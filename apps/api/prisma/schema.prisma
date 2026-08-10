@@ -1,0 +1,247 @@
+// Prisma schema - FOUNDATION PHASE
+//
+// This schema defines PLATFORM/IDENTITY + AUDIT INFRASTRUCTURE models only:
+//   - Business (tenant), Branch, User, UserBranch, RefreshToken, AuditLog, Role
+// These are foundation because every future business-domain model
+// (Customer, Order, Invoice, Payment, InventoryItem, etc.) must be scoped
+// to a Business (and usually a Branch), so the isolation boundary and the
+// audit trail have to exist before those modules are built.
+//
+// Operational/business-domain models are intentionally NOT defined yet -
+// they belong to their respective module implementation phases (see
+// docs/ARCHITECTURE.md for the full list and implementation order).
+//
+// ---------------------------------------------------------------------
+// LOCKED ARCHITECTURAL DECISIONS (approved - see docs/ARCHITECTURE.md)
+// ---------------------------------------------------------------------
+// 1. TENANT ISOLATION: one shared PostgreSQL database, row-level tenant
+//    isolation. Every tenant-scoped table carries a businessId column.
+//    Database-per-tenant and schema-per-tenant are explicitly rejected.
+//    Tenant context is always derived server-side from the authenticated
+//    user - a client-supplied businessId is never trusted for
+//    authorization (see src/lib/tenant-scope.ts).
+// 2. AUDIT TRAIL: generic AuditLog is foundation infrastructure (below),
+//    not a future module. Business modules call into it; they don't
+//    reimplement it.
+// 3. USER <-> BRANCH: many-to-many via UserBranch. A user's business
+//    membership, branch memberships, and currently-selected/active
+//    branch (a request-scoped, server-validated concept - see
+//    src/middleware/branch-context.ts) are three distinct things and
+//    must not be conflated.
+// 4. ROLES: fixed enum for v1 (PLATFORM_ADMIN, BUSINESS_OWNER,
+//    BRANCH_MANAGER, STAFF). A permission-table model may replace this
+//    later; the authorization code is written so that swap is isolated.
+// ---------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// LOCKED for v1 - see decision #4 above. Not dynamic/custom per business.
+enum Role {
+  PLATFORM_ADMIN
+  BUSINESS_OWNER
+  BRANCH_MANAGER
+  STAFF
+}
+// A tenant. Every business-scoped record in the system will eventually
+// carry a businessId pointing here.
+model Business {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches  Branch[]
+  users     User[]
+  auditLogs AuditLog[]
+  customers Customer[]
+
+  @@map("businesses")
+}
+
+// A physical/operational location within a business.
+// User <-> Branch is many-to-many (LOCKED decision #3) via UserBranch.
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  address    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userBranches UserBranch[]
+  auditLogs    AuditLog[]
+
+  @@index([businessId])
+  @@map("branches")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  role         Role      @default(STAFF)
+  isActive     Boolean   @default(true)
+
+  // Nullable because PLATFORM_ADMIN is not tied to a single business.
+  // Every BUSINESS_OWNER / BRANCH_MANAGER / STAFF user MUST have a
+  // businessId - enforced in application logic (not expressible as a
+  // conditional-required FK in Prisma/Postgres without a check
+  // constraint, which can be added in a follow-up migration).
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Branch membership is many-to-many (LOCKED decision #3). There is
+  // deliberately no single branchId column on User anymore - see
+  // UserBranch below, and src/middleware/branch-context.ts for how the
+  // *currently selected* branch is derived per-request and validated
+  // against this table (never trusted from a client-supplied value or
+  // baked into a long-lived token).
+  branches UserBranch[]
+
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// Join table for the many-to-many User <-> Branch relationship
+// (LOCKED decision #3). A row here grants a user access to a branch;
+// it does NOT by itself mean that branch is "active" for any given
+// request - that's request-scoped context, not stored state.
+model UserBranch {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, branchId])
+  @@index([userId])
+  @@index([branchId])
+  @@map("user_branches")
+}
+
+// Refresh tokens stored server-side (hashed) so they can be revoked.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Generic, reusable audit trail (LOCKED decision #2 - foundation
+// infrastructure, not a future module). Business modules call
+// src/lib/audit.ts's recordAuditEvent() rather than writing here
+// directly, so metadata sanitization (see decision below) is never
+// bypassed.
+//
+// Every field that references another record is nullable and uses
+// onDelete: SetNull - an audit row must never disappear just because
+// the thing it references was later deleted, and it must never block
+// deletion of that thing either.
+//
+// NEVER store passwords, raw access tokens, raw refresh tokens, or any
+// other secret in `metadata`. recordAuditEvent() strips known secret-
+// shaped keys defensively, but callers are still responsible for not
+// passing secrets in.
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  // e.g. "user.login", "user.logout". Business-domain modules will add
+  // their own action names (e.g. "order.created") when they're built -
+  // this table doesn't need to change for that.
+  action String
+
+  // e.g. "User", "Order". Kept as a free-form string (not an enum) so
+  // future modules don't require a migration just to add an entity type.
+  entityType String
+  entityId   String?
+
+  metadata      Json?
+  correlationId String?
+
+  @@index([businessId])
+  @@index([branchId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([correlationId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------
+// CUSTOMERS MODULE (first business module - see docs/CUSTOMERS.md)
+// ---------------------------------------------------------------------
+// DECISION (documented in full in docs/CUSTOMERS.md section F): a
+// Customer belongs to a Business, NOT to a Branch. A customer who is
+// served at multiple branches within the same business is still one
+// Customer row - branch-specific activity (which branch handled a given
+// order) belongs on Order once that module exists, not on Customer.
+// This was chosen over per-branch Customer records because duplicating
+// a customer per branch they visit would fragment their history and
+// contact info across rows for no benefit at this stage; nothing in the
+// approved requirements calls for branch-exclusive customer lists.
+model Customer {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name  String
+  // Stored normalized (digits only, optional leading "+") - see
+  // src/modules/customers/customers.service.ts normalizePhone(). The
+  // normalized form is what duplicate detection and search compare
+  // against.
+  phone String
+
+  email   String?
+  address String?
+  notes   String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Duplicate handling is soft (detection + explicit override), not a
+  // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
+  // A hard @@unique([businessId, phone]) would incorrectly block a
+  // second legitimate customer at the same household/shared phone
+  // number. A plain (non-unique) index still makes the duplicate-check
+  // query and phone search efficient.
+  @@index([businessId])
+  @@index([businessId, phone])
+  @@index([businessId, name])
+  @@map("customers")
+}

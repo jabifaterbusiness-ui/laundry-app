@@ -1,0 +1,26 @@
+# Local development infrastructure ONLY.
+# Not used for staging or production. No real credentials belong here -
+# these are throwaway local-dev defaults, overridden via apps/api/.env.
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: laundry_dev_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: laundry_dev
+      POSTGRES_PASSWORD: laundry_dev_local_only
+      POSTGRES_DB: laundry_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - laundry_dev_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laundry_dev -d laundry_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  laundry_dev_pg_data:

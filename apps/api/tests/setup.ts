@@ -1,0 +1,4 @@
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL ??= "postgresql://laundry_dev:laundry_dev_local_only@localhost:5432/laundry_test?schema=public";
+process.env.JWT_ACCESS_SECRET ??= "test_only_access_secret_do_not_use_in_prod";
+process.env.JWT_REFRESH_SECRET ??= "test_only_refresh_secret_do_not_use_in_prod";
