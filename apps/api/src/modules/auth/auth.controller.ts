@@ -36,7 +36,7 @@ export async function login(req: Request, res: Response) {
     entityId: user.id,
     businessId: user.businessId,
     actorUserId: user.id,
-    correlationId: req.correlationId,
+    correlationId: req.correlationId ?? null,
   });
 
   res.status(200).json({
@@ -77,7 +77,7 @@ export async function logout(req: Request, res: Response) {
       entityId: owner.id,
       businessId: owner.businessId,
       actorUserId: owner.id,
-      correlationId: req.correlationId,
+      correlationId: req.correlationId ?? null,
     });
   }
 

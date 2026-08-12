@@ -73,7 +73,9 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
         branchId: input.branchId ?? null,
         actorUserId: input.actorUserId ?? null,
         correlationId: input.correlationId ?? null,
-        metadata: input.metadata ? (sanitizeAuditMetadata(input.metadata) as object) : undefined,
+        ...(input.metadata
+          ? { metadata: sanitizeAuditMetadata(input.metadata) as object }
+          : {}),
       },
     });
   } catch (err) {

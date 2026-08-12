@@ -69,8 +69,8 @@ describe("listCustomers", () => {
 
     await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active", search: "555-1234" });
 
-    const call = findMany.mock.calls[0][0];
-    expect(call.where.OR).toEqual([
+    const call = findMany.mock.calls[0]![0];
+    expect(call!.where!.OR).toEqual([
       { name: { contains: "555-1234", mode: "insensitive" } },
       { phone: { contains: "5551234" } },
     ]);
@@ -82,8 +82,8 @@ describe("listCustomers", () => {
 
     await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active", search: "Jane" });
 
-    const call = findMany.mock.calls[0][0];
-    expect(call.where.OR).toEqual([{ name: { contains: "Jane", mode: "insensitive" } }]);
+    const call = findMany.mock.calls[0]![0];
+   expect(call!.where!.OR).toEqual([{ name: { contains: "Jane", mode: "insensitive" } }]);
   });
 });
 

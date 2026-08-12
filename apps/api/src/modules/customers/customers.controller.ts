@@ -49,13 +49,13 @@ export async function create(req: Request, res: Response) {
   }
 
   const customer = await createCustomer({
-    businessId,
-    name: input.name,
-    phone: normalizedPhone,
-    email: input.email,
-    address: input.address,
-    notes: input.notes,
-  });
+  businessId,
+  name: input.name,
+  phone: normalizedPhone,
+  ...(input.email !== undefined && { email: input.email }),
+  ...(input.address !== undefined && { address: input.address }),
+  ...(input.notes !== undefined && { notes: input.notes }),
+});
 
   await recordAuditEvent({
     action: "customer.created",
@@ -63,7 +63,7 @@ export async function create(req: Request, res: Response) {
     entityId: customer.id,
     businessId,
     actorUserId: req.user!.id,
-    correlationId: req.correlationId,
+    correlationId: req.correlationId ?? null,
     metadata: { name: customer.name },
   });
 
@@ -74,7 +74,13 @@ export async function list(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const query = listCustomersQuerySchema.parse(req.query);
 
-  const result = await listCustomers({ businessId, ...query });
+  const result = await listCustomers({
+  businessId,
+  status: query.status,
+  page: query.page,
+  pageSize: query.pageSize,
+  ...(query.search !== undefined && { search: query.search }),
+});
   res.status(200).json(result);
 }
 
@@ -116,16 +122,22 @@ export async function update(req: Request, res: Response) {
     }
   }
 
-  const patch = { ...fields, phone: normalizedPhone };
-  const customer = await updateCustomer(id, businessId, patch);
+const patch = {
+  ...(fields.name !== undefined && { name: fields.name }),
+  ...(fields.email !== undefined && { email: fields.email }),
+  ...(fields.address !== undefined && { address: fields.address }),
+  ...(fields.notes !== undefined && { notes: fields.notes }),
+  ...(normalizedPhone !== undefined && { phone: normalizedPhone }),
+};
 
+const customer = await updateCustomer(id, businessId, patch);
   await recordAuditEvent({
     action: "customer.updated",
     entityType: "Customer",
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
-    correlationId: req.correlationId,
+    correlationId: req.correlationId ?? null,
     metadata: { fields: Object.keys(fields) },
   });
 
@@ -144,7 +156,7 @@ async function setActiveStatus(req: Request, res: Response, isActive: boolean) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
-    correlationId: req.correlationId,
+    correlationId: req.correlationId ?? null,
   });
 
   res.status(200).json(customer);

@@ -63,7 +63,7 @@ describe("auth controller - multi-branch membership", () => {
 
     await login(req, res);
 
-    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(payload.user.branches).toEqual([
       { id: "branch-1", name: "Main St" },
       { id: "branch-2", name: "Downtown" },
@@ -80,7 +80,7 @@ describe("auth controller - multi-branch membership", () => {
     expect(recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: "user.login", actorUserId: "user-1", businessId: "biz-1" }),
     );
-    const call = vi.mocked(recordAuditEvent).mock.calls[0][0];
+    const call = vi.mocked(recordAuditEvent).mock.calls[0]![0];
     expect(call).not.toHaveProperty("metadata.password");
     expect(call).not.toHaveProperty("accessToken");
     expect(call).not.toHaveProperty("refreshToken");
@@ -95,7 +95,7 @@ describe("auth controller - multi-branch membership", () => {
 
     await me(req, res);
 
-    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(payload.branches).toHaveLength(2);
   });
 });

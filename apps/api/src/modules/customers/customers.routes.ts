@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { asyncHandler } from "../../middleware/async-handler.js";
 import { activate, create, deactivate, getOne, list, update } from "./customers.controller.js";
 
 // Authorization matrix (full rationale in docs/CUSTOMERS.md section C):
@@ -18,9 +19,9 @@ export const customersRouter = Router();
 
 customersRouter.use(requireAuth, requireBusinessContext);
 
-customersRouter.post("/", requireRole(...WRITE_ROLES), create);
-customersRouter.get("/", requireRole(...VIEW_ROLES), list);
-customersRouter.get("/:id", requireRole(...VIEW_ROLES), getOne);
-customersRouter.patch("/:id", requireRole(...WRITE_ROLES), update);
-customersRouter.post("/:id/activate", requireRole(...STATUS_ROLES), activate);
-customersRouter.post("/:id/deactivate", requireRole(...STATUS_ROLES), deactivate);
+customersRouter.post("/", requireRole(...WRITE_ROLES), asyncHandler(create));
+customersRouter.get("/", requireRole(...VIEW_ROLES), asyncHandler(list));
+customersRouter.get("/:id", requireRole(...VIEW_ROLES), asyncHandler(getOne));
+customersRouter.patch("/:id", requireRole(...WRITE_ROLES), asyncHandler(update));
+customersRouter.post("/:id/activate", requireRole(...STATUS_ROLES), asyncHandler(activate));
+customersRouter.post("/:id/deactivate", requireRole(...STATUS_ROLES), asyncHandler(deactivate));

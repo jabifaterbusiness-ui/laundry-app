@@ -70,7 +70,7 @@ describe("recordAuditEvent", () => {
     });
 
     expect(create).toHaveBeenCalledOnce();
-    const call = create.mock.calls[0][0];
+    const call = create.mock.calls[0]![0];
     expect(call.data).toMatchObject({
       action: "user.login",
       entityType: "User",
@@ -92,7 +92,7 @@ describe("recordAuditEvent", () => {
       metadata: { password: "hunter2", refreshToken: "raw-secret", note: "ok" },
     });
 
-    const call = create.mock.calls[0][0];
+    const call = create.mock.calls[0]![0];
     expect(call.data.metadata).toEqual({ note: "ok" });
   });
 

@@ -33,7 +33,7 @@ function signAccessToken(user: TokenSubject): string {
       businessId: user.businessId,
     },
     config.auth.accessTokenSecret,
-    { expiresIn: config.auth.accessTokenExpiresIn },
+    { expiresIn: config.auth.accessTokenExpiresIn as `${number}${"s" | "m" | "h" | "d"}` },
   );
 }
 
