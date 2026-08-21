@@ -9,6 +9,7 @@ import { requestContext } from "./middleware/request-context.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { customersRouter } from "./modules/customers/customers.routes.js";
 import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
+import { servicesRouter } from "./modules/services/services.routes.js";
 
 export function createApp() {
   const app = express();
@@ -32,6 +33,7 @@ type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
   v1.use("/auth", authRouter);
   v1.use("/customers", customersRouter);
   v1.use("/migrations", migrationsRouter);
+  v1.use("/services", servicesRouter);
   // Future modules mount here, e.g.:
   // v1.use("/orders", ordersRouter);
 
