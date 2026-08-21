@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/auth/LoginPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
+import { DataManagementPage } from "./pages/DataManagementPage.js";
 
 export function App() {
   return (
@@ -13,6 +14,14 @@ export function App() {
         element={
           <RequireAuth>
             <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/data-management"
+        element={
+          <RequireAuth>
+            <DataManagementPage />
           </RequireAuth>
         }
       />

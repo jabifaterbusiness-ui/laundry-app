@@ -35,3 +35,6 @@ coverage/
 # Vite
 apps/web/dist/
 apps/web/.vite/
+
+# Uploaded migration sources / local backup staging
+apps/api/data/

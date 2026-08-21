@@ -19,4 +19,10 @@ export const config = {
   log: {
     level: env.LOG_LEVEL,
   },
+  migrations: {
+    storageDir: env.MIGRATION_STORAGE_DIR,
+    storageKey: env.MIGRATION_STORAGE_KEY,
+    maxUploadBytes: env.MIGRATION_MAX_UPLOAD_BYTES,
+    maxUncompressedBytes: env.MIGRATION_MAX_UNCOMPRESSED_BYTES,
+  },
 } as const;

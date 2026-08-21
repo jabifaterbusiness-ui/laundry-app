@@ -13,6 +13,10 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  MIGRATION_STORAGE_DIR: z.string().default("./data/migrations"),
+  MIGRATION_STORAGE_KEY: z.string().min(16).default("dev-only-migration-storage-key-change-me"),
+  MIGRATION_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(250 * 1024 * 1024),
+  MIGRATION_MAX_UNCOMPRESSED_BYTES: z.coerce.number().int().positive().default(500 * 1024 * 1024),
 });
 
 const parsed = envSchema.safeParse(process.env);

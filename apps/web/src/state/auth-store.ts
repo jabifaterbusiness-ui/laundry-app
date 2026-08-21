@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Auto-select when the user has exactly one branch; otherwise the
       // UI must prompt them to choose (not modeled here - foundation
       // phase only establishes the state shape).
-      activeBranchId: user.branches.length === 1 ? user.branches[0].id : null,
+      activeBranchId: user.branches.length === 1 ? user.branches[0]?.id ?? null : null,
     }),
   setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
   clearSession: () => set({ user: null, accessToken: null, refreshToken: null, activeBranchId: null }),

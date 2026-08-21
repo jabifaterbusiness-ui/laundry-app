@@ -100,3 +100,11 @@ is blocked here, so `npm install` and anything downstream of it -
 `prisma generate`, `prisma migrate dev`, an actual `vitest` run - could
 not be executed; see that report for the static verification that was
 possible instead).
+
+## Data migration and backup architecture
+
+Data migration is a commercial platform capability. The API exposes a tenant-scoped migration job workflow that analyzes uploaded legacy data before import. Source-specific parsing is separated from target-domain services so future laundry systems can be supported through additional adapters.
+
+The first adapter supports DBF/FoxPro-style sources, including ZIP archives containing DBF files, plus CSV, JSON and Excel files. The Customer adapter is the first target because Customer is currently implemented. Unsupported entities are surfaced as explicit migration issues rather than being silently ignored.
+
+Application backups use a versioned, encrypted binary format with AES-256-GCM and password-derived keys. Restore is intentionally merge-only in the first version: it never deletes current tenant data and never overwrites staff credentials. As Orders, Garments, Invoices, Payments, Inventory and other modules are implemented, their records will be added to the versioned backup manifest and migration adapters.

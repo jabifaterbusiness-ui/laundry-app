@@ -63,6 +63,7 @@ model Business {
   users     User[]
   auditLogs AuditLog[]
   customers Customer[]
+  migrationJobs MigrationJob[]
 
   @@map("businesses")
 }
@@ -112,6 +113,7 @@ model User {
 
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  migrationJobs MigrationJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -244,4 +246,99 @@ model Customer {
   @@index([businessId, phone])
   @@index([businessId, name])
   @@map("customers")
+}
+
+// ---------------------------------------------------------------------
+// DATA MIGRATION INFRASTRUCTURE
+// ---------------------------------------------------------------------
+// Migration jobs are tenant-scoped. Raw source files are stored outside
+// PostgreSQL through the storage abstraction; the database stores only
+// metadata, status, summaries and issues. This keeps large customer
+// backups out of the relational database while preserving a durable,
+// auditable migration workflow.
+enum MigrationJobStatus {
+  ANALYZING
+  READY
+  IMPORTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MigrationSourceType {
+  LAUNDRY_BACKUP
+  DBF
+  CSV
+  JSON
+  XLSX
+  UNKNOWN
+}
+
+enum MigrationIssueSeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+model MigrationJob {
+  id            String              @id @default(uuid())
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdById   String?
+  createdBy     User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  sourceType    MigrationSourceType
+  sourceName    String
+  status        MigrationJobStatus   @default(ANALYZING)
+  sourcePath    String
+  sourceSha256  String
+  summary       Json?
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  completedAt   DateTime?
+
+  files         MigrationFile[]
+  issues        MigrationIssue[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@map("migration_jobs")
+}
+
+model MigrationFile {
+  id          String        @id @default(uuid())
+  jobId       String
+  job         MigrationJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  relativePath String
+  format      String
+  tableName   String?
+  sizeBytes   Int
+  sha256      String
+  rowCount    Int?
+  headers     Json?
+  status      String        @default("detected")
+  errorMessage String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([jobId, relativePath])
+  @@index([jobId, format])
+  @@map("migration_files")
+}
+
+model MigrationIssue {
+  id           String                 @id @default(uuid())
+  jobId        String
+  job          MigrationJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  severity     MigrationIssueSeverity
+  code         String
+  message      String
+  entityType   String?
+  sourceFile   String?
+  sourceRow    Int?
+  details      Json?
+  resolvedAt   DateTime?
+  createdAt    DateTime               @default(now())
+
+  @@index([jobId, severity])
+  @@map("migration_issues")
 }
