@@ -63,6 +63,7 @@ model Business {
   users     User[]
   auditLogs AuditLog[]
   customers Customer[]
+  services  Service[]
   migrationJobs MigrationJob[]
 
   @@map("businesses")
@@ -247,7 +248,45 @@ model Customer {
   @@index([businessId, name])
   @@map("customers")
 }
+  // ---------------------------------------------------------------------
+// SERVICES / PRICE LIST MODULE
+// ---------------------------------------------------------------------
+// Each service is a chargeable laundry item.
+//
+// `pieces` = physical pieces represented by one unit.
+// `unitPrice` = price for one unit.
+//
+// Example:
+// Complete Agbada = 3 pieces, ₦4,500 per unit.
+//
+// Therefore:
+// QTY 2 × Complete Agbada
+// PCS = 2 × 3 = 6
+// Total Price = 2 × ₦4,500 = ₦9,000
+//
+// Prices are later snapshotted onto orders/invoices so changing the
+// price list will never change historical transactions.
+model Service {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  name      String
+  pieces    Int
+  unitPrice Int
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, isActive])
+  @@index([businessId, name])
+  @@map("services")
+
+
+
+}
 // ---------------------------------------------------------------------
 // DATA MIGRATION INFRASTRUCTURE
 // ---------------------------------------------------------------------
