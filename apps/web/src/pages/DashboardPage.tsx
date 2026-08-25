@@ -10,7 +10,7 @@ export function DashboardPage() {
       <h1>Dashboard</h1>
       <p>Signed in as {user?.fullName ?? "unknown user"} ({user?.role ?? "no role"}).</p>
       <nav>
-        <Link to="/customers">Customers</Link>{canManageData ? <> | <Link to="/data-management">Backup & Data Migration</Link></> : null}
+        <Link to="/customers">Customers</Link> | <Link to="/services">Services & Price List</Link>{canManageData ? <> | <Link to="/data-management">Backup & Data Migration</Link></> : null}
       </nav>
       <p>Other business modules (orders, invoices, etc.) are not implemented yet.</p>
     </main>

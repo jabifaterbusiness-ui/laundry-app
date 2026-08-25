@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
 import { DataManagementPage } from "./pages/DataManagementPage.js";
+import { ServicesPage } from "./pages/services/ServicesPage.js";
 
 export function App() {
   return (
@@ -30,6 +31,14 @@ export function App() {
         element={
           <RequireAuth>
             <CustomersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/services"
+        element={
+          <RequireAuth>
+            <ServicesPage />
           </RequireAuth>
         }
       />
