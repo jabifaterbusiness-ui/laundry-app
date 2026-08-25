@@ -49,6 +49,7 @@ enum Role {
   BRANCH_MANAGER
   STAFF
 }
+
 // A tenant. Every business-scoped record in the system will eventually
 // carry a businessId pointing here.
 model Business {
@@ -59,12 +60,14 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches  Branch[]
-  users     User[]
-  auditLogs AuditLog[]
-  customers Customer[]
-  services  Service[]
+  branches      Branch[]
+  users         User[]
+  auditLogs     AuditLog[]
+  customers     Customer[]
+  services      Service[]
+  orders        Order[]
   migrationJobs MigrationJob[]
+  garments      Garment[]
 
   @@map("businesses")
 }
@@ -83,18 +86,20 @@ model Branch {
 
   userBranches UserBranch[]
   auditLogs    AuditLog[]
+  orders       Order[]
+  garments     Garment[]
 
   @@index([businessId])
   @@map("branches")
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   passwordHash String
   fullName     String
-  role         Role      @default(STAFF)
-  isActive     Boolean   @default(true)
+  role         Role    @default(STAFF)
+  isActive     Boolean @default(true)
 
   // Nullable because PLATFORM_ADMIN is not tied to a single business.
   // Every BUSINESS_OWNER / BRANCH_MANAGER / STAFF user MUST have a
@@ -232,10 +237,16 @@ model Customer {
   address String?
   notes   String?
 
+  // Persistent customer-specific instructions/preferences.
+  // Examples: "Always fold his items" or "Do not give him items on credit".
+  customerInstructions String?
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  orders Order[]
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -248,7 +259,8 @@ model Customer {
   @@index([businessId, name])
   @@map("customers")
 }
-  // ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
 // SERVICES / PRICE LIST MODULE
 // ---------------------------------------------------------------------
 // Each service is a chargeable laundry item.
@@ -274,19 +286,166 @@ model Service {
   name      String
   pieces    Int
   unitPrice Int
-  isActive  Boolean  @default(true)
+  isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
 
   @@index([businessId])
   @@index([businessId, isActive])
   @@index([businessId, name])
   @@map("services")
-
-
-
 }
+
+// ---------------------------------------------------------------------
+// ORDERS MODULE
+// ---------------------------------------------------------------------
+// Orders are tenant-scoped by business and operationally scoped by branch.
+//
+// OrderItem stores a complete historical snapshot of the Service at the
+// moment the order is created. Changing the current price list later can
+// therefore never change an existing order.
+//
+// Receipt visibility:
+//   garmentNote = customer-visible
+//   internalNote = company/staff-only
+enum OrderStatus {
+  RECEIVED
+  IN_PROGRESS
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  orderNumber String
+
+  status OrderStatus @default(RECEIVED)
+
+  orderTotal Int @default(0)
+
+  expectedReadyAt DateTime?
+  readyAt         DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
+  // Visible to the customer.
+  garmentNote String?
+
+  // PRIVATE. Never expose this on customer-facing receipts.
+  internalNote String?
+
+  items    OrderItem[]
+  garments Garment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, orderNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, customerId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  garments Garment[]
+
+  // Historical snapshot from Service at order creation.
+  serviceName   String
+  piecesPerUnit Int
+  quantity      Int
+  totalPieces   Int
+  unitPrice     Int
+  lineTotal     Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([serviceId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------
+// GARMENTS MODULE
+// ---------------------------------------------------------------------
+// A Garment represents one physical garment/piece received for an order.
+// It is always tenant-scoped by business and operationally scoped by
+// branch. Each garment belongs to an OrderItem and therefore retains the
+// historical service snapshot through that OrderItem.
+//
+// Garment status tracks the physical processing lifecycle independently
+// from the overall Order status.
+
+enum GarmentStatus {
+  RECEIVED
+  PROCESSING
+  READY
+  PICKED_UP
+  DAMAGED
+  LOST
+}
+
+model Garment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  garmentNumber Int
+  status        GarmentStatus @default(RECEIVED)
+
+  note String?
+
+  receivedAt DateTime  @default(now())
+  readyAt    DateTime?
+  pickedUpAt DateTime?
+  damagedAt  DateTime?
+  lostAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderItemId, garmentNumber])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, orderId])
+  @@index([businessId, status])
+  @@index([orderItemId])
+  @@map("garments")
+}
+
 // ---------------------------------------------------------------------
 // DATA MIGRATION INFRASTRUCTURE
 // ---------------------------------------------------------------------
@@ -320,24 +479,24 @@ enum MigrationIssueSeverity {
 }
 
 model MigrationJob {
-  id            String              @id @default(uuid())
-  businessId    String
-  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdById   String?
-  createdBy     User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  sourceType    MigrationSourceType
-  sourceName    String
-  status        MigrationJobStatus   @default(ANALYZING)
-  sourcePath    String
-  sourceSha256  String
-  summary       Json?
-  errorMessage  String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  completedAt   DateTime?
+  id           String              @id @default(uuid())
+  businessId   String
+  business     Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdById  String?
+  createdBy    User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  sourceType   MigrationSourceType
+  sourceName   String
+  status       MigrationJobStatus  @default(ANALYZING)
+  sourcePath   String
+  sourceSha256 String
+  summary      Json?
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  completedAt  DateTime?
 
-  files         MigrationFile[]
-  issues        MigrationIssue[]
+  files  MigrationFile[]
+  issues MigrationIssue[]
 
   @@index([businessId, createdAt])
   @@index([businessId, status])
@@ -345,19 +504,19 @@ model MigrationJob {
 }
 
 model MigrationFile {
-  id          String        @id @default(uuid())
-  jobId       String
-  job         MigrationJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id           String       @id @default(uuid())
+  jobId        String
+  job          MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   relativePath String
-  format      String
-  tableName   String?
-  sizeBytes   Int
-  sha256      String
-  rowCount    Int?
-  headers     Json?
-  status      String        @default("detected")
+  format       String
+  tableName    String?
+  sizeBytes    Int
+  sha256       String
+  rowCount     Int?
+  headers      Json?
+  status       String       @default("detected")
   errorMessage String?
-  createdAt   DateTime      @default(now())
+  createdAt    DateTime     @default(now())
 
   @@unique([jobId, relativePath])
   @@index([jobId, format])
@@ -365,18 +524,18 @@ model MigrationFile {
 }
 
 model MigrationIssue {
-  id           String                 @id @default(uuid())
-  jobId        String
-  job          MigrationJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  severity     MigrationIssueSeverity
-  code         String
-  message      String
-  entityType   String?
-  sourceFile   String?
-  sourceRow    Int?
-  details      Json?
-  resolvedAt   DateTime?
-  createdAt    DateTime               @default(now())
+  id         String                 @id @default(uuid())
+  jobId      String
+  job        MigrationJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  severity   MigrationIssueSeverity
+  code       String
+  message    String
+  entityType String?
+  sourceFile String?
+  sourceRow  Int?
+  details    Json?
+  resolvedAt DateTime?
+  createdAt  DateTime               @default(now())
 
   @@index([jobId, severity])
   @@map("migration_issues")
