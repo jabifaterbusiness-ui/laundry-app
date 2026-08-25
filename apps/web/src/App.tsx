@@ -5,6 +5,7 @@ import { CustomersPage } from "./pages/customers/CustomersPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
 import { DataManagementPage } from "./pages/DataManagementPage.js";
 import { ServicesPage } from "./pages/services/ServicesPage.js";
+import { OrdersPage } from "./pages/orders/OrdersPage.js";
 
 export function App() {
   return (
@@ -42,8 +43,14 @@ export function App() {
           </RequireAuth>
         }
       />
-      {/* Future module routes (orders, invoices, payments, inventory,
-          reports) are intentionally not wired up yet. */}
+      <Route
+        path="/orders"
+        element={
+          <RequireAuth>
+            <OrdersPage />
+          </RequireAuth>
+        }
+      />
     </Routes>
   );
 }
