@@ -53,6 +53,9 @@ function createTransactionClient() {
     service: {
       findMany: vi.fn(),
     },
+    orderNumberSequence: {
+      upsert: vi.fn(),
+    },
     order: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -337,6 +340,10 @@ describe("createOrder", () => {
 
     tx.order.findUnique.mockResolvedValue(null);
 
+    tx.orderNumberSequence.upsert.mockResolvedValue({
+      nextNumber: 2,
+    });
+
     tx.order.create.mockResolvedValue({
       id: ORDER_A,
       orderNumber: "ORD-TEST-1000",
@@ -421,6 +428,10 @@ describe("createOrder", () => {
 
     tx.order.findUnique.mockResolvedValue(null);
 
+    tx.orderNumberSequence.upsert.mockResolvedValue({
+      nextNumber: 2,
+    });
+
     tx.order.create.mockResolvedValue({
       id: ORDER_A,
       orderNumber: "ORD-TEST-1001",
@@ -493,6 +504,10 @@ describe("createOrder", () => {
         isActive: true,
       },
     ]);
+
+    tx.orderNumberSequence.upsert.mockResolvedValue({
+      nextNumber: 2,
+    });
 
     tx.order.findUnique.mockResolvedValue(null);
     tx.order.create.mockResolvedValue({ id: ORDER_A } as never);

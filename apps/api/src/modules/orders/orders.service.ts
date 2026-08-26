@@ -26,17 +26,6 @@ export interface ListOrdersParams {
   pageSize: number;
 }
 
-function generateOrderNumber(): string {
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[-:TZ.]/g, "")
-    .slice(0, 14);
-
-  const random = Math.floor(1000 + Math.random() * 9000);
-
-  return `ORD-${timestamp}-${random}`;
-}
-
 /**
  * Creates an order and snapshots the current Service price/name/pieces
  * into OrderItem.
@@ -187,28 +176,34 @@ async function createUniqueOrderNumber(
   tx: Prisma.TransactionClient,
   businessId: string,
 ): Promise<string> {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const orderNumber = generateOrderNumber();
-
-    const existing = await tx.order.findUnique({
-      where: {
-        businessId_orderNumber: {
-          businessId,
-          orderNumber,
-        },
+  const sequence = await tx.orderNumberSequence.upsert({
+    where: {
+      businessId,
+    },
+    create: {
+      businessId,
+      nextNumber: 2,
+    },
+    update: {
+      nextNumber: {
+        increment: 1,
       },
-      select: { id: true },
-    });
+    },
+    select: {
+      nextNumber: true,
+    },
+  });
 
-    if (!existing) {
-      return orderNumber;
-    }
+  const assignedNumber = sequence.nextNumber - 1;
+
+  if (assignedNumber > 99999) {
+    throw new AppError(
+      "The order number limit of 99999 has been reached for this business",
+      422,
+    );
   }
 
-  throw new AppError(
-    "Unable to generate a unique order number. Please try again",
-    500,
-  );
+  return assignedNumber.toString().padStart(5, "0");
 }
 
 /**

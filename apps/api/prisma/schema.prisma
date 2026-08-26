@@ -66,6 +66,7 @@ model Business {
   customers     Customer[]
   services      Service[]
   orders        Order[]
+  orderNumberSequence OrderNumberSequence?
   migrationJobs MigrationJob[]
   garments      Garment[]
 
@@ -317,6 +318,17 @@ enum OrderStatus {
   READY_FOR_PICKUP
   COMPLETED
   CANCELLED
+}
+
+model OrderNumberSequence {
+  id        String   @id @default(uuid())
+  businessId String  @unique
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nextNumber Int     @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("order_number_sequences")
 }
 
 model Order {
