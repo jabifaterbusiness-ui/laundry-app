@@ -53,22 +53,30 @@ enum Role {
 // A tenant. Every business-scoped record in the system will eventually
 // carry a businessId pointing here.
 model Business {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  // Customer-facing company contact information used on receipts.
+  phone   String?
+  email   String?
+  website String?
+  address String?
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches      Branch[]
-  users         User[]
-  auditLogs     AuditLog[]
-  customers     Customer[]
-  services      Service[]
-  orders        Order[]
+  branches            Branch[]
+  users               User[]
+  auditLogs           AuditLog[]
+  customers           Customer[]
+  services            Service[]
+  orders              Order[]
+  invoices            Invoice[]
   orderNumberSequence OrderNumberSequence?
-  migrationJobs MigrationJob[]
-  garments      Garment[]
+  migrationJobs       MigrationJob[]
+  garments            Garment[]
 
   @@map("businesses")
 }
@@ -88,6 +96,7 @@ model Branch {
   userBranches UserBranch[]
   auditLogs    AuditLog[]
   orders       Order[]
+  invoices     Invoice[]
   garments     Garment[]
 
   @@index([businessId])
@@ -321,12 +330,12 @@ enum OrderStatus {
 }
 
 model OrderNumberSequence {
-  id        String   @id @default(uuid())
-  businessId String  @unique
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  nextNumber Int     @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nextNumber Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("order_number_sequences")
 }
@@ -362,6 +371,7 @@ model Order {
 
   items    OrderItem[]
   garments Garment[]
+  invoice  Invoice?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -399,6 +409,89 @@ model OrderItem {
   @@index([orderId])
   @@index([serviceId])
   @@map("order_items")
+}
+
+// ---------------------------------------------------------------------
+// INVOICES / RECEIPTS MODULE
+// ---------------------------------------------------------------------
+
+enum InvoiceStatus {
+  ISSUED
+  VOID
+}
+
+model Invoice {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  // One invoice belongs to exactly one order.
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  // Uses the same progressive 5-digit number as the order.
+  invoiceNumber String
+
+  status InvoiceStatus @default(ISSUED)
+
+  // Historical customer identity snapshot.
+  // Deliberately excludes phone, email and address because
+  // customer contact information is NOT printed on either receipt.
+  customerName String
+
+  // Historical company snapshot for printed receipts.
+  companyName    String
+  companyPhone   String?
+  companyEmail   String?
+  companyWebsite String?
+  companyAddress String?
+
+  // Historical transaction totals.
+  totalAmount Int
+
+  // Customer-visible order note.
+  garmentNote String?
+
+  // PRIVATE. Never expose on the customer receipt.
+  internalNote String?
+
+  // Agreement printed on the customer copy.
+  customerAgreement String
+
+  items InvoiceItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, orderId])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  // Historical snapshots from OrderItem.
+  itemName      String
+  piecesPerUnit Int
+  quantity      Int
+  totalPieces   Int
+  unitPrice     Int
+  totalPrice    Int
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@map("invoice_items")
 }
 
 // ---------------------------------------------------------------------
