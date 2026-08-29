@@ -12,6 +12,10 @@ import {
   getOne,
   list,
 } from "./invoices.controller.js";
+import {
+  customerReceipt,
+  companyReceipt,
+} from "./receipts.controller.js";
 
 const INVOICE_ROLES = [
   "BUSINESS_OWNER",
@@ -43,6 +47,18 @@ invoicesRouter.get(
   "/order/:orderId",
   requireRole(...INVOICE_ROLES),
   asyncHandler(getByOrder),
+);
+
+invoicesRouter.get(
+  "/:id/receipt/customer",
+  requireRole(...INVOICE_ROLES),
+  asyncHandler(customerReceipt),
+);
+
+invoicesRouter.get(
+  "/:id/receipt/company",
+  requireRole(...INVOICE_ROLES),
+  asyncHandler(companyReceipt),
 );
 
 invoicesRouter.get(
