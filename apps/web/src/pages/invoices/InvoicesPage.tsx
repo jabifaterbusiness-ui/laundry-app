@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { InvoiceStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
@@ -7,6 +7,8 @@ import {
   listInvoices,
 } from "../../lib/invoices-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { CustomerReceipt } from "./receipt/CustomerReceipt.js";
+import { CompanyReceipt } from "./receipt/CompanyReceipt.js";
 
 const PAGE_SIZE = 25;
 
@@ -29,6 +31,9 @@ export function InvoicesPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
+    null,
+  );
+  const [printMode, setPrintMode] = useState<"customer" | "company" | null>(
     null,
   );
 
@@ -70,6 +75,60 @@ export function InvoicesPage() {
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "F1" || !selectedInvoiceId || !selectedInvoice) {
+        return;
+      }
+
+      event.preventDefault();
+      setPrintMode(event.ctrlKey ? "company" : "customer");
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedInvoiceId, selectedInvoice]);
+
+  useEffect(() => {
+    if (!printMode || !selectedInvoice) {
+      return;
+    }
+
+    const printClass =
+      printMode === "customer"
+        ? "printing-customer"
+        : "printing-company";
+
+    document.body.classList.add(printClass);
+
+    const timer = window.setTimeout(() => {
+      window.print();
+    }, 50);
+
+    function handleAfterPrint() {
+      window.clearTimeout(timer);
+      document.body.classList.remove(
+        "printing-customer",
+        "printing-company",
+      );
+      setPrintMode(null);
+    }
+
+    window.addEventListener("afterprint", handleAfterPrint);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", handleAfterPrint);
+      document.body.classList.remove(
+        "printing-customer",
+        "printing-company",
+      );
+    };
+  }, [printMode, selectedInvoice]);
 
   return (
     <main>
@@ -201,7 +260,9 @@ export function InvoicesPage() {
           </table>
 
           <p>
-            <strong>Total: {formatMoney(selectedInvoice.totalAmount)}</strong>
+            <strong>
+              Total: {formatMoney(selectedInvoice.totalAmount)}
+            </strong>
           </p>
 
           {selectedInvoice.garmentNote && (
@@ -216,13 +277,41 @@ export function InvoicesPage() {
             {selectedInvoice.customerAgreement}
           </p>
 
-          <button
-            type="button"
-            onClick={() => setSelectedInvoiceId(null)}
-          >
-            Close
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={() => setPrintMode("customer")}
+            >
+              Print Customer Copy (F1)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPrintMode("company")}
+            >
+              Print Company Copy (Ctrl+F1)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedInvoiceId(null)}
+            >
+              Close
+            </button>
+          </div>
         </section>
+      )}
+
+      {selectedInvoice && (
+        <div className="invoice-print-area" aria-hidden="true">
+          <div className="invoice-print-customer">
+            <CustomerReceipt invoice={selectedInvoice} />
+          </div>
+
+          <div className="invoice-print-company">
+            <CompanyReceipt invoice={selectedInvoice} />
+          </div>
+        </div>
       )}
     </main>
   );

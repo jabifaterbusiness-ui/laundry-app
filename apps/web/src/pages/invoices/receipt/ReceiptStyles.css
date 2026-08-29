@@ -152,10 +152,106 @@
   text-align: center;
 }
 
+/* ------------------------------------------------------------------
+   INVOICE PRINT WORKFLOW
+   F1              -> customer copy only
+   Ctrl + F1       -> company copy only
+   ------------------------------------------------------------------ */
+
+.invoice-print-area {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.invoice-print-customer,
+.invoice-print-company {
+  display: block;
+}
+
+/*
+ * During normal screen use, the printable receipts stay out of the
+ * visible page. The selected receipt is made printable by the body
+ * class added by InvoicesPage.
+ */
+body.printing-customer .invoice-print-area,
+body.printing-company .invoice-print-area {
+  position: static;
+  left: auto;
+  width: 100%;
+  visibility: visible;
+}
+
+body.printing-customer .invoice-print-company,
+body.printing-company .invoice-print-customer {
+  display: none;
+}
+
 @media print {
+  /*
+   * Remove the normal application UI while printing a receipt.
+   * The selected receipt is the only printable content.
+   */
+  body.printing-customer > *:not(#root),
+  body.printing-company > *:not(#root) {
+    display: none !important;
+  }
+
+  body.printing-customer #root > *:not(.invoice-print-area),
+  body.printing-company #root > *:not(.invoice-print-area) {
+    display: none !important;
+  }
+
+  body.printing-customer .invoice-print-area,
+  body.printing-company .invoice-print-area {
+    position: static !important;
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.printing-customer .invoice-print-company,
+  body.printing-company .invoice-print-customer {
+    display: none !important;
+  }
+
+  body.printing-customer .invoice-print-customer,
+  body.printing-company .invoice-print-company {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  body.printing-customer .invoice-print-customer *,
+  body.printing-company .invoice-print-company * {
+    visibility: visible !important;
+  }
+
   .receipt {
     max-width: none;
+    width: 100%;
     margin: 0;
-    padding: 8mm;
+    padding: 6mm;
+    box-sizing: border-box;
+    page-break-inside: avoid;
+  }
+
+  .receipt__header,
+  .receipt__title-row,
+  .receipt__customer,
+  .receipt__items,
+  .receipt__note,
+  .receipt__agreement,
+  .receipt__total,
+  .receipt__footer {
+    page-break-inside: avoid;
+  }
+
+  @page {
+    margin: 0;
   }
 }
