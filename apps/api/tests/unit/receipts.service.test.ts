@@ -24,6 +24,9 @@ const invoiceFixture = {
   businessId: "biz-A",
   branchId: BRANCH_ID,
   orderId: "77777777-7777-7777-7777-777777777777",
+  order: {
+    orderNumber: "00017",
+  },
   invoiceNumber: "00042",
   status: "ISSUED",
   customerName: "Jane Doe",
@@ -89,6 +92,7 @@ describe("getCustomerReceipt", () => {
     expect(result).toEqual({
       receiptType: "CUSTOMER",
       invoiceNumber: "00042",
+      orderNumber: "00017",
       companyName: "Clean Laundry",
       companyPhone: "08000000000",
       companyEmail: "hello@cleanlaundry.com",
@@ -152,6 +156,11 @@ describe("getCustomerReceipt", () => {
         branchId: BRANCH_ID,
       },
       include: {
+        order: {
+          select: {
+            orderNumber: true,
+          },
+        },
         branch: {
           select: {
             name: true,
@@ -192,6 +201,7 @@ describe("getCompanyReceipt", () => {
     expect(result).toEqual({
       receiptType: "COMPANY",
       invoiceNumber: "00042",
+      orderNumber: "00017",
       companyName: "Clean Laundry",
       companyPhone: "08000000000",
       companyEmail: "hello@cleanlaundry.com",

@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 export type CustomerReceipt = {
   receiptType: "CUSTOMER";
   invoiceNumber: string;
+  orderNumber: string;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -27,6 +28,7 @@ export type CustomerReceipt = {
 export type CompanyReceipt = {
   receiptType: "COMPANY";
   invoiceNumber: string;
+  orderNumber: string;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -64,6 +66,11 @@ async function getInvoiceSnapshot(
       branchId,
     },
     include: {
+      order: {
+        select: {
+          orderNumber: true,
+        },
+      },
       branch: {
         select: {
           name: true,
@@ -115,6 +122,7 @@ export async function getCustomerReceipt(
   return {
     receiptType: "CUSTOMER",
     invoiceNumber: invoice.invoiceNumber,
+    orderNumber: invoice.order.orderNumber,
     companyName: invoice.companyName,
     companyPhone: invoice.companyPhone,
     companyEmail: invoice.companyEmail,
@@ -155,6 +163,7 @@ export async function getCompanyReceipt(
   return {
     receiptType: "COMPANY",
     invoiceNumber: invoice.invoiceNumber,
+    orderNumber: invoice.order.orderNumber,
     companyName: invoice.companyName,
     companyPhone: invoice.companyPhone,
     companyEmail: invoice.companyEmail,

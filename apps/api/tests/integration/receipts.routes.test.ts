@@ -72,6 +72,9 @@ const invoiceFixture = {
     name: "Main Branch",
   },
   orderId: "77777777-7777-7777-7777-777777777777",
+  order: {
+    orderNumber: "00017",
+  },
   status: "ISSUED",
   customerName: "Jane Doe",
   companyName: "Clean Laundry",
@@ -160,6 +163,7 @@ describe("Customer receipt endpoint", () => {
     expect(res.body).toEqual({
       receiptType: "CUSTOMER",
       invoiceNumber: "00042",
+      orderNumber: "00017",
       companyName: "Clean Laundry",
       companyPhone: "08000000000",
       companyEmail: "hello@example.com",

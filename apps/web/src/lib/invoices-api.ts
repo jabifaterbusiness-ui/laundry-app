@@ -80,6 +80,7 @@ export type ReceiptItem = {
 export type CustomerReceipt = {
   receiptType: "CUSTOMER";
   invoiceNumber: string;
+  orderNumber: string;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -97,6 +98,7 @@ export type CustomerReceipt = {
 export type CompanyReceipt = {
   receiptType: "COMPANY";
   invoiceNumber: string;
+  orderNumber: string;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;

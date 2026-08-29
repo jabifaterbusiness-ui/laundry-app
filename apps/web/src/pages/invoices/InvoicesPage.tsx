@@ -132,6 +132,19 @@ export function InvoicesPage() {
       return;
     }
 
+    const receiptQuery =
+      printMode === "customer"
+        ? customerReceiptQuery
+        : companyReceiptQuery;
+
+    if (receiptQuery.isLoading || receiptQuery.isFetching) {
+      return;
+    }
+
+    if (receiptQuery.isError || !receiptQuery.data) {
+      return;
+    }
+
     const printClass =
       printMode === "customer"
         ? "printing-customer"
@@ -162,7 +175,18 @@ export function InvoicesPage() {
         "printing-company",
       );
     };
-  }, [printMode, selectedInvoice]);
+  }, [
+    printMode,
+    selectedInvoice,
+    customerReceiptQuery.isLoading,
+    customerReceiptQuery.isFetching,
+    customerReceiptQuery.isError,
+    customerReceiptQuery.data,
+    companyReceiptQuery.isLoading,
+    companyReceiptQuery.isFetching,
+    companyReceiptQuery.isError,
+    companyReceiptQuery.data,
+  ]);
 
   return (
     <main>

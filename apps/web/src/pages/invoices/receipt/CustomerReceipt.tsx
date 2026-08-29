@@ -50,7 +50,7 @@ export function CustomerReceipt({ receipt }: CustomerReceiptProps) {
 
         <div>
           <span className="receipt__label">ORDER</span>
-          <strong>{receipt.invoiceNumber}</strong>
+          <strong>{receipt.orderNumber}</strong>
         </div>
 
         <div>
