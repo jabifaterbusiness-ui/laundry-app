@@ -68,6 +68,9 @@ const invoiceFixture = {
   invoiceNumber: "00042",
   businessId: "biz-A",
   branchId: BRANCH_A,
+  branch: {
+    name: "Main Branch",
+  },
   orderId: "77777777-7777-7777-7777-777777777777",
   status: "ISSUED",
   customerName: "Jane Doe",
@@ -80,6 +83,7 @@ const invoiceFixture = {
   garmentNote: "Small mark on sleeve",
   internalNote: "KEEP CUSTOMER'S WHITE SHIRT SEPARATE",
   customerAgreement: "Please check garments before leaving.",
+  createdAt: new Date("2026-08-29T20:00:00.000Z"),
   items: [
     {
       id: "99999999-9999-9999-9999-999999999999",
@@ -162,8 +166,11 @@ describe("Customer receipt endpoint", () => {
       companyWebsite: "https://example.com",
       companyAddress: "12 Main Street",
       customerName: "Jane Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-08-29T20:00:00.000Z",
       items: [
         {
+          id: "99999999-9999-9999-9999-999999999999",
           quantity: 2,
           itemName: "Shirt",
           totalPieces: 2,
@@ -262,6 +269,7 @@ describe("Company receipt endpoint", () => {
     expect(res.status).toBe(200);
 
     expect(res.body.items[0]).toEqual({
+      id: "99999999-9999-9999-9999-999999999999",
       quantity: 2,
       itemName: "Shirt",
       totalPieces: 2,

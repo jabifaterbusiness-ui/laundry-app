@@ -9,7 +9,10 @@ export type CustomerReceipt = {
   companyWebsite: string | null;
   companyAddress: string | null;
   customerName: string;
+  branchName: string;
+  createdAt: string;
   items: Array<{
+    id: string;
     quantity: number;
     itemName: string;
     totalPieces: number;
@@ -30,7 +33,10 @@ export type CompanyReceipt = {
   companyWebsite: string | null;
   companyAddress: string | null;
   customerName: string;
+  branchName: string;
+  createdAt: string;
   items: Array<{
+    id: string;
     quantity: number;
     itemName: string;
     totalPieces: number;
@@ -58,6 +64,11 @@ async function getInvoiceSnapshot(
       branchId,
     },
     include: {
+      branch: {
+        select: {
+          name: true,
+        },
+      },
       items: {
         orderBy: {
           createdAt: "asc",
@@ -69,6 +80,7 @@ async function getInvoiceSnapshot(
 
 function projectItems(invoice: NonNullable<InvoiceForReceipt>) {
   return invoice.items.map((item) => ({
+    id: item.id,
     quantity: item.quantity,
     itemName: item.itemName,
     totalPieces: item.totalPieces,
@@ -109,6 +121,8 @@ export async function getCustomerReceipt(
     companyWebsite: invoice.companyWebsite,
     companyAddress: invoice.companyAddress,
     customerName: invoice.customerName,
+    branchName: invoice.branch.name,
+    createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
     totalAmount: invoice.totalAmount,
     garmentNote: invoice.garmentNote,
@@ -147,6 +161,8 @@ export async function getCompanyReceipt(
     companyWebsite: invoice.companyWebsite,
     companyAddress: invoice.companyAddress,
     customerName: invoice.customerName,
+    branchName: invoice.branch.name,
+    createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
     totalAmount: invoice.totalAmount,
     garmentNote: invoice.garmentNote,

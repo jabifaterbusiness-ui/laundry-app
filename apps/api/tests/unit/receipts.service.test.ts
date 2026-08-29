@@ -28,6 +28,10 @@ const invoiceFixture = {
   status: "ISSUED",
   customerName: "Jane Doe",
 
+  branch: {
+    name: "Main Branch",
+  },
+
   companyName: "Clean Laundry",
   companyPhone: "08000000000",
   companyEmail: "hello@cleanlaundry.com",
@@ -91,8 +95,11 @@ describe("getCustomerReceipt", () => {
       companyWebsite: "https://cleanlaundry.com",
       companyAddress: "12 Main Street",
       customerName: "Jane Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-08-29T10:00:00.000Z",
       items: [
         {
+          id: "item-1",
           quantity: 2,
           itemName: "Shirt",
           totalPieces: 2,
@@ -100,6 +107,7 @@ describe("getCustomerReceipt", () => {
           totalPrice: 9000,
         },
         {
+          id: "item-2",
           quantity: 1,
           itemName: "Complete Agbada",
           totalPieces: 3,
@@ -144,6 +152,11 @@ describe("getCustomerReceipt", () => {
         branchId: BRANCH_ID,
       },
       include: {
+        branch: {
+          select: {
+            name: true,
+          },
+        },
         items: {
           orderBy: {
             createdAt: "asc",
@@ -185,8 +198,11 @@ describe("getCompanyReceipt", () => {
       companyWebsite: "https://cleanlaundry.com",
       companyAddress: "12 Main Street",
       customerName: "Jane Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-08-29T10:00:00.000Z",
       items: [
         {
+          id: "item-1",
           quantity: 2,
           itemName: "Shirt",
           totalPieces: 2,
@@ -194,6 +210,7 @@ describe("getCompanyReceipt", () => {
           totalPrice: 9000,
         },
         {
+          id: "item-2",
           quantity: 1,
           itemName: "Complete Agbada",
           totalPieces: 3,
@@ -263,6 +280,7 @@ describe("receipt financial snapshots", () => {
 
     expect(result?.items).toEqual([
       {
+        id: "item-1",
         quantity: 2,
         itemName: "Shirt",
         totalPieces: 2,
@@ -270,6 +288,7 @@ describe("receipt financial snapshots", () => {
         totalPrice: 9000,
       },
       {
+        id: "item-2",
         quantity: 1,
         itemName: "Complete Agbada",
         totalPieces: 3,
