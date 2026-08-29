@@ -7,6 +7,7 @@ import { logger } from "./lib/logger.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { requestContext } from "./middleware/request-context.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { businessesRouter } from "./modules/businesses/businesses.routes.js";
 import { customersRouter } from "./modules/customers/customers.routes.js";
 import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
 import { ordersRouter } from "./modules/orders/orders.routes.js";
@@ -34,6 +35,7 @@ type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
 
   const v1 = express.Router();
   v1.use("/auth", authRouter);
+  v1.use("/businesses", businessesRouter);
   v1.use("/customers", customersRouter);
   v1.use("/migrations", migrationsRouter);
   v1.use("/services", servicesRouter);

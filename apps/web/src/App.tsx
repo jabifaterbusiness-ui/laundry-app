@@ -6,6 +6,7 @@ import { RequireAuth } from "./routes/RequireAuth.js";
 import { DataManagementPage } from "./pages/DataManagementPage.js";
 import { ServicesPage } from "./pages/services/ServicesPage.js";
 import { OrdersPage } from "./pages/orders/OrdersPage.js";
+import { InvoicesPage } from "./pages/invoices/InvoicesPage.js";
 
 export function App() {
   return (
@@ -48,6 +49,14 @@ export function App() {
         element={
           <RequireAuth>
             <OrdersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/invoices"
+        element={
+          <RequireAuth>
+            <InvoicesPage />
           </RequireAuth>
         }
       />

@@ -1,0 +1,161 @@
+.receipt {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #fff;
+  color: #111;
+  font-family: Arial, Helvetica, sans-serif;
+  box-sizing: border-box;
+}
+
+.receipt__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 2px solid #111;
+  padding-bottom: 14px;
+}
+
+.receipt__brand-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #111;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+.receipt__company h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.receipt__company-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+}
+
+.receipt__title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.receipt__title-row h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.receipt__title-row p,
+.receipt__date {
+  margin: 0;
+  font-size: 11px;
+}
+
+.receipt__customer {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.receipt__customer > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.receipt__label {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.receipt__items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.receipt__items th,
+.receipt__items td {
+  border-bottom: 1px solid #ccc;
+  padding: 7px 5px;
+  text-align: left;
+}
+
+.receipt__items th:nth-child(1),
+.receipt__items th:nth-child(3),
+.receipt__items td:nth-child(1),
+.receipt__items td:nth-child(3) {
+  text-align: center;
+}
+
+.receipt__items th:nth-child(4),
+.receipt__items th:nth-child(5),
+.receipt__items td:nth-child(4),
+.receipt__items td:nth-child(5) {
+  text-align: right;
+}
+
+.receipt__note,
+.receipt__agreement {
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.receipt__note p,
+.receipt__agreement p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+}
+
+.receipt__note--internal {
+  border-style: dashed;
+}
+
+.receipt__total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px solid #111;
+  font-size: 13px;
+}
+
+.receipt__total strong {
+  font-size: 18px;
+}
+
+.receipt__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #ccc;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media print {
+  .receipt {
+    max-width: none;
+    margin: 0;
+    padding: 8mm;
+  }
+}

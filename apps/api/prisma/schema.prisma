@@ -63,6 +63,25 @@ model Business {
   website String?
   address String?
 
+  // -------------------------------------------------------------------
+  // RECEIPT BRANDING
+  // -------------------------------------------------------------------
+  // The logo is stored outside PostgreSQL; this field stores its
+  // publicly usable application URL/reference.
+  logoUrl String?
+
+  // Automatically generated from the business logo by default.
+  // The owner may override these values through receipt customization.
+  receiptPrimaryColor    String?
+  receiptAccentColor     String?
+  receiptBackgroundColor String?
+  receiptTextColor       String?
+
+  // Controls the visual arrangement of the digital receipt header.
+  // Kept as a string initially so the branding system can evolve
+  // without unnecessary enum migrations.
+  receiptHeaderStyle String?
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
