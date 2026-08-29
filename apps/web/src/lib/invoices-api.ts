@@ -68,4 +68,75 @@ export async function getInvoiceByOrder(
   });
 }
 
+export type ReceiptItem = {
+  id: string;
+  quantity: number;
+  itemName: string;
+  totalPieces: number;
+  unitPrice: number;
+  totalPrice: number;
+};
+
+export type CustomerReceipt = {
+  receiptType: "CUSTOMER";
+  invoiceNumber: string;
+  companyName: string;
+  companyPhone: string | null;
+  companyEmail: string | null;
+  companyWebsite: string | null;
+  companyAddress: string | null;
+  customerName: string;
+  branchName: string;
+  createdAt: string;
+  items: ReceiptItem[];
+  totalAmount: number;
+  garmentNote: string | null;
+  customerAgreement: string;
+};
+
+export type CompanyReceipt = {
+  receiptType: "COMPANY";
+  invoiceNumber: string;
+  companyName: string;
+  companyPhone: string | null;
+  companyEmail: string | null;
+  companyWebsite: string | null;
+  companyAddress: string | null;
+  customerName: string;
+  branchName: string;
+  createdAt: string;
+  items: ReceiptItem[];
+  totalAmount: number;
+  garmentNote: string | null;
+  internalNote: string | null;
+};
+
+export async function getCustomerReceipt(
+  id: string,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<CustomerReceipt> {
+  return apiFetch<CustomerReceipt>(
+    `/invoices/${id}/receipt/customer`,
+    {
+      accessToken: auth.accessToken,
+      branchId,
+    },
+  );
+}
+
+export async function getCompanyReceipt(
+  id: string,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<CompanyReceipt> {
+  return apiFetch<CompanyReceipt>(
+    `/invoices/${id}/receipt/company`,
+    {
+      accessToken: auth.accessToken,
+      branchId,
+    },
+  );
+}
+
 export type { InvoiceStatus };

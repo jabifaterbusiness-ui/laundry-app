@@ -1,60 +1,59 @@
-import type { Invoice } from "@laundry-app/shared";
+import type { CompanyReceipt as CompanyReceiptData } from "../../../lib/invoices-api.js";
 import {
   formatReceiptDate,
   formatReceiptMoney,
   getBusinessInitials,
-  getReceiptTitle,
 } from "./receipt-utils.js";
 import "./ReceiptStyles.css";
 
 interface CompanyReceiptProps {
-  invoice: Invoice;
+  receipt: CompanyReceiptData;
 }
 
-export function CompanyReceipt({ invoice }: CompanyReceiptProps) {
+export function CompanyReceipt({ receipt }: CompanyReceiptProps) {
   return (
     <article className="receipt receipt--company">
       <header className="receipt__header">
         <div className="receipt__brand-mark" aria-hidden="true">
-          {getBusinessInitials(invoice.companyName)}
+          {getBusinessInitials(receipt.companyName)}
         </div>
 
         <div className="receipt__company">
-          <h1>{invoice.companyName}</h1>
+          <h1>{receipt.companyName}</h1>
           <div className="receipt__company-contact">
-            {invoice.companyPhone && <span>{invoice.companyPhone}</span>}
-            {invoice.companyEmail && <span>{invoice.companyEmail}</span>}
-            {invoice.companyWebsite && <span>{invoice.companyWebsite}</span>}
-            {invoice.companyAddress && <span>{invoice.companyAddress}</span>}
+            {receipt.companyPhone && <span>{receipt.companyPhone}</span>}
+            {receipt.companyEmail && <span>{receipt.companyEmail}</span>}
+            {receipt.companyWebsite && <span>{receipt.companyWebsite}</span>}
+            {receipt.companyAddress && <span>{receipt.companyAddress}</span>}
           </div>
         </div>
       </header>
 
       <div className="receipt__title-row">
         <div>
-          <h2>{getReceiptTitle(invoice)} — COMPANY COPY</h2>
-          <p>Invoice #{invoice.invoiceNumber}</p>
+          <h2>LAUNDRY RECEIPT — COMPANY COPY</h2>
+          <p>Invoice #{receipt.invoiceNumber}</p>
         </div>
 
         <div className="receipt__date">
-          {formatReceiptDate(invoice.createdAt)}
+          {formatReceiptDate(receipt.createdAt)}
         </div>
       </div>
 
       <section className="receipt__customer">
         <div>
           <span className="receipt__label">CUSTOMER</span>
-          <strong>{invoice.customerName}</strong>
+          <strong>{receipt.customerName}</strong>
         </div>
 
         <div>
           <span className="receipt__label">ORDER</span>
-          <strong>{invoice.invoiceNumber}</strong>
+          <strong>{receipt.invoiceNumber}</strong>
         </div>
 
         <div>
           <span className="receipt__label">BRANCH</span>
-          <strong>{invoice.order.branch.name}</strong>
+          <strong>{receipt.branchName}</strong>
         </div>
       </section>
 
@@ -70,7 +69,7 @@ export function CompanyReceipt({ invoice }: CompanyReceiptProps) {
         </thead>
 
         <tbody>
-          {invoice.items.map((item) => (
+          {receipt.items.map((item) => (
             <tr key={item.id}>
               <td>{item.quantity}</td>
               <td>{item.itemName}</td>
@@ -82,23 +81,23 @@ export function CompanyReceipt({ invoice }: CompanyReceiptProps) {
         </tbody>
       </table>
 
-      {invoice.garmentNote && (
+      {receipt.garmentNote && (
         <section className="receipt__note">
           <span className="receipt__label">GARMENT / CUSTOMER NOTE</span>
-          <p>{invoice.garmentNote}</p>
+          <p>{receipt.garmentNote}</p>
         </section>
       )}
 
-      {invoice.internalNote && (
+      {receipt.internalNote && (
         <section className="receipt__note receipt__note--internal">
           <span className="receipt__label">PRIVATE / INTERNAL NOTE</span>
-          <p>{invoice.internalNote}</p>
+          <p>{receipt.internalNote}</p>
         </section>
       )}
 
       <div className="receipt__total">
         <span>TOTAL AMOUNT</span>
-        <strong>{formatReceiptMoney(invoice.totalAmount)}</strong>
+        <strong>{formatReceiptMoney(receipt.totalAmount)}</strong>
       </div>
 
       <footer className="receipt__footer">

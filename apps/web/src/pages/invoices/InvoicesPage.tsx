@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { InvoiceStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
+  getCompanyReceipt,
+  getCustomerReceipt,
   getInvoice,
   listInvoices,
 } from "../../lib/invoices-api.js";
@@ -75,6 +77,38 @@ export function InvoicesPage() {
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
+
+  const customerReceiptQuery = useQuery({
+    queryKey: ["invoice-receipt", "customer", selectedInvoiceId, activeBranchId],
+    queryFn: () =>
+      getCustomerReceipt(
+        selectedInvoiceId!,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        selectedInvoiceId &&
+        printMode === "customer",
+    ),
+  });
+
+  const companyReceiptQuery = useQuery({
+    queryKey: ["invoice-receipt", "company", selectedInvoiceId, activeBranchId],
+    queryFn: () =>
+      getCompanyReceipt(
+        selectedInvoiceId!,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        selectedInvoiceId &&
+        printMode === "company",
+    ),
+  });
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -305,11 +339,15 @@ export function InvoicesPage() {
       {selectedInvoice && (
         <div className="invoice-print-area" aria-hidden="true">
           <div className="invoice-print-customer">
-            <CustomerReceipt invoice={selectedInvoice} />
+            {customerReceiptQuery.data && (
+              <CustomerReceipt receipt={customerReceiptQuery.data} />
+            )}
           </div>
 
           <div className="invoice-print-company">
-            <CompanyReceipt invoice={selectedInvoice} />
+            {companyReceiptQuery.data && (
+              <CompanyReceipt receipt={companyReceiptQuery.data} />
+            )}
           </div>
         </div>
       )}
