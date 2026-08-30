@@ -93,6 +93,7 @@ model Business {
   services            Service[]
   orders              Order[]
   invoices            Invoice[]
+  payments            Payment[]
   orderNumberSequence OrderNumberSequence?
   migrationJobs       MigrationJob[]
   garments            Garment[]
@@ -116,6 +117,7 @@ model Branch {
   auditLogs    AuditLog[]
   orders       Order[]
   invoices     Invoice[]
+  payments     Payment[]
   garments     Garment[]
 
   @@index([businessId])
@@ -481,7 +483,8 @@ model Invoice {
   // Agreement printed on the customer copy.
   customerAgreement String
 
-  items InvoiceItem[]
+  items    InvoiceItem[]
+  payments Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -511,6 +514,62 @@ model InvoiceItem {
 
   @@index([invoiceId])
   @@map("invoice_items")
+}
+
+// ---------------------------------------------------------------------
+// PAYMENTS MODULE
+// ---------------------------------------------------------------------
+
+// Payment method used for an actual payment transaction.
+// PARTIAL/PART PAYMENT is deliberately not a method: it is determined
+// by comparing the amount paid against the invoice balance.
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+// A recorded payment can be voided without deleting its historical record.
+enum PaymentStatus {
+  POSTED
+  VOID
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  // Tenant and operational scope.
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  // Every payment belongs to exactly one invoice.
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  // Amount is stored as a whole-naira integer, consistent with
+  // Invoice.totalAmount and Order.orderTotal.
+  amount Int
+
+  method PaymentMethod
+  status PaymentStatus @default(POSTED)
+
+  // Optional transaction/reference number supplied for transfer or POS.
+  reference String?
+
+  // Optional internal note about the payment.
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, invoiceId, createdAt])
+  @@index([invoiceId])
+  @@map("payments")
 }
 
 // ---------------------------------------------------------------------

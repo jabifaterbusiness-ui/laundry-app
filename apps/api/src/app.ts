@@ -13,6 +13,7 @@ import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
 import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { garmentsRouter } from "./modules/garments/garments.routes.js";
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
+import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
 
 export function createApp() {
@@ -42,6 +43,7 @@ type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
   v1.use("/orders", ordersRouter);
   v1.use("/garments", garmentsRouter);
   v1.use("/invoices", invoicesRouter);
+  v1.use("/payments", paymentsRouter);
 
   app.use("/api/v1", v1);
 

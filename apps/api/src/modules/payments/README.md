@@ -1,8 +1,19 @@
 # payments module
 
-Status: not implemented - placeholder created during foundation setup.
+Status: API foundation implemented.
 
-This folder is reserved for the payments module (routes, controller, service,
-and any module-specific types). No business logic, fake data, or demo
-endpoints have been added here. It is deliberately empty pending the
-approved implementation order.
+Payment methods:
+- CASH
+- TRANSFER
+- POS
+
+Part payment is not a separate payment method. It is represented by one or
+more posted payments whose combined amount is less than the invoice total.
+
+Payment rules:
+- Payments are tenant- and branch-scoped.
+- Payments may only be made against an ISSUED invoice.
+- Posted payments cannot exceed the outstanding invoice balance.
+- Multiple payments are allowed against one invoice.
+- VOID payments do not contribute to the amount paid.
+- Payment records are retained for historical/audit purposes.

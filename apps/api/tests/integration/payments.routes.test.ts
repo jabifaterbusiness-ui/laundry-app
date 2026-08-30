@@ -1,0 +1,589 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import request from "supertest";
+import jwt from "jsonwebtoken";
+
+vi.mock("../../src/lib/prisma.js", () => ({
+  prisma: {
+    $transaction: vi.fn(),
+    payment: {
+      findMany: vi.fn(),
+      count: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+    },
+    invoice: {
+      findFirst: vi.fn(),
+    },
+    userBranch: {
+      findUnique: vi.fn(),
+    },
+  },
+}));
+
+vi.mock("../../src/lib/audit.js", () => ({
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { prisma } from "../../src/lib/prisma.js";
+import { recordAuditEvent } from "../../src/lib/audit.js";
+import { createApp } from "../../src/app.js";
+
+const paymentFindMany = vi.mocked(prisma.payment.findMany);
+const paymentCount = vi.mocked(prisma.payment.count);
+const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
+const paymentCreate = vi.mocked(prisma.payment.create);
+const invoiceFindFirst = vi.mocked(prisma.invoice.findFirst);
+const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+
+function tokenFor(
+  role: string,
+  businessId: string | null,
+  userId = "user-1",
+) {
+  return jwt.sign(
+    {
+      sub: userId,
+      email: "user@example.com",
+      role,
+      businessId,
+    },
+    process.env.JWT_ACCESS_SECRET as string,
+    { expiresIn: "15m" },
+  );
+}
+
+const OWNER_A = tokenFor("BUSINESS_OWNER", "biz-A");
+const STAFF_A = tokenFor("STAFF", "biz-A", "user-staff-a");
+const MANAGER_A = tokenFor("BRANCH_MANAGER", "biz-A", "user-mgr-a");
+const OWNER_B = tokenFor("BUSINESS_OWNER", "biz-B", "user-owner-b");
+const PLATFORM_ADMIN = tokenFor("PLATFORM_ADMIN", null, "user-admin");
+
+const BRANCH_A = "33333333-3333-3333-3333-333333333333";
+const BRANCH_B = "44444444-4444-4444-4444-444444444444";
+const INVOICE_A = "88888888-8888-8888-8888-888888888888";
+const PAYMENT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+const app = createApp();
+
+function allowBranch(
+  userId: string,
+  branchId: string,
+  businessId: string,
+) {
+  userBranchFindUnique.mockResolvedValue({
+    userId,
+    branchId,
+    branch: {
+      id: branchId,
+      businessId,
+      name: "Main Branch",
+    },
+  } as never);
+}
+
+function mockTransaction() {
+  vi.mocked(prisma.$transaction).mockImplementation(
+    async (callback) => callback(prisma as never),
+  );
+}
+
+const paymentFixture = {
+  id: PAYMENT_A,
+  businessId: "biz-A",
+  branchId: BRANCH_A,
+  invoiceId: INVOICE_A,
+  amount: 4000,
+  method: "TRANSFER",
+  reference: "TRX-123",
+  note: "Customer transfer",
+  status: "POSTED",
+  createdAt: new Date("2026-08-29T20:00:00.000Z"),
+  invoice: {
+    id: INVOICE_A,
+    invoiceNumber: "00042",
+    orderId: "77777777-7777-7777-7777-777777777777",
+    totalAmount: 10000,
+    status: "ISSUED",
+  },
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockTransaction();
+});
+
+describe("Payments routes - authentication", () => {
+  it("rejects an unauthenticated request", async () => {
+    const res = await request(app).get("/api/v1/payments");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects PLATFORM_ADMIN because it has no business context", async () => {
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("Payments routes - branch context", () => {
+  it("rejects a request without X-Branch-Id", async () => {
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a branch the authenticated user is not a member of", async () => {
+    userBranchFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a branch belonging to another business", async () => {
+    userBranchFindUnique.mockResolvedValue({
+      userId: "user-1",
+      branchId: BRANCH_B,
+      branch: {
+        id: BRANCH_B,
+        businessId: "biz-B",
+        name: "Other Business Branch",
+      },
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("Payments routes - authorization", () => {
+  it("STAFF can create a payment", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    invoiceFindFirst.mockResolvedValue({
+      id: INVOICE_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      totalAmount: 10000,
+      status: "ISSUED",
+      payments: [{ amount: 3000 }],
+    } as never);
+
+    paymentCreate.mockResolvedValue(paymentFixture as never);
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "TRANSFER",
+        reference: "TRX-123",
+        note: "Customer transfer",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe(PAYMENT_A);
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "payment.created",
+        entityType: "Payment",
+        entityId: PAYMENT_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-staff-a",
+      }),
+    );
+  });
+
+  it("BRANCH_MANAGER can create a payment", async () => {
+    allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+
+    invoiceFindFirst.mockResolvedValue({
+      id: INVOICE_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      totalAmount: 10000,
+      status: "ISSUED",
+      payments: [],
+    } as never);
+
+    paymentCreate.mockResolvedValue(paymentFixture as never);
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("BUSINESS_OWNER can create a payment", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    invoiceFindFirst.mockResolvedValue({
+      id: INVOICE_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      totalAmount: 10000,
+      status: "ISSUED",
+      payments: [],
+    } as never);
+
+    paymentCreate.mockResolvedValue(paymentFixture as never);
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "POS",
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("does not allow an unauthorized role to access payments", async () => {
+    const token = tokenFor("PLATFORM_ADMIN", "biz-A", "user-platform");
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("Payments routes - creation validation", () => {
+  it("rejects a missing invoiceId", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        amount: 5000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid invoiceId", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: "not-a-uuid",
+        amount: 5000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects a zero payment amount", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 0,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsupported payment method", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 5000,
+        method: "CHEQUE",
+      });
+
+    expect(res.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown fields in the payment body", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 5000,
+        method: "CASH",
+        businessId: "biz-B",
+      });
+
+    expect(res.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("Payments routes - tenant and branch isolation", () => {
+  it("business A lists only payments for its selected branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindMany.mockResolvedValue([]);
+    paymentCount.mockResolvedValue(0);
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+
+    expect(paymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+        }),
+      }),
+    );
+  });
+
+  it("business B cannot retrieve a payment from business A", async () => {
+    allowBranch("user-owner-b", BRANCH_B, "biz-B");
+
+    paymentFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/${PAYMENT_A}`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(404);
+
+    expect(paymentFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: PAYMENT_A,
+          businessId: "biz-B",
+          branchId: BRANCH_B,
+        },
+      }),
+    );
+  });
+
+  it("a payment from another branch is not returned", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/${PAYMENT_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(404);
+
+    expect(paymentFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: PAYMENT_A,
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+        },
+      }),
+    );
+  });
+});
+
+describe("Payments routes - list and filters", () => {
+  it("lists payments successfully", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindMany.mockResolvedValue([paymentFixture] as never);
+    paymentCount.mockResolvedValue(1);
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination.total).toBe(1);
+  });
+
+  it("filters payments by invoice and status", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindMany.mockResolvedValue([]);
+    paymentCount.mockResolvedValue(0);
+
+    const res = await request(app)
+      .get(
+        `/api/v1/payments?invoiceId=${INVOICE_A}&status=POSTED&page=2&pageSize=10`,
+      )
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+
+    expect(paymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          invoiceId: INVOICE_A,
+          status: "POSTED",
+        },
+        skip: 10,
+        take: 10,
+      }),
+    );
+  });
+});
+
+describe("Invoice payment summary route", () => {
+  it("returns the payment summary for an invoice", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    invoiceFindFirst.mockResolvedValue({
+      id: INVOICE_A,
+      invoiceNumber: "00042",
+      totalAmount: 10000,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      payments: [
+        {
+          id: PAYMENT_A,
+          amount: 3000,
+          method: "CASH",
+          status: "POSTED",
+        },
+        {
+          id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          amount: 2000,
+          method: "TRANSFER",
+          status: "VOID",
+        },
+      ],
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/invoice/${INVOICE_A}/summary`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.invoiceId).toBe(INVOICE_A);
+    expect(res.body.invoiceNumber).toBe("00042");
+    expect(res.body.totalAmount).toBe(10000);
+    expect(res.body.amountPaid).toBe(3000);
+    expect(res.body.balance).toBe(7000);
+    expect(res.body.paymentStatus).toBe("PARTIALLY_PAID");
+  });
+
+  it("does not expose an invoice from another business", async () => {
+    allowBranch("user-owner-b", BRANCH_B, "biz-B");
+
+    invoiceFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/invoice/${INVOICE_A}/summary`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(404);
+
+    expect(invoiceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: INVOICE_A,
+          businessId: "biz-B",
+          branchId: BRANCH_B,
+        },
+      }),
+    );
+  });
+});
+
+describe("Payment retrieval route", () => {
+  it("returns a payment within the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(paymentFixture as never);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/${PAYMENT_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(PAYMENT_A);
+    expect(res.body.amount).toBe(4000);
+  });
+
+  it("rejects an invalid payment id", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .get("/api/v1/payments/not-a-uuid")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(422);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the payment does not exist", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payments/${PAYMENT_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(404);
+  });
+});
