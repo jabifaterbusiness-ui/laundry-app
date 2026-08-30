@@ -161,6 +161,7 @@ export async function listPayments(params: ListPaymentsParams) {
             orderId: true,
             totalAmount: true,
             status: true,
+            customerName: true,
           },
         },
       },
