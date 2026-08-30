@@ -1,4 +1,5 @@
 import type { CompanyReceipt as CompanyReceiptData } from "../../../lib/invoices-api.js";
+import type { BusinessBranding } from "../../../lib/businesses-api.js";
 import {
   formatReceiptDate,
   formatReceiptMoney,
@@ -8,15 +9,33 @@ import "./ReceiptStyles.css";
 
 interface CompanyReceiptProps {
   receipt: CompanyReceiptData;
+  branding?: BusinessBranding | null;
 }
 
-export function CompanyReceipt({ receipt }: CompanyReceiptProps) {
+export function CompanyReceipt({
+  receipt,
+  branding,
+}: CompanyReceiptProps) {
+  const style = {
+    "--receipt-primary": branding?.receiptPrimaryColor ?? "#111111",
+    "--receipt-accent": branding?.receiptAccentColor ?? "#111111",
+    "--receipt-background": branding?.receiptBackgroundColor ?? "#ffffff",
+    "--receipt-text": branding?.receiptTextColor ?? "#111111",
+  } as React.CSSProperties;
   return (
-    <article className="receipt receipt--company">
+    <article className="receipt receipt--company" style={style}>
       <header className="receipt__header">
-        <div className="receipt__brand-mark" aria-hidden="true">
-          {getBusinessInitials(receipt.companyName)}
-        </div>
+        {branding?.logoUrl ? (
+          <img
+            className="receipt__logo"
+            src={branding.logoUrl}
+            alt={`${receipt.companyName} logo`}
+          />
+        ) : (
+          <div className="receipt__brand-mark" aria-hidden="true">
+            {getBusinessInitials(receipt.companyName)}
+          </div>
+        )}
 
         <div className="receipt__company">
           <h1>{receipt.companyName}</h1>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getBusinessBranding } from "../../lib/businesses-api.js";
 import type { InvoiceStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -38,6 +39,16 @@ export function InvoicesPage() {
   const [printMode, setPrintMode] = useState<"customer" | "company" | null>(
     null,
   );
+
+  const brandingQuery = useQuery({
+    queryKey: ["business-branding", activeBranchId],
+    queryFn: () =>
+      getBusinessBranding(
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(accessToken && activeBranchId),
+  });
 
   const invoicesQuery = useQuery({
     queryKey: [
@@ -364,13 +375,13 @@ export function InvoicesPage() {
         <div className="invoice-print-area" aria-hidden="true">
           <div className="invoice-print-customer">
             {customerReceiptQuery.data && (
-              <CustomerReceipt receipt={customerReceiptQuery.data} />
+              <CustomerReceipt receipt={customerReceiptQuery.data} branding={brandingQuery.data} />
             )}
           </div>
 
           <div className="invoice-print-company">
             {companyReceiptQuery.data && (
-              <CompanyReceipt receipt={companyReceiptQuery.data} />
+              <CompanyReceipt receipt={companyReceiptQuery.data} branding={brandingQuery.data} />
             )}
           </div>
         </div>

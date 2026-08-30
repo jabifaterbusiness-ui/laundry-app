@@ -255,3 +255,50 @@ body.printing-company .invoice-print-customer {
     margin: 0;
   }
 }
+
+/* ------------------------------------------------------------------
+   BUSINESS BRANDING
+   ------------------------------------------------------------------ */
+
+.receipt {
+  background: var(--receipt-background, #fff);
+  color: var(--receipt-text, #111);
+}
+
+.receipt__header {
+  border-bottom-color: var(--receipt-primary, #111);
+}
+
+.receipt__brand-mark {
+  border-color: var(--receipt-primary, #111);
+  color: var(--receipt-primary, #111);
+}
+
+.receipt__logo {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.receipt__title-row h2 {
+  color: var(--receipt-primary, #111);
+}
+
+.receipt__items th {
+  color: var(--receipt-primary, #111);
+  border-bottom-color: var(--receipt-primary, #111);
+}
+
+.receipt__total {
+  border-top-color: var(--receipt-primary, #111);
+}
+
+.receipt__total strong {
+  color: var(--receipt-accent, #111);
+}
+
+.receipt__note--internal {
+  border-color: var(--receipt-accent, #111);
+}
