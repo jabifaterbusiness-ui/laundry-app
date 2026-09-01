@@ -98,11 +98,12 @@ model Business {
   migrationJobs       MigrationJob[]
   garments            Garment[]
 
-  payrollPeriods       PayrollPeriod[]
-  payrollRecords       PayrollRecord[]
-  ious                 IOU[]
-  loans                Loan[]
-  payrollDeductions    PayrollDeduction[]
+  payrollPeriods        PayrollPeriod[]
+  payrollRecords        PayrollRecord[]
+  ious                  IOU[]
+  loans                 Loan[]
+  payrollDeductions     PayrollDeduction[]
+  employeeCompensations EmployeeCompensation[]
 
   @@map("businesses")
 }
@@ -164,12 +165,13 @@ model User {
   auditLogs     AuditLog[]
   migrationJobs MigrationJob[]
 
-  payrollRecords PayrollRecord[]
-  ious           IOU[]
-  loans          Loan[]
+  payrollRecords        PayrollRecord[]
+  ious                  IOU[]
+  loans                 Loan[]
+  employeeCompensations EmployeeCompensation[]
 
-  approvedIOUs   IOU[]  @relation("IOUApprover")
-  approvedLoans  Loan[] @relation("LoanApprover")
+  approvedIOUs  IOU[]  @relation("IOUApprover")
+  approvedLoans Loan[] @relation("LoanApprover")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -788,15 +790,41 @@ enum PayrollDeductionType {
   OTHER
 }
 
+model EmployeeCompensation {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Historical basic salary in whole naira.
+  basicSalary Int
+
+  // The salary becomes effective on this date.
+  effectiveFrom DateTime
+
+  // Null means this is the current compensation record.
+  effectiveTo DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, effectiveFrom])
+  @@index([businessId, employeeId, effectiveTo])
+  @@map("employee_compensations")
+}
+
 model PayrollPeriod {
-  id         String   @id @default(uuid())
+  id String @id @default(uuid())
 
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   // Payroll is generated for a specific operational branch/context.
-  branchId   String
-  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   periodStart DateTime
   periodEnd   DateTime
@@ -827,7 +855,7 @@ model PayrollRecord {
   payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Restrict)
 
   employeeId String
-  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
   // Historical salary snapshot for this payroll run.
   basicSalary Int
@@ -865,7 +893,7 @@ model IOU {
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   employeeId String
-  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
   // Amount originally approved.
   amount Int
@@ -877,9 +905,9 @@ model IOU {
 
   status IOUStatus @default(PENDING)
 
-  approvedAt DateTime?
+  approvedAt   DateTime?
   approvedById String?
-  approvedBy   User? @relation("IOUApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedBy   User?     @relation("IOUApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   payrollDeductions PayrollDeduction[]
 
@@ -902,18 +930,18 @@ model Loan {
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   employeeId String
-  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
-  principalAmount Int
+  principalAmount   Int
   outstandingAmount Int
 
   reason String?
 
   status LoanStatus @default(PENDING)
 
-  approvedAt DateTime?
+  approvedAt   DateTime?
   approvedById String?
-  approvedBy   User? @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedBy   User?     @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   payrollDeductions PayrollDeduction[]
 
@@ -942,10 +970,10 @@ model PayrollDeduction {
 
   // Exactly one source should normally be populated according to type.
   iouId String?
-  iou   IOU? @relation(fields: [iouId], references: [id], onDelete: Restrict)
+  iou   IOU?    @relation(fields: [iouId], references: [id], onDelete: Restrict)
 
   loanId String?
-  loan   Loan? @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  loan   Loan?   @relation(fields: [loanId], references: [id], onDelete: Restrict)
 
   amount Int
 

@@ -17,18 +17,21 @@ import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
 import loansRouter from "./modules/payroll/loans.routes.js";
+import compensationRouter from "./modules/payroll/compensation.routes.js";
 
 export function createApp() {
   const app = express();
 
   app.use(helmet());
   app.use(cors({ origin: config.cors.origin, credentials: true }));
-  app.use(express.json({
-    limit: "2mb",
-    // Large JSON files used by the migration endpoint must remain raw so
-    // the migration controller can enforce its own upload-size limit.
-type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
-  }));
+  app.use(
+    express.json({
+      limit: "2mb",
+      // Large JSON files used by the migration endpoint must remain raw so
+      // the migration controller can enforce its own upload-size limit.
+      type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
+    }),
+  );
   app.use(requestContext);
   app.use(pinoHttp({ logger, autoLogging: !config.isTest }));
 
@@ -47,7 +50,8 @@ type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
   v1.use("/invoices", invoicesRouter);
   v1.use("/payments", paymentsRouter);
   v1.use("/payroll/ious", iousRouter);
-v1.use("/payroll/loans", loansRouter);
+  v1.use("/payroll/loans", loansRouter);
+  v1.use("/payroll/compensation", compensationRouter);
 
   app.use("/api/v1", v1);
 
