@@ -98,6 +98,12 @@ model Business {
   migrationJobs       MigrationJob[]
   garments            Garment[]
 
+  payrollPeriods       PayrollPeriod[]
+  payrollRecords       PayrollRecord[]
+  ious                 IOU[]
+  loans                Loan[]
+  payrollDeductions    PayrollDeduction[]
+
   @@map("businesses")
 }
 
@@ -119,6 +125,12 @@ model Branch {
   invoices     Invoice[]
   payments     Payment[]
   garments     Garment[]
+
+  payrollPeriods    PayrollPeriod[]
+  payrollRecords    PayrollRecord[]
+  ious              IOU[]
+  loans             Loan[]
+  payrollDeductions PayrollDeduction[]
 
   @@index([businessId])
   @@map("branches")
@@ -151,6 +163,13 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
   migrationJobs MigrationJob[]
+
+  payrollRecords PayrollRecord[]
+  ious           IOU[]
+  loans          Loan[]
+
+  approvedIOUs   IOU[]  @relation("IOUApprover")
+  approvedLoans  Loan[] @relation("LoanApprover")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -722,4 +741,221 @@ model MigrationIssue {
 
   @@index([jobId, severity])
   @@map("migration_issues")
+}
+
+// ---------------------------------------------------------------------
+// PAYROLL / STAFF FINANCE MODULE
+// ---------------------------------------------------------------------
+//
+// Payroll is an internal business-finance system. It is separate from
+// customer invoices/payments.
+//
+// IOUs and loans can be approved against an employee and subsequently
+// deducted through payroll. PayrollDeduction preserves the exact
+// historical amount deducted and the source obligation.
+// ---------------------------------------------------------------------
+
+enum PayrollPeriodStatus {
+  OPEN
+  PROCESSING
+  FINALIZED
+  PAID
+  VOID
+}
+
+enum IOUStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_DEDUCTED
+  FULLY_DEDUCTED
+  REJECTED
+  CANCELLED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  PARTIALLY_REPAID
+  FULLY_REPAID
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollDeductionType {
+  IOU
+  LOAN
+  OTHER
+}
+
+model PayrollPeriod {
+  id         String   @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Payroll is generated for a specific operational branch/context.
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  status PayrollPeriodStatus @default(OPEN)
+
+  payrollRecords PayrollRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, branchId, periodStart, periodEnd])
+  @@index([businessId, periodStart, periodEnd])
+  @@index([businessId, branchId, status])
+  @@map("payroll_periods")
+}
+
+model PayrollRecord {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Historical salary snapshot for this payroll run.
+  basicSalary Int
+
+  // Amounts are whole-naira integers.
+  allowances Int @default(0)
+  bonuses    Int @default(0)
+  grossPay   Int
+
+  // Automatically calculated from approved deductions.
+  totalDeductions Int @default(0)
+
+  // Gross pay minus all deductions.
+  netPay Int
+
+  deductions PayrollDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([payrollPeriodId, employeeId])
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([employeeId, createdAt])
+  @@map("payroll_records")
+}
+
+model IOU {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Amount originally approved.
+  amount Int
+
+  // Remaining amount still owed.
+  outstandingAmount Int
+
+  reason String?
+
+  status IOUStatus @default(PENDING)
+
+  approvedAt DateTime?
+  approvedById String?
+  approvedBy   User? @relation("IOUApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  payrollDeductions PayrollDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, status])
+  @@index([employeeId, status])
+  @@map("ious")
+}
+
+model Loan {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  principalAmount Int
+  outstandingAmount Int
+
+  reason String?
+
+  status LoanStatus @default(PENDING)
+
+  approvedAt DateTime?
+  approvedById String?
+  approvedBy   User? @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  payrollDeductions PayrollDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, status])
+  @@index([employeeId, status])
+  @@map("loans")
+}
+
+model PayrollDeduction {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollRecordId String
+  payrollRecord   PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Restrict)
+
+  type PayrollDeductionType
+
+  // Exactly one source should normally be populated according to type.
+  iouId String?
+  iou   IOU? @relation(fields: [iouId], references: [id], onDelete: Restrict)
+
+  loanId String?
+  loan   Loan? @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  amount Int
+
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, payrollRecordId])
+  @@index([businessId, branchId, createdAt])
+  @@index([iouId])
+  @@index([loanId])
+  @@map("payroll_deductions")
 }
