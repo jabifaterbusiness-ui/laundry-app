@@ -9,6 +9,7 @@ import {
   createPayment,
   getInvoicePaymentSummary,
   listPayments,
+  voidPayment,
   type PaymentMethod,
   type PaymentStatus,
 } from "../../lib/payments-api.js";
@@ -32,7 +33,12 @@ function statusLabel(value: string) {
 export function PaymentsPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
+  const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+
+  const canVoidPayment =
+    user?.role === "BUSINESS_OWNER" ||
+    user?.role === "BRANCH_MANAGER";
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<PaymentStatus | "">("");
@@ -158,6 +164,50 @@ export function PaymentsPage() {
     },
   });
 
+  const voidMutation = useMutation({
+    mutationFn: (paymentId: string) =>
+      voidPayment(
+        paymentId,
+        { accessToken },
+        activeBranchId,
+      ),
+    onSuccess: async (payment) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["payments"],
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: ["invoice-payment-summary", payment.invoiceId],
+      });
+
+      if (selectedInvoiceId === payment.invoiceId) {
+        await queryClient.invalidateQueries({
+          queryKey: [
+            "invoice-payment-summary",
+            payment.invoiceId,
+            activeBranchId,
+          ],
+        });
+      }
+    },
+  });
+
+  function handleVoidPayment(payment: {
+    id: string;
+    invoiceId: string;
+    amount: number;
+  }) {
+    const confirmed = window.confirm(
+      `Void this payment of ${formatMoney(payment.amount)}? This action cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    voidMutation.mutate(payment.id);
+  }
+
   const payments = paymentsQuery.data?.data ?? [];
   const pagination = paymentsQuery.data?.pagination;
   const invoices = invoicesQuery.data?.data ?? [];
@@ -277,6 +327,7 @@ export function PaymentsPage() {
               <th>Status</th>
               <th>Reference</th>
               <th>Created</th>
+              {canVoidPayment && <th>Action</th>}
             </tr>
           </thead>
 
@@ -304,6 +355,31 @@ export function PaymentsPage() {
                 <td>{statusLabel(payment.status)}</td>
                 <td>{payment.reference ?? "-"}</td>
                 <td>{formatDate(payment.createdAt)}</td>
+
+                {canVoidPayment && (
+                  <td>
+                    {payment.status === "POSTED" ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleVoidPayment({
+                            id: payment.id,
+                            invoiceId: payment.invoiceId,
+                            amount: payment.amount,
+                          })
+                        }
+                        disabled={voidMutation.isPending}
+                      >
+                        {voidMutation.isPending &&
+                        voidMutation.variables === payment.id
+                          ? "Voiding..."
+                          : "Void"}
+                      </button>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -332,6 +408,14 @@ export function PaymentsPage() {
             Next
           </button>
         </div>
+      )}
+
+      {voidMutation.isError && (
+        <p role="alert">
+          {voidMutation.error instanceof ApiError
+            ? voidMutation.error.message
+            : "Unable to void payment. Please try again."}
+        </p>
       )}
 
       {formOpen && (

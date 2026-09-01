@@ -121,6 +121,18 @@ export async function listPayments(
   );
 }
 
+export async function voidPayment(
+  id: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<Payment>(`/payments/${id}/void`, {
+    method: "PATCH",
+    headers: branchHeaders(branchId),
+    accessToken: auth.accessToken,
+  });
+}
+
 export async function getPayment(
   id: string,
   auth: AuthOptions,
