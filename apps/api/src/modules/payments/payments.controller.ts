@@ -12,6 +12,7 @@ import {
   getInvoicePaymentSummary,
   getPaymentForBranch,
   listPayments,
+  voidPayment,
 } from "./payments.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -128,4 +129,34 @@ export async function getInvoiceSummary(
   );
 
   res.status(200).json(summary);
+}
+
+export async function voidPaymentController(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = paymentIdParamSchema.parse(req.params);
+
+  const payment = await voidPayment(
+    id,
+    businessId,
+    branchId,
+  );
+
+  await recordAuditEvent({
+    action: "payment.voided",
+    entityType: "Payment",
+    entityId: payment.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceId: payment.invoiceId,
+      amount: payment.amount,
+      method: payment.method,
+      status: payment.status,
+    },
+  });
+
+  res.status(200).json(payment);
 }

@@ -11,6 +11,7 @@ import {
   getInvoiceSummary,
   getOne,
   list,
+  voidPaymentController,
 } from "./payments.controller.js";
 
 const PAYMENT_ROLES = [
@@ -43,6 +44,12 @@ paymentsRouter.get(
   "/invoice/:invoiceId/summary",
   requireRole(...PAYMENT_ROLES),
   asyncHandler(getInvoiceSummary),
+);
+
+paymentsRouter.patch(
+  "/:id/void",
+  requireRole("BUSINESS_OWNER", "BRANCH_MANAGER"),
+  asyncHandler(voidPaymentController),
 );
 
 paymentsRouter.get(

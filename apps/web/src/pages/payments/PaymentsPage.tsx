@@ -85,6 +85,24 @@ export function PaymentsPage() {
     enabled: Boolean(accessToken && activeBranchId && formOpen),
   });
 
+  const formSummaryQuery = useQuery({
+    queryKey: [
+      "invoice-payment-summary",
+      "form",
+      invoiceId,
+      activeBranchId,
+    ],
+    queryFn: () =>
+      getInvoicePaymentSummary(
+        invoiceId,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken && activeBranchId && formOpen && invoiceId,
+    ),
+  });
+
   const summaryQuery = useQuery({
     queryKey: [
       "invoice-payment-summary",
@@ -143,7 +161,13 @@ export function PaymentsPage() {
   const payments = paymentsQuery.data?.data ?? [];
   const pagination = paymentsQuery.data?.pagination;
   const invoices = invoicesQuery.data?.data ?? [];
+
+  const selectedFormInvoice = invoices.find(
+    (invoice) => invoice.id === invoiceId,
+  );
   const summary = summaryQuery.data;
+  const formSummary = formSummaryQuery.data;
+  const formBalance = formSummary?.balance ?? null;
 
   function resetForm() {
     setFormOpen(false);
@@ -174,6 +198,30 @@ export function PaymentsPage() {
     if (!Number.isInteger(numericAmount) || numericAmount <= 0) {
       setFormError(
         "Payment amount must be a positive whole number.",
+      );
+      return;
+    }
+
+    if (formSummaryQuery.isLoading) {
+      setFormError("Please wait while the invoice balance is loaded.");
+      return;
+    }
+
+    if (formSummaryQuery.isError || !formSummary) {
+      setFormError(
+        "Unable to load the invoice balance. Please try again.",
+      );
+      return;
+    }
+
+    if (formSummary.balance <= 0) {
+      setFormError("This invoice has already been fully paid.");
+      return;
+    }
+
+    if (numericAmount > formSummary.balance) {
+      setFormError(
+        `Payment amount cannot exceed the outstanding balance of ${formatMoney(formSummary.balance)}.`,
       );
       return;
     }
@@ -299,9 +347,11 @@ export function PaymentsPage() {
               <select
                 id="payment-invoice"
                 value={invoiceId}
-                onChange={(event) =>
-                  setInvoiceId(event.target.value)
-                }
+                onChange={(event) => {
+                  setInvoiceId(event.target.value);
+                  setAmount("");
+                  setFormError(null);
+                }}
                 disabled={createMutation.isPending}
               >
                 <option value="">Select invoice</option>
@@ -316,6 +366,55 @@ export function PaymentsPage() {
               </select>
             </div>
 
+            {invoiceId && (
+              <div aria-label="Selected invoice payment summary">
+                <p>
+                  <strong>Customer:</strong>{" "}
+                  {selectedFormInvoice?.customerName ?? "-"}
+                </p>
+
+                <p>
+                  <strong>Invoice Total:</strong>{" "}
+                  {formSummary
+                    ? formatMoney(formSummary.totalAmount)
+                    : selectedFormInvoice
+                      ? formatMoney(selectedFormInvoice.totalAmount)
+                      : "-"}
+                </p>
+
+                {formSummaryQuery.isLoading && (
+                  <p>Loading payment balance...</p>
+                )}
+
+                {formSummaryQuery.isError && (
+                  <p role="alert">
+                    {formSummaryQuery.error instanceof ApiError
+                      ? formSummaryQuery.error.message
+                      : "Failed to load the invoice payment balance."}
+                  </p>
+                )}
+
+                {formSummary && (
+                  <>
+                    <p>
+                      <strong>Amount Paid:</strong>{" "}
+                      {formatMoney(formSummary.amountPaid)}
+                    </p>
+
+                    <p>
+                      <strong>Outstanding Balance:</strong>{" "}
+                      {formatMoney(formSummary.balance)}
+                    </p>
+
+                    <p>
+                      <strong>Payment Status:</strong>{" "}
+                      {statusLabel(formSummary.paymentStatus)}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             <div>
               <label htmlFor="payment-amount">
                 Amount
@@ -326,12 +425,30 @@ export function PaymentsPage() {
                 type="number"
                 min="1"
                 step="1"
+                max={formBalance !== null && formBalance > 0
+                  ? formBalance
+                  : undefined}
                 value={amount}
-                onChange={(event) =>
-                  setAmount(event.target.value)
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                  setFormError(null);
+                }}
+                disabled={
+                  createMutation.isPending ||
+                  formSummaryQuery.isLoading ||
+                  formBalance === 0
                 }
-                disabled={createMutation.isPending}
               />
+
+              {formBalance !== null && formBalance > 0 && (
+                <p>
+                  Maximum payment: {formatMoney(formBalance)}
+                </p>
+              )}
+
+              {formBalance === 0 && (
+                <p>This invoice is already fully paid.</p>
+              )}
             </div>
 
             <div>

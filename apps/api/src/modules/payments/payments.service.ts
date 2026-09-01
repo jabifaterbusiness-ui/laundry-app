@@ -103,6 +103,50 @@ export async function createPayment(data: CreatePaymentData) {
 }
 
 /**
+ * Voids a posted payment without deleting its historical record.
+ *
+ * Only payments within the authenticated business and branch can be
+ * voided. A void payment cannot be voided again.
+ *
+ * Because invoice payment summaries count only POSTED payments, changing
+ * the payment status to VOID automatically restores the amount to the
+ * invoice's outstanding balance.
+ */
+export async function voidPayment(
+  id: string,
+  businessId: string,
+  branchId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findFirst({
+      where: {
+        id,
+        businessId,
+        branchId,
+      },
+    });
+
+    if (!payment) {
+      throw new AppError("Payment not found", 404);
+    }
+
+    if (payment.status === "VOID") {
+      throw new AppError("Payment is already void", 422);
+    }
+
+    return tx.payment.update({
+      where: {
+        id: payment.id,
+      },
+      data: {
+        status: "VOID",
+      },
+    });
+  });
+}
+
+
+/**
  * Retrieves a single payment while enforcing tenant and branch isolation.
  */
 export async function getPaymentForBranch(

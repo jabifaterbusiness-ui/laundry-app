@@ -10,6 +10,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
     },
     invoice: {
       findFirst: vi.fn(),
@@ -543,6 +544,107 @@ describe("Invoice payment summary route", () => {
         },
       }),
     );
+  });
+});
+
+describe("Payment void route", () => {
+  it("BUSINESS_OWNER can void a posted payment and records an audit event", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(paymentFixture as never);
+
+    const voidedPayment = {
+      ...paymentFixture,
+      status: "VOID",
+    };
+
+    vi.mocked(prisma.payment.update).mockResolvedValue(voidedPayment as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(PAYMENT_A);
+    expect(res.body.status).toBe("VOID");
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "payment.voided",
+        entityType: "Payment",
+        entityId: PAYMENT_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-1",
+        metadata: expect.objectContaining({
+          invoiceId: INVOICE_A,
+          amount: 4000,
+          method: "TRANSFER",
+          status: "VOID",
+        }),
+      }),
+    );
+  });
+
+  it("BRANCH_MANAGER can void a posted payment", async () => {
+    allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(paymentFixture as never);
+
+    const voidedPayment = {
+      ...paymentFixture,
+      status: "VOID",
+    };
+
+    vi.mocked(prisma.payment.update).mockResolvedValue(voidedPayment as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(PAYMENT_A);
+    expect(res.body.status).toBe("VOID");
+  });
+
+  it("STAFF cannot void a payment", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("cannot void a payment outside the authenticated business and branch", async () => {
+    allowBranch("user-owner-b", BRANCH_B, "biz-B");
+
+    paymentFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(404);
+
+    expect(paymentFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: PAYMENT_A,
+          businessId: "biz-B",
+          branchId: BRANCH_B,
+        },
+      }),
+    );
+
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 

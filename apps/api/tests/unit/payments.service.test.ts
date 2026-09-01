@@ -8,6 +8,7 @@ const { prismaMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
     },
     invoice: {
       findFirst: vi.fn(),
@@ -24,6 +25,7 @@ import {
   getInvoicePaymentSummary,
   getPaymentForBranch,
   listPayments,
+  voidPayment,
 } from "../../src/modules/payments/payments.service.js";
 
 const INVOICE_A = "88888888-8888-8888-8888-888888888888";
@@ -277,6 +279,103 @@ describe("payments.service", () => {
           method: "TRANSFER",
         }),
       });
+    });
+  });
+
+  describe("voidPayment", () => {
+    it("voids a posted payment without deleting it", async () => {
+      const payment = {
+        id: "payment-void-1",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "TRANSFER",
+        status: "POSTED",
+      };
+
+      const voidedPayment = {
+        ...payment,
+        status: "VOID",
+      };
+
+      prismaMock.payment.findFirst.mockResolvedValue(payment);
+      prismaMock.payment.update.mockResolvedValue(voidedPayment);
+
+      const result = await voidPayment(
+        payment.id,
+        "biz-A",
+        "branch-A",
+      );
+
+      expect(result).toBe(voidedPayment);
+
+      expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: payment.id,
+          businessId: "biz-A",
+          branchId: "branch-A",
+        },
+      });
+
+      expect(prismaMock.payment.update).toHaveBeenCalledWith({
+        where: {
+          id: payment.id,
+        },
+        data: {
+          status: "VOID",
+        },
+      });
+    });
+
+    it("rejects a payment that is already void", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue({
+        id: "payment-void-2",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "CASH",
+        status: "VOID",
+      });
+
+      await expect(
+        voidPayment(
+          "payment-void-2",
+          "biz-A",
+          "branch-A",
+        ),
+      ).rejects.toMatchObject({
+        message: "Payment is already void",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a payment outside the authenticated business and branch", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue(null);
+
+      await expect(
+        voidPayment(
+          "payment-from-another-scope",
+          "biz-B",
+          "branch-B",
+        ),
+      ).rejects.toMatchObject({
+        message: "Payment not found",
+        statusCode: 404,
+      });
+
+      expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: "payment-from-another-scope",
+          businessId: "biz-B",
+          branchId: "branch-B",
+        },
+      });
+
+      expect(prismaMock.payment.update).not.toHaveBeenCalled();
     });
   });
 
