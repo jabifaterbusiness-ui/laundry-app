@@ -42,6 +42,13 @@ vi.mock("../../src/lib/prisma.js", () => ({
     employeeCompensation: {
       findFirst: vi.fn(),
     },
+    payrollPayment: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -65,6 +72,9 @@ const payrollDeductionFindMany = vi.mocked(prisma.payrollDeduction.findMany);
 const employeeCompensationFindFirst = vi.mocked(
   prisma.employeeCompensation.findFirst,
 );
+const payrollPaymentFindFirst = vi.mocked(prisma.payrollPayment.findFirst);
+const payrollPaymentFindMany = vi.mocked(prisma.payrollPayment.findMany);
+const payrollPaymentCount = vi.mocked(prisma.payrollPayment.count);
 
 function tokenFor(
   role: string,
@@ -1004,5 +1014,455 @@ describe("Payroll generation routes", () => {
 
     expect(res.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Payroll payment routes", () => {
+  const FINALIZED_PERIOD = {
+    ...periodFixture,
+    status: "FINALIZED",
+  };
+
+  const PAYROLL_RECORD_ID = "66666666-6666-6666-6666-666666666666";
+  const PAYMENT_ID = "77777777-7777-7777-7777-777777777777";
+
+  const paymentFixture = {
+    id: PAYMENT_ID,
+    businessId: "biz-A",
+    branchId: BRANCH_A,
+    payrollRecordId: PAYROLL_RECORD_ID,
+    employeeId: EMPLOYEE_A,
+    amount: 50000,
+    method: "TRANSFER",
+    status: "POSTED",
+    reference: "BANK-001",
+    note: "September salary",
+    createdAt: new Date("2026-09-30T10:00:00.000Z"),
+    updatedAt: new Date("2026-09-30T10:00:00.000Z"),
+  };
+
+  const employeeFixture = {
+    id: EMPLOYEE_A,
+    fullName: "Employee A",
+    email: "employee-a@example.com",
+  };
+
+  const payrollRecordFixture = {
+    id: PAYROLL_RECORD_ID,
+    businessId: "biz-A",
+    branchId: BRANCH_A,
+    payrollPeriodId: PERIOD_A,
+    employeeId: EMPLOYEE_A,
+    basicSalary: 100000,
+    grossPay: 100000,
+    totalDeductions: 0,
+    netPay: 100000,
+  };
+
+  function finalizedPaymentTransaction(
+    existingPayments: Array<{ amount: number }> = [],
+    createdPayment = paymentFixture,
+  ) {
+    const tx = {
+      payrollRecord: {
+        findFirst: vi.fn().mockResolvedValue({
+          ...payrollRecordFixture,
+          payrollPeriod: {
+            id: PERIOD_A,
+            status: "FINALIZED",
+          },
+          payments: existingPayments,
+        }),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            ...payrollRecordFixture,
+            payments: [
+              ...existingPayments,
+              { amount: createdPayment.amount },
+            ],
+          },
+        ]),
+      },
+      payrollPayment: {
+        create: vi.fn().mockResolvedValue(createdPayment),
+        findFirst: vi.fn(),
+        update: vi.fn(),
+      },
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(FINALIZED_PERIOD),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) =>
+        callback(tx),
+    );
+
+    return tx;
+  }
+
+  it("requires authentication", async () => {
+    const res = await request(app)
+      .get("/api/v1/payroll/payments");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("requires finance authorization", async () => {
+    const res = await request(app)
+      .get("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+  });
+
+  it("requires branch context", async () => {
+    const res = await request(app)
+      .get("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("creates a payroll payment within the authenticated business and branch", async () => {
+    const tx = finalizedPaymentTransaction();
+
+    const res = await request(app)
+      .post("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        amount: 50000,
+        method: "TRANSFER",
+        reference: "BANK-001",
+        note: "September salary",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.payment.id).toBe(PAYMENT_ID);
+    expect(res.body.amountPaid).toBe(50000);
+    expect(res.body.balance).toBe(50000);
+
+    expect(tx.payrollPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          payrollRecordId: PAYROLL_RECORD_ID,
+          employeeId: EMPLOYEE_A,
+          amount: 50000,
+          method: "TRANSFER",
+        }),
+      }),
+    );
+  });
+
+  it("automatically marks the payroll period PAID when the final payment settles the record", async () => {
+    const tx = finalizedPaymentTransaction([{ amount: 50000 }], {
+      ...paymentFixture,
+      amount: 50000,
+    });
+
+    const res = await request(app)
+      .post("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        amount: 50000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.payrollPeriodStatus).toBe("PAID");
+
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        status: "FINALIZED",
+      },
+      data: {
+        status: "PAID",
+      },
+    });
+  });
+
+  it("rejects invalid payment amount", async () => {
+    const res = await request(app)
+      .post("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        amount: 0,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid payment method", async () => {
+    const res = await request(app)
+      .post("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        amount: 50000,
+        method: "CHEQUE",
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects client-supplied businessId or branchId instead of accepting client scope", async () => {
+    const tx = finalizedPaymentTransaction();
+
+    const res = await request(app)
+      .post("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        businessId: "biz-B",
+        branchId: BRANCH_B,
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        amount: 50000,
+        method: "TRANSFER",
+      });
+
+    expect(res.status).toBe(400);
+    expect(tx.payrollRecord.findFirst).not.toHaveBeenCalled();
+    expect(tx.payrollPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("does not expose another business's payroll payment", async () => {
+    const res = await request(app)
+      .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(payrollPaymentFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not expose another branch's payroll payment", async () => {
+    userBranchFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(403);
+    expect(payrollPaymentFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("gets a payroll payment within the selected scope", async () => {
+    payrollPaymentFindFirst.mockResolvedValue({
+      ...paymentFixture,
+      employee: employeeFixture,
+      payrollRecord: {
+        id: PAYROLL_RECORD_ID,
+        payrollPeriodId: PERIOD_A,
+        basicSalary: 100000,
+        grossPay: 100000,
+        totalDeductions: 0,
+        netPay: 100000,
+      },
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(PAYMENT_ID);
+  });
+
+  it("returns 404 when a scoped payroll payment does not exist", async () => {
+    payrollPaymentFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("lists payroll payments with business and branch scope", async () => {
+    payrollPaymentFindMany.mockResolvedValue([
+      {
+        ...paymentFixture,
+        employee: employeeFixture,
+        payrollRecord: {
+          id: PAYROLL_RECORD_ID,
+          payrollPeriodId: PERIOD_A,
+          netPay: 100000,
+        },
+      },
+    ] as never);
+
+    payrollPaymentCount.mockResolvedValue(1);
+
+    const res = await request(app)
+      .get("/api/v1/payroll/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination.total).toBe(1);
+
+    expect(payrollPaymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+        },
+      }),
+    );
+  });
+
+  it("supports payroll payment filters and pagination", async () => {
+    payrollPaymentFindMany.mockResolvedValue([] as never);
+    payrollPaymentCount.mockResolvedValue(0);
+
+    const res = await request(app)
+      .get("/api/v1/payroll/payments")
+      .query({
+        payrollRecordId: PAYROLL_RECORD_ID,
+        employeeId: EMPLOYEE_A,
+        status: "VOID",
+        page: 2,
+        pageSize: 10,
+      })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+
+    expect(payrollPaymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          payrollRecordId: PAYROLL_RECORD_ID,
+          employeeId: EMPLOYEE_A,
+          status: "VOID",
+        },
+        skip: 10,
+        take: 10,
+      }),
+    );
+  });
+
+  it("voids a posted payroll payment and preserves the historical row", async () => {
+    const tx = {
+      payrollPayment: {
+        findFirst: vi.fn().mockResolvedValue({
+          ...paymentFixture,
+          status: "POSTED",
+          payrollRecord: {
+            id: PAYROLL_RECORD_ID,
+            payrollPeriodId: PERIOD_A,
+          },
+        }),
+        update: vi.fn().mockResolvedValue({
+          ...paymentFixture,
+          status: "VOID",
+        }),
+      },
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue({
+          ...FINALIZED_PERIOD,
+          status: "PAID",
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      payrollRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            ...payrollRecordFixture,
+            payments: [],
+          },
+        ]),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/payments/${PAYMENT_ID}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.payment.status).toBe("VOID");
+    expect(res.body.payrollPeriodStatus).toBe("FINALIZED");
+
+    expect(tx.payrollPayment.update).toHaveBeenCalledWith({
+      where: { id: PAYMENT_ID },
+      data: { status: "VOID" },
+    });
+
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        status: "PAID",
+      },
+      data: { status: "FINALIZED" },
+    });
+  });
+
+  it("rejects an already void payroll payment", async () => {
+    const tx = {
+      payrollPayment: {
+        findFirst: vi.fn().mockResolvedValue({
+          ...paymentFixture,
+          status: "VOID",
+          payrollRecord: {
+            id: PAYROLL_RECORD_ID,
+            payrollPeriodId: PERIOD_A,
+          },
+        }),
+        update: vi.fn(),
+      },
+      payrollPeriod: {
+        findFirst: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      payrollRecord: {
+        findMany: vi.fn(),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/payments/${PAYMENT_ID}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(422);
+    expect(tx.payrollPayment.update).not.toHaveBeenCalled();
   });
 });

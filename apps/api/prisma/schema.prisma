@@ -94,6 +94,7 @@ model Business {
   orders              Order[]
   invoices            Invoice[]
   payments            Payment[]
+  payrollPayments     PayrollPayment[]
   orderNumberSequence OrderNumberSequence?
   migrationJobs       MigrationJob[]
   garments            Garment[]
@@ -129,6 +130,7 @@ model Branch {
 
   payrollPeriods    PayrollPeriod[]
   payrollRecords    PayrollRecord[]
+  payrollPayments   PayrollPayment[]
   ious              IOU[]
   loans             Loan[]
   payrollDeductions PayrollDeduction[]
@@ -166,6 +168,7 @@ model User {
   migrationJobs MigrationJob[]
 
   payrollRecords        PayrollRecord[]
+  payrollPayments       PayrollPayment[]
   ious                  IOU[]
   loans                 Loan[]
   employeeCompensations EmployeeCompensation[]
@@ -790,6 +793,20 @@ enum PayrollDeductionType {
   OTHER
 }
 
+// Method used to disburse an employee's payroll.
+enum PayrollPaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+// Payroll payments are historical records.
+// Voiding changes the status instead of deleting the record.
+enum PayrollPaymentStatus {
+  POSTED
+  VOID
+}
+
 model EmployeeCompensation {
   id String @id @default(uuid())
 
@@ -872,6 +889,7 @@ model PayrollRecord {
   netPay Int
 
   deductions PayrollDeduction[]
+  payments   PayrollPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -952,6 +970,44 @@ model Loan {
   @@index([businessId, branchId, status])
   @@index([employeeId, status])
   @@map("loans")
+}
+
+model PayrollPayment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollRecordId String
+  payrollRecord   PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Whole-naira amount actually disbursed in this transaction.
+  amount Int
+
+  method PayrollPaymentMethod
+  status PayrollPaymentStatus @default(POSTED)
+
+  // Optional bank/POS transaction reference.
+  reference String?
+
+  // Optional internal note about the disbursement.
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, payrollRecordId, createdAt])
+  @@index([businessId, employeeId, createdAt])
+  @@index([payrollRecordId])
+  @@map("payroll_payments")
 }
 
 model PayrollDeduction {
