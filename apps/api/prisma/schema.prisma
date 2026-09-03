@@ -106,6 +106,9 @@ model Business {
   payrollDeductions     PayrollDeduction[]
   employeeCompensations EmployeeCompensation[]
   financialRepayments   FinancialRepayment[]
+  inventoryItems        InventoryItem[]
+  inventoryStocks       InventoryStock[]
+  inventoryMovements    InventoryMovement[]
 
   @@map("businesses")
 }
@@ -136,6 +139,8 @@ model Branch {
   loans               Loan[]
   payrollDeductions   PayrollDeduction[]
   financialRepayments FinancialRepayment[]
+  inventoryStocks     InventoryStock[]
+  inventoryMovements  InventoryMovement[]
 
   @@index([businessId])
   @@map("branches")
@@ -180,6 +185,7 @@ model User {
 
   financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
   financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
+  inventoryMovementsCreated     InventoryMovement[]  @relation("InventoryMovementCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -751,6 +757,125 @@ model MigrationIssue {
 
   @@index([jobId, severity])
   @@map("migration_issues")
+}
+
+// ---------------------------------------------------------------------
+// INVENTORY MODULE
+// ---------------------------------------------------------------------
+// Inventory items are business-owned catalog records. Actual quantities
+// are maintained separately per branch through InventoryStock.
+//
+// InventoryMovement provides the historical stock ledger. InventoryStock
+// stores the current operational balance for fast reads and reconciliation.
+
+enum InventoryUnit {
+  PIECE
+  PACK
+  BOTTLE
+  LITRE
+  KILOGRAM
+  BOX
+  ROLL
+  OTHER
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+}
+
+model InventoryItem {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  unit        InventoryUnit
+
+  // A stock level at or below this value is considered low stock.
+  lowStockThreshold Int @default(0)
+
+  isActive Boolean @default(true)
+
+  stocks    InventoryStock[]
+  movements InventoryMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+  @@index([businessId, name])
+  @@map("inventory_items")
+}
+
+model InventoryStock {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  // Current physical quantity held by this branch.
+  quantity Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One current stock balance per inventory item per branch.
+  @@unique([inventoryItemId, branchId])
+  @@index([businessId, branchId])
+  @@index([businessId, branchId, quantity])
+  @@index([businessId, inventoryItemId])
+  @@map("inventory_stocks")
+}
+
+model InventoryMovement {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  // RECEIPT and ISSUE use positive quantities.
+  // The movement type determines whether stock increases or decreases.
+  // ADJUSTMENT may represent either an increase or decrease.
+  quantity Int
+
+  type InventoryMovementType
+
+  // Stock balance immediately after this movement.
+  resultingQuantity Int
+
+  reason    String?
+  reference String?
+
+  // User responsible for creating the movement.
+  createdById String
+  createdBy   User   @relation("InventoryMovementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  // Movement rows are historical records and are not deleted by normal
+  // inventory operations.
+  createdAt DateTime @default(now())
+
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, branchId, inventoryItemId, createdAt])
+  @@index([businessId, inventoryItemId, createdAt])
+  @@index([createdById])
+  @@map("inventory_movements")
 }
 
 // ---------------------------------------------------------------------
