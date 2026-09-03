@@ -1466,3 +1466,161 @@ describe("Payroll payment routes", () => {
     expect(tx.payrollPayment.update).not.toHaveBeenCalled();
   });
 });
+
+describe("Payroll status routes", () => {
+  const STATUS_PERIOD_ID = "99999999-9999-9999-9999-999999999999";
+  const STATUS_RECORD_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const STATUS_EMPLOYEE_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+  const statusPeriodFixture = {
+    ...periodFixture,
+    id: STATUS_PERIOD_ID,
+    status: "FINALIZED",
+  };
+
+  const statusRecordFixture = {
+    id: STATUS_RECORD_ID,
+    businessId: "biz-A",
+    branchId: BRANCH_A,
+    payrollPeriodId: STATUS_PERIOD_ID,
+    employeeId: STATUS_EMPLOYEE_ID,
+    basicSalary: 150000,
+    allowances: 10000,
+    bonuses: 5000,
+    grossPay: 165000,
+    totalDeductions: 15000,
+    netPay: 150000,
+    employee: {
+      id: STATUS_EMPLOYEE_ID,
+      fullName: "Status Employee",
+      email: "status-employee@example.com",
+      role: "STAFF",
+    },
+    deductions: [],
+    payments: [
+      {
+        id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        amount: 50000,
+        status: "POSTED",
+        createdAt: new Date("2026-09-30T10:00:00.000Z"),
+      },
+      {
+        id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        amount: 25000,
+        status: "VOID",
+        createdAt: new Date("2026-09-30T11:00:00.000Z"),
+      },
+    ],
+  };  it("returns payroll payment status for a finance user", async () => {
+    payrollPeriodFindFirst.mockResolvedValue({
+      ...statusPeriodFixture,
+      payrollRecords: [statusRecordFixture],
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary.employeeCount).toBe(1);
+    expect(res.body.summary.paidCount).toBe(0);
+    expect(res.body.summary.partiallyPaidCount).toBe(1);
+    expect(res.body.summary.unpaidCount).toBe(0);
+    expect(res.body.summary.totalNetPay).toBe(150000);
+    expect(res.body.summary.totalPaid).toBe(50000);
+    expect(res.body.summary.totalBalance).toBe(100000);
+
+    expect(res.body.records[0].amountPaid).toBe(50000);
+    expect(res.body.records[0].balance).toBe(100000);
+    expect(res.body.records[0].paymentStatus).toBe("PARTIALLY_PAID");
+    expect(res.body.records[0].payments).toHaveLength(2);
+    expect(res.body.records[0].payments[1].status).toBe("VOID");
+  });  it("rejects an unauthenticated request", async () => {
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(401);
+    expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects a staff user from payroll status", async () => {
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("requires branch context", async () => {
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(400);
+    expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
+  });  it("enforces business scope", async () => {
+    businessFindFirst.mockResolvedValue({
+      id: "biz-B",
+      name: "Business B",
+      isActive: true,
+    } as never);
+
+    branchFindFirst.mockResolvedValue({
+      id: BRANCH_B,
+      businessId: "biz-B",
+      isActive: true,
+    } as never);
+
+    userBranchFindUnique.mockResolvedValue({
+      userId: "user-owner-b",
+      branchId: BRANCH_B,
+      branch: {
+        id: BRANCH_B,
+        businessId: "biz-B",
+        isActive: true,
+      },
+    } as never);
+
+    payrollPeriodFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(404);
+    expect(payrollPeriodFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: STATUS_PERIOD_ID,
+          businessId: "biz-B",
+          branchId: BRANCH_B,
+        },
+      }),
+    );
+  });
+
+  it("enforces branch scope", async () => {
+    payrollPeriodFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(404);
+    expect(payrollPeriodFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: STATUS_PERIOD_ID,
+          businessId: "biz-A",
+          branchId: BRANCH_B,
+        },
+      }),
+    );
+  });
+});

@@ -11,6 +11,7 @@ import {
 } from "./payroll.service.js";
 
 import { processPayrollDeductions } from "./payroll-deductions.service.js";
+import { getPayrollStatus } from "./payroll-status.service.js";
 
 import { createPayrollPeriodSchema } from "./payroll.validation.js";
 
@@ -120,6 +121,20 @@ export async function processPayrollDeductionsController(
     branchId: branchId(req),
     payrollPeriodId: req.params.id!,
     actorUserId: req.user!.id,
+  });
+
+  res.json(result);
+}
+
+
+export async function getPayrollStatusController(
+  req: Request,
+  res: Response,
+) {
+  const result = await getPayrollStatus({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    payrollPeriodId: req.params.id!,
   });
 
   res.json(result);

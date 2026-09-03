@@ -11,6 +11,7 @@ import {
   finalizePayrollController,
   generatePayrollController,
   getPayrollPeriodController,
+  getPayrollStatusController,
   listPayrollPeriodsController,
   processPayrollDeductionsController,
 } from "./payroll.controller.js";
@@ -46,6 +47,12 @@ router.get(
   "/periods/:id",
   asyncHandler(requireRole(...FINANCE_ROLES)),
   asyncHandler(getPayrollPeriodController),
+);
+
+router.get(
+  "/periods/:id/status",
+  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(getPayrollStatusController),
 );
 
 router.post(
