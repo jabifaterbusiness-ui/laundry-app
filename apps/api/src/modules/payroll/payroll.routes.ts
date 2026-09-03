@@ -8,6 +8,7 @@ import { requireRole } from "../../middleware/rbac.js";
 
 import {
   createPayrollPeriodController,
+  finalizePayrollController,
   generatePayrollController,
   getPayrollPeriodController,
   listPayrollPeriodsController,
@@ -44,6 +45,12 @@ router.post(
   "/periods/:id/generate",
   asyncHandler(requireRole(...FINANCE_ROLES)),
   asyncHandler(generatePayrollController),
+);
+
+router.post(
+  "/periods/:id/finalize",
+  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(finalizePayrollController),
 );
 
 router.post(

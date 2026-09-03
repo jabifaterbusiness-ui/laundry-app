@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error-handler.js";
 
 import {
   createPayrollPeriod,
+  finalizePayroll,
   generatePayroll,
   getPayrollPeriod,
   listPayrollPeriods,
@@ -76,6 +77,20 @@ export async function getPayrollPeriodController(
     businessId: businessId(req),
     branchId: branchId(req),
     id: req.params.id!,
+  });
+
+  res.json(result);
+}
+
+export async function finalizePayrollController(
+  req: Request,
+  res: Response,
+) {
+  const result = await finalizePayroll({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    payrollPeriodId: req.params.id!,
+    actorUserId: req.user!.id,
   });
 
   res.json(result);

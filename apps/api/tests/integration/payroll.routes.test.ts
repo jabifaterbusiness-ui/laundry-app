@@ -686,6 +686,176 @@ describe("Payroll deduction routes", () => {
 });
 
 
+describe("Payroll finalization routes", () => {
+  const processingPeriodFixture = {
+    ...periodFixture,
+    status: "PROCESSING",
+  };
+
+  const validPayrollRecord = {
+    id: "record-a",
+    businessId: "biz-A",
+    branchId: BRANCH_A,
+    payrollPeriodId: PERIOD_A,
+    employeeId: EMPLOYEE_A,
+    basicSalary: 150000,
+    allowances: 10000,
+    bonuses: 5000,
+    grossPay: 165000,
+    totalDeductions: 15000,
+    netPay: 150000,
+  };
+
+  function mockFinalizeTransaction(
+    period = processingPeriodFixture,
+    records = [validPayrollRecord],
+    updateCount = 1,
+  ) {
+    const tx = {
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(period),
+        updateMany: vi.fn().mockResolvedValue({ count: updateCount }),
+      },
+      payrollRecord: {
+        findMany: vi.fn().mockResolvedValue(records),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    return tx;
+  }
+
+  it("finalizes a valid processing payroll period", async () => {
+    const tx = mockFinalizeTransaction();
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      payrollPeriodId: PERIOD_A,
+      status: "FINALIZED",
+      recordCount: 1,
+    });
+
+    expect(tx.payrollPeriod.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+    });
+
+    expect(tx.payrollRecord.findMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        payrollPeriodId: PERIOD_A,
+      },
+      orderBy: {
+        employeeId: "asc",
+      },
+    });
+
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        status: "PROCESSING",
+      },
+      data: {
+        status: "FINALIZED",
+      },
+    });
+  });
+
+  it("rejects finalization for a non-processing period", async () => {
+    mockFinalizeTransaction({
+      ...periodFixture,
+      status: "OPEN",
+    });
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects finalization when payroll records are missing", async () => {
+    mockFinalizeTransaction(processingPeriodFixture, []);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects finalization when payroll totals are inconsistent", async () => {
+    mockFinalizeTransaction(processingPeriodFixture, [
+      {
+        ...validPayrollRecord,
+        netPay: 149000,
+      },
+    ]);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects finalization for a payroll period outside the business and branch scope", async () => {
+    userBranchFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects STAFF from finalizing payroll", async () => {
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects finalization when the processing status changed concurrently", async () => {
+    const tx = mockFinalizeTransaction(
+      processingPeriodFixture,
+      [validPayrollRecord],
+      0,
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(409);
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalled();
+  });
+});
+
+
 describe("Payroll generation routes", () => {
   it("generates payroll records for an open period", async () => {
     payrollPeriodFindFirst.mockResolvedValue(periodFixture as never);

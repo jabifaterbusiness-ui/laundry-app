@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createPayrollPeriod,
+  finalizePayroll,
   generatePayroll,
   getPayrollPeriod,
   listPayrollPeriods,
@@ -21,6 +22,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     user: {
       findMany: vi.fn(),
@@ -68,6 +70,7 @@ describe("payroll.service", () => {
     payrollPeriodFindMany.mockReset();
     payrollPeriodCreate.mockReset();
     payrollPeriodUpdate.mockReset();
+    (prisma.payrollPeriod.updateMany as unknown as MockFn).mockReset();
     userFindMany.mockReset();
     payrollRecordFindMany.mockReset();
     employeeCompensationFindFirst.mockReset();
@@ -286,6 +289,262 @@ describe("payroll.service", () => {
           },
         ],
       });
+    });
+  });
+
+  describe("finalizePayroll", () => {
+    const processingPeriod = {
+      id: "period-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      periodStart: new Date("2026-08-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-08-31T23:59:59.999Z"),
+      status: "PROCESSING",
+    };
+
+    const validRecord = {
+      id: "record-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      payrollPeriodId: "period-1",
+      employeeId: "employee-1",
+      basicSalary: 150000,
+      allowances: 10000,
+      bonuses: 5000,
+      grossPay: 165000,
+      totalDeductions: 15000,
+      netPay: 150000,
+    };
+
+    function mockFinalizeTransaction(
+      period: typeof processingPeriod | null = processingPeriod,
+      records = [validRecord],
+      updateCount = 1,
+    ) {
+      const txPayrollPeriodFindFirst = vi.fn().mockResolvedValue(period);
+      const txPayrollRecordFindMany = vi.fn().mockResolvedValue(records);
+      const txPayrollPeriodUpdateMany = vi
+        .fn()
+        .mockResolvedValue({ count: updateCount });
+
+      transaction.mockImplementation(async (callback) =>
+        callback({
+          payrollPeriod: {
+            findFirst: txPayrollPeriodFindFirst,
+            updateMany: txPayrollPeriodUpdateMany,
+          },
+          payrollRecord: {
+            findMany: txPayrollRecordFindMany,
+          },
+        } as never),
+      );
+
+      return {
+        txPayrollPeriodFindFirst,
+        txPayrollRecordFindMany,
+        txPayrollPeriodUpdateMany,
+      };
+    }
+
+    it("finalizes a valid processing payroll period", async () => {
+      const tx = mockFinalizeTransaction();
+
+      const result = await finalizePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      });
+
+      expect(result).toEqual({
+        payrollPeriodId: "period-1",
+        status: "FINALIZED",
+        recordCount: 1,
+      });
+
+      expect(tx.txPayrollPeriodFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: "period-1",
+          businessId: "business-1",
+          branchId: "branch-1",
+        },
+      });
+
+      expect(tx.txPayrollRecordFindMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+        },
+        orderBy: {
+          employeeId: "asc",
+        },
+      });
+
+      expect(tx.txPayrollPeriodUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: "period-1",
+          businessId: "business-1",
+          branchId: "branch-1",
+          status: "PROCESSING",
+        },
+        data: {
+          status: "FINALIZED",
+        },
+      });
+
+      expect(mockedRecordAuditEvent).toHaveBeenCalledWith({
+        businessId: "business-1",
+        branchId: "branch-1",
+        actorUserId: "user-1",
+        action: "payroll_period.finalized",
+        entityType: "PAYROLL_PERIOD",
+        entityId: "period-1",
+        metadata: {
+          payrollPeriodId: "period-1",
+          recordCount: 1,
+        },
+      });
+    });
+
+    it("rejects finalization outside the business and branch scope", async () => {
+      mockFinalizeTransaction(null, []);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-other",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "Payroll period not found",
+        statusCode: 404,
+      });
+
+      expect(mockedRecordAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it("rejects finalization unless the period is processing", async () => {
+      mockFinalizeTransaction({
+        ...processingPeriod,
+        status: "OPEN",
+      });
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "Only a processing payroll period can be finalized",
+        statusCode: 400,
+      });
+    });
+
+    it("rejects finalization when no payroll records exist", async () => {
+      mockFinalizeTransaction(processingPeriod, []);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "No payroll records exist for this payroll period",
+        statusCode: 400,
+      });
+    });
+
+    it("rejects deductions that exceed gross pay", async () => {
+      mockFinalizeTransaction(processingPeriod, [
+        {
+          ...validRecord,
+          grossPay: 100000,
+          totalDeductions: 120000,
+          netPay: 0,
+        },
+      ]);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "Payroll deductions exceed gross pay for employee employee-1",
+        statusCode: 400,
+      });
+    });
+
+    it("rejects an inconsistent net pay calculation", async () => {
+      mockFinalizeTransaction(processingPeriod, [
+        {
+          ...validRecord,
+          grossPay: 165000,
+          totalDeductions: 15000,
+          netPay: 149000,
+        },
+      ]);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "Payroll net pay is inconsistent for employee employee-1",
+        statusCode: 400,
+      });
+    });
+
+    it("rejects negative payroll totals", async () => {
+      mockFinalizeTransaction(processingPeriod, [
+        {
+          ...validRecord,
+          netPay: -1,
+        },
+      ]);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message: "Invalid payroll totals for employee employee-1",
+        statusCode: 400,
+      });
+    });
+
+    it("does not finalize when the processing status changed concurrently", async () => {
+      const tx = mockFinalizeTransaction(processingPeriod, [validRecord], 0);
+
+      await expect(
+        finalizePayroll({
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+          actorUserId: "user-1",
+        }),
+      ).rejects.toMatchObject({
+        message:
+          "Payroll period could not be finalized because its status changed",
+        statusCode: 409,
+      });
+
+      expect(tx.txPayrollPeriodUpdateMany).toHaveBeenCalled();
+      expect(mockedRecordAuditEvent).not.toHaveBeenCalled();
     });
   });
 

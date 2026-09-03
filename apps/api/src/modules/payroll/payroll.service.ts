@@ -30,6 +30,128 @@ type GeneratePayrollArgs = {
   actorUserId: string;
 };
 
+type FinalizePayrollArgs = {
+  businessId: string;
+  branchId: string;
+  payrollPeriodId: string;
+  actorUserId: string;
+};
+
+export async function finalizePayroll({
+  businessId,
+  branchId,
+  payrollPeriodId,
+  actorUserId,
+}: FinalizePayrollArgs) {
+  const result = await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+      },
+    });
+
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
+
+    if (period.status !== PayrollPeriodStatus.PROCESSING) {
+      throw new AppError(
+        "Only a processing payroll period can be finalized",
+        400,
+      );
+    }
+
+    const payrollRecords = await tx.payrollRecord.findMany({
+      where: {
+        businessId,
+        branchId,
+        payrollPeriodId,
+      },
+      orderBy: {
+        employeeId: "asc",
+      },
+    });
+
+    if (payrollRecords.length === 0) {
+      throw new AppError(
+        "No payroll records exist for this payroll period",
+        400,
+      );
+    }
+
+    for (const record of payrollRecords) {
+      if (
+        record.grossPay < 0 ||
+        record.totalDeductions < 0 ||
+        record.netPay < 0
+      ) {
+        throw new AppError(
+          `Invalid payroll totals for employee ${record.employeeId}`,
+          400,
+        );
+      }
+
+      if (record.totalDeductions > record.grossPay) {
+        throw new AppError(
+          `Payroll deductions exceed gross pay for employee ${record.employeeId}`,
+          400,
+        );
+      }
+
+      const expectedNetPay = record.grossPay - record.totalDeductions;
+
+      if (record.netPay !== expectedNetPay) {
+        throw new AppError(
+          `Payroll net pay is inconsistent for employee ${record.employeeId}`,
+          400,
+        );
+      }
+    }
+
+    const updateResult = await tx.payrollPeriod.updateMany({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+        status: PayrollPeriodStatus.PROCESSING,
+      },
+      data: {
+        status: PayrollPeriodStatus.FINALIZED,
+      },
+    });
+
+    if (updateResult.count !== 1) {
+      throw new AppError(
+        "Payroll period could not be finalized because its status changed",
+        409,
+      );
+    }
+
+    return {
+      payrollPeriodId,
+      status: PayrollPeriodStatus.FINALIZED,
+      recordCount: payrollRecords.length,
+    };
+  });
+
+  await recordAuditEvent({
+    businessId,
+    branchId,
+    actorUserId,
+    action: "payroll_period.finalized",
+    entityType: "PAYROLL_PERIOD",
+    entityId: payrollPeriodId,
+    metadata: {
+      payrollPeriodId,
+      recordCount: result.recordCount,
+    },
+  });
+
+  return result;
+}
+
 export async function createPayrollPeriod({
   businessId,
   branchId,
