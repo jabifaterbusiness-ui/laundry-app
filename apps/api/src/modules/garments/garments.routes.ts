@@ -4,6 +4,7 @@ import {
   requireBusinessContext,
 } from "../auth/auth.middleware.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import {
   createForOrder,
@@ -29,6 +30,7 @@ export const garmentsRouter = Router();
 garmentsRouter.use(
   requireAuth,
   requireBusinessContext,
+  asyncHandler(requireBranchContext),
 );
 
 garmentsRouter.post(
