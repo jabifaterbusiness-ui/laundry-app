@@ -25,6 +25,19 @@ vi.mock("../../src/lib/prisma.js", () => ({
     payrollRecord: {
       findMany: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
+    },
+    payrollDeduction: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+    },
+    iOU: {
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+    loan: {
+      findMany: vi.fn(),
+      update: vi.fn(),
     },
     employeeCompensation: {
       findFirst: vi.fn(),
@@ -48,6 +61,7 @@ const payrollPeriodFindMany = vi.mocked(prisma.payrollPeriod.findMany);
 const payrollPeriodCreate = vi.mocked(prisma.payrollPeriod.create);
 const userFindMany = vi.mocked(prisma.user.findMany);
 const payrollRecordFindMany = vi.mocked(prisma.payrollRecord.findMany);
+const payrollDeductionFindMany = vi.mocked(prisma.payrollDeduction.findMany);
 const employeeCompensationFindFirst = vi.mocked(
   prisma.employeeCompensation.findFirst,
 );
@@ -367,6 +381,310 @@ describe("Payroll period routes - creation and isolation", () => {
     expect(res.body.payrollRecords).toEqual([]);
   });
 });
+
+describe("Payroll deduction routes", () => {
+  const processingPeriodFixture = {
+    ...periodFixture,
+    status: "PROCESSING",
+  };
+
+  it("processes IOUs before loans and updates payroll totals", async () => {
+    payrollPeriodFindFirst.mockResolvedValue(processingPeriodFixture as never);
+
+    payrollRecordFindMany.mockResolvedValue([
+      {
+        id: "record-a",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        payrollPeriodId: PERIOD_A,
+        employeeId: EMPLOYEE_A,
+        basicSalary: 100000,
+        allowances: 0,
+        bonuses: 0,
+        grossPay: 100000,
+        totalDeductions: 0,
+        netPay: 100000,
+      },
+    ] as never);
+
+    payrollDeductionFindMany.mockResolvedValue([]);
+    vi.mocked(prisma.iOU.findMany).mockResolvedValue([
+      {
+        id: "iou-a",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 30000,
+        status: "APPROVED",
+        createdAt: new Date("2026-08-01T00:00:00.000Z"),
+      },
+    ] as never);
+
+    vi.mocked(prisma.loan.findMany).mockResolvedValue([
+      {
+        id: "loan-a",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 120000,
+        status: "APPROVED",
+        createdAt: new Date("2026-08-02T00:00:00.000Z"),
+      },
+    ] as never);
+
+    const tx = {
+      payrollDeduction: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({}),
+      },
+      iOU: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "iou-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            employeeId: EMPLOYEE_A,
+            outstandingAmount: 30000,
+            status: "APPROVED",
+            createdAt: new Date("2026-08-01T00:00:00.000Z"),
+          },
+        ]),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      loan: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "loan-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            employeeId: EMPLOYEE_A,
+            outstandingAmount: 120000,
+            status: "APPROVED",
+            createdAt: new Date("2026-08-02T00:00:00.000Z"),
+          },
+        ]),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      payrollRecord: {
+        update: vi.fn().mockResolvedValue({
+          id: "record-a",
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          payrollPeriodId: PERIOD_A,
+          employeeId: EMPLOYEE_A,
+          basicSalary: 100000,
+          allowances: 0,
+          bonuses: 0,
+          grossPay: 100000,
+          totalDeductions: 100000,
+          netPay: 0,
+        }),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.payrollPeriodId).toBe(PERIOD_A);
+    expect(res.body.records).toHaveLength(1);
+
+    expect(tx.payrollDeduction.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          payrollRecordId: "record-a",
+          type: "IOU",
+          iouId: "iou-a",
+          amount: 30000,
+        }),
+      }),
+    );
+
+    expect(tx.payrollDeduction.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "LOAN",
+          loanId: "loan-a",
+          amount: 70000,
+        }),
+      }),
+    );
+
+    expect(tx.iOU.update).toHaveBeenCalledWith({
+      where: { id: "iou-a" },
+      data: {
+        outstandingAmount: 0,
+        status: "FULLY_DEDUCTED",
+      },
+    });
+
+    expect(tx.loan.update).toHaveBeenCalledWith({
+      where: { id: "loan-a" },
+      data: {
+        outstandingAmount: 50000,
+        status: "PARTIALLY_REPAID",
+      },
+    });
+
+    expect(tx.payrollRecord.update).toHaveBeenCalledWith({
+      where: { id: "record-a" },
+      data: {
+        totalDeductions: 100000,
+        netPay: 0,
+      },
+    });
+  });
+
+  it("rejects deduction processing for a non-processing period", async () => {
+    payrollPeriodFindFirst.mockResolvedValue(periodFixture as never);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects deduction processing for a payroll period outside the branch scope", async () => {
+    userBranchFindUnique.mockResolvedValue(null);
+    payrollPeriodFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(res.status).toBe(403);
+    expect(payrollRecordFindMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects deduction processing for STAFF", async () => {
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects deduction processing without branch context", async () => {
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(400);
+    expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not create duplicate deductions for obligations already recorded on the payroll record", async () => {
+    payrollPeriodFindFirst.mockResolvedValue(processingPeriodFixture as never);
+
+    payrollRecordFindMany.mockResolvedValue([
+      {
+        id: "record-a",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        payrollPeriodId: PERIOD_A,
+        employeeId: EMPLOYEE_A,
+        basicSalary: 100000,
+        allowances: 0,
+        bonuses: 0,
+        grossPay: 100000,
+        totalDeductions: 30000,
+        netPay: 70000,
+      },
+    ] as never);
+
+    const tx = {
+      payrollDeduction: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            iouId: "iou-a",
+            loanId: null,
+          },
+          {
+            iouId: null,
+            loanId: "loan-a",
+          },
+        ]),
+        create: vi.fn(),
+      },
+      iOU: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "iou-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            employeeId: EMPLOYEE_A,
+            outstandingAmount: 20000,
+            status: "APPROVED",
+            createdAt: new Date("2026-08-01T00:00:00.000Z"),
+          },
+        ]),
+        update: vi.fn(),
+      },
+      loan: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "loan-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            employeeId: EMPLOYEE_A,
+            outstandingAmount: 50000,
+            status: "APPROVED",
+            createdAt: new Date("2026-08-02T00:00:00.000Z"),
+          },
+        ]),
+        update: vi.fn(),
+      },
+      payrollRecord: {
+        update: vi.fn(),
+      },
+    };
+
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(tx.payrollDeduction.create).not.toHaveBeenCalled();
+    expect(tx.iOU.update).not.toHaveBeenCalled();
+    expect(tx.loan.update).not.toHaveBeenCalled();
+    expect(tx.payrollRecord.update).not.toHaveBeenCalled();
+  });
+
+  it("does not process a payroll period from another business", async () => {
+    payrollPeriodFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/payroll/periods/${PERIOD_B}/deductions/process`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(404);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
 
 describe("Payroll generation routes", () => {
   it("generates payroll records for an open period", async () => {

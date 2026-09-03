@@ -11,6 +11,7 @@ import {
   generatePayrollController,
   getPayrollPeriodController,
   listPayrollPeriodsController,
+  processPayrollDeductionsController,
 } from "./payroll.controller.js";
 
 const router = Router();
@@ -43,6 +44,12 @@ router.post(
   "/periods/:id/generate",
   asyncHandler(requireRole(...FINANCE_ROLES)),
   asyncHandler(generatePayrollController),
+);
+
+router.post(
+  "/periods/:id/deductions/process",
+  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(processPayrollDeductionsController),
 );
 
 export default router;
