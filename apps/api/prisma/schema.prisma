@@ -105,6 +105,7 @@ model Business {
   loans                 Loan[]
   payrollDeductions     PayrollDeduction[]
   employeeCompensations EmployeeCompensation[]
+  financialRepayments   FinancialRepayment[]
 
   @@map("businesses")
 }
@@ -128,12 +129,13 @@ model Branch {
   payments     Payment[]
   garments     Garment[]
 
-  payrollPeriods    PayrollPeriod[]
-  payrollRecords    PayrollRecord[]
-  payrollPayments   PayrollPayment[]
-  ious              IOU[]
-  loans             Loan[]
-  payrollDeductions PayrollDeduction[]
+  payrollPeriods      PayrollPeriod[]
+  payrollRecords      PayrollRecord[]
+  payrollPayments     PayrollPayment[]
+  ious                IOU[]
+  loans               Loan[]
+  payrollDeductions   PayrollDeduction[]
+  financialRepayments FinancialRepayment[]
 
   @@index([businessId])
   @@map("branches")
@@ -175,6 +177,9 @@ model User {
 
   approvedIOUs  IOU[]  @relation("IOUApprover")
   approvedLoans Loan[] @relation("LoanApprover")
+
+  financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
+  financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -928,6 +933,7 @@ model IOU {
   approvedBy   User?     @relation("IOUApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   payrollDeductions PayrollDeduction[]
+  repayments        FinancialRepayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -962,6 +968,7 @@ model Loan {
   approvedBy   User?     @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   payrollDeductions PayrollDeduction[]
+  repayments        FinancialRepayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1042,4 +1049,62 @@ model PayrollDeduction {
   @@index([iouId])
   @@index([loanId])
   @@map("payroll_deductions")
+}
+
+enum FinancialRepaymentType {
+  IOU
+  LOAN
+}
+
+enum FinancialRepaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+enum FinancialRepaymentStatus {
+  POSTED
+  VOID
+}
+
+model FinancialRepayment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation("FinancialRepaymentEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  type FinancialRepaymentType
+
+  iouId String?
+  iou   IOU?    @relation(fields: [iouId], references: [id], onDelete: Restrict)
+
+  loanId String?
+  loan   Loan?   @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  amount Int
+  method FinancialRepaymentMethod
+
+  reference String?
+  note      String?
+
+  createdById String
+  createdBy   User   @relation("FinancialRepaymentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  status FinancialRepaymentStatus @default(POSTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, employeeId, createdAt])
+  @@index([iouId])
+  @@index([loanId])
+  @@index([createdById])
+  @@map("financial_repayments")
 }

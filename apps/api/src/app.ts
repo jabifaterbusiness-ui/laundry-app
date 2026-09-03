@@ -17,6 +17,7 @@ import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
 import loansRouter from "./modules/payroll/loans.routes.js";
+import repaymentsRouter from "./modules/payroll/repayments.routes.js";
 import compensationRouter from "./modules/payroll/compensation.routes.js";
 import payrollRouter from "./modules/payroll/payroll.routes.js";
 
@@ -52,6 +53,7 @@ export function createApp() {
   v1.use("/payments", paymentsRouter);
   v1.use("/payroll/ious", iousRouter);
   v1.use("/payroll/loans", loansRouter);
+  v1.use("/payroll/repayments", repaymentsRouter);
   v1.use("/payroll/compensation", compensationRouter);
   v1.use("/payroll", payrollRouter);
 
