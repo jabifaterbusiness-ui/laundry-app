@@ -18,6 +18,7 @@ import { servicesRouter } from "./modules/services/services.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
 import loansRouter from "./modules/payroll/loans.routes.js";
 import compensationRouter from "./modules/payroll/compensation.routes.js";
+import payrollRouter from "./modules/payroll/payroll.routes.js";
 
 export function createApp() {
   const app = express();
@@ -52,6 +53,7 @@ export function createApp() {
   v1.use("/payroll/ious", iousRouter);
   v1.use("/payroll/loans", loansRouter);
   v1.use("/payroll/compensation", compensationRouter);
+  v1.use("/payroll", payrollRouter);
 
   app.use("/api/v1", v1);
 
