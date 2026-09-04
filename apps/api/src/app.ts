@@ -13,6 +13,7 @@ import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
 import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { garmentsRouter } from "./modules/garments/garments.routes.js";
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
+import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
 import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
@@ -50,6 +51,7 @@ export function createApp() {
   v1.use("/orders", ordersRouter);
   v1.use("/garments", garmentsRouter);
   v1.use("/invoices", invoicesRouter);
+  v1.use("/inventory", inventoryRouter);
   v1.use("/payments", paymentsRouter);
   v1.use("/payroll/ious", iousRouter);
   v1.use("/payroll/loans", loansRouter);
