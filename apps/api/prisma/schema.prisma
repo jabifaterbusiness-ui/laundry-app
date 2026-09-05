@@ -109,6 +109,8 @@ model Business {
   inventoryItems        InventoryItem[]
   inventoryStocks       InventoryStock[]
   inventoryMovements    InventoryMovement[]
+  businessRolePermissions BusinessRolePermission[]
+  userPermissionOverrides UserPermissionOverride[]
 
   @@map("businesses")
 }
@@ -186,6 +188,8 @@ model User {
   financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
   financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
   inventoryMovementsCreated     InventoryMovement[]  @relation("InventoryMovementCreator")
+
+  permissionOverrides UserPermissionOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1232,4 +1236,55 @@ model FinancialRepayment {
   @@index([loanId])
   @@index([createdById])
   @@map("financial_repayments")
+}
+
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  module      String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+
+  businessRolePermissions BusinessRolePermission[]
+  userPermissionOverrides UserPermissionOverride[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model BusinessRolePermission {
+  id           String     @id @default(uuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  allowed      Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([businessId, role, permissionId])
+  @@index([businessId, role])
+  @@index([permissionId])
+  @@map("business_role_permissions")
+}
+
+model UserPermissionOverride {
+  id           String     @id @default(uuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  allowed      Boolean
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([businessId, userId, permissionId])
+  @@index([businessId, userId])
+  @@index([permissionId])
+  @@map("user_permission_overrides")
 }

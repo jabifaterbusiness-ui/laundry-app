@@ -1,0 +1,1235 @@
+// Prisma schema - FOUNDATION PHASE
+//
+// This schema defines PLATFORM/IDENTITY + AUDIT INFRASTRUCTURE models only:
+//   - Business (tenant), Branch, User, UserBranch, RefreshToken, AuditLog, Role
+// These are foundation because every future business-domain model
+// (Customer, Order, Invoice, Payment, InventoryItem, etc.) must be scoped
+// to a Business (and usually a Branch), so the isolation boundary and the
+// audit trail have to exist before those modules are built.
+//
+// Operational/business-domain models are intentionally NOT defined yet -
+// they belong to their respective module implementation phases (see
+// docs/ARCHITECTURE.md for the full list and implementation order).
+//
+// ---------------------------------------------------------------------
+// LOCKED ARCHITECTURAL DECISIONS (approved - see docs/ARCHITECTURE.md)
+// ---------------------------------------------------------------------
+// 1. TENANT ISOLATION: one shared PostgreSQL database, row-level tenant
+//    isolation. Every tenant-scoped table carries a businessId column.
+//    Database-per-tenant and schema-per-tenant are explicitly rejected.
+//    Tenant context is always derived server-side from the authenticated
+//    user - a client-supplied businessId is never trusted for
+//    authorization (see src/lib/tenant-scope.ts).
+// 2. AUDIT TRAIL: generic AuditLog is foundation infrastructure (below),
+//    not a future module. Business modules call into it; they don't
+//    reimplement it.
+// 3. USER <-> BRANCH: many-to-many via UserBranch. A user's business
+//    membership, branch memberships, and currently-selected/active
+//    branch (a request-scoped, server-validated concept - see
+//    src/middleware/branch-context.ts) are three distinct things and
+//    must not be conflated.
+// 4. ROLES: fixed enum for v1 (PLATFORM_ADMIN, BUSINESS_OWNER,
+//    BRANCH_MANAGER, STAFF). A permission-table model may replace this
+//    later; the authorization code is written so that swap is isolated.
+// ---------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// LOCKED for v1 - see decision #4 above. Not dynamic/custom per business.
+enum Role {
+  PLATFORM_ADMIN
+  BUSINESS_OWNER
+  BRANCH_MANAGER
+  STAFF
+}
+
+// A tenant. Every business-scoped record in the system will eventually
+// carry a businessId pointing here.
+model Business {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  // Customer-facing company contact information used on receipts.
+  phone   String?
+  email   String?
+  website String?
+  address String?
+
+  // -------------------------------------------------------------------
+  // RECEIPT BRANDING
+  // -------------------------------------------------------------------
+  // The logo is stored outside PostgreSQL; this field stores its
+  // publicly usable application URL/reference.
+  logoUrl String?
+
+  // Automatically generated from the business logo by default.
+  // The owner may override these values through receipt customization.
+  receiptPrimaryColor    String?
+  receiptAccentColor     String?
+  receiptBackgroundColor String?
+  receiptTextColor       String?
+
+  // Controls the visual arrangement of the digital receipt header.
+  // Kept as a string initially so the branding system can evolve
+  // without unnecessary enum migrations.
+  receiptHeaderStyle String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches            Branch[]
+  users               User[]
+  auditLogs           AuditLog[]
+  customers           Customer[]
+  services            Service[]
+  orders              Order[]
+  invoices            Invoice[]
+  payments            Payment[]
+  payrollPayments     PayrollPayment[]
+  orderNumberSequence OrderNumberSequence?
+  migrationJobs       MigrationJob[]
+  garments            Garment[]
+
+  payrollPeriods        PayrollPeriod[]
+  payrollRecords        PayrollRecord[]
+  ious                  IOU[]
+  loans                 Loan[]
+  payrollDeductions     PayrollDeduction[]
+  employeeCompensations EmployeeCompensation[]
+  financialRepayments   FinancialRepayment[]
+  inventoryItems        InventoryItem[]
+  inventoryStocks       InventoryStock[]
+  inventoryMovements    InventoryMovement[]
+
+  @@map("businesses")
+}
+
+// A physical/operational location within a business.
+// User <-> Branch is many-to-many (LOCKED decision #3) via UserBranch.
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  address    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userBranches UserBranch[]
+  auditLogs    AuditLog[]
+  orders       Order[]
+  invoices     Invoice[]
+  payments     Payment[]
+  garments     Garment[]
+
+  payrollPeriods      PayrollPeriod[]
+  payrollRecords      PayrollRecord[]
+  payrollPayments     PayrollPayment[]
+  ious                IOU[]
+  loans               Loan[]
+  payrollDeductions   PayrollDeduction[]
+  financialRepayments FinancialRepayment[]
+  inventoryStocks     InventoryStock[]
+  inventoryMovements  InventoryMovement[]
+
+  @@index([businessId])
+  @@map("branches")
+}
+
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String
+  fullName     String
+  role         Role    @default(STAFF)
+  isActive     Boolean @default(true)
+
+  // Nullable because PLATFORM_ADMIN is not tied to a single business.
+  // Every BUSINESS_OWNER / BRANCH_MANAGER / STAFF user MUST have a
+  // businessId - enforced in application logic (not expressible as a
+  // conditional-required FK in Prisma/Postgres without a check
+  // constraint, which can be added in a follow-up migration).
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Branch membership is many-to-many (LOCKED decision #3). There is
+  // deliberately no single branchId column on User anymore - see
+  // UserBranch below, and src/middleware/branch-context.ts for how the
+  // *currently selected* branch is derived per-request and validated
+  // against this table (never trusted from a client-supplied value or
+  // baked into a long-lived token).
+  branches UserBranch[]
+
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  migrationJobs MigrationJob[]
+
+  payrollRecords        PayrollRecord[]
+  payrollPayments       PayrollPayment[]
+  ious                  IOU[]
+  loans                 Loan[]
+  employeeCompensations EmployeeCompensation[]
+
+  approvedIOUs  IOU[]  @relation("IOUApprover")
+  approvedLoans Loan[] @relation("LoanApprover")
+
+  financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
+  financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
+  inventoryMovementsCreated     InventoryMovement[]  @relation("InventoryMovementCreator")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// Join table for the many-to-many User <-> Branch relationship
+// (LOCKED decision #3). A row here grants a user access to a branch;
+// it does NOT by itself mean that branch is "active" for any given
+// request - that's request-scoped context, not stored state.
+model UserBranch {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, branchId])
+  @@index([userId])
+  @@index([branchId])
+  @@map("user_branches")
+}
+
+// Refresh tokens stored server-side (hashed) so they can be revoked.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Generic, reusable audit trail (LOCKED decision #2 - foundation
+// infrastructure, not a future module). Business modules call
+// src/lib/audit.ts's recordAuditEvent() rather than writing here
+// directly, so metadata sanitization (see decision below) is never
+// bypassed.
+//
+// Every field that references another record is nullable and uses
+// onDelete: SetNull - an audit row must never disappear just because
+// the thing it references was later deleted, and it must never block
+// deletion of that thing either.
+//
+// NEVER store passwords, raw access tokens, raw refresh tokens, or any
+// other secret in `metadata`. recordAuditEvent() strips known secret-
+// shaped keys defensively, but callers are still responsible for not
+// passing secrets in.
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  // e.g. "user.login", "user.logout". Business-domain modules will add
+  // their own action names (e.g. "order.created") when they're built -
+  // this table doesn't need to change for that.
+  action String
+
+  // e.g. "User", "Order". Kept as a free-form string (not an enum) so
+  // future modules don't require a migration just to add an entity type.
+  entityType String
+  entityId   String?
+
+  metadata      Json?
+  correlationId String?
+
+  @@index([businessId])
+  @@index([branchId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([correlationId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------
+// CUSTOMERS MODULE (first business module - see docs/CUSTOMERS.md)
+// ---------------------------------------------------------------------
+// DECISION (documented in full in docs/CUSTOMERS.md section F): a
+// Customer belongs to a Business, NOT to a Branch. A customer who is
+// served at multiple branches within the same business is still one
+// Customer row - branch-specific activity (which branch handled a given
+// order) belongs on Order once that module exists, not on Customer.
+// This was chosen over per-branch Customer records because duplicating
+// a customer per branch they visit would fragment their history and
+// contact info across rows for no benefit at this stage; nothing in the
+// approved requirements calls for branch-exclusive customer lists.
+model Customer {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name  String
+  // Stored normalized (digits only, optional leading "+") - see
+  // src/modules/customers/customers.service.ts normalizePhone(). The
+  // normalized form is what duplicate detection and search compare
+  // against.
+  phone String
+
+  email   String?
+  address String?
+  notes   String?
+
+  // Persistent customer-specific instructions/preferences.
+  // Examples: "Always fold his items" or "Do not give him items on credit".
+  customerInstructions String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  // Duplicate handling is soft (detection + explicit override), not a
+  // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
+  // A hard @@unique([businessId, phone]) would incorrectly block a
+  // second legitimate customer at the same household/shared phone
+  // number. A plain (non-unique) index still makes the duplicate-check
+  // query and phone search efficient.
+  @@index([businessId])
+  @@index([businessId, phone])
+  @@index([businessId, name])
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------
+// SERVICES / PRICE LIST MODULE
+// ---------------------------------------------------------------------
+// Each service is a chargeable laundry item.
+//
+// `pieces` = physical pieces represented by one unit.
+// `unitPrice` = price for one unit.
+//
+// Example:
+// Complete Agbada = 3 pieces, ₦4,500 per unit.
+//
+// Therefore:
+// QTY 2 × Complete Agbada
+// PCS = 2 × 3 = 6
+// Total Price = 2 × ₦4,500 = ₦9,000
+//
+// Prices are later snapshotted onto orders/invoices so changing the
+// price list will never change historical transactions.
+model Service {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name      String
+  pieces    Int
+  unitPrice Int
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([businessId])
+  @@index([businessId, isActive])
+  @@index([businessId, name])
+  @@map("services")
+}
+
+// ---------------------------------------------------------------------
+// ORDERS MODULE
+// ---------------------------------------------------------------------
+// Orders are tenant-scoped by business and operationally scoped by branch.
+//
+// OrderItem stores a complete historical snapshot of the Service at the
+// moment the order is created. Changing the current price list later can
+// therefore never change an existing order.
+//
+// Receipt visibility:
+//   garmentNote = customer-visible
+//   internalNote = company/staff-only
+enum OrderStatus {
+  RECEIVED
+  IN_PROGRESS
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+}
+
+model OrderNumberSequence {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nextNumber Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("order_number_sequences")
+}
+
+model Order {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  orderNumber String
+
+  status OrderStatus @default(RECEIVED)
+
+  orderTotal Int @default(0)
+
+  expectedReadyAt DateTime?
+  readyAt         DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
+  // Visible to the customer.
+  garmentNote String?
+
+  // PRIVATE. Never expose this on customer-facing receipts.
+  internalNote String?
+
+  items    OrderItem[]
+  garments Garment[]
+  invoice  Invoice?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, orderNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, customerId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  garments Garment[]
+
+  // Historical snapshot from Service at order creation.
+  serviceName   String
+  piecesPerUnit Int
+  quantity      Int
+  totalPieces   Int
+  unitPrice     Int
+  lineTotal     Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([serviceId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------
+// INVOICES / RECEIPTS MODULE
+// ---------------------------------------------------------------------
+
+enum InvoiceStatus {
+  ISSUED
+  VOID
+}
+
+model Invoice {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  // One invoice belongs to exactly one order.
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  // Uses the same progressive 5-digit number as the order.
+  invoiceNumber String
+
+  status InvoiceStatus @default(ISSUED)
+
+  // Historical customer identity snapshot.
+  // Deliberately excludes phone, email and address because
+  // customer contact information is NOT printed on either receipt.
+  customerName String
+
+  // Historical company snapshot for printed receipts.
+  companyName    String
+  companyPhone   String?
+  companyEmail   String?
+  companyWebsite String?
+  companyAddress String?
+
+  // Historical transaction totals.
+  totalAmount Int
+
+  // Customer-visible order note.
+  garmentNote String?
+
+  // PRIVATE. Never expose on the customer receipt.
+  internalNote String?
+
+  // Agreement printed on the customer copy.
+  customerAgreement String
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, orderId])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  // Historical snapshots from OrderItem.
+  itemName      String
+  piecesPerUnit Int
+  quantity      Int
+  totalPieces   Int
+  unitPrice     Int
+  totalPrice    Int
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+// ---------------------------------------------------------------------
+// PAYMENTS MODULE
+// ---------------------------------------------------------------------
+
+// Payment method used for an actual payment transaction.
+// PARTIAL/PART PAYMENT is deliberately not a method: it is determined
+// by comparing the amount paid against the invoice balance.
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+// A recorded payment can be voided without deleting its historical record.
+enum PaymentStatus {
+  POSTED
+  VOID
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  // Tenant and operational scope.
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  // Every payment belongs to exactly one invoice.
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  // Amount is stored as a whole-naira integer, consistent with
+  // Invoice.totalAmount and Order.orderTotal.
+  amount Int
+
+  method PaymentMethod
+  status PaymentStatus @default(POSTED)
+
+  // Optional transaction/reference number supplied for transfer or POS.
+  reference String?
+
+  // Optional internal note about the payment.
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, invoiceId, createdAt])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------
+// GARMENTS MODULE
+// ---------------------------------------------------------------------
+// A Garment represents one physical garment/piece received for an order.
+// It is always tenant-scoped by business and operationally scoped by
+// branch. Each garment belongs to an OrderItem and therefore retains the
+// historical service snapshot through that OrderItem.
+//
+// Garment status tracks the physical processing lifecycle independently
+// from the overall Order status.
+
+enum GarmentStatus {
+  RECEIVED
+  PROCESSING
+  READY
+  PICKED_UP
+  DAMAGED
+  LOST
+}
+
+model Garment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  garmentNumber Int
+  status        GarmentStatus @default(RECEIVED)
+
+  note String?
+
+  receivedAt DateTime  @default(now())
+  readyAt    DateTime?
+  pickedUpAt DateTime?
+  damagedAt  DateTime?
+  lostAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderItemId, garmentNumber])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, orderId])
+  @@index([businessId, status])
+  @@index([orderItemId])
+  @@map("garments")
+}
+
+// ---------------------------------------------------------------------
+// DATA MIGRATION INFRASTRUCTURE
+// ---------------------------------------------------------------------
+// Migration jobs are tenant-scoped. Raw source files are stored outside
+// PostgreSQL through the storage abstraction; the database stores only
+// metadata, status, summaries and issues. This keeps large customer
+// backups out of the relational database while preserving a durable,
+// auditable migration workflow.
+enum MigrationJobStatus {
+  ANALYZING
+  READY
+  IMPORTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MigrationSourceType {
+  LAUNDRY_BACKUP
+  DBF
+  CSV
+  JSON
+  XLSX
+  UNKNOWN
+}
+
+enum MigrationIssueSeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+model MigrationJob {
+  id           String              @id @default(uuid())
+  businessId   String
+  business     Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdById  String?
+  createdBy    User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  sourceType   MigrationSourceType
+  sourceName   String
+  status       MigrationJobStatus  @default(ANALYZING)
+  sourcePath   String
+  sourceSha256 String
+  summary      Json?
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  completedAt  DateTime?
+
+  files  MigrationFile[]
+  issues MigrationIssue[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@map("migration_jobs")
+}
+
+model MigrationFile {
+  id           String       @id @default(uuid())
+  jobId        String
+  job          MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  relativePath String
+  format       String
+  tableName    String?
+  sizeBytes    Int
+  sha256       String
+  rowCount     Int?
+  headers      Json?
+  status       String       @default("detected")
+  errorMessage String?
+  createdAt    DateTime     @default(now())
+
+  @@unique([jobId, relativePath])
+  @@index([jobId, format])
+  @@map("migration_files")
+}
+
+model MigrationIssue {
+  id         String                 @id @default(uuid())
+  jobId      String
+  job        MigrationJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  severity   MigrationIssueSeverity
+  code       String
+  message    String
+  entityType String?
+  sourceFile String?
+  sourceRow  Int?
+  details    Json?
+  resolvedAt DateTime?
+  createdAt  DateTime               @default(now())
+
+  @@index([jobId, severity])
+  @@map("migration_issues")
+}
+
+// ---------------------------------------------------------------------
+// INVENTORY MODULE
+// ---------------------------------------------------------------------
+// Inventory items are business-owned catalog records. Actual quantities
+// are maintained separately per branch through InventoryStock.
+//
+// InventoryMovement provides the historical stock ledger. InventoryStock
+// stores the current operational balance for fast reads and reconciliation.
+
+enum InventoryUnit {
+  PIECE
+  PACK
+  BOTTLE
+  LITRE
+  KILOGRAM
+  BOX
+  ROLL
+  OTHER
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+}
+
+model InventoryItem {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  unit        InventoryUnit
+
+  // A stock level at or below this value is considered low stock.
+  lowStockThreshold Int @default(0)
+
+  isActive Boolean @default(true)
+
+  stocks    InventoryStock[]
+  movements InventoryMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+  @@index([businessId, name])
+  @@map("inventory_items")
+}
+
+model InventoryStock {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  // Current physical quantity held by this branch.
+  quantity Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One current stock balance per inventory item per branch.
+  @@unique([inventoryItemId, branchId])
+  @@index([businessId, branchId])
+  @@index([businessId, branchId, quantity])
+  @@index([businessId, inventoryItemId])
+  @@map("inventory_stocks")
+}
+
+model InventoryMovement {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  // RECEIPT and ISSUE use positive quantities.
+  // The movement type determines whether stock increases or decreases.
+  // ADJUSTMENT may represent either an increase or decrease.
+  quantity Int
+
+  type InventoryMovementType
+
+  // Stock balance immediately after this movement.
+  resultingQuantity Int
+
+  reason    String?
+  reference String?
+
+  // User responsible for creating the movement.
+  createdById String
+  createdBy   User   @relation("InventoryMovementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  // Movement rows are historical records and are not deleted by normal
+  // inventory operations.
+  createdAt DateTime @default(now())
+
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, branchId, inventoryItemId, createdAt])
+  @@index([businessId, inventoryItemId, createdAt])
+  @@index([createdById])
+  @@map("inventory_movements")
+}
+
+// ---------------------------------------------------------------------
+// PAYROLL / STAFF FINANCE MODULE
+// ---------------------------------------------------------------------
+//
+// Payroll is an internal business-finance system. It is separate from
+// customer invoices/payments.
+//
+// IOUs and loans can be approved against an employee and subsequently
+// deducted through payroll. PayrollDeduction preserves the exact
+// historical amount deducted and the source obligation.
+// ---------------------------------------------------------------------
+
+enum PayrollPeriodStatus {
+  OPEN
+  PROCESSING
+  FINALIZED
+  PAID
+  VOID
+}
+
+enum IOUStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_DEDUCTED
+  FULLY_DEDUCTED
+  REJECTED
+  CANCELLED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  PARTIALLY_REPAID
+  FULLY_REPAID
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollDeductionType {
+  IOU
+  LOAN
+  OTHER
+}
+
+// Method used to disburse an employee's payroll.
+enum PayrollPaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+// Payroll payments are historical records.
+// Voiding changes the status instead of deleting the record.
+enum PayrollPaymentStatus {
+  POSTED
+  VOID
+}
+
+model EmployeeCompensation {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Historical basic salary in whole naira.
+  basicSalary Int
+
+  // The salary becomes effective on this date.
+  effectiveFrom DateTime
+
+  // Null means this is the current compensation record.
+  effectiveTo DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, effectiveFrom])
+  @@index([businessId, employeeId, effectiveTo])
+  @@map("employee_compensations")
+}
+
+model PayrollPeriod {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Payroll is generated for a specific operational branch/context.
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  status PayrollPeriodStatus @default(OPEN)
+
+  payrollRecords PayrollRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, branchId, periodStart, periodEnd])
+  @@index([businessId, periodStart, periodEnd])
+  @@index([businessId, branchId, status])
+  @@map("payroll_periods")
+}
+
+model PayrollRecord {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Historical salary snapshot for this payroll run.
+  basicSalary Int
+
+  // Amounts are whole-naira integers.
+  allowances Int @default(0)
+  bonuses    Int @default(0)
+  grossPay   Int
+
+  // Automatically calculated from approved deductions.
+  totalDeductions Int @default(0)
+
+  // Gross pay minus all deductions.
+  netPay Int
+
+  deductions PayrollDeduction[]
+  payments   PayrollPayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([payrollPeriodId, employeeId])
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([employeeId, createdAt])
+  @@map("payroll_records")
+}
+
+model IOU {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Amount originally approved.
+  amount Int
+
+  // Remaining amount still owed.
+  outstandingAmount Int
+
+  reason String?
+
+  status IOUStatus @default(PENDING)
+
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   User?     @relation("IOUApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  payrollDeductions PayrollDeduction[]
+  repayments        FinancialRepayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, status])
+  @@index([employeeId, status])
+  @@map("ious")
+}
+
+model Loan {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  principalAmount   Int
+  outstandingAmount Int
+
+  reason String?
+
+  status LoanStatus @default(PENDING)
+
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   User?     @relation("LoanApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  payrollDeductions PayrollDeduction[]
+  repayments        FinancialRepayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, employeeId, createdAt])
+  @@index([businessId, branchId, status])
+  @@index([employeeId, status])
+  @@map("loans")
+}
+
+model PayrollPayment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollRecordId String
+  payrollRecord   PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // Whole-naira amount actually disbursed in this transaction.
+  amount Int
+
+  method PayrollPaymentMethod
+  status PayrollPaymentStatus @default(POSTED)
+
+  // Optional bank/POS transaction reference.
+  reference String?
+
+  // Optional internal note about the disbursement.
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, payrollRecordId, createdAt])
+  @@index([businessId, employeeId, createdAt])
+  @@index([payrollRecordId])
+  @@map("payroll_payments")
+}
+
+model PayrollDeduction {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  payrollRecordId String
+  payrollRecord   PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Restrict)
+
+  type PayrollDeductionType
+
+  // Exactly one source should normally be populated according to type.
+  iouId String?
+  iou   IOU?    @relation(fields: [iouId], references: [id], onDelete: Restrict)
+
+  loanId String?
+  loan   Loan?   @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  amount Int
+
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, payrollRecordId])
+  @@index([businessId, branchId, createdAt])
+  @@index([iouId])
+  @@index([loanId])
+  @@map("payroll_deductions")
+}
+
+enum FinancialRepaymentType {
+  IOU
+  LOAN
+}
+
+enum FinancialRepaymentMethod {
+  CASH
+  TRANSFER
+  POS
+}
+
+enum FinancialRepaymentStatus {
+  POSTED
+  VOID
+}
+
+model FinancialRepayment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  employeeId String
+  employee   User   @relation("FinancialRepaymentEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  type FinancialRepaymentType
+
+  iouId String?
+  iou   IOU?    @relation(fields: [iouId], references: [id], onDelete: Restrict)
+
+  loanId String?
+  loan   Loan?   @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  amount Int
+  method FinancialRepaymentMethod
+
+  reference String?
+  note      String?
+
+  createdById String
+  createdBy   User   @relation("FinancialRepaymentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  status FinancialRepaymentStatus @default(POSTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, employeeId, createdAt])
+  @@index([iouId])
+  @@index([loanId])
+  @@index([createdById])
+  @@map("financial_repayments")
+}
