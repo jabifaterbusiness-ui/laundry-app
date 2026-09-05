@@ -22,6 +22,7 @@ import loansRouter from "./modules/payroll/loans.routes.js";
 import repaymentsRouter from "./modules/payroll/repayments.routes.js";
 import compensationRouter from "./modules/payroll/compensation.routes.js";
 import payrollRouter from "./modules/payroll/payroll.routes.js";
+import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
 
 export function createApp() {
   const app = express();
@@ -60,6 +61,7 @@ export function createApp() {
   v1.use("/payroll/repayments", repaymentsRouter);
   v1.use("/payroll/compensation", compensationRouter);
   v1.use("/payroll", payrollRouter);
+  v1.use("/permissions", permissionsRouter);
 
   app.use("/api/v1", v1);
 
