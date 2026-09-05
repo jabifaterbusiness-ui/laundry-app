@@ -14,6 +14,7 @@ import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { garmentsRouter } from "./modules/garments/garments.routes.js";
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
 import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
+import { branchesRouter } from "./modules/branches/branches.routes.js";
 import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
@@ -45,6 +46,7 @@ export function createApp() {
   const v1 = express.Router();
   v1.use("/auth", authRouter);
   v1.use("/businesses", businessesRouter);
+  v1.use("/branches", branchesRouter);
   v1.use("/customers", customersRouter);
   v1.use("/migrations", migrationsRouter);
   v1.use("/services", servicesRouter);
