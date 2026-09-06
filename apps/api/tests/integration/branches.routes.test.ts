@@ -4,6 +4,15 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
     branch: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -39,6 +48,9 @@ const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const userBranchCreate = vi.mocked(prisma.userBranch.create);
 const userBranchDeleteMany = vi.mocked(prisma.userBranch.deleteMany);
 const userFindFirst = vi.mocked(prisma.user.findFirst);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
@@ -58,6 +70,25 @@ const app = createApp();
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  findPermission.mockImplementation(((args: {
+    where: { code?: string };
+  }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Branches routes - authentication", () => {
@@ -102,6 +133,22 @@ describe("Branches routes - tenant isolation", () => {
         businessId: "biz-B",
       },
     });
+  });
+});
+
+describe("Branches routes - permission enforcement", () => {
+  it("rejects a BUSINESS_OWNER when branches.create is explicitly denied", async () => {
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/branches")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ name: "Blocked Branch" });
+
+    expect(response.status).toBe(403);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
