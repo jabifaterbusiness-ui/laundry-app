@@ -80,6 +80,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
       "garments.view",
       "garments.manage",
       "invoices.view",
+      "invoices.manage",
       "payments.view",
       "payments.manage",
       "inventory.view"

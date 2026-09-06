@@ -10,6 +10,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -18,6 +27,9 @@ import { createApp } from "../../src/app.js";
 
 const invoiceFindFirst = vi.mocked(prisma.invoice.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -104,6 +116,22 @@ const invoiceFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  findPermission.mockImplementation(((args: { where: { code?: string } }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Receipt routes - authentication and context", () => {
