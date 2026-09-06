@@ -4,6 +4,15 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
     customer: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -27,6 +36,9 @@ const count = vi.mocked(prisma.customer.count);
 const findFirst = vi.mocked(prisma.customer.findFirst);
 const create = vi.mocked(prisma.customer.create);
 const updateMany = vi.mocked(prisma.customer.updateMany);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
@@ -46,6 +58,25 @@ const app = createApp();
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  findPermission.mockImplementation(((args: {
+    where: { code?: string };
+  }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Customers routes - authentication", () => {
@@ -108,6 +139,22 @@ describe("Customers routes - tenant isolation end-to-end", () => {
       .set("Authorization", `Bearer ${OWNER_A}`);
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
+  });
+});
+
+describe("Customers routes - permission enforcement", () => {
+  it("rejects a STAFF user when customers.create is explicitly denied", async () => {
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/customers")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ name: "Blocked Customer" });
+
+    expect(response.status).toBe(403);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
