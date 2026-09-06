@@ -24,6 +24,7 @@ import compensationRouter from "./modules/payroll/compensation.routes.js";
 import payrollRouter from "./modules/payroll/payroll.routes.js";
 import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
 import { searchRouter } from "./modules/search/search.routes.js";
+import { quickOperationsRouter } from "./modules/quick-operations/quick-operations.routes.js";
 
 export function createApp() {
   const app = express();
@@ -64,6 +65,7 @@ export function createApp() {
   v1.use("/payroll", payrollRouter);
   v1.use("/permissions", permissionsRouter);
   v1.use("/search", searchRouter);
+  v1.use("/quick-operations", quickOperationsRouter);
 
   app.use("/api/v1", v1);
 
