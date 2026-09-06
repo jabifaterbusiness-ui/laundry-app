@@ -1,0 +1,221 @@
+import type { Request, Response } from "express";
+import type { Role } from "@prisma/client";
+import { AppError } from "../../middleware/error-handler.js";
+import { recordAuditEvent } from "../../lib/audit.js";
+import {
+  listPermissions,
+  getRolePermissions,
+  getUserPermissions,
+  upsertBusinessRolePermission,
+  removeBusinessRolePermission,
+  upsertUserPermissionOverride,
+  removeUserPermissionOverride,
+  requirePermissionForGrant,
+} from "./permissions.service.js";
+import {
+  rolePermissionParamsSchema,
+  userIdParamSchema,
+  roleParamSchema,
+  userPermissionParamsSchema,
+  permissionValueSchema,
+} from "./permissions.validation.js";
+
+function requireBusinessId(req: Request): string {
+  if (!req.user?.businessId) {
+    throw new AppError(
+      "This action requires an account scoped to a business",
+      403,
+    );
+  }
+
+  return req.user.businessId;
+}
+
+export async function list(req: Request, res: Response) {
+  requireBusinessId(req);
+
+  res.status(200).json(await listPermissions());
+}
+
+export async function rolePermissions(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const { role } = roleParamSchema.parse(req.params);
+
+  if (role === "PLATFORM_ADMIN") {
+    throw new AppError(
+      "PLATFORM_ADMIN permissions cannot be configured at business level",
+      400,
+    );
+  }
+
+  res.status(200).json(
+    await getRolePermissions(businessId, role as Role),
+  );
+}
+
+export async function updateRolePermission(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { role, permissionCode } =
+    rolePermissionParamsSchema.parse(req.params);
+  const { allowed } = permissionValueSchema.parse(req.body);
+
+  if (role === "PLATFORM_ADMIN") {
+    throw new AppError(
+      "PLATFORM_ADMIN permissions cannot be configured at business level",
+      400,
+    );
+  }
+
+  if (allowed) {
+    await requirePermissionForGrant(
+      req.user!.id,
+      businessId,
+      req.user!.role,
+      permissionCode,
+    );
+  }
+
+  const result = await upsertBusinessRolePermission(
+    businessId,
+    role as Role,
+    permissionCode,
+    allowed,
+  );
+
+  await recordAuditEvent({
+    action: "permission.role.updated",
+    entityType: "BusinessRolePermission",
+    entityId: result.id,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      role,
+      permissionCode,
+      allowed,
+    },
+  });
+
+  res.status(200).json(result);
+}
+
+export async function removeRolePermission(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { role, permissionCode } =
+    rolePermissionParamsSchema.parse(req.params);
+
+  if (role === "PLATFORM_ADMIN") {
+    throw new AppError(
+      "PLATFORM_ADMIN permissions cannot be configured at business level",
+      400,
+    );
+  }
+
+  const result = await removeBusinessRolePermission(
+    businessId,
+    role as Role,
+    permissionCode,
+  );
+
+  await recordAuditEvent({
+    action: "permission.role.removed",
+    entityType: "BusinessRolePermission",
+    entityId: null,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      role,
+      permissionCode,
+    },
+  });
+
+  res.status(200).json(result);
+}
+
+export async function userPermissions(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const { userId } = userIdParamSchema.parse(req.params);
+
+  res.status(200).json(
+    await getUserPermissions(businessId, userId),
+  );
+}
+
+export async function updateUserPermission(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { userId, permissionCode } =
+    userPermissionParamsSchema.parse(req.params);
+  const { allowed } = permissionValueSchema.parse(req.body);
+
+  if (allowed) {
+    await requirePermissionForGrant(
+      req.user!.id,
+      businessId,
+      req.user!.role,
+      permissionCode,
+    );
+  }
+
+  const result = await upsertUserPermissionOverride(
+    businessId,
+    userId,
+    permissionCode,
+    allowed,
+  );
+
+  await recordAuditEvent({
+    action: "permission.user.updated",
+    entityType: "UserPermissionOverride",
+    entityId: result.id,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      userId,
+      permissionCode,
+      allowed,
+    },
+  });
+
+  res.status(200).json(result);
+}
+
+export async function removeUserPermission(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { userId, permissionCode } =
+    userPermissionParamsSchema.parse(req.params);
+
+  const result = await removeUserPermissionOverride(
+    businessId,
+    userId,
+    permissionCode,
+  );
+
+  await recordAuditEvent({
+    action: "permission.user.removed",
+    entityType: "UserPermissionOverride",
+    entityId: null,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      userId,
+      permissionCode,
+    },
+  });
+
+  res.status(200).json(result);
+}
