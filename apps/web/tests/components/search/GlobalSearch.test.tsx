@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { GlobalSearch } from "../../../src/components/search/GlobalSearch.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as searchApi from "../../../src/lib/search-api.js";
+import type { QuickOperationDefinition } from "../../../src/lib/quick-operations-catalog.js";
 
 vi.mock("../../../src/lib/search-api.js");
 
@@ -101,6 +102,65 @@ describe("GlobalSearch", () => {
       { accessToken: "test-token" },
       "branch-1",
     );
+  });
+
+
+  it("shows matching quick operations alongside normal search results", async () => {
+    const user = userEvent.setup();
+
+    mockedSearchApi.globalSearch.mockResolvedValue([]);
+
+    renderSearch();
+
+    await user.type(
+      screen.getByRole("textbox", { name: /global search/i }),
+      "TI",
+    );
+
+    expect(
+      await screen.findByRole("option", {
+        name: /TI Transfer Invoice/i,
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Quick Operations")).toBeInTheDocument();
+  });
+
+  it("opens a quick operation event when a shortcut is selected", async () => {
+    const user = userEvent.setup();
+    const events: QuickOperationDefinition[] = [];
+
+    function listener(event: Event) {
+      events.push(
+        (event as CustomEvent<QuickOperationDefinition>).detail,
+      );
+    }
+
+    window.addEventListener("quick-operation:open", listener);
+
+    try {
+      mockedSearchApi.globalSearch.mockResolvedValue([]);
+
+      renderSearch();
+
+      const input = screen.getByRole("textbox", {
+        name: /global search/i,
+      });
+
+      await user.type(input, "TI");
+
+      await user.click(
+        await screen.findByRole("option", {
+          name: /TI Transfer Invoice/i,
+        }),
+      );
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.code).toBe("TI");
+      expect(input).toHaveValue("");
+    } finally {
+      window.removeEventListener("quick-operation:open", listener);
+    }
   });
 
   it("shows an empty state when no results are returned", async () => {

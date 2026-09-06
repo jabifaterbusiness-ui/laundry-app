@@ -6,6 +6,10 @@ import {
   type GlobalSearchResultType,
 } from "../../lib/search-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import {
+  searchQuickOperations,
+  type QuickOperationDefinition,
+} from "../../lib/quick-operations-catalog.js";
 
 const RESULT_GROUPS: {
   type: GlobalSearchResultType;
@@ -107,6 +111,20 @@ export function GlobalSearch() {
   }
 
   const groups = groupResults(results);
+  const quickOperations = searchQuickOperations(query);
+
+  function selectQuickOperation(operation: QuickOperationDefinition) {
+    setQuery("");
+    setResults([]);
+    setError(null);
+    setIsOpen(false);
+
+    window.dispatchEvent(
+      new CustomEvent("quick-operation:open", {
+        detail: operation,
+      }),
+    );
+  }
 
   return (
     <div
@@ -158,10 +176,61 @@ export function GlobalSearch() {
             <div style={{ padding: 16 }}>Searching...</div>
           ) : error ? (
             <div style={{ padding: 16 }}>{error}</div>
-          ) : groups.length === 0 ? (
+          ) : groups.length === 0 && quickOperations.length === 0 ? (
             <div style={{ padding: 16 }}>No results found.</div>
           ) : (
-            groups.map((group) => (
+            <>
+              {quickOperations.length > 0 ? (
+                <section>
+                  <div
+                    style={{
+                      padding: "8px 14px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      borderBottom: "1px solid #eee",
+                    }}
+                  >
+                    Quick Operations
+                  </div>
+
+                  {quickOperations.map((operation) => (
+                    <button
+                      key={`quick-operation-${operation.code}`}
+                      type="button"
+                      role="option"
+                      onClick={() => selectQuickOperation(operation)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        border: 0,
+                        background: "transparent",
+                        padding: "11px 14px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <strong>{operation.code}</strong>
+                        <span style={{ fontWeight: 600 }}>
+                          {operation.name}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, marginTop: 3 }}>
+                        {operation.description}
+                      </div>
+                    </button>
+                  ))}
+                </section>
+              ) : null}
+
+              {groups.map((group) => (
               <section key={group.type}>
                 <div
                   style={{
@@ -198,7 +267,8 @@ export function GlobalSearch() {
                   </button>
                 ))}
               </section>
-            ))
+              ))}
+            </>
           )}
         </div>
       ) : null}

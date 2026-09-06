@@ -1,6 +1,8 @@
 import type { PropsWithChildren } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
+import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
+import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 interface NavItem {
