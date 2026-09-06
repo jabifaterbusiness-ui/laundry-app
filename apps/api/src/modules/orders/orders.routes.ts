@@ -11,6 +11,7 @@ import {
   create,
   getOne,
   list,
+  transfer,
   updateStatus,
 } from "./orders.controller.js";
 
@@ -62,6 +63,14 @@ ordersRouter.get(
   requirePermission("orders.view"),
   asyncHandler(getOne),
 );
+
+ordersRouter.patch(
+  "/:id/transfer",
+  requireRole(...ORDER_ROLES),
+  requirePermission("orders.update"),
+  asyncHandler(transfer),
+);
+
 
 ordersRouter.patch(
   "/:id/status",

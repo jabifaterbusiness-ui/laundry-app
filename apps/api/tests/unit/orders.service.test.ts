@@ -20,6 +20,7 @@ import {
   getOrderForBusiness,
   listOrders,
   updateOrderStatus,
+  transferOrder,
 } from "../../src/modules/orders/orders.service.js";
 import { AppError } from "../../src/middleware/error-handler.js";
 
@@ -58,7 +59,9 @@ function createTransactionClient() {
     },
     order: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
     },
   };
 }
@@ -789,4 +792,191 @@ describe("createOrder", () => {
 
     expect(orderUpdate).not.toHaveBeenCalled();
   });
+
+describe("transferOrder", () => {
+  it("transfers an order to another customer", async () => {
+    const tx = createTransactionClient();
+
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_A,
+    });
+
+    tx.customer.findFirst.mockResolvedValue({
+      id: CUSTOMER_B,
+      name: "Customer B",
+    });
+
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_B,
+    });
+
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    const result = await transferOrder(
+      ORDER_A,
+      "biz-A",
+      BRANCH_A,
+      CUSTOMER_B,
+    );
+
+    expect(result).toEqual({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_B,
+    });
+
+    expect(tx.order.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        customerId: true,
+      },
+    });
+
+    expect(tx.customer.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_B,
+        businessId: "biz-A",
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: {
+        id: ORDER_A,
+      },
+      data: {
+        customer: {
+          connect: {
+            id: CUSTOMER_B,
+          },
+        },
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: true,
+      },
+    });
+  });
+
+  it("rejects an order outside the authenticated business or branch", async () => {
+    const tx = createTransactionClient();
+
+    tx.order.findFirst.mockResolvedValue(null);
+
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await expect(
+      transferOrder(
+        ORDER_A,
+        "biz-B",
+        BRANCH_B,
+        CUSTOMER_B,
+      ),
+    ).rejects.toThrow("Order not found");
+
+    expect(tx.customer.findFirst).not.toHaveBeenCalled();
+    expect(tx.order.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a destination customer outside the authenticated business", async () => {
+    const tx = createTransactionClient();
+
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_A,
+    });
+
+    tx.customer.findFirst.mockResolvedValue(null);
+
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await expect(
+      transferOrder(
+        ORDER_A,
+        "biz-A",
+        BRANCH_A,
+        CUSTOMER_B,
+      ),
+    ).rejects.toThrow("Customer not found");
+
+    expect(tx.order.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects transferring to the same customer", async () => {
+    const tx = createTransactionClient();
+
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_A,
+    });
+
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await expect(
+      transferOrder(
+        ORDER_A,
+        "biz-A",
+        BRANCH_A,
+        CUSTOMER_A,
+      ),
+    ).rejects.toThrow(
+      "Order is already assigned to this customer",
+    );
+
+    expect(tx.customer.findFirst).not.toHaveBeenCalled();
+    expect(tx.order.update).not.toHaveBeenCalled();
+  });
+
+  it("runs the transfer inside a Prisma transaction", async () => {
+    const tx = createTransactionClient();
+
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_A,
+    });
+
+    tx.customer.findFirst.mockResolvedValue({
+      id: CUSTOMER_B,
+      name: "Customer B",
+    });
+
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      customerId: CUSTOMER_B,
+    });
+
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await transferOrder(
+      ORDER_A,
+      "biz-A",
+      BRANCH_A,
+      CUSTOMER_B,
+    );
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(tx.order.findFirst).toHaveBeenCalledTimes(1);
+    expect(tx.customer.findFirst).toHaveBeenCalledTimes(1);
+    expect(tx.order.update).toHaveBeenCalledTimes(1);
+  });
+});
+
 });

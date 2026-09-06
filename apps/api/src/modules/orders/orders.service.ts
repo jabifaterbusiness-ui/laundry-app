@@ -284,9 +284,77 @@ export async function getOrderForBusiness(
 }
 
 /**
- * Changes order status without allowing a caller to update an order
- * outside their authenticated business/branch.
+ * Transfers an order to another customer within the authenticated
+ * business and branch without changing the order's financial or
+ * operational history.
  */
+export async function transferOrder(
+  id: string,
+  businessId: string,
+  branchId: string,
+  newCustomerId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findFirst({
+      where: {
+        id,
+        businessId,
+        branchId,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        customerId: true,
+      },
+    });
+
+    if (!order) {
+      throw new AppError("Order not found", 404);
+    }
+
+    if (order.customerId === newCustomerId) {
+      throw new AppError(
+        "Order is already assigned to this customer",
+        422,
+      );
+    }
+
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: newCustomerId,
+        businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!customer) {
+      throw new AppError("Customer not found", 404);
+    }
+
+    return tx.order.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        customer: {
+          connect: {
+            id: customer.id,
+          },
+        },
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: true,
+      },
+    });
+  });
+}
+
+
 export async function updateOrderStatus(
   id: string,
   businessId: string,

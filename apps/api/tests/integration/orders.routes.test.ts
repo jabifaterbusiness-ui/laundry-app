@@ -52,6 +52,12 @@ const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
+const transaction = vi.mocked(prisma.$transaction);
+const customerFindFirst = vi.mocked(prisma.customer.findFirst);
+
+const recordAuditEvent = vi.mocked(
+  (await import("../../src/lib/audit.js")).recordAuditEvent,
+);
 
 function tokenFor(
   role: string,
@@ -79,6 +85,8 @@ const PLATFORM_ADMIN = tokenFor("PLATFORM_ADMIN", null, "user-admin");
 const BRANCH_A = "33333333-3333-3333-3333-333333333333";
 const BRANCH_B = "44444444-4444-4444-4444-444444444444";
 const ORDER_A = "77777777-7777-7777-7777-777777777777";
+const CUSTOMER_A = "11111111-1111-4111-8111-111111111111";
+const CUSTOMER_B = "22222222-2222-4222-8222-222222222222";
 
 const app = createApp();
 
@@ -115,6 +123,18 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+
+  transaction.mockImplementation(async (callback) =>
+    callback({
+      order: {
+        findFirst: orderFindFirst,
+        update: orderUpdate,
+      },
+      customer: {
+        findFirst: customerFindFirst,
+      },
+    } as never),
+  );
 });
 
 describe("Orders routes - authentication", () => {
@@ -366,6 +386,115 @@ describe("Orders routes - permission enforcement", () => {
 
     expect(res.status).toBe(403);
     expect(orderUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("Orders routes - transfer", () => {
+  it("STAFF can transfer an order when orders.update is allowed", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    const previousOrder = {
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      customerId: CUSTOMER_A,
+      orderNumber: "00042",
+    };
+
+    orderFindFirst.mockResolvedValue(previousOrder as never);
+
+    customerFindFirst.mockResolvedValue({
+      id: CUSTOMER_B,
+      businessId: "biz-A",
+      name: "Customer B",
+    } as never);
+
+    orderUpdate.mockResolvedValue({
+      ...previousOrder,
+      customerId: CUSTOMER_B,
+      items: [],
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/transfer`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ customerId: CUSTOMER_B });
+
+    expect(res.status).toBe(200);
+    expect(res.body.customerId).toBe(CUSTOMER_B);
+    expect(orderUpdate).toHaveBeenCalled();
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "order.customer_transferred",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-staff-a",
+        metadata: expect.objectContaining({
+          previousCustomerId: CUSTOMER_A,
+          newCustomerId: CUSTOMER_B,
+        }),
+      }),
+    );
+  });
+
+  it("rejects transfer when orders.update is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/transfer`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ customerId: CUSTOMER_B });
+
+    expect(res.status).toBe(403);
+    expect(orderFindFirst).not.toHaveBeenCalled();
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("enforces business and branch isolation during transfer", async () => {
+    allowBranch("user-owner-b", BRANCH_B, "biz-B");
+
+    orderFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/transfer`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B)
+      .send({ customerId: CUSTOMER_B });
+
+    expect(res.status).toBe(404);
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects transferring an order to the same customer", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      customerId: CUSTOMER_A,
+      orderNumber: "00042",
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/transfer`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ customerId: CUSTOMER_A });
+
+    expect(res.status).toBe(422);
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 

@@ -5,12 +5,14 @@ import {
   createOrderSchema,
   listOrdersQuerySchema,
   orderIdParamSchema,
+  transferOrderSchema,
   updateOrderStatusSchema,
 } from "./orders.validation.js";
 import {
   createOrder,
   getOrderForBusiness,
   listOrders,
+  transferOrder,
   updateOrderStatus,
 } from "./orders.service.js";
 
@@ -114,6 +116,50 @@ export async function getOne(req: Request, res: Response) {
 
   res.status(200).json(order);
 }
+
+export async function transfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = orderIdParamSchema.parse(req.params);
+  const input = transferOrderSchema.parse(req.body);
+
+  const previousOrder = await getOrderForBusiness(
+    id,
+    businessId,
+    branchId,
+  );
+
+  if (!previousOrder) {
+    throw new AppError("Order not found", 404);
+  }
+
+  const previousCustomerId = previousOrder.customerId;
+
+  const order = await transferOrder(
+    id,
+    businessId,
+    branchId,
+    input.customerId,
+  );
+
+  await recordAuditEvent({
+    action: "order.customer_transferred",
+    entityType: "Order",
+    entityId: order.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      orderNumber: order.orderNumber,
+      previousCustomerId,
+      newCustomerId: order.customerId,
+    },
+  });
+
+  res.status(200).json(order);
+}
+
 
 export async function updateStatus(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
