@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import {
   activate,
   create,
@@ -45,35 +46,41 @@ servicesRouter.use(requireAuth, requireBusinessContext);
 servicesRouter.post(
   "/",
   requireRole(...WRITE_ROLES),
+  requirePermission("services.create"),
   asyncHandler(create),
 );
 
 servicesRouter.get(
   "/",
   requireRole(...VIEW_ROLES),
+  requirePermission("services.view"),
   asyncHandler(list),
 );
 
 servicesRouter.get(
   "/:id",
   requireRole(...VIEW_ROLES),
+  requirePermission("services.view"),
   asyncHandler(getOne),
 );
 
 servicesRouter.patch(
   "/:id",
   requireRole(...WRITE_ROLES),
+  requirePermission("services.update"),
   asyncHandler(update),
 );
 
 servicesRouter.post(
   "/:id/activate",
   requireRole(...STATUS_ROLES),
+  requirePermission("services.change_status"),
   asyncHandler(activate),
 );
 
 servicesRouter.post(
   "/:id/deactivate",
   requireRole(...STATUS_ROLES),
+  requirePermission("services.change_status"),
   asyncHandler(deactivate),
 );
