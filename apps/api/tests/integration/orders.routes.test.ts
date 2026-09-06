@@ -25,6 +25,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -40,6 +49,9 @@ const orderCount = vi.mocked(prisma.order.count);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
 const orderUpdate = vi.mocked(prisma.order.update);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -84,6 +96,25 @@ function allowBranch(userId: string, branchId: string, businessId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  findPermission.mockImplementation(((args: {
+    where: { code?: string };
+  }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Orders routes - authentication", () => {
@@ -281,6 +312,60 @@ describe("Orders routes - listing", () => {
         }),
       }),
     );
+  });
+});
+
+describe("Orders routes - permission enforcement", () => {
+  it("rejects STAFF when orders.create is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/orders")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        customerId: "11111111-1111-4111-8111-111111111111",
+        items: [],
+      });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects BUSINESS_OWNER when orders.view is explicitly denied", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/orders")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(orderFindMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects BRANCH_MANAGER when orders.change_status is explicitly denied", async () => {
+    allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/status`)
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ status: "IN_PROGRESS" });
+
+    expect(res.status).toBe(403);
+    expect(orderUpdate).not.toHaveBeenCalled();
   });
 });
 

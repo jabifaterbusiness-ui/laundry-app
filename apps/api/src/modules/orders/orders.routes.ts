@@ -6,6 +6,7 @@ import {
 import { requireRole } from "../../middleware/rbac.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import {
   create,
   getOne,
@@ -44,23 +45,27 @@ ordersRouter.use(
 ordersRouter.post(
   "/",
   requireRole(...ORDER_ROLES),
+  requirePermission("orders.create"),
   asyncHandler(create),
 );
 
 ordersRouter.get(
   "/",
   requireRole(...ORDER_ROLES),
+  requirePermission("orders.view"),
   asyncHandler(list),
 );
 
 ordersRouter.get(
   "/:id",
   requireRole(...ORDER_ROLES),
+  requirePermission("orders.view"),
   asyncHandler(getOne),
 );
 
 ordersRouter.patch(
   "/:id/status",
   requireRole(...ORDER_STATUS_UPDATE_ROLES),
+  requirePermission("orders.change_status"),
   asyncHandler(updateStatus),
 );
