@@ -18,6 +18,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -35,6 +44,9 @@ const garmentCount = vi.mocked(prisma.garment.count);
 const garmentCreateMany = vi.mocked(prisma.garment.createMany);
 const garmentUpdate = vi.mocked(prisma.garment.update);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -91,6 +103,21 @@ beforeEach(() => {
   vi.mocked(prisma.$transaction).mockImplementation(
     async (callback: any) => callback(prisma),
   );
+
+  findPermission.mockImplementation(((args: { where: { code?: string } }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Garments routes - authentication", () => {
@@ -340,6 +367,54 @@ describe("Garments routes - authorization", () => {
       .send({ status: "READY" });
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe("Garments routes - permission enforcement", () => {
+  it("rejects STAFF when garments.manage is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/garments/orders/${ORDER_A}/generate`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(orderFindFirst).not.toHaveBeenCalled();
+    expect(garmentCreateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects BUSINESS_OWNER when garments.view is explicitly denied", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+
+    const res = await request(app)
+      .get("/api/v1/garments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(garmentFindMany).not.toHaveBeenCalled();
+    expect(garmentCount).not.toHaveBeenCalled();
+  });
+
+  it("rejects BRANCH_MANAGER when garments.manage is explicitly denied", async () => {
+    allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+
+    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/garments/${GARMENT_A}/status`)
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ status: "READY" });
+
+    expect(res.status).toBe(403);
+    expect(garmentFindFirst).not.toHaveBeenCalled();
+    expect(garmentUpdate).not.toHaveBeenCalled();
   });
 });
 
