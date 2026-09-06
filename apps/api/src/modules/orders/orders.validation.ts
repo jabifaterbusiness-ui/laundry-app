@@ -58,3 +58,10 @@ export const updateOrderStatusSchema = z.object({
     "CANCELLED",
   ]),
 });
+
+
+export const transferOrderSchema = z
+  .object({
+    customerId: uuidSchema,
+  })
+  .strict();
