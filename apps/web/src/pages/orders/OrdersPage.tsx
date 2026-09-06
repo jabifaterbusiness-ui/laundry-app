@@ -14,6 +14,8 @@ import {
 import { listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
+import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 
 const PAGE_SIZE = 25;
 
@@ -50,6 +52,28 @@ export function OrdersPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
+  const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useOrderWorkspaceStore(
+    (s) => s.activeWorkspaceId,
+  );
+  const openWorkspace = useOrderWorkspaceStore(
+    (s) => s.openWorkspace,
+  );
+  const switchWorkspace = useOrderWorkspaceStore(
+    (s) => s.switchWorkspace,
+  );
+  const closeWorkspace = useOrderWorkspaceStore(
+    (s) => s.closeWorkspace,
+  );
+  const updateWorkspace = useOrderWorkspaceStore(
+    (s) => s.updateWorkspace,
+  );
+
+  const activeWorkspace =
+    workspaces.find(
+      (workspace) => workspace.id === activeWorkspaceId,
+    ) ?? null;
+
   const canUpdateStatus =
     user?.role === "BUSINESS_OWNER" ||
     user?.role === "BRANCH_MANAGER";
@@ -59,14 +83,6 @@ export function OrdersPage() {
   const [customerId, setCustomerId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-
-  const [formCustomerId, setFormCustomerId] = useState("");
-  const [lines, setLines] = useState<OrderLine[]>([
-    { serviceId: "", quantity: 1 },
-  ]);
-  const [garmentNote, setGarmentNote] = useState("");
-  const [internalNote, setInternalNote] = useState("");
-  const [expectedReadyAt, setExpectedReadyAt] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const ordersQuery = useQuery({
@@ -139,7 +155,21 @@ export function OrdersPage() {
       ),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      closeForm();
+
+      if (activeWorkspaceId) {
+        updateWorkspace(activeWorkspaceId, {
+          activeOrder: order,
+          draft: {
+            lines: [{ serviceId: "", quantity: 1 }],
+            garmentNote: "",
+            internalNote: "",
+            expectedReadyAt: "",
+          },
+        });
+      }
+
+      setFormOpen(false);
+      setFormError(null);
       setSelectedOrder(order);
     },
     onError: (error) => {
@@ -180,39 +210,86 @@ export function OrdersPage() {
     return map;
   }, [services]);
 
+  const formCustomerId =
+    activeWorkspace?.draft.customerId ?? "";
+
+  const lines =
+    activeWorkspace?.draft.lines ?? [
+      { serviceId: "", quantity: 1 },
+    ];
+
+  const garmentNote =
+    activeWorkspace?.draft.garmentNote ?? "";
+
+  const internalNote =
+    activeWorkspace?.draft.internalNote ?? "";
+
+  const expectedReadyAt =
+    activeWorkspace?.draft.expectedReadyAt ?? "";
+
   const formTotal = lines.reduce((sum, line) => {
     const service = selectedServices.get(line.serviceId);
     return sum + (service ? line.quantity * service.unitPrice : 0);
   }, 0);
 
   function resetForm() {
-    setFormCustomerId("");
-    setLines([{ serviceId: "", quantity: 1 }]);
-    setGarmentNote("");
-    setInternalNote("");
-    setExpectedReadyAt("");
+    if (!activeWorkspaceId) {
+      setFormError(null);
+      return;
+    }
+
+    updateWorkspace(activeWorkspaceId, {
+      draft: {
+        lines: [{ serviceId: "", quantity: 1 }],
+        garmentNote: "",
+        internalNote: "",
+        expectedReadyAt: "",
+      },
+    });
+
     setFormError(null);
   }
 
   function closeForm() {
     setFormOpen(false);
-    resetForm();
+    setFormError(null);
   }
 
   function openCreate() {
-    resetForm();
+    setSelectedOrder(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openCustomerWorkspace(customer: Customer) {
+    const workspaceId = openWorkspace(customer);
+    switchWorkspace(workspaceId);
+    setSelectedOrder(null);
+    setFormError(null);
     setFormOpen(true);
   }
 
   function addLine() {
-    setLines((current) => [
-      ...current,
-      { serviceId: "", quantity: 1 },
-    ]);
+    if (!activeWorkspaceId) return;
+
+    updateWorkspace(activeWorkspaceId, {
+      draft: {
+        lines: [
+          ...lines,
+          { serviceId: "", quantity: 1 },
+        ],
+      },
+    });
   }
 
   function removeLine(index: number) {
-    setLines((current) => current.filter((_, i) => i !== index));
+    if (!activeWorkspaceId) return;
+
+    updateWorkspace(activeWorkspaceId, {
+      draft: {
+        lines: lines.filter((_, i) => i !== index),
+      },
+    });
   }
 
   function updateLine(
@@ -220,24 +297,28 @@ export function OrdersPage() {
     field: keyof OrderLine,
     value: string | number,
   ) {
-    setLines((current) =>
-      current.map((line, i) =>
-        i === index
-          ? {
-              ...line,
-              [field]: value,
-            }
-          : line,
-      ),
-    );
+    if (!activeWorkspaceId) return;
+
+    updateWorkspace(activeWorkspaceId, {
+      draft: {
+        lines: lines.map((line, i) =>
+          i === index
+            ? {
+                ...line,
+                [field]: value,
+              }
+            : line,
+        ),
+      },
+    });
   }
 
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
 
-    if (!formCustomerId) {
-      setFormError("Customer is required.");
+    if (!activeWorkspaceId || !formCustomerId) {
+      setFormError("Select or add a customer before creating an order.");
       return;
     }
 
@@ -270,6 +351,43 @@ export function OrdersPage() {
   return (
     <main>
       <h1>Orders</h1>
+
+      <OrderWorkspaceSwitcher
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onOpenCustomer={() => {
+          if (customers.length === 0) {
+            setFormError("No active customers are available.");
+            return;
+          }
+
+          setFormError(null);
+          setFormOpen(true);
+        }}
+        onSwitch={(workspaceId) => {
+          switchWorkspace(workspaceId);
+
+          const workspace = workspaces.find(
+            (item) => item.id === workspaceId,
+          );
+
+          setSelectedOrder(workspace?.activeOrder ?? null);
+          setFormOpen(!workspace?.activeOrder);
+          setFormError(null);
+        }}
+        onClose={(workspaceId) => {
+          const closingActive =
+            workspaceId === activeWorkspaceId;
+
+          closeWorkspace(workspaceId);
+
+          if (closingActive) {
+            setSelectedOrder(null);
+            setFormOpen(false);
+            setFormError(null);
+          }
+        }}
+      />
 
       <div>
         <select
@@ -347,7 +465,21 @@ export function OrdersPage() {
                   <td>
                     <button
                       type="button"
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => {
+                        setSelectedOrder(order);
+
+                        const customer = customers.find(
+                          (item) => item.id === order.customerId,
+                        );
+
+                        if (customer) {
+                          const workspaceId = openWorkspace(
+                            customer,
+                            { order },
+                          );
+                          switchWorkspace(workspaceId);
+                        }
+                      }}
                     >
                       {order.orderNumber}
                     </button>
@@ -400,9 +532,17 @@ export function OrdersPage() {
                 Customer
                 <select
                   value={formCustomerId}
-                  onChange={(event) =>
-                    setFormCustomerId(event.target.value)
-                  }
+                  onChange={(event) => {
+                    const customer = customers.find(
+                      (item) => item.id === event.target.value,
+                    );
+
+                    if (!customer) {
+                      return;
+                    }
+
+                    openCustomerWorkspace(customer);
+                  }}
                 >
                   <option value="">Select customer</option>
                   {customers.map((customer) => (
@@ -525,9 +665,15 @@ export function OrdersPage() {
                 <input
                   type="datetime-local"
                   value={expectedReadyAt}
-                  onChange={(event) =>
-                    setExpectedReadyAt(event.target.value)
-                  }
+                  onChange={(event) => {
+                    if (!activeWorkspaceId) return;
+
+                    updateWorkspace(activeWorkspaceId, {
+                      draft: {
+                        expectedReadyAt: event.target.value,
+                      },
+                    });
+                  }}
                 />
               </label>
             </div>
@@ -537,9 +683,15 @@ export function OrdersPage() {
                 Garment / Customer Note
                 <textarea
                   value={garmentNote}
-                  onChange={(event) =>
-                    setGarmentNote(event.target.value)
-                  }
+                  onChange={(event) => {
+                    if (!activeWorkspaceId) return;
+
+                    updateWorkspace(activeWorkspaceId, {
+                      draft: {
+                        garmentNote: event.target.value,
+                      },
+                    });
+                  }}
                   maxLength={2000}
                 />
               </label>
@@ -550,9 +702,15 @@ export function OrdersPage() {
                 Internal Note
                 <textarea
                   value={internalNote}
-                  onChange={(event) =>
-                    setInternalNote(event.target.value)
-                  }
+                  onChange={(event) => {
+                    if (!activeWorkspaceId) return;
+
+                    updateWorkspace(activeWorkspaceId, {
+                      draft: {
+                        internalNote: event.target.value,
+                      },
+                    });
+                  }}
                   maxLength={2000}
                 />
               </label>
@@ -655,7 +813,15 @@ export function OrdersPage() {
 
           <button
             type="button"
-            onClick={() => setSelectedOrder(null)}
+            onClick={() => {
+              setSelectedOrder(null);
+
+              if (activeWorkspaceId) {
+                updateWorkspace(activeWorkspaceId, {
+                  activeOrder: null,
+                });
+              }
+            }}
           >
             Close
           </button>
