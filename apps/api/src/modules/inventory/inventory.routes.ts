@@ -6,6 +6,7 @@ import {
 import { requireRole } from "../../middleware/rbac.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import {
   createItem,
   updateItem,
@@ -37,24 +38,28 @@ inventoryRouter.use(
 inventoryRouter.get(
   "/",
   requireRole(...VIEW_ROLES),
+  requirePermission("inventory.view"),
   asyncHandler(listItems),
 );
 
 inventoryRouter.post(
   "/",
   requireRole(...WRITE_ROLES),
+  requirePermission("inventory.manage"),
   asyncHandler(createItem),
 );
 
 inventoryRouter.patch(
   "/:id",
   requireRole(...WRITE_ROLES),
+  requirePermission("inventory.manage"),
   asyncHandler(updateItem),
 );
 
 inventoryRouter.get(
   "/stock",
   requireRole(...VIEW_ROLES),
+  requirePermission("inventory.view"),
   asyncHandler(requireBranchContext),
   asyncHandler(listStock),
 );
@@ -62,6 +67,7 @@ inventoryRouter.get(
 inventoryRouter.post(
   "/movements",
   requireRole(...WRITE_ROLES),
+  requirePermission("inventory.manage"),
   asyncHandler(requireBranchContext),
   asyncHandler(createMovement),
 );
@@ -69,6 +75,7 @@ inventoryRouter.post(
 inventoryRouter.post(
   "/stock/adjust",
   requireRole(...WRITE_ROLES),
+  requirePermission("inventory.manage"),
   asyncHandler(requireBranchContext),
   asyncHandler(adjustStock),
 );

@@ -27,6 +27,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -43,6 +52,9 @@ const inventoryItemCount = vi.mocked(prisma.inventoryItem.count);
 const inventoryStockFindMany = vi.mocked(prisma.inventoryStock.findMany);
 const inventoryStockCount = vi.mocked(prisma.inventoryStock.count);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -89,6 +101,22 @@ function allowBranch(
 beforeEach(() => {
   vi.clearAllMocks();
 
+  findPermission.mockImplementation(((args: { where: { code?: string } }) => {
+    const code = args.where.code ?? "";
+    const [module, action] = code.split(".");
+    return Promise.resolve({
+      id: `permission-${code}`,
+      code,
+      module,
+      action,
+      description: null,
+      createdAt: new Date(),
+    });
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
+
   vi.mocked(prisma.$transaction).mockImplementation(
     async (
       input:
@@ -102,6 +130,100 @@ beforeEach(() => {
       return Promise.all(input);
     },
   );
+});
+
+describe("Inventory routes - permissions", () => {
+  it("rejects STAFF when inventory.manage is denied", async () => {
+    findPermission.mockResolvedValueOnce({
+      id: "permission-inventory.manage",
+      code: "inventory.manage",
+      module: "inventory",
+      action: "manage",
+      description: "Manage inventory",
+      createdAt: new Date(),
+    } as never);
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-1",
+      businessId: "biz-A",
+      userId: "user-staff-a",
+      permissionId: "permission-inventory.manage",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/inventory")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({
+        name: "Detergent",
+        unit: "LITRE",
+        lowStockThreshold: 5,
+      });
+
+    expect(res.status).toBe(403);
+    expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects BUSINESS_OWNER when inventory.view is denied", async () => {
+    findPermission.mockResolvedValueOnce({
+      id: "permission-inventory.view",
+      code: "inventory.view",
+      module: "inventory",
+      action: "view",
+      description: "View inventory",
+      createdAt: new Date(),
+    } as never);
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-2",
+      businessId: "biz-A",
+      userId: "user-1",
+      permissionId: "permission-inventory.view",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(403);
+    expect(inventoryItemFindMany).not.toHaveBeenCalled();
+    expect(inventoryItemCount).not.toHaveBeenCalled();
+  });
+
+  it("rejects BRANCH_MANAGER when inventory.manage is denied", async () => {
+    const managerToken = tokenFor(
+      "BRANCH_MANAGER",
+      "biz-A",
+      "user-manager-a",
+    );
+
+    findPermission.mockResolvedValueOnce({
+      id: "permission-inventory.manage",
+      code: "inventory.manage",
+      module: "inventory",
+      action: "manage",
+      description: "Manage inventory",
+      createdAt: new Date(),
+    } as never);
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-3",
+      businessId: "biz-A",
+      userId: "user-manager-a",
+      permissionId: "permission-inventory.manage",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/inventory")
+      .set("Authorization", `Bearer ${managerToken}`)
+      .send({
+        name: "Bleach",
+        unit: "LITRE",
+        lowStockThreshold: 3,
+      });
+
+    expect(res.status).toBe(403);
+    expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("Inventory routes - authentication", () => {
