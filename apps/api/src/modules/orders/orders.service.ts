@@ -35,12 +35,27 @@ export interface ListOrdersParams {
  *
  * Client-supplied prices, pieces and totals are deliberately not accepted.
  */
-export async function createOrder(data: CreateOrderData) {
+export async function createOrder(
+  data: CreateOrderData,
+  db?: Prisma.TransactionClient,
+) {
   if (data.items.length === 0) {
     throw new AppError("An order must contain at least one item", 422);
   }
 
+  if (db) {
+    return createOrderWithTx(db, data);
+  }
+
   return prisma.$transaction(async (tx) => {
+    return createOrderWithTx(tx, data);
+  });
+}
+
+async function createOrderWithTx(
+  tx: Prisma.TransactionClient,
+  data: CreateOrderData,
+) {
     // Customer must belong to the authenticated business.
     const customer = await tx.customer.findFirst({
       where: {
@@ -169,7 +184,6 @@ export async function createOrder(data: CreateOrderData) {
         items: true,
       },
     });
-  });
 }
 
 async function createUniqueOrderNumber(
@@ -288,69 +302,92 @@ export async function getOrderForBusiness(
  * business and branch without changing the order's financial or
  * operational history.
  */
+type OrderDb = typeof prisma | Prisma.TransactionClient;
+
 export async function transferOrder(
   id: string,
   businessId: string,
   branchId: string,
   newCustomerId: string,
+  db: OrderDb = prisma,
 ) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findFirst({
-      where: {
-        id,
-        businessId,
-        branchId,
-      },
-      select: {
-        id: true,
-        orderNumber: true,
-        customerId: true,
-      },
-    });
+  if (db === prisma) {
+    return prisma.$transaction(async (tx) =>
+      transferOrderWithTx(tx, id, businessId, branchId, newCustomerId),
+    );
+  }
 
-    if (!order) {
-      throw new AppError("Order not found", 404);
-    }
+  return transferOrderWithTx(
+    db,
+    id,
+    businessId,
+    branchId,
+    newCustomerId,
+  );
+}
 
-    if (order.customerId === newCustomerId) {
-      throw new AppError(
-        "Order is already assigned to this customer",
-        422,
-      );
-    }
+async function transferOrderWithTx(
+  tx: Prisma.TransactionClient,
+  id: string,
+  businessId: string,
+  branchId: string,
+  newCustomerId: string,
+) {
+  const order = await tx.order.findFirst({
+    where: {
+      id,
+      businessId,
+      branchId,
+    },
+    select: {
+      id: true,
+      orderNumber: true,
+      customerId: true,
+    },
+  });
 
-    const customer = await tx.customer.findFirst({
-      where: {
-        id: newCustomerId,
-        businessId,
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
+  if (!order) {
+    throw new AppError("Order not found", 404);
+  }
 
-    if (!customer) {
-      throw new AppError("Customer not found", 404);
-    }
+  if (order.customerId === newCustomerId) {
+    throw new AppError(
+      "Order is already assigned to this customer",
+      422,
+    );
+  }
 
-    return tx.order.update({
-      where: {
-        id: order.id,
-      },
-      data: {
-        customer: {
-          connect: {
-            id: customer.id,
-          },
+  const customer = await tx.customer.findFirst({
+    where: {
+      id: newCustomerId,
+      businessId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (!customer) {
+    throw new AppError("Customer not found", 404);
+  }
+
+  return tx.order.update({
+    where: {
+      id: order.id,
+    },
+    data: {
+      customer: {
+        connect: {
+          id: customer.id,
         },
       },
-      include: {
-        customer: true,
-        branch: true,
-        items: true,
-      },
-    });
+    },
+    include: {
+      customer: true,
+      branch: true,
+      items: true,
+    },
   });
 }
 
@@ -360,8 +397,25 @@ export async function updateOrderStatus(
   businessId: string,
   branchId: string,
   status: OrderStatus,
+  db: OrderDb = prisma,
 ) {
-  const existing = await prisma.order.findFirst({
+  return updateOrderStatusWithDb(
+    db,
+    id,
+    businessId,
+    branchId,
+    status,
+  );
+}
+
+async function updateOrderStatusWithDb(
+  db: OrderDb,
+  id: string,
+  businessId: string,
+  branchId: string,
+  status: OrderStatus,
+) {
+  const existing = await db.order.findFirst({
     where: {
       id,
       businessId,
@@ -391,7 +445,7 @@ export async function updateOrderStatus(
     data.cancelledAt = now;
   }
 
-  return prisma.order.update({
+  return db.order.update({
     where: { id },
     data,
     include: {

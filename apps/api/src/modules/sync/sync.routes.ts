@@ -7,7 +7,7 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { enqueue, getOne, list } from "./sync.controller.js";
+import { enqueue, getOne, list, replay } from "./sync.controller.js";
 
 const SYNC_ROLES = [
   "BUSINESS_OWNER",
@@ -26,7 +26,6 @@ syncRouter.use(
 syncRouter.post(
   "/",
   requireRole(...SYNC_ROLES),
-  requirePermission("orders.create"),
   asyncHandler(enqueue),
 );
 
@@ -42,4 +41,11 @@ syncRouter.get(
   requireRole(...SYNC_ROLES),
   requirePermission("orders.view"),
   asyncHandler(getOne),
+);
+
+
+syncRouter.post(
+  "/:id/replay",
+  requireRole(...SYNC_ROLES),
+  asyncHandler(replay),
 );

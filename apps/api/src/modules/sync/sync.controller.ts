@@ -9,6 +9,7 @@ import {
   enqueueSyncOperation,
   getSyncOperation,
   listSyncOperations,
+  replaySyncOperation,
 } from "./sync.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -85,6 +86,25 @@ export async function list(req: Request, res: Response) {
     }),
     page: query.page,
     pageSize: query.pageSize,
+  });
+
+  res.status(200).json(result);
+}
+
+
+export async function replay(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = syncOperationIdParamSchema.parse(req.params);
+
+  const result = await replaySyncOperation({
+    context: {
+      businessId,
+      branchId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+    },
+    id,
   });
 
   res.status(200).json(result);

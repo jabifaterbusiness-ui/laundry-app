@@ -62,8 +62,14 @@ export async function listCustomers(params: ListParams) {
  * nonexistent id does - the caller can't distinguish "doesn't exist"
  * from "exists but isn't yours" (LOCKED tenant-isolation decision).
  */
-export async function getCustomerForBusiness(id: string, businessId: string) {
-  return prisma.customer.findFirst({ where: { id, businessId } });
+type CustomerDb = typeof prisma | Prisma.TransactionClient;
+
+export async function getCustomerForBusiness(
+  id: string,
+  businessId: string,
+  db: CustomerDb = prisma,
+) {
+  return db.customer.findFirst({ where: { id, businessId } });
 }
 
 /**
@@ -77,8 +83,13 @@ export async function getCustomerForBusiness(id: string, businessId: string) {
  * phone number never counts as a "duplicate" of itself - only used for
  * PATCH, never for POST (create has no record to exclude).
  */
-export async function findPossibleDuplicates(businessId: string, normalizedPhone: string, excludeId?: string) {
-  return prisma.customer.findMany({
+export async function findPossibleDuplicates(
+  businessId: string,
+  normalizedPhone: string,
+  excludeId?: string,
+  db: CustomerDb = prisma,
+) {
+  return db.customer.findMany({
     where: {
       businessId,
       phone: normalizedPhone,
@@ -98,8 +109,11 @@ export interface CreateCustomerData {
   notes?: string;
 }
 
-export async function createCustomer(data: CreateCustomerData) {
-  return prisma.customer.create({
+export async function createCustomer(
+  data: CreateCustomerData,
+  db: CustomerDb = prisma,
+) {
+  return db.customer.create({
     data: {
       businessId: data.businessId,
       name: data.name,
@@ -126,7 +140,12 @@ export interface UpdateCustomerData {
  * afterward for the response. Throws 404 if nothing matched - same
  * anti-leak reasoning as getCustomerForBusiness.
  */
-export async function updateCustomer(id: string, businessId: string, data: UpdateCustomerData) {
+export async function updateCustomer(
+  id: string,
+  businessId: string,
+  data: UpdateCustomerData,
+  db: CustomerDb = prisma,
+) {
   const patch: Prisma.CustomerUpdateManyMutationInput = {};
   if (data.name !== undefined) patch.name = data.name;
   if (data.phone !== undefined) patch.phone = data.phone;
@@ -134,13 +153,16 @@ export async function updateCustomer(id: string, businessId: string, data: Updat
   if (data.address !== undefined) patch.address = data.address;
   if (data.notes !== undefined) patch.notes = data.notes;
 
-  const result = await prisma.customer.updateMany({ where: { id, businessId }, data: patch });
+  const result = await db.customer.updateMany({
+    where: { id, businessId },
+    data: patch,
+  });
 
   if (result.count === 0) {
     throw new AppError("Customer not found", 404);
   }
 
-  return getCustomerForBusiness(id, businessId);
+  return getCustomerForBusiness(id, businessId, db);
 }
 
 export async function setCustomerActiveStatus(id: string, businessId: string, isActive: boolean) {

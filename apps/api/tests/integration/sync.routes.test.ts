@@ -10,6 +10,13 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+    },
+    customer: {
+      findMany: vi.fn(),
+      create: vi.fn(),
     },
     branch: {
       findFirst: vi.fn(),
@@ -40,6 +47,15 @@ const offlineSyncFindFirst = vi.mocked(prisma.offlineSyncOperation.findFirst);
 const offlineSyncFindMany = vi.mocked(prisma.offlineSyncOperation.findMany);
 const offlineSyncCount = vi.mocked(prisma.offlineSyncOperation.count);
 const offlineSyncCreate = vi.mocked(prisma.offlineSyncOperation.create);
+const offlineSyncUpdateMany = vi.mocked(
+  prisma.offlineSyncOperation.updateMany,
+);
+const offlineSyncFindUniqueOrThrow = vi.mocked(
+  prisma.offlineSyncOperation.findUniqueOrThrow,
+);
+const offlineSyncUpdate = vi.mocked(prisma.offlineSyncOperation.update);
+const customerFindMany = vi.mocked(prisma.customer.findMany);
+const customerCreate = vi.mocked(prisma.customer.create);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
 const userFindFirst = vi.mocked(prisma.user.findFirst);
 
@@ -446,5 +462,175 @@ describe("Sync routes - get one", () => {
         branchId: BRANCH_A,
       },
     });
+  });
+});
+
+
+describe("Sync routes - replay", () => {
+  it("replays a pending operation and returns APPLIED", async () => {
+    mockContext("user-1", BRANCH_A, "biz-A");
+
+    const appliedOperation = {
+      ...operationFixture,
+      status: "APPLIED",
+      attemptCount: 1,
+      lastAttemptAt: new Date("2026-09-07T10:05:00.000Z"),
+      processedAt: new Date("2026-09-07T10:05:01.000Z"),
+      updatedAt: new Date("2026-09-07T10:05:01.000Z"),
+    };
+
+    offlineSyncFindFirst.mockResolvedValue(operationFixture as never);
+    offlineSyncUpdateMany.mockResolvedValue({ count: 1 } as never);
+    offlineSyncFindUniqueOrThrow.mockResolvedValue(
+      operationFixture as never,
+    );
+    customerFindMany.mockResolvedValue([] as never);
+    customerCreate.mockResolvedValue({
+      id: CUSTOMER_A,
+      businessId: "biz-A",
+      name: customerCreatePayload.name,
+      phone: customerCreatePayload.phone,
+    } as never);
+    offlineSyncUpdate.mockResolvedValue(appliedOperation as never);
+
+    const res = await request(app)
+      .post(`/api/v1/sync/${OPERATION_A}/replay`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("APPLIED");
+    expect(res.body.operation.id).toBe(OPERATION_A);
+    expect(res.body.operation.status).toBe("APPLIED");
+
+    expect(offlineSyncUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: OPERATION_A,
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          status: "PENDING",
+        }),
+        data: expect.objectContaining({
+          status: "PROCESSING",
+        }),
+      }),
+    );
+
+    expect(customerCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: "biz-A",
+          name: "John Doe",
+          phone: "08012345678",
+        }),
+      }),
+    );
+  });
+
+  it("returns APPLIED without replaying an already-applied operation", async () => {
+    mockContext("user-1", BRANCH_A, "biz-A");
+
+    const appliedOperation = {
+      ...operationFixture,
+      status: "APPLIED",
+      processedAt: new Date("2026-09-07T10:05:00.000Z"),
+    };
+
+    offlineSyncFindFirst.mockResolvedValue(appliedOperation as never);
+
+    const res = await request(app)
+      .post(`/api/v1/sync/${OPERATION_A}/replay`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("APPLIED");
+    expect(res.body.operation.id).toBe(OPERATION_A);
+    expect(res.body.operation.status).toBe("APPLIED");
+
+    expect(offlineSyncUpdateMany).not.toHaveBeenCalled();
+    expect(customerCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects replay when the actor lacks the operation permission", async () => {
+    mockContext("user-staff-a", BRANCH_A, "biz-A");
+    vi.mocked(hasPermission).mockResolvedValue(false);
+    offlineSyncFindFirst.mockResolvedValue(operationFixture as never);
+
+    const res = await request(app)
+      .post(`/api/v1/sync/${OPERATION_A}/replay`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(offlineSyncUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not replay an operation from another business or branch", async () => {
+    mockContext("user-1", BRANCH_A, "biz-A");
+    offlineSyncFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/sync/${OPERATION_B}/replay`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(404);
+
+    expect(offlineSyncFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: OPERATION_B,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      select: {
+        operationType: true,
+        payload: true,
+        status: true,
+      },
+    });
+  });
+
+  it("returns CONFLICT when replay detects a duplicate customer", async () => {
+    mockContext("user-1", BRANCH_A, "biz-A");
+
+    const conflictOperation = {
+      ...operationFixture,
+      status: "CONFLICT",
+      attemptCount: 1,
+      conflictReason: "A customer with this phone number already exists",
+      lastError: null,
+    };
+
+    offlineSyncFindFirst.mockResolvedValue(operationFixture as never);
+    offlineSyncUpdateMany.mockResolvedValue({ count: 1 } as never);
+    offlineSyncFindUniqueOrThrow.mockResolvedValue(
+      operationFixture as never,
+    );
+
+    customerFindMany.mockResolvedValue([
+      {
+        id: "existing-customer",
+        name: "Existing Customer",
+        phone: customerCreatePayload.phone,
+      },
+    ] as never);
+
+    offlineSyncUpdate.mockResolvedValue(conflictOperation as never);
+
+    const res = await request(app)
+      .post(`/api/v1/sync/${OPERATION_A}/replay`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("CONFLICT");
+    expect(res.body.operation.status).toBe("CONFLICT");
+    expect(res.body.operation.conflictReason).toBe(
+      "A customer with this phone number already exists",
+    );
+
+    expect(customerCreate).not.toHaveBeenCalled();
   });
 });
