@@ -84,8 +84,8 @@ const orderA: Order = {
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
   listOrders: vi.fn(),
-  createOrder: vi.fn(),
-  updateOrderStatus: vi.fn(),
+  createOrderWithOfflineQueue: vi.fn(),
+  updateOrderStatusWithOfflineQueue: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
@@ -97,7 +97,7 @@ vi.mock("../../../src/lib/services-api.js", () => ({
 }));
 
 import {
-  createOrder,
+  createOrderWithOfflineQueue,
   listOrders,
 } from "../../../src/lib/orders-api.js";
 import { listCustomers } from "../../../src/lib/customers-api.js";
@@ -343,11 +343,14 @@ describe("OrdersPage quick customer switching", () => {
 
     expect(screen.getByLabelText("Customer")).toHaveValue("");
 
-    expect(vi.mocked(createOrder)).not.toHaveBeenCalled();
+    expect(vi.mocked(createOrderWithOfflineQueue)).not.toHaveBeenCalled();
   });
 
   it("keeps the customer workspace after creating an order", async () => {
-    vi.mocked(createOrder).mockResolvedValue(orderA);
+    vi.mocked(createOrderWithOfflineQueue).mockResolvedValue({
+  queued: false,
+  order: orderA,
+});
 
     renderPage();
 
@@ -383,7 +386,7 @@ describe("OrdersPage quick customer switching", () => {
     );
 
     await waitFor(() =>
-      expect(vi.mocked(createOrder)).toHaveBeenCalled(),
+      expect(vi.mocked(createOrderWithOfflineQueue)).toHaveBeenCalled(),
     );
 
     const workspace =

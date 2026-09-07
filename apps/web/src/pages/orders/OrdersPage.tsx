@@ -7,9 +7,9 @@ import type {
 } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
-  createOrder,
+  createOrderWithOfflineQueue,
   listOrders,
-  updateOrderStatus,
+  updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
@@ -167,7 +167,7 @@ export function OrdersPage() {
   const createMutation = useMutation({
     mutationKey: ["orders"],
     mutationFn: () =>
-      createOrder(
+      createOrderWithOfflineQueue(
         {
           customerId: formCustomerId,
           items: lines.map((line) => ({
@@ -181,9 +181,22 @@ export function OrdersPage() {
             : undefined,
         },
         { accessToken },
-        activeBranchId,
+        {
+          businessId: user?.businessId ?? "",
+          branchId: activeBranchId ?? "",
+          actorUserId: user?.id ?? "",
+        },
       ),
-    onSuccess: (order) => {
+    onSuccess: (result) => {
+      if (result.queued) {
+        setFormError(
+          "Order saved offline and will be synchronized when the connection is restored.",
+        );
+        return;
+      }
+
+      const order = result.order;
+
       queryClient.invalidateQueries({ queryKey: ["orders"] });
 
       if (activeWorkspaceId) {
@@ -214,15 +227,26 @@ export function OrdersPage() {
   const statusMutation = useMutation({
     mutationKey: ["orders"],
     mutationFn: (input: { id: string; status: OrderStatus }) =>
-      updateOrderStatus(
+      updateOrderStatusWithOfflineQueue(
         input.id,
         input.status,
         { accessToken },
-        activeBranchId,
+        {
+          businessId: user?.businessId ?? "",
+          branchId: activeBranchId ?? "",
+          actorUserId: user?.id ?? "",
+        },
       ),
-    onSuccess: (order) => {
+    onSuccess: (result) => {
+      if (result.queued) {
+        setFormError(
+          "Order update saved offline and will be synchronized when the connection is restored.",
+        );
+        return;
+      }
+
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setSelectedOrder(order);
+      setSelectedOrder(result.order);
     },
   });
 

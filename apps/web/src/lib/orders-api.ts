@@ -4,13 +4,43 @@ import type {
   OrderStatus,
   PaginatedResult,
 } from "@laundry-app/shared";
-import { apiFetch } from "./api-client.js";
+import { apiFetch, NetworkError } from "./api-client.js";
+import {
+  enqueueOfflineSyncOperation,
+  type OfflineSyncQueueEntry,
+} from "./offline-sync-queue.js";
 
 export interface ListOrdersParams {
   page?: number;
   pageSize?: number;
   status?: OrderStatus;
   customerId?: string;
+}
+
+export interface OfflineOrderSyncContext {
+  businessId: string;
+  branchId: string;
+  actorUserId: string;
+}
+
+export type OrderMutationResult =
+  | {
+      queued: false;
+      order: Order;
+    }
+  | {
+      queued: true;
+      operation: OfflineSyncQueueEntry;
+    };
+
+function canQueueOrderMutation(
+  context: OfflineOrderSyncContext,
+): boolean {
+  return Boolean(
+    context.businessId &&
+      context.branchId &&
+      context.actorUserId,
+  );
 }
 
 function buildQuery(params: ListOrdersParams): string {
@@ -72,4 +102,96 @@ export async function updateOrderStatus(
     branchId,
     body: JSON.stringify({ status }),
   });
+}
+
+export async function createOrderWithOfflineQueue(
+  input: CreateOrderInput,
+  auth: { accessToken: string | null },
+  syncContext: OfflineOrderSyncContext,
+): Promise<OrderMutationResult> {
+  try {
+    const order = await createOrder(
+      input,
+      auth,
+      syncContext.branchId,
+    );
+
+    return {
+      queued: false,
+      order,
+    };
+  } catch (error) {
+    if (!(error instanceof NetworkError)) {
+      throw error;
+    }
+
+    if (!canQueueOrderMutation(syncContext)) {
+      throw new NetworkError(
+        "The server is unavailable and offline order storage is not ready for the current account or branch.",
+      );
+    }
+
+    const operation = await enqueueOfflineSyncOperation({
+      businessId: syncContext.businessId,
+      branchId: syncContext.branchId,
+      actorUserId: syncContext.actorUserId,
+      clientOperationId: crypto.randomUUID(),
+      operationType: "ORDER_CREATE",
+      payload: input,
+    });
+
+    return {
+      queued: true,
+      operation,
+    };
+  }
+}
+
+export async function updateOrderStatusWithOfflineQueue(
+  id: string,
+  status: OrderStatus,
+  auth: { accessToken: string | null },
+  syncContext: OfflineOrderSyncContext,
+): Promise<OrderMutationResult> {
+  try {
+    const order = await updateOrderStatus(
+      id,
+      status,
+      auth,
+      syncContext.branchId,
+    );
+
+    return {
+      queued: false,
+      order,
+    };
+  } catch (error) {
+    if (!(error instanceof NetworkError)) {
+      throw error;
+    }
+
+    if (!canQueueOrderMutation(syncContext)) {
+      throw new NetworkError(
+        "The server is unavailable and offline order storage is not ready for the current account or branch.",
+      );
+    }
+
+    const operation = await enqueueOfflineSyncOperation({
+      businessId: syncContext.businessId,
+      branchId: syncContext.branchId,
+      actorUserId: syncContext.actorUserId,
+      clientOperationId: crypto.randomUUID(),
+      operationType: "ORDER_UPDATE",
+      payload: {
+        orderId: id,
+        operation: "UPDATE_STATUS",
+        status,
+      },
+    });
+
+    return {
+      queued: true,
+      operation,
+    };
+  }
 }
