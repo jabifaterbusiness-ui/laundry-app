@@ -6,7 +6,19 @@ export class ApiError extends Error {
     public status: number,
   ) {
     super(message);
+    this.name = "ApiError";
   }
+}
+
+export class NetworkError extends Error {
+  constructor(message = "Unable to reach the server") {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+export function isNetworkError(error: unknown): error is NetworkError {
+  return error instanceof NetworkError;
 }
 
 interface RequestOptions extends RequestInit {
@@ -20,15 +32,29 @@ interface RequestOptions extends RequestInit {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { accessToken, branchId, headers, ...rest } = options;
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(branchId ? { "X-Branch-Id": branchId } : {}),
-      ...headers,
-    },
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
+        ...headers,
+      },
+    });
+  } catch (error) {
+    if (error instanceof NetworkError) {
+      throw error;
+    }
+
+    throw new NetworkError(
+      error instanceof Error && error.message
+        ? error.message
+        : "Unable to reach the server",
+    );
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

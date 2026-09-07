@@ -4,14 +4,45 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { CustomersPage } from "../../../src/pages/customers/CustomersPage.js";
 
+const mockAuthState = vi.hoisted(() => ({
+  user: {
+    id: "user-1",
+    email: "staff@example.com",
+    fullName: "Staff User",
+    role: "STAFF" as const,
+    businessId: "business-1",
+    branches: [{ id: "branch-1", name: "Main Branch" }],
+  },
+  accessToken: "token",
+  refreshToken: "refresh",
+  activeBranchId: "branch-1",
+}));
+
+vi.mock("../../../src/state/auth-store.js", () => ({
+  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) =>
+    selector(mockAuthState),
+}));
+
 vi.mock("../../../src/lib/customers-api.js", async () => {
   const actual = await vi.importActual<typeof import("../../../src/lib/customers-api.js")>(
     "../../../src/lib/customers-api.js",
   );
-  return { ...actual, listCustomers: vi.fn(), updateCustomer: vi.fn() };
+  return {
+    ...actual,
+    listCustomers: vi.fn(),
+    createCustomerWithOfflineQueue: vi.fn(),
+    updateCustomer: vi.fn(),
+    updateCustomerWithOfflineQueue: vi.fn(),
+  };
 });
 
-import { DuplicateCustomerError, listCustomers, updateCustomer } from "../../../src/lib/customers-api.js";
+import {
+  DuplicateCustomerError,
+  listCustomers,
+  createCustomerWithOfflineQueue,
+  updateCustomer,
+  updateCustomerWithOfflineQueue,
+} from "../../../src/lib/customers-api.js";
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -55,6 +86,129 @@ describe("CustomersPage", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
   });
 
+
+
+  it("reports a customer create as saved offline when the queue-aware mutation queues it", async () => {
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+    });
+
+    vi.mocked(createCustomerWithOfflineQueue).mockResolvedValue({
+      queued: true,
+      operation: {
+        businessId: "business-1",
+        branchId: "branch-1",
+        actorUserId: "user-1",
+        clientOperationId: "client-op-1",
+        operationType: "CUSTOMER_CREATE",
+        payloadVersion: 1,
+        payload: {},
+        correlationId: null,
+        status: "PENDING",
+        attemptCount: 0,
+        lastAttemptAt: null,
+        lastError: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        id: 1,
+      },
+    });
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /new customer/i }));
+
+    fireEvent.change(await screen.findByLabelText(/name/i), {
+      target: { value: "Offline Customer" },
+    });
+    fireEvent.change(screen.getByLabelText(/phone/i), {
+      target: { value: "08012345678" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(
+      await screen.findByRole("status"),
+    ).toHaveTextContent(/saved offline/i);
+
+    expect(vi.mocked(createCustomerWithOfflineQueue)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Offline Customer",
+        phone: "08012345678",
+      }),
+      { accessToken: "token" },
+      {
+        businessId: "business-1",
+        branchId: "branch-1",
+        actorUserId: "user-1",
+      },
+    );
+  });
+
+  it("reports a customer update as saved offline when the queue-aware mutation queues it", async () => {
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [
+        {
+          id: "customer-1",
+          name: "Jane Doe",
+          phone: "5551234567",
+          email: null,
+          address: null,
+          notes: null,
+          isActive: true,
+          createdAt: "",
+          updatedAt: "",
+        },
+      ],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    });
+
+    vi.mocked(updateCustomerWithOfflineQueue).mockResolvedValue({
+      queued: true,
+      operation: {
+        businessId: "business-1",
+        branchId: "branch-1",
+        actorUserId: "user-1",
+        clientOperationId: "client-op-2",
+        operationType: "CUSTOMER_UPDATE",
+        payloadVersion: 1,
+        payload: {},
+        correlationId: null,
+        status: "PENDING",
+        attemptCount: 0,
+        lastAttemptAt: null,
+        lastError: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        id: 2,
+      },
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText("Jane Doe"));
+
+    const nameInput = await screen.findByLabelText(/name/i);
+    fireEvent.change(nameInput, { target: { value: "Jane Updated" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/update saved offline/i);
+
+    expect(vi.mocked(updateCustomerWithOfflineQueue)).toHaveBeenCalledWith(
+      "customer-1",
+      expect.objectContaining({
+        name: "Jane Updated",
+      }),
+      { accessToken: "token" },
+      {
+        businessId: "business-1",
+        branchId: "branch-1",
+        actorUserId: "user-1",
+      },
+    );
+  });
+
   it("editing a customer's phone to a duplicate shows the confirmation flow, and 'Save anyway' resubmits with confirmDuplicate: true", async () => {
     vi.mocked(listCustomers).mockResolvedValue({
       data: [
@@ -78,6 +232,7 @@ describe("CustomersPage", () => {
         { id: "2", name: "John Doe", phone: "5559998888" },
       ]),
     );
+
     vi.mocked(updateCustomer).mockResolvedValueOnce({
       id: "1",
       name: "Jane Doe",
@@ -90,6 +245,13 @@ describe("CustomersPage", () => {
       updatedAt: "",
     });
 
+    vi.mocked(updateCustomerWithOfflineQueue).mockImplementation(
+      async (id, input, auth) => ({
+        queued: false,
+        customer: await updateCustomer(id, input, auth),
+      }),
+    );
+
     renderPage();
 
     fireEvent.click(await screen.findByText("Jane Doe"));
@@ -98,13 +260,12 @@ describe("CustomersPage", () => {
     fireEvent.change(phoneInput, { target: { value: "555-999-8888" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    // Duplicate warning surfaces the conflicting customer and offers an
-    // explicit choice rather than silently overwriting/merging.
     expect(await screen.findByText(/john doe/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /save anyway/i }));
 
     await waitFor(() => expect(vi.mocked(updateCustomer)).toHaveBeenCalledTimes(2));
+
     expect(vi.mocked(updateCustomer).mock.calls[1][1]).toMatchObject({
       phone: "555-999-8888",
       confirmDuplicate: true,

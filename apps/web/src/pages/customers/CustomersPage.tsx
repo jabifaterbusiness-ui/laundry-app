@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Customer } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
-  createCustomer,
+  createCustomerWithOfflineQueue,
   listCustomers,
   setCustomerActive,
-  updateCustomer,
+  updateCustomerWithOfflineQueue,
   type CreateCustomerInput,
 } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -16,7 +16,11 @@ const PAGE_SIZE = 25;
 
 export function CustomersPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const user = useAuthStore((s) => s.user);
+  const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const queryClient = useQueryClient();
+
+  const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -29,17 +33,50 @@ export function CustomersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: CreateCustomerInput) => createCustomer(input, { accessToken }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    mutationFn: (input: CreateCustomerInput) =>
+      createCustomerWithOfflineQueue(
+        input,
+        { accessToken },
+        {
+          businessId: user?.businessId ?? null,
+          branchId: activeBranchId,
+          actorUserId: user?.id ?? null,
+        },
+      ),
+    onSuccess: (result) => {
+      if (result.queued) {
+        setOfflineMessage(
+          "Customer saved offline. It will synchronize automatically when the connection is restored.",
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["customers"] });
+      }
+
       setEditingCustomer(undefined);
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; data: CreateCustomerInput }) => updateCustomer(input.id, input.data, { accessToken }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    mutationFn: (input: { id: string; data: CreateCustomerInput }) =>
+      updateCustomerWithOfflineQueue(
+        input.id,
+        input.data,
+        { accessToken },
+        {
+          businessId: user?.businessId ?? null,
+          branchId: activeBranchId,
+          actorUserId: user?.id ?? null,
+        },
+      ),
+    onSuccess: (result) => {
+      if (result.queued) {
+        setOfflineMessage(
+          "Customer update saved offline. It will synchronize automatically when the connection is restored.",
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["customers"] });
+      }
+
       setEditingCustomer(undefined);
     },
   });
@@ -63,6 +100,15 @@ export function CustomersPage() {
   return (
     <main>
       <h1>Customers</h1>
+
+      {offlineMessage && (
+        <p role="status">
+          {offlineMessage}
+          <button type="button" onClick={() => setOfflineMessage(null)}>
+            Dismiss
+          </button>
+        </p>
+      )}
 
       <div>
         <input
