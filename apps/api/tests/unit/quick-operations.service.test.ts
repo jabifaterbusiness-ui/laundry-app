@@ -15,6 +15,7 @@ const {
   getCompanyReceiptMock,
   resendDigitalReceiptMock,
   reconcileInvoiceMock,
+  getCustomerForBusinessMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
@@ -30,6 +31,7 @@ const {
   getCompanyReceiptMock: vi.fn(),
   resendDigitalReceiptMock: vi.fn(),
   reconcileInvoiceMock: vi.fn(),
+  getCustomerForBusinessMock: vi.fn(),
 }));
 
 vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
@@ -47,6 +49,7 @@ vi.mock("../../src/modules/orders/orders.service.js", () => ({
 }));
 
 vi.mock("../../src/modules/customers/customers.service.js", () => ({
+  getCustomerForBusiness: getCustomerForBusinessMock,
   transferCustomer: transferCustomerMock,
   mergeCustomer: mergeCustomerMock,
 }));
@@ -1731,5 +1734,202 @@ describe("quick-operations.service", () => {
       expect(createInventoryMovementMock).not.toHaveBeenCalled();
       expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+
+describe("SC — Switch Customer", () => {
+  const customer = {
+    id: "66666666-6666-4666-8666-666666666666",
+    businessId: "biz-A",
+    name: "Customer A",
+    phone: "08012345678",
+    email: "customer@example.com",
+    address: "Customer Address",
+    notes: null,
+    customerInstructions: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it("switches to an existing customer within the authenticated business", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+    getCustomerForBusinessMock.mockResolvedValue(customer);
+
+    const result = await executeQuickOperation(
+      {
+        userId: "user-staff-a",
+        role: "STAFF",
+        businessId: "biz-A",
+        branchId: "33333333-3333-4333-8333-333333333333",
+      },
+      "SC",
+      { customerId: customer.id },
+    );
+
+    expect(result.code).toBe("SC");
+    expect(result.result).toEqual(customer);
+    expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
+      customer.id,
+      "biz-A",
+    );
+  });
+
+  it("enforces the customers.view permission for SC", async () => {
+    hasPermissionMock.mockResolvedValue(false);
+
+    await expect(
+      executeQuickOperation(
+        {
+          userId: "user-staff-a",
+          role: "STAFF",
+          businessId: "biz-A",
+          branchId: "33333333-3333-4333-8333-333333333333",
+        },
+        "SC",
+        { customerId: customer.id },
+      ),
+    ).rejects.toThrow("Insufficient permissions");
+
+    expect(getCustomerForBusinessMock).not.toHaveBeenCalled();
+  });
+
+  it("enforces authenticated business scope", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+    getCustomerForBusinessMock.mockResolvedValue(null);
+
+    await expect(
+      executeQuickOperation(
+        {
+          userId: "user-staff-a",
+          role: "STAFF",
+          businessId: "biz-A",
+          branchId: "33333333-3333-4333-8333-333333333333",
+        },
+        "SC",
+        { customerId: customer.id },
+      ),
+    ).rejects.toThrow("Customer not found");
+
+    expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
+      customer.id,
+      "biz-A",
+    );
+  });
+
+  it("does not require confirmation because SC is read-only", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+    getCustomerForBusinessMock.mockResolvedValue(customer);
+
+    const result = await executeQuickOperation(
+      {
+        userId: "user-staff-a",
+        role: "STAFF",
+        businessId: "biz-A",
+        branchId: "33333333-3333-4333-8333-333333333333",
+      },
+      "SC",
+      { customerId: customer.id },
+      false,
+    );
+
+    expect(result.code).toBe("SC");
+  });
+
+  it("records a safe audit event without customer contact data", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+    getCustomerForBusinessMock.mockResolvedValue(customer);
+
+    await executeQuickOperation(
+      {
+        userId: "user-staff-a",
+        role: "STAFF",
+        businessId: "biz-A",
+        branchId: "33333333-3333-4333-8333-333333333333",
+      },
+      "SC",
+      { customerId: customer.id },
+    );
+
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: customer.id,
+        businessId: "biz-A",
+        branchId: "33333333-3333-4333-8333-333333333333",
+        metadata: expect.objectContaining({
+          operationCode: "SC",
+          operationName: "Switch Customer",
+          customerId: customer.id,
+        }),
+      }),
+    );
+
+    const auditCall = recordAuditEventMock.mock.calls.at(-1)?.[0];
+    expect(JSON.stringify(auditCall)).not.toContain(customer.phone);
+    expect(JSON.stringify(auditCall)).not.toContain(customer.email);
+    expect(JSON.stringify(auditCall)).not.toContain(customer.address);
+  });
+
+  it("rejects malformed SC input", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+
+    await expect(
+      executeQuickOperation(
+        {
+          userId: "user-staff-a",
+          role: "STAFF",
+          businessId: "biz-A",
+          branchId: "33333333-3333-4333-8333-333333333333",
+        },
+        "SC",
+        { customerId: "not-a-uuid" },
+      ),
+    ).rejects.toThrow();
+
+    expect(getCustomerForBusinessMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects unexpected SC fields", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+
+    await expect(
+      executeQuickOperation(
+        {
+          userId: "user-staff-a",
+          role: "STAFF",
+          businessId: "biz-A",
+          branchId: "33333333-3333-4333-8333-333333333333",
+        },
+        "SC",
+        {
+          customerId: customer.id,
+          unexpected: true,
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(getCustomerForBusinessMock).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate the customer while switching", async () => {
+    hasPermissionMock.mockResolvedValue(true);
+    getCustomerForBusinessMock.mockResolvedValue(customer);
+
+    await executeQuickOperation(
+      {
+        userId: "user-staff-a",
+        role: "STAFF",
+        businessId: "biz-A",
+        branchId: "33333333-3333-4333-8333-333333333333",
+      },
+      "SC",
+      { customerId: customer.id },
+    );
+
+    expect(getCustomerForBusinessMock).toHaveBeenCalledTimes(1);
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
   });
 });

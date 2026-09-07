@@ -18,6 +18,7 @@ import {
   resendReceiptQuickOperationSchema,
   reconcileQuickOperationSchema,
   switchOrderQuickOperationSchema,
+  switchCustomerQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import {
   getOrderForBusiness,
@@ -25,6 +26,7 @@ import {
   updateOrderStatus,
 } from "../orders/orders.service.js";
 import {
+  getCustomerForBusiness,
   transferCustomer,
   mergeCustomer,
 } from "../customers/customers.service.js";
@@ -340,6 +342,39 @@ export async function executeQuickOperation(
           operationName: definition.name,
           orderNumber: result.orderNumber,
           customerId: result.customerId,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "SC": {
+      const parsed = switchCustomerQuickOperationSchema.parse(input);
+
+      const result = await getCustomerForBusiness(
+        parsed.customerId,
+        context.businessId,
+      );
+
+      if (!result) {
+        throw new AppError("Customer not found", 404);
+      }
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: result.id,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          customerId: result.id,
         },
       });
 

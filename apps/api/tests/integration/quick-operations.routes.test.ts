@@ -1318,6 +1318,142 @@ describe("Quick Operations routes - SO", () => {
   });
 });
 
+describe("Quick Operations routes - SC", () => {
+  it("switches to an existing customer within the authenticated business", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    customerFindFirst.mockResolvedValue({
+      id: CUSTOMER_A,
+      name: "Customer A",
+      businessId: "biz-A",
+      isActive: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SC",
+        input: {
+          customerId: CUSTOMER_A,
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("SC");
+    expect(res.body.data.result.id).toBe(CUSTOMER_A);
+
+    expect(customerFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_A,
+        businessId: "biz-A",
+      },
+    });
+  });
+
+  it("enforces the customers.view permission for SC", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-customers-view",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SC",
+        input: {
+          customerId: CUSTOMER_A,
+        },
+      });
+
+    expect(res.status).toBe(403);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the customer is outside the authenticated business", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    customerFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SC",
+        input: {
+          customerId: CUSTOMER_A,
+        },
+      });
+
+    expect(res.status).toBe(404);
+
+    expect(customerFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_A,
+        businessId: "biz-A",
+      },
+    });
+
+    expect(customerUpdateMany).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed SC input before customer lookup", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SC",
+        input: {
+          customerId: "not-a-uuid",
+        },
+      });
+
+    expect(res.status).toBe(422);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate the customer while switching", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    customerFindFirst.mockResolvedValue({
+      id: CUSTOMER_A,
+      name: "Customer A",
+      businessId: "biz-A",
+      isActive: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SC",
+        input: {
+          customerId: CUSTOMER_A,
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(customerUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+
 describe("Quick Operations routes - TC", () => {
   it("transfers every order from Customer A to Customer B across the business", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");

@@ -76,6 +76,12 @@ export const switchOrderQuickOperationSchema = z
   })
   .strict();
 
+export const switchCustomerQuickOperationSchema = z
+  .object({
+    customerId: uuidSchema,
+  })
+  .strict();
+
 export const refundPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,
