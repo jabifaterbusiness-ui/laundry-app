@@ -12,10 +12,12 @@ import { InventoryPage } from "./pages/inventory/InventoryPage.js";
 import { UsersPage } from "./pages/users/UsersPage.js";
 import { ReportsPage } from "./pages/reports/ReportsPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
+import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 
 function AuthenticatedLayout() {
   return (
     <RequireAuth>
+      <OfflineSyncManager />
       <AppShell>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
