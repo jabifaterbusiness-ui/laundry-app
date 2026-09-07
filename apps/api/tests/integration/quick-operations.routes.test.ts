@@ -16,6 +16,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: vi.fn(),
+      updateMany: vi.fn(),
     },
     payment: {
       findFirst: vi.fn(),
@@ -60,6 +61,7 @@ const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderUpdate = vi.mocked(prisma.order.update);
 const orderUpdateMany = vi.mocked(prisma.order.updateMany);
 const customerFindFirst = vi.mocked(prisma.customer.findFirst);
+const customerUpdateMany = vi.mocked(prisma.customer.updateMany);
 const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
 const paymentUpdate = vi.mocked(prisma.payment.update);
 const inventoryItemFindFirst = vi.mocked(prisma.inventoryItem.findFirst);
@@ -725,5 +727,211 @@ describe("Quick Operations routes - TC", () => {
     expect(customerFindFirst).not.toHaveBeenCalled();
     expect(orderFindMany).not.toHaveBeenCalled();
     expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Quick Operations routes - MA", () => {
+  it("merges Customer A into Customer B across the business and deactivates Customer A", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    customerFindFirst
+      .mockResolvedValueOnce({
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+        isActive: true,
+      } as never)
+      .mockResolvedValueOnce({
+        id: CUSTOMER_B,
+        name: "Customer B",
+        businessId: "biz-A",
+        isActive: true,
+      } as never);
+
+    const mergedOrders = [
+      {
+        id: ORDER_A,
+        orderNumber: "00042",
+        branchId: BRANCH_A,
+      },
+      {
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        orderNumber: "00043",
+        branchId: BRANCH_B,
+      },
+    ];
+
+    orderFindMany.mockResolvedValue(mergedOrders as never);
+    orderUpdateMany.mockResolvedValue({
+      count: mergedOrders.length,
+    } as never);
+    customerUpdateMany.mockResolvedValue({
+      count: 1,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MA",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("MA");
+
+    expect(orderFindMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        branchId: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+      },
+      data: {
+        customerId: CUSTOMER_B,
+      },
+    });
+
+    expect(customerUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_A,
+        businessId: "biz-A",
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: "biz-A",
+        actorUserId: "user-1",
+        entityType: "Customer",
+        entityId: CUSTOMER_A,
+        metadata: expect.objectContaining({
+          operationCode: "MA",
+          operationName: "Merge Account",
+          targetCustomerId: CUSTOMER_B,
+          mergedOrderCount: 2,
+          mergedOrderIds: mergedOrders.map((order) => order.id),
+          mergedOrderNumbers: ["00042", "00043"],
+          sourceDeactivated: true,
+        }),
+      }),
+    );
+  });
+
+  it("does not allow MA to target a customer outside the authenticated business", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    customerFindFirst
+      .mockResolvedValueOnce({
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+        isActive: true,
+      } as never)
+      .mockResolvedValueOnce(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MA",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(404);
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(customerUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects MA without confirmation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MA",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(customerUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("enforces the customers.update permission for MA", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MA",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(403);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(customerUpdateMany).not.toHaveBeenCalled();
   });
 });

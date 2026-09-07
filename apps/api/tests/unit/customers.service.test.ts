@@ -25,6 +25,7 @@ import {
   findPossibleDuplicates,
   getCustomerForBusiness,
   listCustomers,
+  mergeCustomer,
   setCustomerActiveStatus,
   transferCustomer,
   updateCustomer,
@@ -197,6 +198,204 @@ describe("setCustomerActiveStatus", () => {
   });
 });
 
+
+
+describe("mergeCustomer - duplicate account merge", () => {
+  const sourceCustomer = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    name: "Customer A",
+    businessId: "biz-A",
+    isActive: true,
+  };
+
+  const targetCustomer = {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    name: "Customer B",
+    businessId: "biz-A",
+    isActive: true,
+  };
+
+  const orders = [
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      orderNumber: "00042",
+      branchId: "branch-A",
+    },
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      orderNumber: "00043",
+      branchId: "branch-B",
+    },
+  ];
+
+  it("merges every source order into the target and deactivates the source in one transaction", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue(orders as never);
+    orderUpdateMany.mockResolvedValue({ count: orders.length });
+    updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+
+    expect(orderFindMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: sourceCustomer.id,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        branchId: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: sourceCustomer.id,
+      },
+      data: {
+        customerId: targetCustomer.id,
+      },
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: sourceCustomer.id,
+        businessId: "biz-A",
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    expect(result).toEqual({
+      customer: sourceCustomer,
+      targetCustomer,
+      mergedOrderCount: 2,
+      mergedOrders: orders,
+      sourceDeactivated: true,
+    });
+  });
+
+  it("merges an account with no orders and still deactivates the source", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(orderFindMany).toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: sourceCustomer.id,
+        businessId: "biz-A",
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    expect(result.mergedOrderCount).toBe(0);
+    expect(result.mergedOrders).toEqual([]);
+    expect(result.sourceDeactivated).toBe(true);
+  });
+
+  it("rejects merging a customer into itself", async () => {
+    findFirst.mockResolvedValueOnce(sourceCustomer as never);
+
+    await expect(
+      mergeCustomer(sourceCustomer.id, "biz-A", sourceCustomer.id),
+    ).rejects.toThrow("Customer cannot be merged into the same customer");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a target customer outside the authenticated business", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      mergeCustomer(
+        sourceCustomer.id,
+        "biz-A",
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      ),
+    ).rejects.toThrow("Target customer not found");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a source customer outside the authenticated business", async () => {
+    findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      mergeCustomer(
+        sourceCustomer.id,
+        "biz-B",
+        targetCustomer.id,
+      ),
+    ).rejects.toThrow("Customer not found");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("deactivates the source instead of deleting or rewriting the target account", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue(orders as never);
+    orderUpdateMany.mockResolvedValue({ count: orders.length });
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.customer.create).not.toHaveBeenCalled();
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: sourceCustomer.id,
+        businessId: "biz-A",
+      },
+      data: {
+        isActive: false,
+      },
+    });
+  });
+});
 
 describe("transferCustomer - full account transfer", () => {
   const sourceCustomer = {

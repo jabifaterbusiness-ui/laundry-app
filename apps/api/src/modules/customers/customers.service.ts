@@ -154,6 +154,112 @@ export async function setCustomerActiveStatus(id: string, businessId: string, is
 }
 
 /**
+ * Merges everything represented by a customer's order history into another
+ * customer account within the same business.
+ *
+ * Orders are reassigned to the target customer in one transaction. Their
+ * related order items, garments, invoices, and payments remain attached to
+ * those orders/invoices, so the complete transactional history moves with
+ * the account without rewriting historical invoice/payment snapshots.
+ *
+ * Customer records themselves are not deleted or merged here. Full duplicate
+ * account consolidation belongs to MA.
+ */
+export async function mergeCustomer(
+  customerId: string,
+  businessId: string,
+  targetCustomerId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: customerId,
+        businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+        businessId: true,
+        isActive: true,
+      },
+    });
+
+    if (!customer) {
+      throw new AppError("Customer not found", 404);
+    }
+
+    if (customer.id === targetCustomerId) {
+      throw new AppError(
+        "Customer cannot be merged into the same customer",
+        422,
+      );
+    }
+
+    const targetCustomer = await tx.customer.findFirst({
+      where: {
+        id: targetCustomerId,
+        businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+        businessId: true,
+        isActive: true,
+      },
+    });
+
+    if (!targetCustomer) {
+      throw new AppError("Target customer not found", 404);
+    }
+
+    const orders = await tx.order.findMany({
+      where: {
+        businessId,
+        customerId: customer.id,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        branchId: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    if (orders.length > 0) {
+      await tx.order.updateMany({
+        where: {
+          businessId,
+          customerId: customer.id,
+        },
+        data: {
+          customerId: targetCustomer.id,
+        },
+      });
+    }
+
+    await tx.customer.updateMany({
+      where: {
+        id: customer.id,
+        businessId,
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    return {
+      customer,
+      targetCustomer,
+      mergedOrderCount: orders.length,
+      mergedOrders: orders,
+      sourceDeactivated: true,
+    };
+  });
+}
+
+/**
  * Transfers everything represented by a customer's order history to another
  * customer account within the same business.
  *

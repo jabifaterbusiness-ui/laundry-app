@@ -24,6 +24,13 @@ export const transferCustomerQuickOperationSchema = z
   })
   .strict();
 
+export const mergeCustomerQuickOperationSchema = z
+  .object({
+    customerId: uuidSchema,
+    targetCustomerId: uuidSchema,
+  })
+  .strict();
+
 export const voidPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,

@@ -10,10 +10,14 @@ import {
   stockQuickOperationSchema,
   transferInvoiceQuickOperationSchema,
   transferCustomerQuickOperationSchema,
+  mergeCustomerQuickOperationSchema,
   voidPaymentQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import { transferOrder } from "../orders/orders.service.js";
-import { transferCustomer } from "../customers/customers.service.js";
+import {
+  transferCustomer,
+  mergeCustomer,
+} from "../customers/customers.service.js";
 import { voidPayment } from "../payments/payments.service.js";
 import { createInventoryMovement } from "../inventory/inventory.service.js";
 
@@ -124,6 +128,41 @@ export async function executeQuickOperation(
           transferredOrderNumbers: result.transferredOrders.map(
             (order) => order.orderNumber,
           ),
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "MA": {
+      const parsed = mergeCustomerQuickOperationSchema.parse(input);
+
+      const result = await mergeCustomer(
+        parsed.customerId,
+        context.businessId,
+        parsed.targetCustomerId,
+      );
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: result.customer.id,
+        businessId: context.businessId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          targetCustomerId: result.targetCustomer.id,
+          mergedOrderCount: result.mergedOrderCount,
+          mergedOrderIds: result.mergedOrders.map((order) => order.id),
+          mergedOrderNumbers: result.mergedOrders.map(
+            (order) => order.orderNumber,
+          ),
+          sourceDeactivated: result.sourceDeactivated,
         },
       });
 

@@ -5,6 +5,7 @@ const {
   recordAuditEventMock,
   transferOrderMock,
   transferCustomerMock,
+  mergeCustomerMock,
   voidPaymentMock,
   createInventoryMovementMock,
 } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const {
   recordAuditEventMock: vi.fn(),
   transferOrderMock: vi.fn(),
   transferCustomerMock: vi.fn(),
+  mergeCustomerMock: vi.fn(),
   voidPaymentMock: vi.fn(),
   createInventoryMovementMock: vi.fn(),
 }));
@@ -30,6 +32,7 @@ vi.mock("../../src/modules/orders/orders.service.js", () => ({
 
 vi.mock("../../src/modules/customers/customers.service.js", () => ({
   transferCustomer: transferCustomerMock,
+  mergeCustomer: mergeCustomerMock,
 }));
 
 vi.mock("../../src/modules/payments/payments.service.js", () => ({
@@ -289,6 +292,120 @@ describe("quick-operations.service", () => {
       ).rejects.toThrow();
 
       expect(transferCustomerMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("MA - Merge Account", () => {
+    it("merges a customer within the authenticated business and records the merge audit", async () => {
+      const result = {
+        customer: {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          name: "Customer A",
+          businessId: "biz-A",
+          isActive: true,
+        },
+        targetCustomer: {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          name: "Customer B",
+          businessId: "biz-A",
+          isActive: true,
+        },
+        mergedOrderCount: 2,
+        mergedOrders: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            orderNumber: "00042",
+            branchId: "branch-A",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            orderNumber: "00043",
+            branchId: "branch-B",
+          },
+        ],
+        sourceDeactivated: true,
+      };
+
+      mergeCustomerMock.mockResolvedValue(result);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "MA",
+        {
+          customerId: result.customer.id,
+          targetCustomerId: result.targetCustomer.id,
+        },
+        true,
+      );
+
+      expect(mergeCustomerMock).toHaveBeenCalledWith(
+        result.customer.id,
+        "biz-A",
+        result.targetCustomer.id,
+      );
+
+      expect(response).toEqual({
+        code: "MA",
+        result,
+      });
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: result.customer.id,
+        businessId: "biz-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "MA",
+          operationName: "Merge Account",
+          targetCustomerId: result.targetCustomer.id,
+          mergedOrderCount: 2,
+          mergedOrderIds: [
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+          ],
+          mergedOrderNumbers: ["00042", "00043"],
+          sourceDeactivated: true,
+        },
+      });
+    });
+
+    it("rejects malformed merge input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "MA",
+          {
+            customerId: "not-a-uuid",
+            targetCustomerId: "also-not-a-uuid",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(mergeCustomerMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("requires confirmation before executing the sensitive merge operation", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "MA",
+          {
+            customerId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            targetCustomerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          },
+          false,
+        ),
+      ).rejects.toMatchObject({
+        message: "Confirmation is required for this quick operation",
+        statusCode: 422,
+      });
+
+      expect(mergeCustomerMock).not.toHaveBeenCalled();
       expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
   });
