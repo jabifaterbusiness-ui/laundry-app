@@ -20,6 +20,8 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     payment: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
       update: vi.fn(),
     },
     inventoryItem: {
@@ -63,6 +65,8 @@ const orderUpdateMany = vi.mocked(prisma.order.updateMany);
 const customerFindFirst = vi.mocked(prisma.customer.findFirst);
 const customerUpdateMany = vi.mocked(prisma.customer.updateMany);
 const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
+const paymentFindMany = vi.mocked(prisma.payment.findMany);
+const paymentCreate = vi.mocked(prisma.payment.create);
 const paymentUpdate = vi.mocked(prisma.payment.update);
 const inventoryItemFindFirst = vi.mocked(prisma.inventoryItem.findFirst);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
@@ -626,6 +630,177 @@ describe("Quick Operations routes - VO", () => {
   });
 });
 
+describe("Quick Operations routes - RF", () => {
+  it("executes Refund within the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    paymentFindFirst.mockResolvedValue({
+      id: PAYMENT_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      invoiceId: "invoice-A",
+      amount: 5000,
+      method: "TRANSFER",
+      type: "PAYMENT",
+      status: "POSTED",
+      invoice: {
+        id: "invoice-A",
+        status: "ISSUED",
+      },
+    } as never);
+
+    paymentFindMany.mockResolvedValue([] as never);
+
+    paymentCreate.mockResolvedValue({
+      id: "refund-A",
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      invoiceId: "invoice-A",
+      amount: 2000,
+      method: "TRANSFER",
+      type: "REFUND",
+      status: "POSTED",
+      refundOfPaymentId: PAYMENT_A,
+      reference: "RF-001",
+      note: "Customer refund",
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RF",
+        input: {
+          paymentId: PAYMENT_A,
+          amount: 2000,
+          method: "TRANSFER",
+          reference: "RF-001",
+          note: "Customer refund",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("RF");
+    expect(paymentFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: PAYMENT_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+    expect(paymentCreate).toHaveBeenCalled();
+    expect(recordAuditEvent).toHaveBeenCalled();
+  });
+
+  it("rejects RF without confirmation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RF",
+        input: {
+          paymentId: PAYMENT_A,
+          amount: 2000,
+          method: "TRANSFER",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("enforces the payments.manage permission for RF", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RF",
+        input: {
+          paymentId: PAYMENT_A,
+          amount: 2000,
+          method: "TRANSFER",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(403);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an RF request with invalid input", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RF",
+        input: {
+          paymentId: PAYMENT_A,
+          amount: 0,
+          method: "TRANSFER",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(422);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(paymentCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe("Quick Operations routes - inventory", () => {
   it("executes Stock Issue against the authenticated branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
@@ -723,14 +898,14 @@ describe("Quick Operations routes - unimplemented operations", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "RF",
+        code: "RI",
         input: {},
         confirmed: true,
       });
 
     expect(res.status).toBe(501);
     expect(res.body.error.message).toBe(
-      "Quick operation RF is not implemented yet",
+      "Quick operation RI is not implemented yet",
     );
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });

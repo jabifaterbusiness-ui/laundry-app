@@ -13,6 +13,7 @@ import {
   transferCustomerQuickOperationSchema,
   mergeCustomerQuickOperationSchema,
   voidPaymentQuickOperationSchema,
+  refundPaymentQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import {
   getOrderForBusiness,
@@ -23,7 +24,10 @@ import {
   transferCustomer,
   mergeCustomer,
 } from "../customers/customers.service.js";
-import { voidPayment } from "../payments/payments.service.js";
+import {
+  voidPayment,
+  refundPayment,
+} from "../payments/payments.service.js";
 import { createInventoryMovement } from "../inventory/inventory.service.js";
 
 export interface ExecuteQuickOperationContext {
@@ -257,6 +261,49 @@ export async function executeQuickOperation(
           invoiceId: result.invoiceId,
           amount: result.amount,
           method: result.method,
+          status: result.status,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "RF": {
+      const parsed = refundPaymentQuickOperationSchema.parse(input);
+
+      const result = await refundPayment({
+        paymentId: parsed.paymentId,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        amount: parsed.amount,
+        method: parsed.method,
+        ...(parsed.reference !== undefined && {
+          reference: parsed.reference,
+        }),
+        ...(parsed.note !== undefined && {
+          note: parsed.note,
+        }),
+      });
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Payment",
+        entityId: result.id,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          originalPaymentId: result.refundOfPaymentId,
+          invoiceId: result.invoiceId,
+          amount: result.amount,
+          method: result.method,
+          type: result.type,
           status: result.status,
         },
       });

@@ -50,6 +50,27 @@ export const voidPaymentQuickOperationSchema = z
   })
   .strict();
 
+export const refundPaymentQuickOperationSchema = z
+  .object({
+    paymentId: uuidSchema,
+    amount: z.coerce
+      .number()
+      .int()
+      .positive("Refund amount must be a positive whole number"),
+    method: z.enum(["CASH", "TRANSFER", "POS"]),
+    reference: z
+      .string()
+      .trim()
+      .max(200, "Refund reference is too long")
+      .optional(),
+    note: z
+      .string()
+      .trim()
+      .max(1000, "Refund note is too long")
+      .optional(),
+  })
+  .strict();
+
 export const stockQuickOperationSchema = z
   .object({
     inventoryItemId: uuidSchema,

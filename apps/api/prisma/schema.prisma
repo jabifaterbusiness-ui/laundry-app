@@ -99,16 +99,16 @@ model Business {
   migrationJobs       MigrationJob[]
   garments            Garment[]
 
-  payrollPeriods        PayrollPeriod[]
-  payrollRecords        PayrollRecord[]
-  ious                  IOU[]
-  loans                 Loan[]
-  payrollDeductions     PayrollDeduction[]
-  employeeCompensations EmployeeCompensation[]
-  financialRepayments   FinancialRepayment[]
-  inventoryItems        InventoryItem[]
-  inventoryStocks       InventoryStock[]
-  inventoryMovements    InventoryMovement[]
+  payrollPeriods          PayrollPeriod[]
+  payrollRecords          PayrollRecord[]
+  ious                    IOU[]
+  loans                   Loan[]
+  payrollDeductions       PayrollDeduction[]
+  employeeCompensations   EmployeeCompensation[]
+  financialRepayments     FinancialRepayment[]
+  inventoryItems          InventoryItem[]
+  inventoryStocks         InventoryStock[]
+  inventoryMovements      InventoryMovement[]
   businessRolePermissions BusinessRolePermission[]
   userPermissionOverrides UserPermissionOverride[]
 
@@ -574,6 +574,12 @@ enum PaymentStatus {
   VOID
 }
 
+// Identifies whether a ledger row represents money received or returned.
+enum PaymentType {
+  PAYMENT
+  REFUND
+}
+
 model Payment {
   id String @id @default(uuid())
 
@@ -593,7 +599,14 @@ model Payment {
   amount Int
 
   method PaymentMethod
+  type   PaymentType   @default(PAYMENT)
   status PaymentStatus @default(POSTED)
+
+  // For REFUND rows, links back to the original customer payment.
+  // Original PAYMENT rows remain unchanged and preserve their history.
+  refundOfPaymentId String?
+  refundOfPayment   Payment?  @relation("PaymentRefund", fields: [refundOfPaymentId], references: [id], onDelete: Restrict)
+  refunds           Payment[] @relation("PaymentRefund")
 
   // Optional transaction/reference number supplied for transfer or POS.
   reference String?
@@ -608,6 +621,7 @@ model Payment {
   @@index([businessId, branchId, createdAt])
   @@index([businessId, invoiceId, createdAt])
   @@index([invoiceId])
+  @@index([refundOfPaymentId])
   @@map("payments")
 }
 
@@ -1237,7 +1251,6 @@ model FinancialRepayment {
   @@index([createdById])
   @@map("financial_repayments")
 }
-
 
 model Permission {
   id          String   @id @default(uuid())

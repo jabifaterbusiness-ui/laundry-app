@@ -25,6 +25,7 @@ import {
   getInvoicePaymentSummary,
   getPaymentForBranch,
   listPayments,
+  refundPayment,
   voidPayment,
 } from "../../src/modules/payments/payments.service.js";
 
@@ -52,7 +53,7 @@ describe("payments.service", () => {
         totalAmount: 10000,
         status: "ISSUED",
         payments: [
-          { amount: 3000 },
+          { amount: 3000, type: "PAYMENT" },
         ],
       });
 
@@ -93,6 +94,7 @@ describe("payments.service", () => {
             },
             select: {
               amount: true,
+              type: true,
             },
           },
         },
@@ -279,6 +281,388 @@ describe("payments.service", () => {
           method: "TRANSFER",
         }),
       });
+    });
+  });
+
+  describe("refundPayment", () => {
+    it("creates a separate refund while preserving the original payment", async () => {
+      const payment = {
+        id: "payment-refund-1",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 10000,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      };
+
+      const refund = {
+        id: "refund-1",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "TRANSFER",
+        type: "REFUND",
+        status: "POSTED",
+        refundOfPaymentId: payment.id,
+      };
+
+      prismaMock.payment.findFirst.mockResolvedValue(payment);
+      prismaMock.payment.findMany.mockResolvedValue([]);
+      prismaMock.payment.create.mockResolvedValue(refund);
+
+      const result = await refundPayment({
+        paymentId: payment.id,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        amount: 4000,
+        method: "TRANSFER",
+        reference: "REF-123",
+        note: "Customer refund",
+      });
+
+      expect(result).toBe(refund);
+
+      expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: payment.id,
+          businessId: "biz-A",
+          branchId: "branch-A",
+        },
+        include: {
+          invoice: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      expect(prismaMock.payment.findMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "biz-A",
+          branchId: "branch-A",
+          refundOfPaymentId: payment.id,
+          type: "REFUND",
+          status: "POSTED",
+        },
+        select: {
+          amount: true,
+        },
+      });
+
+      expect(prismaMock.payment.create).toHaveBeenCalledWith({
+        data: {
+          businessId: "biz-A",
+          branchId: "branch-A",
+          invoiceId: INVOICE_A,
+          amount: 4000,
+          method: "TRANSFER",
+          type: "REFUND",
+          refundOfPaymentId: payment.id,
+          reference: "REF-123",
+          note: "Customer refund",
+        },
+      });
+    });
+
+    it("allows multiple partial refunds without exceeding the original payment", async () => {
+      const payment = {
+        id: "payment-refund-2",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 10000,
+        method: "CASH",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      };
+
+      prismaMock.payment.findFirst.mockResolvedValue(payment);
+      prismaMock.payment.findMany
+        .mockResolvedValueOnce([{ amount: 3000 }])
+        .mockResolvedValueOnce([{ amount: 3000 }, { amount: 2000 }]);
+
+      prismaMock.payment.create
+        .mockResolvedValueOnce({
+          id: "refund-2",
+          amount: 3000,
+          type: "REFUND",
+          status: "POSTED",
+        })
+        .mockResolvedValueOnce({
+          id: "refund-3",
+          amount: 2000,
+          type: "REFUND",
+          status: "POSTED",
+        });
+
+      await refundPayment({
+        paymentId: payment.id,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        amount: 3000,
+        method: "CASH",
+      });
+
+      await refundPayment({
+        paymentId: payment.id,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        amount: 2000,
+        method: "TRANSFER",
+      });
+
+      expect(prismaMock.payment.create).toHaveBeenCalledTimes(2);
+    });
+
+    it("rejects a refund greater than the remaining refundable amount", async () => {
+      const payment = {
+        id: "payment-refund-4",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 10000,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      };
+
+      prismaMock.payment.findFirst.mockResolvedValue(payment);
+      prismaMock.payment.findMany.mockResolvedValue([{ amount: 7000 }]);
+
+      await expect(
+        refundPayment({
+          paymentId: payment.id,
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 3001,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message:
+          "Refund amount cannot exceed the remaining refundable amount of 3000",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a payment that has already been fully refunded", async () => {
+      const payment = {
+        id: "payment-refund-5",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 10000,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      };
+
+      prismaMock.payment.findFirst.mockResolvedValue(payment);
+      prismaMock.payment.findMany.mockResolvedValue([{ amount: 6000 }, { amount: 4000 }]);
+
+      await expect(
+        refundPayment({
+          paymentId: payment.id,
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 1,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message: "This payment has already been fully refunded",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a void payment", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue({
+        id: "payment-refund-6",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        status: "VOID",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      });
+
+      await expect(
+        refundPayment({
+          paymentId: "payment-refund-6",
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 1000,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message: "A void payment cannot be refunded",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects refunding a refund row", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue({
+        id: "refund-refund-1",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 1000,
+        method: "CASH",
+        type: "REFUND",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      });
+
+      await expect(
+        refundPayment({
+          paymentId: "refund-refund-1",
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 500,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message: "Only an original payment can be refunded",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a payment outside the authenticated business and branch", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue(null);
+
+      await expect(
+        refundPayment({
+          paymentId: "payment-other-scope",
+          businessId: "biz-B",
+          branchId: "branch-B",
+          amount: 1000,
+          method: "TRANSFER",
+        }),
+      ).rejects.toMatchObject({
+        message: "Payment not found",
+        statusCode: 404,
+      });
+
+      expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: "payment-other-scope",
+          businessId: "biz-B",
+          branchId: "branch-B",
+        },
+        include: {
+          invoice: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a refund with a non-positive amount", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue({
+        id: "payment-refund-7",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "ISSUED",
+        },
+      });
+
+      await expect(
+        refundPayment({
+          paymentId: "payment-refund-7",
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 0,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message: "Refund amount must be greater than zero",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects refunds against a void invoice", async () => {
+      prismaMock.payment.findFirst.mockResolvedValue({
+        id: "payment-refund-8",
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_A,
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        status: "POSTED",
+        invoice: {
+          id: INVOICE_A,
+          status: "VOID",
+        },
+      });
+
+      await expect(
+        refundPayment({
+          paymentId: "payment-refund-8",
+          businessId: "biz-A",
+          branchId: "branch-A",
+          amount: 1000,
+          method: "CASH",
+        }),
+      ).rejects.toMatchObject({
+        message: "Payments cannot be refunded for a void invoice",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.payment.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.payment.create).not.toHaveBeenCalled();
     });
   });
 

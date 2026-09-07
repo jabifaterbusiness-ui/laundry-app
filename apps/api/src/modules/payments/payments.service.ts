@@ -1,4 +1,4 @@
-import type { PaymentStatus, Prisma } from "@prisma/client";
+import type { PaymentStatus, PaymentType, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 
@@ -17,8 +17,19 @@ export interface ListPaymentsParams {
   branchId: string;
   invoiceId?: string;
   status?: PaymentStatus;
+  type?: PaymentType;
   page: number;
   pageSize: number;
+}
+
+export interface RefundPaymentData {
+  paymentId: string;
+  businessId: string;
+  branchId: string;
+  amount: number;
+  method: "CASH" | "TRANSFER" | "POS";
+  reference?: string;
+  note?: string;
 }
 
 /**
@@ -47,6 +58,7 @@ export async function createPayment(data: CreatePaymentData) {
           },
           select: {
             amount: true,
+            type: true,
           },
         },
       },
@@ -64,7 +76,8 @@ export async function createPayment(data: CreatePaymentData) {
     }
 
     const amountPaid = invoice.payments.reduce(
-      (sum, payment) => sum + payment.amount,
+      (sum, payment) =>
+        sum + (payment.type === "REFUND" ? -payment.amount : payment.amount),
       0,
     );
 
@@ -147,6 +160,109 @@ export async function voidPayment(
 
 
 /**
+ * Refunds a posted customer payment without modifying or deleting the
+ * original payment record.
+ *
+ * A refund is stored as a separate REFUND ledger row linked to the
+ * original PAYMENT. Multiple partial refunds are allowed, but the total
+ * posted refund amount can never exceed the original payment amount.
+ *
+ * Business and branch isolation are enforced for both the original
+ * payment and the invoice transaction.
+ */
+export async function refundPayment(data: RefundPaymentData) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findFirst({
+      where: {
+        id: data.paymentId,
+        businessId: data.businessId,
+        branchId: data.branchId,
+      },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new AppError("Payment not found", 404);
+    }
+
+    if (payment.type !== "PAYMENT") {
+      throw new AppError("Only an original payment can be refunded", 422);
+    }
+
+    if (payment.status === "VOID") {
+      throw new AppError("A void payment cannot be refunded", 422);
+    }
+
+    if (data.amount <= 0) {
+      throw new AppError("Refund amount must be greater than zero", 422);
+    }
+
+    if (payment.invoice.status === "VOID") {
+      throw new AppError(
+        "Payments cannot be refunded for a void invoice",
+        422,
+      );
+    }
+
+    const existingRefunds = await tx.payment.findMany({
+      where: {
+        businessId: data.businessId,
+        branchId: data.branchId,
+        refundOfPaymentId: payment.id,
+        type: "REFUND",
+        status: "POSTED",
+      },
+      select: {
+        amount: true,
+      },
+    });
+
+    const refundedAmount = existingRefunds.reduce(
+      (sum, refund) => sum + refund.amount,
+      0,
+    );
+
+    const refundableAmount = payment.amount - refundedAmount;
+
+    if (refundableAmount <= 0) {
+      throw new AppError("This payment has already been fully refunded", 422);
+    }
+
+    if (data.amount > refundableAmount) {
+      throw new AppError(
+        `Refund amount cannot exceed the remaining refundable amount of ${refundableAmount}`,
+        422,
+      );
+    }
+
+    return tx.payment.create({
+      data: {
+        businessId: data.businessId,
+        branchId: data.branchId,
+        invoiceId: payment.invoiceId,
+        amount: data.amount,
+        method: data.method,
+        type: "REFUND",
+        refundOfPaymentId: payment.id,
+        ...(data.reference !== undefined && {
+          reference: data.reference,
+        }),
+        ...(data.note !== undefined && {
+          note: data.note,
+        }),
+      },
+    });
+  });
+}
+
+/**
  * Retrieves a single payment while enforcing tenant and branch isolation.
  */
 export async function getPaymentForBranch(
@@ -183,6 +299,7 @@ export async function listPayments(params: ListPaymentsParams) {
     branchId,
     invoiceId,
     status,
+    type,
     page,
     pageSize,
   } = params;
@@ -192,6 +309,7 @@ export async function listPayments(params: ListPaymentsParams) {
     branchId,
     ...(invoiceId ? { invoiceId } : {}),
     ...(status ? { status } : {}),
+    ...(type ? { type } : {}),
   };
 
   const [data, total] = await Promise.all([
@@ -232,7 +350,8 @@ export async function listPayments(params: ListPaymentsParams) {
 /**
  * Returns the payment summary for one invoice.
  *
- * Only POSTED payments contribute to amountPaid and balance.
+ * POSTED PAYMENT rows increase amountPaid, while POSTED REFUND rows
+ * decrease it. VOID rows do not contribute.
  */
 export async function getInvoicePaymentSummary(
   invoiceId: string,
@@ -260,7 +379,11 @@ export async function getInvoicePaymentSummary(
 
   const amountPaid = invoice.payments
     .filter((payment) => payment.status === "POSTED")
-    .reduce((sum, payment) => sum + payment.amount, 0);
+    .reduce(
+      (sum, payment) =>
+        sum + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+      0,
+    );
 
   const balance = Math.max(0, invoice.totalAmount - amountPaid);
 

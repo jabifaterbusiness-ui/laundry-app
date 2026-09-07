@@ -9,6 +9,7 @@ const {
   transferCustomerMock,
   mergeCustomerMock,
   voidPaymentMock,
+  refundPaymentMock,
   createInventoryMovementMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   transferCustomerMock: vi.fn(),
   mergeCustomerMock: vi.fn(),
   voidPaymentMock: vi.fn(),
+  refundPaymentMock: vi.fn(),
   createInventoryMovementMock: vi.fn(),
 }));
 
@@ -43,6 +45,7 @@ vi.mock("../../src/modules/customers/customers.service.js", () => ({
 
 vi.mock("../../src/modules/payments/payments.service.js", () => ({
   voidPayment: voidPaymentMock,
+  refundPayment: refundPaymentMock,
 }));
 
 vi.mock("../../src/modules/inventory/inventory.service.js", () => ({
@@ -629,6 +632,212 @@ describe("quick-operations.service", () => {
     });
   });
 
+  describe("RF - Refund", () => {
+    const PAYMENT_ID = "33333333-3333-4333-8333-333333333333";
+    const REFUND_ID = "66666666-6666-4666-8666-666666666666";
+    const INVOICE_ID = "44444444-4444-4444-8444-444444444444";
+
+    it("creates a refund through the payment service and records the refund audit", async () => {
+      const result = {
+        id: REFUND_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        invoiceId: INVOICE_ID,
+        amount: 2000,
+        method: "TRANSFER",
+        type: "REFUND",
+        refundOfPaymentId: PAYMENT_ID,
+        status: "POSTED",
+      };
+
+      refundPaymentMock.mockResolvedValue(result);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "RF",
+        {
+          paymentId: PAYMENT_ID,
+          amount: 2000,
+          method: "TRANSFER",
+          reference: "REF-001",
+          note: "Customer refund",
+        },
+        true,
+      );
+
+      expect(refundPaymentMock).toHaveBeenCalledWith({
+        paymentId: PAYMENT_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        amount: 2000,
+        method: "TRANSFER",
+        reference: "REF-001",
+        note: "Customer refund",
+      });
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Payment",
+        entityId: REFUND_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "RF",
+          operationName: "Refund",
+          originalPaymentId: PAYMENT_ID,
+          invoiceId: INVOICE_ID,
+          amount: 2000,
+          method: "TRANSFER",
+          type: "REFUND",
+          status: "POSTED",
+        },
+      });
+
+      expect(response).toEqual({
+        code: "RF",
+        result,
+      });
+    });
+
+    it("passes the authenticated business and branch to the refund service", async () => {
+      refundPaymentMock.mockResolvedValue({
+        id: REFUND_ID,
+        invoiceId: INVOICE_ID,
+        amount: 1000,
+        method: "CASH",
+        type: "REFUND",
+        refundOfPaymentId: PAYMENT_ID,
+        status: "POSTED",
+      });
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RF",
+        {
+          paymentId: PAYMENT_ID,
+          amount: 1000,
+          method: "CASH",
+        },
+        true,
+      );
+
+      expect(refundPaymentMock).toHaveBeenCalledWith({
+        paymentId: PAYMENT_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        amount: 1000,
+        method: "CASH",
+      });
+    });
+
+    it("rejects an RF operation when payments.manage permission is denied", async () => {
+      hasPermissionMock.mockResolvedValue(false);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RF",
+          {
+            paymentId: PAYMENT_ID,
+            amount: 1000,
+            method: "CASH",
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "Insufficient permissions for this quick operation",
+        statusCode: 403,
+      });
+
+      expect(hasPermissionMock).toHaveBeenCalledWith(
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "payments.manage",
+      );
+
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("requires confirmation before executing a refund", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RF",
+          {
+            paymentId: PAYMENT_ID,
+            amount: 1000,
+            method: "CASH",
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Confirmation is required for this quick operation",
+        statusCode: 422,
+      });
+
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("validates the refund input before calling the payment service", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RF",
+          {
+            paymentId: PAYMENT_ID,
+            amount: 0,
+            method: "CASH",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unsupported refund methods", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RF",
+          {
+            paymentId: PAYMENT_ID,
+            amount: 1000,
+            method: "CARD",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unexpected refund fields", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RF",
+          {
+            paymentId: PAYMENT_ID,
+            amount: 1000,
+            method: "CASH",
+            customerPhone: "08000000000",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("SI - Stock Issue", () => {
     it("records an ISSUE against the authenticated branch", async () => {
       const result = {
@@ -755,12 +964,12 @@ describe("quick-operations.service", () => {
       await expect(
         executeQuickOperation(
           CONTEXT,
-          "RF",
+          "RI",
           {},
           true,
         ),
       ).rejects.toMatchObject({
-        message: "Quick operation RF is not implemented yet",
+        message: "Quick operation RI is not implemented yet",
         statusCode: 501,
       });
 
@@ -768,7 +977,7 @@ describe("quick-operations.service", () => {
         "user-A",
         "biz-A",
         "BUSINESS_OWNER",
-        "payments.manage",
+        "invoices.view",
       );
       expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
