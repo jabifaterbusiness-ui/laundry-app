@@ -17,6 +17,13 @@ export const transferInvoiceQuickOperationSchema = z
   })
   .strict();
 
+export const transferCustomerQuickOperationSchema = z
+  .object({
+    customerId: uuidSchema,
+    targetCustomerId: uuidSchema,
+  })
+  .strict();
+
 export const voidPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,

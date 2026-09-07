@@ -9,9 +9,11 @@ import {
   executeQuickOperationSchema,
   stockQuickOperationSchema,
   transferInvoiceQuickOperationSchema,
+  transferCustomerQuickOperationSchema,
   voidPaymentQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import { transferOrder } from "../orders/orders.service.js";
+import { transferCustomer } from "../customers/customers.service.js";
 import { voidPayment } from "../payments/payments.service.js";
 import { createInventoryMovement } from "../inventory/inventory.service.js";
 
@@ -88,6 +90,40 @@ export async function executeQuickOperation(
           operationName: definition.name,
           orderNumber: result.orderNumber,
           customerId: result.customerId,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "TC": {
+      const parsed = transferCustomerQuickOperationSchema.parse(input);
+
+      const result = await transferCustomer(
+        parsed.customerId,
+        context.businessId,
+        parsed.targetCustomerId,
+      );
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: result.customer.id,
+        businessId: context.businessId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          targetCustomerId: result.targetCustomer.id,
+          transferredOrderCount: result.transferredOrderCount,
+          transferredOrderIds: result.transferredOrders.map((order) => order.id),
+          transferredOrderNumbers: result.transferredOrders.map(
+            (order) => order.orderNumber,
+          ),
         },
       });
 

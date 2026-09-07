@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/lib/prisma.js", () => ({
-  prisma: {
-    customer: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      updateMany: vi.fn(),
-    },
+const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
+  customer: {
+    findMany: vi.fn(),
+    count: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    updateMany: vi.fn(),
   },
+  order: {
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/lib/prisma.js", () => ({
+  prisma: prismaMock,
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
@@ -19,6 +26,7 @@ import {
   getCustomerForBusiness,
   listCustomers,
   setCustomerActiveStatus,
+  transferCustomer,
   updateCustomer,
 } from "../../src/modules/customers/customers.service.js";
 import { AppError } from "../../src/middleware/error-handler.js";
@@ -28,9 +36,16 @@ const count = vi.mocked(prisma.customer.count);
 const findFirst = vi.mocked(prisma.customer.findFirst);
 const create = vi.mocked(prisma.customer.create);
 const updateMany = vi.mocked(prisma.customer.updateMany);
+const transaction = vi.mocked(prisma.$transaction);
+const orderFindMany = vi.mocked(prisma.order.findMany);
+const orderUpdateMany = vi.mocked(prisma.order.updateMany);
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  transaction.mockImplementation(
+    async (callback) => callback(prismaMock as never),
+  );
 });
 
 describe("listCustomers", () => {
@@ -179,5 +194,162 @@ describe("setCustomerActiveStatus", () => {
     const result = await setCustomerActiveStatus("cust-1", "biz-1", false);
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { isActive: false } });
     expect(result?.isActive).toBe(false);
+  });
+});
+
+
+describe("transferCustomer - full account transfer", () => {
+  const sourceCustomer = {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    name: "Customer A",
+    businessId: "biz-A",
+  };
+
+  const targetCustomer = {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    name: "Customer B",
+    businessId: "biz-A",
+  };
+
+  const orders = [
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      orderNumber: "00042",
+      branchId: "branch-A",
+    },
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      orderNumber: "00043",
+      branchId: "branch-B",
+    },
+  ];
+
+  it("moves every order belonging to Customer A to Customer B in one transaction", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue(orders as never);
+    orderUpdateMany.mockResolvedValue({ count: orders.length });
+
+    const result = await transferCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+
+    expect(orderFindMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: sourceCustomer.id,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        branchId: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: sourceCustomer.id,
+      },
+      data: {
+        customerId: targetCustomer.id,
+      },
+    });
+
+    expect(result).toEqual({
+      customer: sourceCustomer,
+      targetCustomer,
+      transferredOrderCount: 2,
+      transferredOrders: orders,
+    });
+  });
+
+  it("transfers an account with no orders without performing an order update", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+
+    const result = await transferCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(orderFindMany).toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(result.transferredOrderCount).toBe(0);
+    expect(result.transferredOrders).toEqual([]);
+  });
+
+  it("rejects transferring a customer to itself", async () => {
+    findFirst.mockResolvedValueOnce(sourceCustomer as never);
+
+    await expect(
+      transferCustomer(sourceCustomer.id, "biz-A", sourceCustomer.id),
+    ).rejects.toThrow("Customer cannot be transferred to the same customer");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a target customer outside the authenticated business", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      transferCustomer(
+        sourceCustomer.id,
+        "biz-A",
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      ),
+    ).rejects.toThrow("Target customer not found");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a source customer outside the authenticated business", async () => {
+    findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      transferCustomer(
+        sourceCustomer.id,
+        "biz-B",
+        targetCustomer.id,
+      ),
+    ).rejects.toThrow("Customer not found");
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps the source customer record intact", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue(orders as never);
+    orderUpdateMany.mockResolvedValue({ count: orders.length });
+
+    await transferCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(prisma.customer.updateMany).not.toHaveBeenCalled();
+    expect(prisma.customer.create).not.toHaveBeenCalled();
   });
 });

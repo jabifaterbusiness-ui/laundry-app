@@ -4,12 +4,14 @@ const {
   hasPermissionMock,
   recordAuditEventMock,
   transferOrderMock,
+  transferCustomerMock,
   voidPaymentMock,
   createInventoryMovementMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
   transferOrderMock: vi.fn(),
+  transferCustomerMock: vi.fn(),
   voidPaymentMock: vi.fn(),
   createInventoryMovementMock: vi.fn(),
 }));
@@ -24,6 +26,10 @@ vi.mock("../../src/lib/audit.js", () => ({
 
 vi.mock("../../src/modules/orders/orders.service.js", () => ({
   transferOrder: transferOrderMock,
+}));
+
+vi.mock("../../src/modules/customers/customers.service.js", () => ({
+  transferCustomer: transferCustomerMock,
 }));
 
 vi.mock("../../src/modules/payments/payments.service.js", () => ({
@@ -194,6 +200,96 @@ describe("quick-operations.service", () => {
           customerId: "22222222-2222-4222-8222-222222222222",
         },
       });
+    });
+  });
+
+  describe("TC - Transfer Customer", () => {
+    it("transfers a customer within the authenticated business", async () => {
+      const result = {
+        customer: {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          name: "Customer A",
+          businessId: "biz-A",
+        },
+        targetCustomer: {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          name: "Customer B",
+          businessId: "biz-A",
+        },
+        transferredOrderCount: 2,
+        transferredOrders: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            orderNumber: "00042",
+            branchId: "branch-A",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            orderNumber: "00043",
+            branchId: "branch-B",
+          },
+        ],
+      };
+
+      transferCustomerMock.mockResolvedValue(result);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "TC",
+        {
+          customerId: result.customer.id,
+          targetCustomerId: result.targetCustomer.id,
+        },
+        true,
+      );
+
+      expect(transferCustomerMock).toHaveBeenCalledWith(
+        result.customer.id,
+        "biz-A",
+        result.targetCustomer.id,
+      );
+
+      expect(response).toEqual({
+        code: "TC",
+        result,
+      });
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Customer",
+        entityId: result.customer.id,
+        businessId: "biz-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "TC",
+          operationName: "Transfer Customer",
+          targetCustomerId: result.targetCustomer.id,
+          transferredOrderCount: 2,
+          transferredOrderIds: [
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+          ],
+          transferredOrderNumbers: ["00042", "00043"],
+        },
+      });
+    });
+
+    it("rejects malformed customer transfer input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "TC",
+          {
+            customerId: "not-a-uuid",
+            targetCustomerId: "also-not-a-uuid",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(transferCustomerMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
   });
 

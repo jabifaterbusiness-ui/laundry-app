@@ -10,7 +10,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     order: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     customer: {
       findFirst: vi.fn(),
@@ -54,7 +56,9 @@ import { createApp } from "../../src/app.js";
 
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
+const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderUpdate = vi.mocked(prisma.order.update);
+const orderUpdateMany = vi.mocked(prisma.order.updateMany);
 const customerFindFirst = vi.mocked(prisma.customer.findFirst);
 const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
 const paymentUpdate = vi.mocked(prisma.payment.update);
@@ -536,5 +540,190 @@ describe("Quick Operations routes - branch/business isolation", () => {
 
     expect(res.status).toBe(403);
     expect(orderFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Quick Operations routes - TC", () => {
+  it("transfers every order from Customer A to Customer B across the business", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    customerFindFirst
+      .mockResolvedValueOnce({
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+      } as never)
+      .mockResolvedValueOnce({
+        id: CUSTOMER_B,
+        name: "Customer B",
+        businessId: "biz-A",
+      } as never);
+
+    const transferredOrders = [
+      {
+        id: ORDER_A,
+        orderNumber: "00042",
+        branchId: BRANCH_A,
+      },
+      {
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        orderNumber: "00043",
+        branchId: BRANCH_B,
+      },
+    ];
+
+    orderFindMany.mockResolvedValue(transferredOrders as never);
+    orderUpdateMany.mockResolvedValue({
+      count: transferredOrders.length,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "TC",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("TC");
+
+    expect(orderFindMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        branchId: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+      },
+      data: {
+        customerId: CUSTOMER_B,
+      },
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: "biz-A",
+        actorUserId: "user-1",
+        entityType: "Customer",
+        entityId: CUSTOMER_A,
+        metadata: expect.objectContaining({
+          operationCode: "TC",
+          operationName: "Transfer Customer",
+          targetCustomerId: CUSTOMER_B,
+          transferredOrderCount: 2,
+          transferredOrderIds: transferredOrders.map((order) => order.id),
+          transferredOrderNumbers: ["00042", "00043"],
+        }),
+      }),
+    );
+  });
+
+  it("does not allow TC to target a customer outside the authenticated business", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    customerFindFirst
+      .mockResolvedValueOnce({
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+      } as never)
+      .mockResolvedValueOnce(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "TC",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(404);
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects TC without confirmation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "TC",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+    expect(orderFindMany).not.toHaveBeenCalled();
+  });
+
+  it("enforces the customers.update permission for TC", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "TC",
+        input: {
+          customerId: CUSTOMER_A,
+          targetCustomerId: CUSTOMER_B,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(403);
+    expect(customerFindFirst).not.toHaveBeenCalled();
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
   });
 });
