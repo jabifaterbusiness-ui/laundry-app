@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
     inventoryItem: {
       update: vi.fn(),
       create: vi.fn(),
@@ -1089,23 +1090,42 @@ describe("listInventoryStock", () => {
     });
   });
 
-  it("filters stock to low-stock items when lowStockOnly is enabled", async () => {
+  it("filters stock using each inventory item's low-stock threshold", async () => {
     const stocks = [
       {
         id: "stock-1",
         businessId: "business-1",
         branchId: "branch-1",
         inventoryItemId: "item-1",
-        quantity: 0,
+        quantity: 7,
         inventoryItem: {
           id: "item-1",
           name: "Laundry Detergent",
+          lowStockThreshold: 10,
+        },
+      },
+      {
+        id: "stock-2",
+        businessId: "business-1",
+        branchId: "branch-1",
+        inventoryItemId: "item-2",
+        quantity: 10,
+        inventoryItem: {
+          id: "item-2",
+          name: "Stain Remover",
+          lowStockThreshold: 10,
         },
       },
     ];
 
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([
+        { id: "stock-1" },
+        { id: "stock-2" },
+      ])
+      .mockResolvedValueOnce([{ count: 2n }]);
+
     prismaMock.inventoryStock.findMany.mockResolvedValue(stocks);
-    prismaMock.inventoryStock.count.mockResolvedValue(1);
 
     const result = await listInventoryStock(
       {
@@ -1119,35 +1139,28 @@ describe("listInventoryStock", () => {
       },
     );
 
-    expect(result.stocks).toEqual(stocks);
+    expect(result).toEqual({
+      stocks,
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        total: 2,
+        totalPages: 1,
+      },
+    });
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
 
     expect(prismaMock.inventoryStock.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        quantity: {
-          lte: 0,
+        id: {
+          in: ["stock-1", "stock-2"],
         },
       },
       include: {
         inventoryItem: true,
-      },
-      orderBy: {
-        inventoryItem: {
-          name: "asc",
-        },
-      },
-      skip: 0,
-      take: 10,
-    });
-
-    expect(prismaMock.inventoryStock.count).toHaveBeenCalledWith({
-      where: {
-        businessId: "business-1",
-        branchId: "branch-1",
-        quantity: {
-          lte: 0,
-        },
       },
     });
   });

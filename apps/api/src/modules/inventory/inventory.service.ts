@@ -207,11 +207,72 @@ export async function listInventoryStock(
     where.inventoryItemId = input.inventoryItemId;
   }
 
-  if (input.lowStockOnly) {
-    where.quantity = { lte: 0 };
-  }
-
   const skip = (input.page - 1) * input.pageSize;
+
+  if (input.lowStockOnly) {
+    const itemFilter = input.inventoryItemId
+      ? Prisma.sql`AND s.inventory_item_id = ${input.inventoryItemId}`
+      : Prisma.empty;
+
+    const [stockRows, countRows] = await prisma.$transaction([
+      prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+          SELECT s.id
+          FROM "inventory_stocks" AS s
+          INNER JOIN "inventory_items" AS i
+            ON i.id = s.inventory_item_id
+          WHERE s.business_id = ${scope.businessId}
+            AND s.branch_id = ${scope.branchId}
+            ${itemFilter}
+            AND s.quantity <= i.low_stock_threshold
+          ORDER BY i.name ASC, s.id ASC
+          LIMIT ${input.pageSize}
+          OFFSET ${skip}
+        `,
+      ),
+      prisma.$queryRaw<Array<{ count: bigint }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "inventory_stocks" AS s
+          INNER JOIN "inventory_items" AS i
+            ON i.id = s.inventory_item_id
+          WHERE s.business_id = ${scope.businessId}
+            AND s.branch_id = ${scope.branchId}
+            ${itemFilter}
+            AND s.quantity <= i.low_stock_threshold
+        `,
+      ),
+    ]);
+
+    const stockIds = stockRows.map((row) => row.id);
+
+    const stocks = stockIds.length
+      ? await prisma.inventoryStock.findMany({
+          where: {
+            ...where,
+            id: { in: stockIds },
+          },
+          include: { inventoryItem: true },
+        })
+      : [];
+
+    const stockById = new Map(stocks.map((stock) => [stock.id, stock]));
+    const orderedStocks = stockIds
+      .map((id) => stockById.get(id))
+      .filter((stock): stock is NonNullable<typeof stock> => Boolean(stock));
+
+    const total = Number(countRows[0]?.count ?? 0);
+
+    return {
+      stocks: orderedStocks,
+      pagination: {
+        page: input.page,
+        pageSize: input.pageSize,
+        total,
+        totalPages: Math.ceil(total / input.pageSize),
+      },
+    };
+  }
 
   const [stocks, total] = await prisma.$transaction([
     prisma.inventoryStock.findMany({
