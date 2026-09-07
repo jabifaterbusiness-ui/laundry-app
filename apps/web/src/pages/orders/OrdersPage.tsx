@@ -263,24 +263,6 @@ export function OrdersPage() {
     return sum + (service ? line.quantity * service.unitPrice : 0);
   }, 0);
 
-  function resetForm() {
-    if (!activeWorkspaceId) {
-      setFormError(null);
-      return;
-    }
-
-    updateWorkspace(activeWorkspaceId, {
-      draft: {
-        lines: [{ serviceId: "", quantity: 1 }],
-        garmentNote: "",
-        internalNote: "",
-        expectedReadyAt: "",
-      },
-    });
-
-    setFormError(null);
-  }
-
   function closeForm() {
     setFormOpen(false);
     setFormError(null);

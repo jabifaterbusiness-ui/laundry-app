@@ -4,8 +4,6 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 
-import type { CreateIOUInput } from "./ious.validation.js";
-
 const EMPLOYEE_ROLES: Role[] = [
   Role.BUSINESS_OWNER,
   Role.BRANCH_MANAGER,

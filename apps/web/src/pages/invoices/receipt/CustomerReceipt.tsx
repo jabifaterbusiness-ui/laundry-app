@@ -4,7 +4,6 @@ import {
   formatReceiptDate,
   formatReceiptMoney,
   getBusinessInitials,
-  getReceiptTitle,
 } from "./receipt-utils.js";
 import "./ReceiptStyles.css";
 
