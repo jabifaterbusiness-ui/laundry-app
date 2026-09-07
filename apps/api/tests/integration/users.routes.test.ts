@@ -105,8 +105,11 @@ beforeEach(() => {
     async (callback) =>
       callback({
         user: {
+          findFirst: userFindFirst,
           create: userCreate,
           update: userUpdate,
+          count: userCount,
+          updateMany: userUpdateMany,
         },
       } as never),
   );

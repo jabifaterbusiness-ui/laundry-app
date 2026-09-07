@@ -92,8 +92,11 @@ beforeEach(() => {
   transaction.mockImplementation(async (callback) =>
     callback({
       user: {
+        findFirst: userFindFirst,
         create: userCreate,
         update: userUpdate,
+        count: userCount,
+        updateMany: userUpdateMany,
       },
       userBranch: {
         create: userBranchCreate,
@@ -315,6 +318,7 @@ describe("users.service - updateUser", () => {
       } as never)
       .mockResolvedValueOnce({
         ...BASE_USER,
+        branches: [{ branchId: "branch-old" }],
       } as never)
       .mockResolvedValueOnce({
         ...BASE_USER,
@@ -374,7 +378,14 @@ describe("users.service - updateUser", () => {
         ...BASE_USER,
         branches: [],
       } as never)
-      .mockResolvedValueOnce(BASE_USER as never);
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        branches: [],
+      } as never);
 
     await updateUser(
       BASE_USER.id,
@@ -442,7 +453,11 @@ describe("users.service - setUserActiveStatus", () => {
   it("deactivates a user and records an audit event", async () => {
     userFindFirst
       .mockResolvedValueOnce(BASE_USER as never)
-      .mockResolvedValueOnce(BASE_USER as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        isActive: true,
+        branches: [],
+      } as never)
       .mockResolvedValueOnce({
         ...BASE_USER,
         isActive: false,

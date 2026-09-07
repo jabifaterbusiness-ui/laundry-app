@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import { Prisma, type Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -92,23 +92,21 @@ async function validateBranches(businessId: string, branchIds: string[]) {
 }
 
 async function assertNotLastActiveOwner(
-  userId: string,
+  tx: Prisma.TransactionClient,
+  current: {
+    role: Role;
+    isActive: boolean;
+  },
   businessId: string,
   nextRole: Role,
   nextActive: boolean,
 ) {
-  const current = await getUserRecord(userId, businessId);
-
-  if (!current) {
-    throw new AppError("User not found", 404);
-  }
-
   if (
     current.role === "BUSINESS_OWNER" &&
     current.isActive &&
     (nextRole !== "BUSINESS_OWNER" || !nextActive)
   ) {
-    const ownerCount = await prisma.user.count({
+    const ownerCount = await tx.user.count({
       where: {
         businessId,
         role: "BUSINESS_OWNER",
@@ -298,8 +296,6 @@ export async function updateUser(
     assertBusinessRole(input.role);
   }
 
-  const nextRole = input.role ?? current.role;
-
   if (input.branchIds !== undefined) {
     const branches = await validateBranches(context.businessId, input.branchIds);
 
@@ -324,54 +320,79 @@ export async function updateUser(
     }
   }
 
-  await assertNotLastActiveOwner(
-    userId,
-    context.businessId,
-    nextRole,
-    current.isActive,
-  );
-
   const passwordHash =
     input.password !== undefined
       ? await hashPassword(input.password)
       : undefined;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        ...(input.fullName !== undefined
-          ? { fullName: input.fullName.trim() }
-          : {}),
-        ...(input.email !== undefined
-          ? { email: input.email.trim().toLowerCase() }
-          : {}),
-        ...(passwordHash !== undefined ? { passwordHash } : {}),
-        ...(input.role !== undefined ? { role: input.role } : {}),
-      },
-    });
+  await prisma.$transaction(
+    async (tx) => {
+      const currentInTransaction = await tx.user.findFirst({
+        where: { id: userId, businessId: context.businessId },
+        select: {
+          ...USER_SELECT,
+          branches: {
+            select: { branchId: true },
+          },
+        },
+      });
 
-    if (input.branchIds !== undefined) {
-      const desired = new Set(input.branchIds);
-      const currentBranchIds = new Set(current.branches.map((b) => b.branchId));
-
-      for (const branchId of desired) {
-        if (!currentBranchIds.has(branchId)) {
-          await tx.userBranch.create({
-            data: { userId, branchId },
-          });
-        }
+      if (!currentInTransaction) {
+        throw new AppError("User not found", 404);
       }
 
-      for (const branchId of currentBranchIds) {
-        if (!desired.has(branchId)) {
-          await tx.userBranch.deleteMany({
-            where: { userId, branchId },
-          });
+      const nextRoleInTransaction =
+        input.role ?? currentInTransaction.role;
+
+      await assertNotLastActiveOwner(
+        tx,
+        currentInTransaction,
+        context.businessId,
+        nextRoleInTransaction,
+        currentInTransaction.isActive,
+      );
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.fullName !== undefined
+            ? { fullName: input.fullName.trim() }
+            : {}),
+          ...(input.email !== undefined
+            ? { email: input.email.trim().toLowerCase() }
+            : {}),
+          ...(passwordHash !== undefined ? { passwordHash } : {}),
+          ...(input.role !== undefined ? { role: input.role } : {}),
+        },
+      });
+
+      if (input.branchIds !== undefined) {
+        const desired = new Set(input.branchIds);
+        const currentBranchIds = new Set(
+          currentInTransaction.branches.map((b) => b.branchId),
+        );
+
+        for (const branchId of desired) {
+          if (!currentBranchIds.has(branchId)) {
+            await tx.userBranch.create({
+              data: { userId, branchId },
+            });
+          }
+        }
+
+        for (const branchId of currentBranchIds) {
+          if (!desired.has(branchId)) {
+            await tx.userBranch.deleteMany({
+              where: { userId, branchId },
+            });
+          }
         }
       }
-    }
-  });
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
+  );
 
   await recordAuditEvent({
     action: "user.updated",
@@ -414,22 +435,46 @@ export async function setUserActiveStatus(
     await assertCannotDeactivateSelf(userId, context.actorUserId);
   }
 
-  if (!isActive) {
-    await assertNotLastActiveOwner(
-      userId,
-      context.businessId,
-      current.role,
-      false,
-    );
-  }
+  await prisma.$transaction(
+    async (tx) => {
+      const currentInTransaction = await tx.user.findFirst({
+        where: { id: userId, businessId: context.businessId },
+        select: USER_SELECT,
+      });
 
-  await prisma.user.updateMany({
-    where: {
-      id: userId,
-      businessId: context.businessId,
+      if (!currentInTransaction) {
+        throw new AppError("User not found", 404);
+      }
+
+      if (currentInTransaction.isActive === isActive) {
+        throw new AppError(
+          isActive ? "User is already active" : "User is already inactive",
+          400,
+        );
+      }
+
+      if (!isActive) {
+        await assertNotLastActiveOwner(
+          tx,
+          currentInTransaction,
+          context.businessId,
+          currentInTransaction.role,
+          false,
+        );
+      }
+
+      await tx.user.updateMany({
+        where: {
+          id: userId,
+          businessId: context.businessId,
+        },
+        data: { isActive },
+      });
     },
-    data: { isActive },
-  });
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
+  );
 
   await recordAuditEvent({
     action: isActive ? "user.activated" : "user.deactivated",
