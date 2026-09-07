@@ -399,6 +399,192 @@ describe("quick-operations.service", () => {
     });
   });
 
+  describe("SO - Switch Order", () => {
+    const ORDER_ID = "11111111-1111-4111-8111-111111111111";
+
+    const order = {
+      id: ORDER_ID,
+      businessId: "biz-A",
+      branchId: "branch-A",
+      customerId: "22222222-2222-4222-8222-222222222222",
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      orderTotal: 9000,
+      customer: {
+        id: "22222222-2222-4222-8222-222222222222",
+        name: "Customer A",
+        businessId: "biz-A",
+      },
+      branch: {
+        id: "branch-A",
+        name: "Main Branch",
+        businessId: "biz-A",
+      },
+      items: [],
+    };
+
+    it("switches to an existing order within the authenticated business and branch", async () => {
+      getOrderForBusinessMock.mockResolvedValue(order);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "SO",
+        {
+          orderId: ORDER_ID,
+        },
+      );
+
+      expect(getOrderForBusinessMock).toHaveBeenCalledWith(
+        ORDER_ID,
+        "biz-A",
+        "branch-A",
+      );
+
+      expect(response).toEqual({
+        code: "SO",
+        result: order,
+      });
+    });
+
+    it("enforces orders.view permission", async () => {
+      hasPermissionMock.mockResolvedValue(false);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SO",
+          {
+            orderId: ORDER_ID,
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Insufficient permissions for this quick operation",
+        statusCode: 403,
+      });
+
+      expect(hasPermissionMock).toHaveBeenCalledWith(
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "orders.view",
+      );
+      expect(getOrderForBusinessMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("passes the authenticated business and branch scope to the order lookup", async () => {
+      getOrderForBusinessMock.mockResolvedValue(order);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "SO",
+        {
+          orderId: ORDER_ID,
+        },
+      );
+
+      expect(getOrderForBusinessMock).toHaveBeenCalledWith(
+        ORDER_ID,
+        CONTEXT.businessId,
+        CONTEXT.branchId,
+      );
+    });
+
+    it("rejects an order outside the authenticated business or branch", async () => {
+      getOrderForBusinessMock.mockResolvedValue(null);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SO",
+          {
+            orderId: ORDER_ID,
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Order not found",
+        statusCode: 404,
+      });
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("records a safe audit event without customer contact data", async () => {
+      getOrderForBusinessMock.mockResolvedValue(order);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "SO",
+        {
+          orderId: ORDER_ID,
+        },
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Order",
+        entityId: ORDER_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "SO",
+          operationName: "Switch Order",
+          orderNumber: "00042",
+          customerId: "22222222-2222-4222-8222-222222222222",
+        },
+      });
+    });
+
+    it("does not mutate the order", async () => {
+      getOrderForBusinessMock.mockResolvedValue(order);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "SO",
+        {
+          orderId: ORDER_ID,
+        },
+      );
+
+      expect(updateOrderStatusMock).not.toHaveBeenCalled();
+      expect(transferOrderMock).not.toHaveBeenCalled();
+      expect(getOrderForBusinessMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects malformed SO input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SO",
+          {
+            orderId: "not-a-uuid",
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(getOrderForBusinessMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unexpected SO fields", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SO",
+          {
+            orderId: ORDER_ID,
+            customerId: "22222222-2222-4222-8222-222222222222",
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(getOrderForBusinessMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("TC - Transfer Customer", () => {
     it("transfers a customer within the authenticated business", async () => {
       const result = {

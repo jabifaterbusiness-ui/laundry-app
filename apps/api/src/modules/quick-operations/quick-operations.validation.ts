@@ -70,6 +70,12 @@ export const reconcileQuickOperationSchema = z
   })
   .strict();
 
+export const switchOrderQuickOperationSchema = z
+  .object({
+    orderId: uuidSchema,
+  })
+  .strict();
+
 export const refundPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,

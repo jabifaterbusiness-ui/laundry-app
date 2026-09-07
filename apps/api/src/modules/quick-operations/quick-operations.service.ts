@@ -17,6 +17,7 @@ import {
   reprintInvoiceQuickOperationSchema,
   resendReceiptQuickOperationSchema,
   reconcileQuickOperationSchema,
+  switchOrderQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import {
   getOrderForBusiness,
@@ -304,6 +305,41 @@ export async function executeQuickOperation(
           operationName: definition.name,
           invoiceId: parsed.invoiceId,
           channel: parsed.channel,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "SO": {
+      const parsed = switchOrderQuickOperationSchema.parse(input);
+
+      const result = await getOrderForBusiness(
+        parsed.orderId,
+        context.businessId,
+        context.branchId,
+      );
+
+      if (!result) {
+        throw new AppError("Order not found", 404);
+      }
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Order",
+        entityId: result.id,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          orderNumber: result.orderNumber,
+          customerId: result.customerId,
         },
       });
 

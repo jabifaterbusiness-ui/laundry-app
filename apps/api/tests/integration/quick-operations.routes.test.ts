@@ -1152,6 +1152,172 @@ describe("Quick Operations routes - branch/business isolation", () => {
 });
 
 
+describe("Quick Operations routes - SO", () => {
+  it("switches to an existing order within the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      customerId: CUSTOMER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      orderTotal: 9000,
+      customer: {
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+      },
+      branch: {
+        id: BRANCH_A,
+        name: "Main Branch",
+        businessId: "biz-A",
+      },
+      items: [],
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SO",
+        input: {
+          orderId: ORDER_A,
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("SO");
+    expect(res.body.data.result.id).toBe(ORDER_A);
+    expect(orderFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: ORDER_A,
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+        }),
+      }),
+    );
+  });
+
+  it("enforces the orders.view permission for SO", async () => {
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-orders-view",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SO",
+        input: {
+          orderId: ORDER_A,
+        },
+      });
+
+    expect(res.status).toBe(403);
+    expect(orderFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the order is outside the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SO",
+        input: {
+          orderId: ORDER_A,
+        },
+      });
+
+    expect(res.status).toBe(404);
+    expect(orderFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: true,
+      },
+    });
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed SO input before order lookup", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SO",
+        input: {
+          orderId: "not-a-uuid",
+        },
+      });
+
+    expect(res.status).toBe(422);
+    expect(orderFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate the order while switching", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      customerId: CUSTOMER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      orderTotal: 9000,
+      customer: {
+        id: CUSTOMER_A,
+        name: "Customer A",
+        businessId: "biz-A",
+      },
+      branch: {
+        id: BRANCH_A,
+        name: "Main Branch",
+        businessId: "biz-A",
+      },
+      items: [],
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SO",
+        input: {
+          orderId: ORDER_A,
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("Quick Operations routes - TC", () => {
   it("transfers every order from Customer A to Customer B across the business", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
