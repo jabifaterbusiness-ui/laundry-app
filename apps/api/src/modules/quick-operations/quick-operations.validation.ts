@@ -50,6 +50,13 @@ export const voidPaymentQuickOperationSchema = z
   })
   .strict();
 
+export const reprintInvoiceQuickOperationSchema = z
+  .object({
+    invoiceId: uuidSchema,
+    receiptType: z.enum(["CUSTOMER", "COMPANY"]),
+  })
+  .strict();
+
 export const refundPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,

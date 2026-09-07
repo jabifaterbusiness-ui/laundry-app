@@ -11,6 +11,8 @@ const {
   voidPaymentMock,
   refundPaymentMock,
   createInventoryMovementMock,
+  getCustomerReceiptMock,
+  getCompanyReceiptMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
@@ -22,6 +24,8 @@ const {
   voidPaymentMock: vi.fn(),
   refundPaymentMock: vi.fn(),
   createInventoryMovementMock: vi.fn(),
+  getCustomerReceiptMock: vi.fn(),
+  getCompanyReceiptMock: vi.fn(),
 }));
 
 vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
@@ -50,6 +54,11 @@ vi.mock("../../src/modules/payments/payments.service.js", () => ({
 
 vi.mock("../../src/modules/inventory/inventory.service.js", () => ({
   createInventoryMovement: createInventoryMovementMock,
+}));
+
+vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
+  getCustomerReceipt: getCustomerReceiptMock,
+  getCompanyReceipt: getCompanyReceiptMock,
 }));
 
 import { executeQuickOperation } from "../../src/modules/quick-operations/quick-operations.service.js";
@@ -959,18 +968,133 @@ describe("quick-operations.service", () => {
     });
   });
 
-  describe("unsupported operations", () => {
-    it("rejects catalog operations that do not have an implementation yet", async () => {
+  describe("RI - Reprint Invoice / Receipt", () => {
+    const INVOICE_ID = "44444444-4444-4444-8444-444444444444";
+
+    const customerReceipt = {
+      receiptType: "CUSTOMER" as const,
+      invoiceNumber: "INV-00001",
+      orderNumber: "00001",
+      companyName: "Test Laundry",
+      companyPhone: "08000000000",
+      companyEmail: "hello@testlaundry.com",
+      companyWebsite: "https://testlaundry.com",
+      companyAddress: "Enugu, Nigeria",
+      customerName: "John Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-09-07T08:00:00.000Z",
+      items: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          quantity: 2,
+          itemName: "Complete Agbada",
+          totalPieces: 6,
+          unitPrice: 4500,
+          totalPrice: 9000,
+        },
+      ],
+      totalAmount: 9000,
+      garmentNote: "Minor stain noted",
+      customerAgreement: "Customer agrees to the company laundry terms.",
+    };
+
+    const companyReceipt = {
+      ...customerReceipt,
+      receiptType: "COMPANY" as const,
+      internalNote: "Handle with care.",
+    };
+
+    beforeEach(() => {
+      getCustomerReceiptMock.mockReset();
+      getCompanyReceiptMock.mockReset();
+    });
+
+    it("reprints a customer receipt without requiring confirmation", async () => {
+      getCustomerReceiptMock.mockResolvedValue(customerReceipt);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "RI",
+        {
+          invoiceId: INVOICE_ID,
+          receiptType: "CUSTOMER",
+        },
+      );
+
+      expect(getCustomerReceiptMock).toHaveBeenCalledWith(
+        INVOICE_ID,
+        "biz-A",
+        "branch-A",
+      );
+
+      expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+
+      expect(response).toEqual({
+        code: "RI",
+        result: customerReceipt,
+      });
+    });
+
+    it("reprints a company receipt without requiring confirmation", async () => {
+      getCompanyReceiptMock.mockResolvedValue(companyReceipt);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "RI",
+        {
+          invoiceId: INVOICE_ID,
+          receiptType: "COMPANY",
+        },
+      );
+
+      expect(getCompanyReceiptMock).toHaveBeenCalledWith(
+        INVOICE_ID,
+        "biz-A",
+        "branch-A",
+      );
+
+      expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+
+      expect(response).toEqual({
+        code: "RI",
+        result: companyReceipt,
+      });
+    });
+
+    it("passes the authenticated business and branch scope to receipt generation", async () => {
+      getCustomerReceiptMock.mockResolvedValue(customerReceipt);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RI",
+        {
+          invoiceId: INVOICE_ID,
+          receiptType: "CUSTOMER",
+        },
+      );
+
+      expect(getCustomerReceiptMock).toHaveBeenCalledWith(
+        INVOICE_ID,
+        CONTEXT.businessId,
+        CONTEXT.branchId,
+      );
+    });
+
+    it("enforces invoices.view permission", async () => {
+      hasPermissionMock.mockResolvedValue(false);
+
       await expect(
         executeQuickOperation(
           CONTEXT,
           "RI",
-          {},
-          true,
+          {
+            invoiceId: INVOICE_ID,
+            receiptType: "CUSTOMER",
+          },
         ),
       ).rejects.toMatchObject({
-        message: "Quick operation RI is not implemented yet",
-        statusCode: 501,
+        message: "Insufficient permissions for this quick operation",
+        statusCode: 403,
       });
 
       expect(hasPermissionMock).toHaveBeenCalledWith(
@@ -978,6 +1102,159 @@ describe("quick-operations.service", () => {
         "biz-A",
         "BUSINESS_OWNER",
         "invoices.view",
+      );
+
+      expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+      expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the invoice is not found within the authenticated scope", async () => {
+      getCustomerReceiptMock.mockResolvedValue(null);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RI",
+          {
+            invoiceId: INVOICE_ID,
+            receiptType: "CUSTOMER",
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Invoice not found",
+        statusCode: 404,
+      });
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("records an audit event for a customer receipt reprint", async () => {
+      getCustomerReceiptMock.mockResolvedValue(customerReceipt);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RI",
+        {
+          invoiceId: INVOICE_ID,
+          receiptType: "CUSTOMER",
+        },
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: INVOICE_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "RI",
+          operationName: "Reprint Invoice / Receipt",
+          invoiceNumber: "INV-00001",
+          orderNumber: "00001",
+          receiptType: "CUSTOMER",
+        },
+      });
+    });
+
+    it("records the receipt type when reprinting a company receipt", async () => {
+      getCompanyReceiptMock.mockResolvedValue(companyReceipt);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RI",
+        {
+          invoiceId: INVOICE_ID,
+          receiptType: "COMPANY",
+        },
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: "Invoice",
+          entityId: INVOICE_ID,
+          metadata: expect.objectContaining({
+            operationCode: "RI",
+            receiptType: "COMPANY",
+          }),
+        }),
+      );
+    });
+
+    it("rejects malformed RI input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RI",
+          {
+            invoiceId: "not-a-uuid",
+            receiptType: "CUSTOMER",
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+      expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unsupported receipt type", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RI",
+          {
+            invoiceId: INVOICE_ID,
+            receiptType: "PDF",
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+      expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unexpected RI fields", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RI",
+          {
+            invoiceId: INVOICE_ID,
+            receiptType: "CUSTOMER",
+            customerPhone: "08000000000",
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+      expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("unsupported operations", () => {
+    it("rejects catalog operations that do not have an implementation yet", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RC",
+          {},
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "Quick operation RC is not implemented yet",
+        statusCode: 501,
+      });
+
+      expect(hasPermissionMock).toHaveBeenCalledWith(
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        expect.any(String),
       );
       expect(recordAuditEventMock).not.toHaveBeenCalled();
     });

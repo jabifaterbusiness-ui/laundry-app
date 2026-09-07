@@ -14,6 +14,7 @@ import {
   mergeCustomerQuickOperationSchema,
   voidPaymentQuickOperationSchema,
   refundPaymentQuickOperationSchema,
+  reprintInvoiceQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import {
   getOrderForBusiness,
@@ -28,6 +29,11 @@ import {
   voidPayment,
   refundPayment,
 } from "../payments/payments.service.js";
+
+import {
+  getCustomerReceipt,
+  getCompanyReceipt,
+} from "../invoices/receipts.service.js";
 import { createInventoryMovement } from "../inventory/inventory.service.js";
 
 export interface ExecuteQuickOperationContext {
@@ -268,6 +274,49 @@ export async function executeQuickOperation(
       return {
         code: definition.code,
         result,
+      };
+    }
+
+    case "RI": {
+      const parsed = reprintInvoiceQuickOperationSchema.parse(input);
+
+      const receipt =
+        parsed.receiptType === "CUSTOMER"
+          ? await getCustomerReceipt(
+              parsed.invoiceId,
+              context.businessId,
+              context.branchId,
+            )
+          : await getCompanyReceipt(
+              parsed.invoiceId,
+              context.businessId,
+              context.branchId,
+            );
+
+      if (!receipt) {
+        throw new AppError("Invoice not found", 404);
+      }
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: parsed.invoiceId,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          invoiceNumber: receipt.invoiceNumber,
+          orderNumber: receipt.orderNumber,
+          receiptType: receipt.receiptType,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result: receipt,
       };
     }
 

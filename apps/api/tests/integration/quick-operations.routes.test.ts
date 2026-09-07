@@ -49,8 +49,21 @@ vi.mock("../../src/lib/prisma.js", () => ({
   },
 }));
 
+const {
+  getCustomerReceiptMock,
+  getCompanyReceiptMock,
+} = vi.hoisted(() => ({
+  getCustomerReceiptMock: vi.fn(),
+  getCompanyReceiptMock: vi.fn(),
+}));
+
 vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
+  getCustomerReceipt: getCustomerReceiptMock,
+  getCompanyReceipt: getCompanyReceiptMock,
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
@@ -146,6 +159,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
   allowPermission();
+  getCustomerReceiptMock.mockReset();
+  getCompanyReceiptMock.mockReset();
 });
 
 describe("Quick Operations routes - authentication", () => {
@@ -630,6 +645,201 @@ describe("Quick Operations routes - VO", () => {
   });
 });
 
+
+describe("Quick Operations routes - RI", () => {
+  const INVOICE_A = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+  const customerReceipt = {
+    receiptType: "CUSTOMER",
+    invoiceNumber: "INV-00042",
+    orderNumber: "00042",
+    companyName: "Laundry Company",
+    companyPhone: "08000000000",
+    companyEmail: "hello@example.com",
+    companyWebsite: "https://example.com",
+    companyAddress: "Main Street",
+    customerName: "Customer A",
+    branchName: "Main Branch",
+    createdAt: "2026-09-07T08:00:00.000Z",
+    items: [
+      {
+        id: "item-A",
+        quantity: 1,
+        itemName: "Complete Agbada",
+        totalPieces: 3,
+        unitPrice: 4500,
+        totalPrice: 4500,
+      },
+    ],
+    totalAmount: 4500,
+    garmentNote: "Check sleeve before processing.",
+    customerAgreement: "Customer agrees to the company laundry terms.",
+  };
+
+  const companyReceipt = {
+    ...customerReceipt,
+    receiptType: "COMPANY",
+    internalNote: "Handle with care.",
+  };
+
+  it("reprints a customer receipt within the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    getCustomerReceiptMock.mockResolvedValue(customerReceipt);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RI",
+        input: {
+          invoiceId: INVOICE_A,
+          receiptType: "CUSTOMER",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      code: "RI",
+      result: customerReceipt,
+    });
+
+    expect(getCustomerReceiptMock).toHaveBeenCalledWith(
+      INVOICE_A,
+      "biz-A",
+      BRANCH_A,
+    );
+    expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: INVOICE_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-1",
+        metadata: expect.objectContaining({
+          operationCode: "RI",
+          receiptType: "CUSTOMER",
+        }),
+      }),
+    );
+  });
+
+  it("reprints a company receipt without requiring confirmation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    getCompanyReceiptMock.mockResolvedValue(companyReceipt);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RI",
+        input: {
+          invoiceId: INVOICE_A,
+          receiptType: "COMPANY",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      code: "RI",
+      result: companyReceipt,
+    });
+
+    expect(getCompanyReceiptMock).toHaveBeenCalledWith(
+      INVOICE_A,
+      "biz-A",
+      BRANCH_A,
+    );
+    expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+  });
+
+  it("enforces the invoices.view permission for RI", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RI",
+        input: {
+          invoiceId: INVOICE_A,
+          receiptType: "CUSTOMER",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(403);
+    expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+    expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the invoice is outside the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    getCustomerReceiptMock.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RI",
+        input: {
+          invoiceId: INVOICE_A,
+          receiptType: "CUSTOMER",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(404);
+    expect(getCustomerReceiptMock).toHaveBeenCalledWith(
+      INVOICE_A,
+      "biz-A",
+      BRANCH_A,
+    );
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed RI input before receipt generation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "RI",
+        input: {
+          invoiceId: "not-a-uuid",
+          receiptType: "CUSTOMER",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(getCustomerReceiptMock).not.toHaveBeenCalled();
+    expect(getCompanyReceiptMock).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("Quick Operations routes - RF", () => {
   it("executes Refund within the authenticated business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
@@ -898,14 +1108,14 @@ describe("Quick Operations routes - unimplemented operations", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "RI",
+        code: "RS",
         input: {},
         confirmed: true,
       });
 
     expect(res.status).toBe(501);
     expect(res.body.error.message).toBe(
-      "Quick operation RI is not implemented yet",
+      "Quick operation RS is not implemented yet",
     );
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
