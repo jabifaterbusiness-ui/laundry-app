@@ -8,21 +8,32 @@ const {
   saveOrderWorkspaceStateMock,
   clearWorkspacesMock,
   useIsMutatingMock,
+  getCustomerMock,
+  getOrderMock,
 } = vi.hoisted(() => ({
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
   clearWorkspacesMock: vi.fn(),
   useIsMutatingMock: vi.fn(() => 0),
+  getCustomerMock: vi.fn(),
+  getOrderMock: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/quick-operations-api.js", () => ({
   executeQuickOperation: executeQuickOperationMock,
 }));
 
+vi.mock("../../../src/lib/customers-api.js", () => ({
+  getCustomer: getCustomerMock,
+}));
+
+vi.mock("../../../src/lib/orders-api.js", () => ({
+  getOrder: getOrderMock,
+}));
+
 vi.mock("@tanstack/react-query", () => ({
   useIsMutating: useIsMutatingMock,
 }));
-
 
 vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: {
@@ -43,13 +54,15 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     }),
 }));
 
-
 vi.mock("../../../src/state/order-workspace-store.js", () => ({
   useOrderWorkspaceStore: (
     selector: (state: {
       workspaces: unknown[];
       activeWorkspaceId: string | null;
       clearWorkspaces: () => void;
+      openWorkspace: ReturnType<typeof vi.fn>;
+      switchWorkspace: ReturnType<typeof vi.fn>;
+      updateWorkspace: ReturnType<typeof vi.fn>;
     }) => unknown,
   ) =>
     selector({
@@ -73,20 +86,46 @@ vi.mock("../../../src/state/order-workspace-store.js", () => ({
       ],
       activeWorkspaceId: "workspace-1",
       clearWorkspaces: clearWorkspacesMock,
+      openWorkspace: vi.fn(),
+      switchWorkspace: vi.fn(),
+      updateWorkspace: vi.fn(),
     }),
 }));
-
 
 vi.mock("../../../src/lib/order-workspace-persistence.js", () => ({
   saveOrderWorkspaceState: saveOrderWorkspaceStateMock,
 }));
 
 const operations: Record<string, QuickOperationDefinition> = {
+  MU: {
+    code: "MU",
+    name: "Manual Update",
+    description: "Make an authorized manual update.",
+    permission: "orders.update",
+    requiresConfirmation: true,
+    sensitive: true,
+  },
   TI: {
     code: "TI",
     name: "Transfer Invoice",
     description: "Transfer an invoice/order to another customer account.",
     permission: "orders.update",
+    requiresConfirmation: true,
+    sensitive: true,
+  },
+  TC: {
+    code: "TC",
+    name: "Transfer Customer",
+    description: "Transfer a customer to another business account.",
+    permission: "customers.update",
+    requiresConfirmation: true,
+    sensitive: true,
+  },
+  MA: {
+    code: "MA",
+    name: "Merge Account",
+    description: "Merge one customer account into another.",
+    permission: "customers.update",
     requiresConfirmation: true,
     sensitive: true,
   },
@@ -98,6 +137,38 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
+  RF: {
+    code: "RF",
+    name: "Refund",
+    description: "Refund a supported payment.",
+    permission: "payments.manage",
+    requiresConfirmation: true,
+    sensitive: true,
+  },
+  RI: {
+    code: "RI",
+    name: "Reprint Invoice / Receipt",
+    description: "Reprint an existing invoice or receipt.",
+    permission: "invoices.view",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  RS: {
+    code: "RS",
+    name: "Resend Receipt",
+    description: "Resend an existing digital receipt through a supported delivery channel.",
+    permission: "invoices.view",
+    requiresConfirmation: true,
+    sensitive: false,
+  },
+  RC: {
+    code: "RC",
+    name: "Reconcile",
+    description: "Run an authorized reconciliation for supported business records.",
+    permission: "invoices.manage",
+    requiresConfirmation: true,
+    sensitive: true,
+  },
   SI: {
     code: "SI",
     name: "Stock Issue",
@@ -106,13 +177,29 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
-  MU: {
-    code: "MU",
-    name: "Manual Update",
-    description: "Make an authorized manual update.",
-    permission: "orders.update",
+  SR: {
+    code: "SR",
+    name: "Stock Receipt",
+    description: "Record an inventory receipt against the active branch.",
+    permission: "inventory.manage",
     requiresConfirmation: true,
     sensitive: true,
+  },
+  SO: {
+    code: "SO",
+    name: "Switch Order",
+    description: "Switch the active workspace to another order.",
+    permission: "orders.view",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  SC: {
+    code: "SC",
+    name: "Switch Customer",
+    description: "Switch the active workspace to another customer.",
+    permission: "customers.view",
+    requiresConfirmation: false,
+    sensitive: false,
   },
   SOS: {
     code: "SOS",
@@ -137,6 +224,40 @@ describe("QuickOperationLauncher", () => {
     clearWorkspacesMock.mockReset();
     useIsMutatingMock.mockReset();
     useIsMutatingMock.mockReturnValue(0);
+
+    getCustomerMock.mockReset();
+    getCustomerMock.mockResolvedValue({
+      id: "customer-2",
+      name: "Target Customer",
+      phone: "08000000000",
+      email: null,
+      address: null,
+      notes: null,
+      customerInstructions: null,
+      isActive: true,
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    getOrderMock.mockReset();
+    getOrderMock.mockResolvedValue({
+      id: "order-2",
+      businessId: "business-1",
+      branchId: "branch-1",
+      customerId: "customer-2",
+      orderNumber: "00002",
+      status: "RECEIVED",
+      orderTotal: 10000,
+      expectedReadyAt: null,
+      readyAt: null,
+      completedAt: null,
+      cancelledAt: null,
+      garmentNote: null,
+      internalNote: null,
+      items: [],
+      createdAt: "",
+      updatedAt: "",
+    });
   });
 
   it("renders the selected operation", () => {
@@ -177,6 +298,39 @@ describe("QuickOperationLauncher", () => {
     expect(executeQuickOperationMock).not.toHaveBeenCalled();
   });
 
+  it("executes MU with the correct input after confirmation", async () => {
+    render(
+      <QuickOperationLauncher
+        operation={operations.MU}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Order ID"), {
+      target: { value: "order-1" },
+    });
+    fireEvent.change(screen.getByLabelText("New Order Status"), {
+      target: { value: "IN_PROGRESS" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "MU",
+          input: {
+            orderId: "order-1",
+            status: "IN_PROGRESS",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
   it("executes TI with the correct input after confirmation", async () => {
     render(
       <QuickOperationLauncher
@@ -214,6 +368,72 @@ describe("QuickOperationLauncher", () => {
     ).toBeInTheDocument();
   });
 
+  it("executes TC with source and target customer IDs", async () => {
+    render(
+      <QuickOperationLauncher
+        operation={operations.TC}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Customer ID"), {
+      target: { value: "customer-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+      target: { value: "customer-2" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "TC",
+          input: {
+            customerId: "customer-1",
+            targetCustomerId: "customer-2",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("executes MA with source and target customer IDs", async () => {
+    render(
+      <QuickOperationLauncher
+        operation={operations.MA}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Customer ID"), {
+      target: { value: "customer-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+      target: { value: "customer-2" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "MA",
+          input: {
+            customerId: "customer-1",
+            targetCustomerId: "customer-2",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
   it("executes VO with the payment ID", async () => {
     render(
       <QuickOperationLauncher
@@ -234,6 +454,160 @@ describe("QuickOperationLauncher", () => {
           code: "VO",
           input: {
             paymentId: "payment-1",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("executes RF with payment, amount, method, reference and note", async () => {
+    render(
+      <QuickOperationLauncher
+        operation={operations.RF}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Payment ID"), {
+      target: { value: "payment-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Refund Amount"), {
+      target: { value: "2500" },
+    });
+    fireEvent.change(screen.getByLabelText("Refund Method"), {
+      target: { value: "TRANSFER" },
+    });
+    fireEvent.change(screen.getByLabelText("Reference"), {
+      target: { value: "REF-001" },
+    });
+    fireEvent.change(screen.getByLabelText("Note"), {
+      target: { value: "Customer refund" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "RF",
+          input: {
+            paymentId: "payment-1",
+            amount: 2500,
+            method: "TRANSFER",
+            reference: "REF-001",
+            note: "Customer refund",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("executes RI with invoice ID and customer receipt type", async () => {
+    executeQuickOperationMock.mockResolvedValueOnce({
+      code: "RI",
+      result: {
+        receiptType: "CUSTOMER",
+      },
+    });
+
+    render(
+      <QuickOperationLauncher
+        operation={operations.RI}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Invoice ID"), {
+      target: { value: "invoice-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Receipt Type"), {
+      target: { value: "CUSTOMER" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "RI",
+          input: {
+            invoiceId: "invoice-1",
+            receiptType: "CUSTOMER",
+          },
+          confirmed: false,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("executes RS with invoice ID and delivery channel", async () => {
+    render(
+      <QuickOperationLauncher
+        operation={operations.RS}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Invoice ID"), {
+      target: { value: "invoice-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Delivery Channel"), {
+      target: { value: "EMAIL" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "RS",
+          input: {
+            invoiceId: "invoice-1",
+            channel: "EMAIL",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("executes RC with the invoice ID", async () => {
+    executeQuickOperationMock.mockResolvedValueOnce({
+      code: "RC",
+      result: {
+        reconciled: true,
+        issueCount: 0,
+      },
+    });
+
+    render(
+      <QuickOperationLauncher
+        operation={operations.RC}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Invoice ID"), {
+      target: { value: "invoice-1" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "RC",
+          input: {
+            invoiceId: "invoice-1",
           },
           confirmed: true,
         },
@@ -284,25 +658,123 @@ describe("QuickOperationLauncher", () => {
     });
   });
 
-  it("does not execute unsupported operations", async () => {
+  it("executes SR with quantity, reason and reference", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.MU}
+        operation={operations.SR}
         onClose={vi.fn()}
       />,
     );
 
-    expect(
-      screen.getByText(/backend workflow has not been implemented yet/i),
-    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Inventory Item ID"), {
+      target: { value: "item-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Quantity"), {
+      target: { value: "7" },
+    });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Supplier delivery" },
+    });
+    fireEvent.change(screen.getByLabelText("Reference"), {
+      target: { value: "REC-001" },
+    });
+    fireEvent.click(screen.getByLabelText(/confirm/i));
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
-    expect(
-      screen.queryByRole("button", { name: /execute/i }),
-    ).not.toBeInTheDocument();
-
-    expect(executeQuickOperationMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "SR",
+          input: {
+            inventoryItemId: "item-1",
+            quantity: 7,
+            reason: "Supplier delivery",
+            reference: "REC-001",
+          },
+          confirmed: true,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
   });
 
+  it("executes SO and switches to the requested order", async () => {
+    const onClose = vi.fn();
+
+    render(
+      <QuickOperationLauncher
+        operation={operations.SO}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Order ID"), {
+      target: { value: "order-2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "SO",
+          input: {
+            orderId: "order-2",
+          },
+          confirmed: false,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+
+    expect(getOrderMock).toHaveBeenCalledWith(
+      "order-2",
+      { accessToken: "access-token" },
+      "branch-1",
+    );
+    expect(getCustomerMock).toHaveBeenCalledWith(
+      "customer-2",
+      { accessToken: "access-token" },
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("executes SC and switches to the requested customer", async () => {
+    const onClose = vi.fn();
+
+    render(
+      <QuickOperationLauncher
+        operation={operations.SC}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Customer ID"), {
+      target: { value: "customer-2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(executeQuickOperationMock).toHaveBeenCalledWith(
+        {
+          code: "SC",
+          input: {
+            customerId: "customer-2",
+          },
+          confirmed: false,
+        },
+        { accessToken: "access-token" },
+        "branch-1",
+      );
+    });
+
+    expect(getCustomerMock).toHaveBeenCalledWith(
+      "customer-2",
+      { accessToken: "access-token" },
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it("renders SOS without requiring a record ID", () => {
     render(
