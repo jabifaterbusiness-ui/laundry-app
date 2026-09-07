@@ -1108,14 +1108,14 @@ describe("Quick Operations routes - unimplemented operations", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "RC",
+        code: "SOS",
         input: {},
         confirmed: true,
       });
 
     expect(res.status).toBe(501);
     expect(res.body.error.message).toBe(
-      "Quick operation RC is not implemented yet",
+      "Quick operation SOS is not implemented yet",
     );
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });

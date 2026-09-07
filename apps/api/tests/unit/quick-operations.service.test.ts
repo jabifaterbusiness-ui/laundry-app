@@ -14,6 +14,7 @@ const {
   getCustomerReceiptMock,
   getCompanyReceiptMock,
   resendDigitalReceiptMock,
+  reconcileInvoiceMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
@@ -28,6 +29,7 @@ const {
   getCustomerReceiptMock: vi.fn(),
   getCompanyReceiptMock: vi.fn(),
   resendDigitalReceiptMock: vi.fn(),
+  reconcileInvoiceMock: vi.fn(),
 }));
 
 vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
@@ -65,6 +67,10 @@ vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
 
 vi.mock("../../src/modules/invoices/receipt-delivery.service.js", () => ({
   resendDigitalReceipt: resendDigitalReceiptMock,
+}));
+
+vi.mock("../../src/modules/payments/reconciliation.service.js", () => ({
+  reconcileInvoice: reconcileInvoiceMock,
 }));
 
 import { executeQuickOperation } from "../../src/modules/quick-operations/quick-operations.service.js";
@@ -1488,12 +1494,12 @@ describe("quick-operations.service", () => {
       await expect(
         executeQuickOperation(
           CONTEXT,
-          "RC",
+          "SOS",
           {},
           true,
         ),
       ).rejects.toMatchObject({
-        message: "Quick operation RC is not implemented yet",
+        message: "Quick operation SOS is not implemented yet",
         statusCode: 501,
       });
 

@@ -64,6 +64,12 @@ export const resendReceiptQuickOperationSchema = z
   })
   .strict();
 
+export const reconcileQuickOperationSchema = z
+  .object({
+    invoiceId: uuidSchema,
+  })
+  .strict();
+
 export const refundPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,
