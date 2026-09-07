@@ -10,6 +10,19 @@ export const executeQuickOperationSchema = z
   })
   .strict();
 
+export const manualUpdateQuickOperationSchema = z
+  .object({
+    orderId: uuidSchema,
+    status: z.enum([
+      "RECEIVED",
+      "IN_PROGRESS",
+      "READY_FOR_PICKUP",
+      "COMPLETED",
+      "CANCELLED",
+    ]),
+  })
+  .strict();
+
 export const transferInvoiceQuickOperationSchema = z
   .object({
     orderId: uuidSchema,

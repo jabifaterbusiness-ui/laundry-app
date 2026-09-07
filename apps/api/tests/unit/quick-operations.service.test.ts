@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   hasPermissionMock,
   recordAuditEventMock,
+  getOrderForBusinessMock,
   transferOrderMock,
+  updateOrderStatusMock,
   transferCustomerMock,
   mergeCustomerMock,
   voidPaymentMock,
@@ -11,7 +13,9 @@ const {
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
+  getOrderForBusinessMock: vi.fn(),
   transferOrderMock: vi.fn(),
+  updateOrderStatusMock: vi.fn(),
   transferCustomerMock: vi.fn(),
   mergeCustomerMock: vi.fn(),
   voidPaymentMock: vi.fn(),
@@ -27,7 +31,9 @@ vi.mock("../../src/lib/audit.js", () => ({
 }));
 
 vi.mock("../../src/modules/orders/orders.service.js", () => ({
+  getOrderForBusiness: getOrderForBusinessMock,
   transferOrder: transferOrderMock,
+  updateOrderStatus: updateOrderStatusMock,
 }));
 
 vi.mock("../../src/modules/customers/customers.service.js", () => ({
@@ -153,6 +159,168 @@ describe("quick-operations.service", () => {
         code: "VO",
         result,
       });
+    });
+  });
+
+  describe("MU - Manual Update", () => {
+    const ORDER_ID = "55555555-5555-4555-8555-555555555555";
+
+    it("updates the order status and records the before/after audit", async () => {
+      const currentOrder = {
+        id: ORDER_ID,
+        orderNumber: "10001",
+        status: "IN_PROGRESS",
+      };
+
+      const updatedOrder = {
+        ...currentOrder,
+        status: "READY_FOR_PICKUP",
+      };
+
+      getOrderForBusinessMock.mockResolvedValue(currentOrder);
+      updateOrderStatusMock.mockResolvedValue(updatedOrder);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "MU",
+        {
+          orderId: ORDER_ID,
+          status: "READY_FOR_PICKUP",
+        },
+        true,
+      );
+
+      expect(getOrderForBusinessMock).toHaveBeenCalledWith(
+        ORDER_ID,
+        "biz-A",
+        "branch-A",
+      );
+
+      expect(updateOrderStatusMock).toHaveBeenCalledWith(
+        ORDER_ID,
+        "biz-A",
+        "branch-A",
+        "READY_FOR_PICKUP",
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "quick_operation.executed",
+          entityType: "Order",
+          entityId: ORDER_ID,
+          businessId: "biz-A",
+          branchId: "branch-A",
+          actorUserId: "user-A",
+          correlationId: "corr-123",
+          metadata: expect.objectContaining({
+            operationCode: "MU",
+            operationName: "Manual Update",
+            orderNumber: "10001",
+            beforeStatus: "IN_PROGRESS",
+            afterStatus: "READY_FOR_PICKUP",
+          }),
+        }),
+      );
+
+      expect(response).toEqual({
+        code: "MU",
+        result: updatedOrder,
+      });
+    });
+
+    it("rejects an order outside the authenticated business and branch", async () => {
+      getOrderForBusinessMock.mockResolvedValue(null);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "MU",
+          {
+            orderId: ORDER_ID,
+            status: "COMPLETED",
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "Order not found",
+        statusCode: 404,
+      });
+
+      expect(getOrderForBusinessMock).toHaveBeenCalledWith(
+        ORDER_ID,
+        "biz-A",
+        "branch-A",
+      );
+      expect(updateOrderStatusMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("requires orders.change_status permission", async () => {
+      const currentOrder = {
+        id: ORDER_ID,
+        orderNumber: "10001",
+        status: "IN_PROGRESS",
+      };
+
+      getOrderForBusinessMock.mockResolvedValue(currentOrder);
+
+      hasPermissionMock
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "MU",
+          {
+            orderId: ORDER_ID,
+            status: "COMPLETED",
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "Insufficient permissions to change order status",
+        statusCode: 403,
+      });
+
+      expect(hasPermissionMock).toHaveBeenNthCalledWith(
+        1,
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "orders.update",
+      );
+
+      expect(hasPermissionMock).toHaveBeenNthCalledWith(
+        2,
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "orders.change_status",
+      );
+
+      expect(updateOrderStatusMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("requires confirmation before executing the update", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "MU",
+          {
+            orderId: ORDER_ID,
+            status: "COMPLETED",
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Confirmation is required for this quick operation",
+        statusCode: 422,
+      });
+
+      expect(getOrderForBusinessMock).not.toHaveBeenCalled();
+      expect(updateOrderStatusMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
   });
 

@@ -7,13 +7,18 @@ import {
 } from "./quick-operations.catalog.js";
 import {
   executeQuickOperationSchema,
+  manualUpdateQuickOperationSchema,
   stockQuickOperationSchema,
   transferInvoiceQuickOperationSchema,
   transferCustomerQuickOperationSchema,
   mergeCustomerQuickOperationSchema,
   voidPaymentQuickOperationSchema,
 } from "./quick-operations.validation.js";
-import { transferOrder } from "../orders/orders.service.js";
+import {
+  getOrderForBusiness,
+  transferOrder,
+  updateOrderStatus,
+} from "../orders/orders.service.js";
 import {
   transferCustomer,
   mergeCustomer,
@@ -71,6 +76,63 @@ export async function executeQuickOperation(
   const input = execution.input;
 
   switch (definition.code) {
+    case "MU": {
+      const parsed = manualUpdateQuickOperationSchema.parse(input);
+
+      const currentOrder = await getOrderForBusiness(
+        parsed.orderId,
+        context.businessId,
+        context.branchId,
+      );
+
+      if (!currentOrder) {
+        throw new AppError("Order not found", 404);
+      }
+
+      const canChangeStatus = await hasPermission(
+        context.userId,
+        context.businessId,
+        context.role,
+        "orders.change_status",
+      );
+
+      if (!canChangeStatus) {
+        throw new AppError(
+          "Insufficient permissions to change order status",
+          403,
+        );
+      }
+
+      const result = await updateOrderStatus(
+        parsed.orderId,
+        context.businessId,
+        context.branchId,
+        parsed.status,
+      );
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Order",
+        entityId: result.id,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          orderNumber: result.orderNumber,
+          beforeStatus: currentOrder.status,
+          afterStatus: result.status,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
     case "TI": {
       const parsed = transferInvoiceQuickOperationSchema.parse(input);
 

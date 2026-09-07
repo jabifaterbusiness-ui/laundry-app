@@ -290,6 +290,227 @@ describe("Quick Operations routes - validation and authorization", () => {
   });
 });
 
+describe("Quick Operations routes - MU", () => {
+  it("updates an order status within the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockResolvedValue({
+      id: "permission-1",
+    } as never);
+    userPermissionFindUnique.mockResolvedValue(null);
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    orderFindFirst.mockResolvedValueOnce({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+    } as never);
+
+    orderFindFirst.mockResolvedValueOnce({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "IN_PROGRESS",
+    } as never);
+
+    orderUpdate.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "READY_FOR_PICKUP",
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MU",
+        input: {
+          orderId: ORDER_A,
+          status: "READY_FOR_PICKUP",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.code).toBe("MU");
+
+    expect(orderFindFirst).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: true,
+      },
+    });
+
+    expect(orderFindFirst).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+    });
+
+    expect(orderUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: ORDER_A,
+        },
+        data: expect.objectContaining({
+          status: "READY_FOR_PICKUP",
+          readyAt: expect.any(Date),
+        }),
+        include: {
+          customer: true,
+          branch: true,
+          items: true,
+        },
+      }),
+    );
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "quick_operation.executed",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-1",
+        metadata: expect.objectContaining({
+          operationCode: "MU",
+          operationName: "Manual Update",
+          orderNumber: "00042",
+          beforeStatus: "IN_PROGRESS",
+          afterStatus: "READY_FOR_PICKUP",
+        }),
+      }),
+    );
+  });
+
+  it("rejects an order outside the authenticated business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    orderFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MU",
+        input: {
+          orderId: ORDER_A,
+          status: "COMPLETED",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(404);
+    expect(orderFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      include: {
+        customer: true,
+        branch: true,
+        items: true,
+      },
+    });
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("enforces the orders.change_status permission for MU", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    permissionFindUnique.mockImplementation((args) => {
+      const code = args.where.code;
+
+      if (code === "orders.change_status") {
+        return {
+          id: "permission-change-status",
+          code,
+          module: "orders",
+          action: "change_status",
+          createdAt: new Date(),
+          description: null,
+        } as never;
+      }
+
+      return {
+        id: "permission-update",
+        code,
+        module: "orders",
+        action: "update",
+        createdAt: new Date(),
+        description: null,
+      } as never;
+    });
+
+    userPermissionFindUnique.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MU",
+        input: {
+          orderId: ORDER_A,
+          status: "COMPLETED",
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(403);
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects MU without confirmation", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "MU",
+        input: {
+          orderId: ORDER_A,
+          status: "COMPLETED",
+        },
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(orderFindFirst).not.toHaveBeenCalled();
+    expect(orderUpdate).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("Quick Operations routes - TI", () => {
   it("executes Transfer Invoice within the authenticated business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
