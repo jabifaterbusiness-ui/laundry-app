@@ -57,6 +57,13 @@ export const reprintInvoiceQuickOperationSchema = z
   })
   .strict();
 
+export const resendReceiptQuickOperationSchema = z
+  .object({
+    invoiceId: uuidSchema,
+    channel: z.enum(["EMAIL", "WHATSAPP"]),
+  })
+  .strict();
+
 export const refundPaymentQuickOperationSchema = z
   .object({
     paymentId: uuidSchema,

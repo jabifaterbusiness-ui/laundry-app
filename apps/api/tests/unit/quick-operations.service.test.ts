@@ -13,6 +13,7 @@ const {
   createInventoryMovementMock,
   getCustomerReceiptMock,
   getCompanyReceiptMock,
+  resendDigitalReceiptMock,
 } = vi.hoisted(() => ({
   hasPermissionMock: vi.fn(),
   recordAuditEventMock: vi.fn(),
@@ -26,6 +27,7 @@ const {
   createInventoryMovementMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
   getCompanyReceiptMock: vi.fn(),
+  resendDigitalReceiptMock: vi.fn(),
 }));
 
 vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
@@ -61,6 +63,10 @@ vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
   getCompanyReceipt: getCompanyReceiptMock,
 }));
 
+vi.mock("../../src/modules/invoices/receipt-delivery.service.js", () => ({
+  resendDigitalReceipt: resendDigitalReceiptMock,
+}));
+
 import { executeQuickOperation } from "../../src/modules/quick-operations/quick-operations.service.js";
 
 const CONTEXT = {
@@ -75,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   hasPermissionMock.mockResolvedValue(true);
   recordAuditEventMock.mockResolvedValue(undefined);
+  resendDigitalReceiptMock.mockReset();
 });
 
 describe("quick-operations.service", () => {
@@ -965,6 +972,246 @@ describe("quick-operations.service", () => {
         code: "SR",
         result,
       });
+    });
+  });
+
+  describe("RS - Resend Receipt", () => {
+    const INVOICE_ID = "44444444-4444-4444-8444-444444444444";
+
+    const deliveryResult = {
+      status: "QUEUED",
+      channel: "EMAIL",
+      invoiceId: INVOICE_ID,
+    };
+
+    it("requires explicit confirmation before resending a receipt", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: INVOICE_ID,
+            channel: "EMAIL",
+          },
+        ),
+      ).rejects.toMatchObject({
+        message: "Confirmation is required for this quick operation",
+        statusCode: 422,
+      });
+
+      expect(resendDigitalReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("resends a receipt through EMAIL", async () => {
+      resendDigitalReceiptMock.mockResolvedValue(deliveryResult);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "RS",
+        {
+          invoiceId: INVOICE_ID,
+          channel: "EMAIL",
+        },
+        true,
+      );
+
+      expect(resendDigitalReceiptMock).toHaveBeenCalledWith({
+        invoiceId: INVOICE_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        channel: "EMAIL",
+      });
+
+      expect(response).toEqual({
+        code: "RS",
+        result: deliveryResult,
+      });
+    });
+
+    it("resends a receipt through WHATSAPP", async () => {
+      const whatsappResult = {
+        status: "QUEUED",
+        channel: "WHATSAPP",
+        invoiceId: INVOICE_ID,
+      };
+
+      resendDigitalReceiptMock.mockResolvedValue(whatsappResult);
+
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "RS",
+        {
+          invoiceId: INVOICE_ID,
+          channel: "WHATSAPP",
+        },
+        true,
+      );
+
+      expect(resendDigitalReceiptMock).toHaveBeenCalledWith({
+        invoiceId: INVOICE_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        channel: "WHATSAPP",
+      });
+
+      expect(response).toEqual({
+        code: "RS",
+        result: whatsappResult,
+      });
+    });
+
+    it("passes the authenticated business and branch scope to delivery", async () => {
+      resendDigitalReceiptMock.mockResolvedValue(deliveryResult);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RS",
+        {
+          invoiceId: INVOICE_ID,
+          channel: "EMAIL",
+        },
+        true,
+      );
+
+      expect(resendDigitalReceiptMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          invoiceId: INVOICE_ID,
+          businessId: CONTEXT.businessId,
+          branchId: CONTEXT.branchId,
+        }),
+      );
+    });
+
+    it("enforces invoices.view permission", async () => {
+      hasPermissionMock.mockResolvedValue(false);
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: INVOICE_ID,
+            channel: "EMAIL",
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "Insufficient permissions for this quick operation",
+        statusCode: 403,
+      });
+
+      expect(hasPermissionMock).toHaveBeenCalledWith(
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "invoices.view",
+      );
+
+      expect(resendDigitalReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("records a safe audit event without receipt or customer contact data", async () => {
+      resendDigitalReceiptMock.mockResolvedValue(deliveryResult);
+
+      await executeQuickOperation(
+        CONTEXT,
+        "RS",
+        {
+          invoiceId: INVOICE_ID,
+          channel: "EMAIL",
+        },
+        true,
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: INVOICE_ID,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "RS",
+          operationName: "Resend Receipt",
+          invoiceId: INVOICE_ID,
+          channel: "EMAIL",
+        },
+      });
+    });
+
+    it("does not audit a failed delivery", async () => {
+      resendDigitalReceiptMock.mockRejectedValue(
+        new Error("EMAIL receipt delivery is not configured"),
+      );
+
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: INVOICE_ID,
+            channel: "EMAIL",
+          },
+          true,
+        ),
+      ).rejects.toThrow("EMAIL receipt delivery is not configured");
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects malformed RS input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: "not-a-uuid",
+            channel: "EMAIL",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(resendDigitalReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unsupported delivery channel", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: INVOICE_ID,
+            channel: "SMS",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(resendDigitalReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unexpected RS fields", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "RS",
+          {
+            invoiceId: INVOICE_ID,
+            channel: "EMAIL",
+            customerPhone: "08000000000",
+          },
+          true,
+        ),
+      ).rejects.toThrow();
+
+      expect(resendDigitalReceiptMock).not.toHaveBeenCalled();
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
   });
 

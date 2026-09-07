@@ -15,6 +15,7 @@ import {
   voidPaymentQuickOperationSchema,
   refundPaymentQuickOperationSchema,
   reprintInvoiceQuickOperationSchema,
+  resendReceiptQuickOperationSchema,
 } from "./quick-operations.validation.js";
 import {
   getOrderForBusiness,
@@ -34,6 +35,7 @@ import {
   getCustomerReceipt,
   getCompanyReceipt,
 } from "../invoices/receipts.service.js";
+import { resendDigitalReceipt } from "../invoices/receipt-delivery.service.js";
 import { createInventoryMovement } from "../inventory/inventory.service.js";
 
 export interface ExecuteQuickOperationContext {
@@ -76,7 +78,7 @@ export async function executeQuickOperation(
     );
   }
 
-  if (definition.sensitive && !execution.confirmed) {
+  if (definition.requiresConfirmation && !execution.confirmed) {
     throw new AppError(
       "Confirmation is required for this quick operation",
       422,
@@ -268,6 +270,38 @@ export async function executeQuickOperation(
           amount: result.amount,
           method: result.method,
           status: result.status,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result,
+      };
+    }
+
+    case "RS": {
+      const parsed = resendReceiptQuickOperationSchema.parse(input);
+
+      const result = await resendDigitalReceipt({
+        invoiceId: parsed.invoiceId,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        channel: parsed.channel,
+      });
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: parsed.invoiceId,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          invoiceId: parsed.invoiceId,
+          channel: parsed.channel,
         },
       });
 
