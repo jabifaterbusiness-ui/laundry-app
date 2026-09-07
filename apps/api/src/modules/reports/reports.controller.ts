@@ -1,0 +1,45 @@
+import type { Request, Response } from "express";
+import { AppError } from "../../middleware/error-handler.js";
+import { reportDateRangeSchema } from "./reports.validation.js";
+import { getDashboardReport } from "./reports.service.js";
+
+function requireBusinessId(req: Request): string {
+  if (!req.user?.businessId) {
+    throw new AppError(
+      "This action requires an account scoped to a business",
+      403,
+    );
+  }
+
+  return req.user.businessId;
+}
+
+function requireBranchId(req: Request): string {
+  if (!req.branchId) {
+    throw new AppError(
+      "A valid branch context is required",
+      400,
+    );
+  }
+
+  return req.branchId;
+}
+
+export async function dashboard(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const range = reportDateRangeSchema.parse(req.query);
+
+  const report = await getDashboardReport(
+    {
+      businessId,
+      branchId,
+    },
+    {
+      ...(range.from !== undefined ? { from: range.from } : {}),
+      ...(range.to !== undefined ? { to: range.to } : {}),
+    },
+  );
+
+  res.status(200).json(report);
+}

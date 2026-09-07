@@ -23,6 +23,7 @@ import repaymentsRouter from "./modules/payroll/repayments.routes.js";
 import compensationRouter from "./modules/payroll/compensation.routes.js";
 import payrollRouter from "./modules/payroll/payroll.routes.js";
 import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
+import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { searchRouter } from "./modules/search/search.routes.js";
 import { quickOperationsRouter } from "./modules/quick-operations/quick-operations.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
@@ -65,6 +66,7 @@ export function createApp() {
   v1.use("/payroll/compensation", compensationRouter);
   v1.use("/payroll", payrollRouter);
   v1.use("/permissions", permissionsRouter);
+  v1.use("/reports", reportsRouter);
   v1.use("/search", searchRouter);
   v1.use("/quick-operations", quickOperationsRouter);
   v1.use("/users", usersRouter);

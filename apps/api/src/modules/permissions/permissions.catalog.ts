@@ -41,6 +41,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
 
   { code: "inventory.view", module: "inventory", action: "view", description: "View inventory" },
   { code: "inventory.manage", module: "inventory", action: "manage", description: "Manage inventory" },
+  { code: "reports.view", module: "reports", action: "view", description: "View reports" },
 
   { code: "payroll.view", module: "payroll", action: "view", description: "View payroll" },
   { code: "payroll.manage", module: "payroll", action: "manage", description: "Manage payroll" },
