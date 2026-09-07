@@ -25,6 +25,7 @@ import payrollRouter from "./modules/payroll/payroll.routes.js";
 import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
 import { searchRouter } from "./modules/search/search.routes.js";
 import { quickOperationsRouter } from "./modules/quick-operations/quick-operations.routes.js";
+import { usersRouter } from "./modules/users/users.routes.js";
 
 export function createApp() {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp() {
   v1.use("/permissions", permissionsRouter);
   v1.use("/search", searchRouter);
   v1.use("/quick-operations", quickOperationsRouter);
+  v1.use("/users", usersRouter);
 
   app.use("/api/v1", v1);
 
