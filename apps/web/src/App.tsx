@@ -9,6 +9,7 @@ import { OrdersPage } from "./pages/orders/OrdersPage.js";
 import { InvoicesPage } from "./pages/invoices/InvoicesPage.js";
 import { PaymentsPage } from "./pages/payments/PaymentsPage.js";
 import { InventoryPage } from "./pages/inventory/InventoryPage.js";
+import { UsersPage } from "./pages/users/UsersPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 
 function AuthenticatedLayout() {
@@ -24,6 +25,7 @@ function AuthenticatedLayout() {
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/users" element={<UsersPage />} />
         </Routes>
       </AppShell>
     </RequireAuth>
