@@ -1678,8 +1678,74 @@ describe("quick-operations.service", () => {
     });
   });
 
-  describe("unsupported operations", () => {
-    it("rejects catalog operations that do not have an implementation yet", async () => {
+  describe("SOS - Safe Stop / Safe Exit", () => {
+    it("executes a confirmed safe stop without mutating business records", async () => {
+      const response = await executeQuickOperation(
+        CONTEXT,
+        "SOS",
+        {},
+        true,
+      );
+
+      expect(response).toEqual({
+        code: "SOS",
+        result: {
+          stopped: true,
+          safeStateSaved: true,
+          pendingOfflineOperationsHandled: false,
+          offlineQueueAvailable: false,
+        },
+      });
+
+      expect(hasPermissionMock).toHaveBeenCalledWith(
+        "user-A",
+        "biz-A",
+        "BUSINESS_OWNER",
+        "orders.update",
+      );
+
+      expect(recordAuditEventMock).toHaveBeenCalledWith({
+        action: "quick_operation.executed",
+        entityType: "QuickOperation",
+        entityId: null,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        actorUserId: "user-A",
+        correlationId: "corr-123",
+        metadata: {
+          operationCode: "SOS",
+          operationName: "Safe Stop / Safe Exit",
+          safeStop: true,
+          offlineQueueReconciled: false,
+        },
+      });
+
+      expect(getOrderForBusinessMock).not.toHaveBeenCalled();
+      expect(updateOrderStatusMock).not.toHaveBeenCalled();
+      expect(transferOrderMock).not.toHaveBeenCalled();
+      expect(voidPaymentMock).not.toHaveBeenCalled();
+      expect(refundPaymentMock).not.toHaveBeenCalled();
+      expect(createInventoryMovementMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects SOS without confirmation", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SOS",
+          {},
+        ),
+      ).rejects.toMatchObject({
+        message: "Confirmation is required for this quick operation",
+        statusCode: 422,
+      });
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("enforces the catalog orders.update permission", async () => {
+      hasPermissionMock.mockResolvedValue(false);
+
       await expect(
         executeQuickOperation(
           CONTEXT,
@@ -1688,16 +1754,34 @@ describe("quick-operations.service", () => {
           true,
         ),
       ).rejects.toMatchObject({
-        message: "Quick operation SOS is not implemented yet",
-        statusCode: 501,
+        message: "Insufficient permissions for this quick operation",
+        statusCode: 403,
       });
 
       expect(hasPermissionMock).toHaveBeenCalledWith(
         "user-A",
         "biz-A",
         "BUSINESS_OWNER",
-        expect.any(String),
+        "orders.update",
       );
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects unexpected SOS input", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SOS",
+          {
+            orderId: "11111111-1111-4111-8111-111111111111",
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "SOS does not accept business record input",
+        statusCode: 400,
+      });
+
       expect(recordAuditEventMock).not.toHaveBeenCalled();
     });
   });

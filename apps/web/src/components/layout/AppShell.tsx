@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
@@ -25,6 +25,37 @@ const MANAGEMENT: NavItem[] = [
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
+  const [quickOperation, setQuickOperation] =
+    useState<QuickOperationDefinition | null>(null);
+
+  useEffect(() => {
+    function handleQuickOperationOpen(event: Event) {
+      const detail = (event as CustomEvent<unknown>).detail;
+
+      if (
+        typeof detail !== "object" ||
+        detail === null ||
+        !("code" in detail) ||
+        !("name" in detail)
+      ) {
+        return;
+      }
+
+      setQuickOperation(detail as QuickOperationDefinition);
+    }
+
+    window.addEventListener(
+      "quick-operation:open",
+      handleQuickOperationOpen,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "quick-operation:open",
+        handleQuickOperationOpen,
+      );
+    };
+  }, []);
 
   const canManageData =
     user?.role === "BUSINESS_OWNER" ||
@@ -202,6 +233,11 @@ export function AppShell({ children }: PropsWithChildren) {
         >
           {children}
         </main>
+
+        <QuickOperationLauncher
+          operation={quickOperation}
+          onClose={() => setQuickOperation(null)}
+        />
       </div>
     </div>
   );

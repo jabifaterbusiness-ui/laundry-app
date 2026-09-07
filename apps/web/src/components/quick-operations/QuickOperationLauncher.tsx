@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { useIsMutating } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
+import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import {
   executeQuickOperation,
 } from "../../lib/quick-operations-api.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 
 interface Props {
   operation: QuickOperationDefinition | null;
@@ -12,7 +15,7 @@ interface Props {
 }
 
 function isImplemented(code: string) {
-  return ["TI", "VO", "SI", "SR"].includes(code);
+  return ["TI", "VO", "SI", "SR", "SOS"].includes(code);
 }
 
 function fieldLabel(code: string) {
@@ -37,6 +40,19 @@ export function QuickOperationLauncher({
   const activeBranchId = useAuthStore(
     (state) => state.activeBranchId,
   );
+    const user = useAuthStore((state) => state.user);
+    const workspaces = useOrderWorkspaceStore(
+      (state) => state.workspaces,
+    );
+    const activeWorkspaceId = useOrderWorkspaceStore(
+      (state) => state.activeWorkspaceId,
+    );
+    const clearWorkspaces = useOrderWorkspaceStore(
+      (state) => state.clearWorkspaces,
+    );
+    const pendingOrderMutations = useIsMutating({
+      mutationKey: ["orders"],
+    });
 
   const [recordId, setRecordId] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -84,6 +100,10 @@ export function QuickOperationLauncher({
   const implemented = isImplemented(activeOperation.code);
 
   function validate(): Record<string, unknown> | null {
+    if (activeOperation.code === "SOS") {
+      return {};
+    }
+
     if (!recordId.trim()) {
       setError(`${fieldLabel(activeOperation.code)} is required.`);
       return null;
@@ -156,6 +176,16 @@ export function QuickOperationLauncher({
       return;
     }
 
+    if (
+      activeOperation.code === "SOS" &&
+      pendingOrderMutations > 0
+    ) {
+      setError(
+        "SOS is temporarily blocked while an order operation is still in progress. Please wait and try again.",
+      );
+      return;
+    }
+
     const input = validate();
 
     if (!input) {
@@ -165,6 +195,41 @@ export function QuickOperationLauncher({
     setIsSubmitting(true);
 
     try {
+      if (activeOperation.code === "SOS") {
+        if (!user?.businessId || !activeBranchId) {
+          throw new Error(
+            "A valid business, user, and active branch are required to safely stop the application.",
+          );
+        }
+
+        saveOrderWorkspaceState(
+          user.businessId,
+          user.id,
+          activeBranchId,
+          workspaces,
+          activeWorkspaceId,
+        );
+
+        await executeQuickOperation(
+          {
+            code: activeOperation.code,
+            input,
+            confirmed,
+          },
+          { accessToken },
+          activeBranchId,
+        );
+
+        clearWorkspaces();
+
+        setSuccess(
+          "Safe stop completed. Your active order workspace has been safely saved.",
+        );
+
+        onClose();
+        return;
+      }
+
       await executeQuickOperation(
         {
           code: activeOperation.code,
@@ -182,7 +247,9 @@ export function QuickOperationLauncher({
       setError(
         err instanceof ApiError
           ? err.message
-          : "The operation could not be completed. Please try again.",
+          : err instanceof Error
+            ? err.message
+            : "The operation could not be completed. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -292,6 +359,8 @@ export function QuickOperationLauncher({
             </div>
           ) : (
             <>
+              {operation.code !== "SOS" ? (
+                <>
               <label
                 style={{
                   display: "block",
@@ -451,6 +520,8 @@ export function QuickOperationLauncher({
                   </div>
                 </>
               ) : null}
+                </>
+                ) : null}
 
               {operation.requiresConfirmation ? (
                 <label

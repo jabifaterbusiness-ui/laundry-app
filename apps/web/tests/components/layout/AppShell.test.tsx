@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { AppShell } from "../../../src/components/layout/AppShell.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
@@ -21,12 +22,21 @@ beforeEach(() => {
 });
 
 function renderShell(initialEntry = "/") {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <AppShell>
-        <div>Current page content</div>
-      </AppShell>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <AppShell>
+          <div>Current page content</div>
+        </AppShell>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -54,6 +64,54 @@ describe("AppShell", () => {
     renderShell("/orders");
 
     expect(screen.getByText("Current page content")).toBeInTheDocument();
+  });
+
+  it("opens the Quick Operation launcher from the global event", async () => {
+    renderShell();
+
+    window.dispatchEvent(
+      new CustomEvent("quick-operation:open", {
+        detail: {
+          code: "VO",
+          name: "Void Operation",
+          permission: "payments.manage",
+          requiresConfirmation: true,
+          sensitive: true,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /void operation/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("opens SOS through the global Quick Operation event", async () => {
+    renderShell();
+
+    window.dispatchEvent(
+      new CustomEvent("quick-operation:open", {
+        detail: {
+          code: "SOS",
+          name: "Safe Stop / Safe Exit",
+          description:
+            "Safely stop the current workflow while protecting unsaved and pending business state.",
+          permission: "orders.update",
+          requiresConfirmation: true,
+          sensitive: true,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", {
+          name: /safe stop \/ safe exit/i,
+        }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("shows business management navigation only to authorized roles", () => {

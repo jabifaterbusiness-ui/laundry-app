@@ -384,6 +384,43 @@ export async function executeQuickOperation(
       };
     }
 
+    case "SOS": {
+      const parsed = executeQuickOperationSchema.shape.input.parse(input);
+
+      if (Object.keys(parsed).length !== 0) {
+        throw new AppError(
+          "SOS does not accept business record input",
+          400,
+        );
+      }
+
+      await recordAuditEvent({
+        action: "quick_operation.executed",
+        entityType: "QuickOperation",
+        entityId: null,
+        businessId: context.businessId,
+        branchId: context.branchId,
+        actorUserId: context.userId,
+        correlationId: context.correlationId ?? null,
+        metadata: {
+          operationCode: definition.code,
+          operationName: definition.name,
+          safeStop: true,
+          offlineQueueReconciled: false,
+        },
+      });
+
+      return {
+        code: definition.code,
+        result: {
+          stopped: true,
+          safeStateSaved: true,
+          pendingOfflineOperationsHandled: false,
+          offlineQueueAvailable: false,
+        },
+      };
+    }
+
     case "RC": {
       const parsed = reconcileQuickOperationSchema.parse(input);
 

@@ -45,6 +45,11 @@ interface OrderWorkspaceState {
   ) => void;
 
   clearWorkspaces: () => void;
+
+  restoreWorkspaces: (
+    workspaces: OrderWorkspace[],
+    activeWorkspaceId: string | null,
+  ) => void;
 }
 
 const DEFAULT_DRAFT: Omit<OrderWorkspaceDraft, "customerId"> = {
@@ -177,5 +182,18 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
         workspaces: [],
         activeWorkspaceId: null,
       }),
+
+    restoreWorkspaces: (workspaces, activeWorkspaceId) =>
+      set({
+        workspaces,
+        activeWorkspaceId:
+          activeWorkspaceId &&
+          workspaces.some(
+            (workspace) => workspace.id === activeWorkspaceId,
+          )
+            ? activeWorkspaceId
+            : workspaces[0]?.id ?? null,
+      }),
+
   }),
 );

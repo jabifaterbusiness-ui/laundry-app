@@ -1091,8 +1091,8 @@ describe("Quick Operations routes - inventory", () => {
   });
 });
 
-describe("Quick Operations routes - unimplemented operations", () => {
-  it("returns 501 for a catalogued but unimplemented operation", async () => {
+describe("Quick Operations routes - SOS", () => {
+  beforeEach(() => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
@@ -1101,6 +1101,74 @@ describe("Quick Operations routes - unimplemented operations", () => {
     userPermissionFindUnique.mockResolvedValue(null);
     rolePermissionFindUnique.mockResolvedValue({
       allowed: true,
+    } as never);
+  });
+
+  it("executes a confirmed safe stop within the authenticated business and branch", async () => {
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SOS",
+        input: {},
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      data: {
+        code: "SOS",
+        result: {
+          stopped: true,
+          safeStateSaved: true,
+          pendingOfflineOperationsHandled: false,
+          offlineQueueAvailable: false,
+        },
+      },
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "quick_operation.executed",
+        entityType: "QuickOperation",
+        entityId: null,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-1",
+        metadata: expect.objectContaining({
+          operationCode: "SOS",
+          operationName: "Safe Stop / Safe Exit",
+          safeStop: true,
+          offlineQueueReconciled: false,
+        }),
+      }),
+    );
+
+    expect(orderFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects SOS without confirmation", async () => {
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SOS",
+        input: {},
+        confirmed: false,
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.message).toBe(
+      "Confirmation is required for this quick operation",
+    );
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("enforces the orders.update permission", async () => {
+    rolePermissionFindUnique.mockResolvedValue({
+      allowed: false,
     } as never);
 
     const res = await request(app)
@@ -1113,13 +1181,35 @@ describe("Quick Operations routes - unimplemented operations", () => {
         confirmed: true,
       });
 
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(403);
     expect(res.body.error.message).toBe(
-      "Quick operation SOS is not implemented yet",
+      "Insufficient permissions for this quick operation",
     );
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
+
+  it("rejects unexpected SOS business-record input", async () => {
+    const res = await request(app)
+      .post("/api/v1/quick-operations/execute")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        code: "SOS",
+        input: {
+          orderId: ORDER_A,
+        },
+        confirmed: true,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe(
+      "SOS does not accept business record input",
+    );
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(orderFindFirst).not.toHaveBeenCalled();
+  });
 });
+
 
 describe("Quick Operations routes - branch/business isolation", () => {
   it("does not execute when the selected branch belongs to another business", async () => {
@@ -1841,5 +1931,5 @@ describe("Quick Operations routes - MA", () => {
     expect(orderFindMany).not.toHaveBeenCalled();
     expect(orderUpdateMany).not.toHaveBeenCalled();
     expect(customerUpdateMany).not.toHaveBeenCalled();
-  });
+});
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Customer,
@@ -15,6 +15,7 @@ import { listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
+import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 
 const PAGE_SIZE = 25;
@@ -68,11 +69,39 @@ export function OrdersPage() {
   const updateWorkspace = useOrderWorkspaceStore(
     (s) => s.updateWorkspace,
   );
+    const restoreWorkspaces = useOrderWorkspaceStore(
+      (s) => s.restoreWorkspaces,
+    );
 
   const activeWorkspace =
     workspaces.find(
       (workspace) => workspace.id === activeWorkspaceId,
     ) ?? null;
+
+  useEffect(() => {
+    if (!user?.businessId || !activeBranchId) {
+      return;
+    }
+
+    const saved = loadOrderWorkspaceState(
+      user.businessId,
+      user.id,
+      activeBranchId,
+    );
+
+    if (saved && saved.workspaces.length > 0) {
+      restoreWorkspaces(
+        saved.workspaces,
+        saved.activeWorkspaceId,
+      );
+    }
+  }, [
+    user?.businessId,
+    user?.id,
+    activeBranchId,
+    restoreWorkspaces,
+  ]);
+
 
   const canUpdateStatus =
     user?.role === "BUSINESS_OWNER" ||
@@ -136,6 +165,7 @@ export function OrdersPage() {
   });
 
   const createMutation = useMutation({
+    mutationKey: ["orders"],
     mutationFn: () =>
       createOrder(
         {
@@ -182,6 +212,7 @@ export function OrdersPage() {
   });
 
   const statusMutation = useMutation({
+    mutationKey: ["orders"],
     mutationFn: (input: { id: string; status: OrderStatus }) =>
       updateOrderStatus(
         input.id,
