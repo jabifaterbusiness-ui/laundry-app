@@ -20,6 +20,7 @@ const OPERATIONS: NavItem[] = [
 
 const MANAGEMENT: NavItem[] = [
   { label: "Services & Price List", href: "/services" },
+  { label: "Inventory", href: "/inventory" },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
