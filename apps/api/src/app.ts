@@ -27,6 +27,7 @@ import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { searchRouter } from "./modules/search/search.routes.js";
 import { quickOperationsRouter } from "./modules/quick-operations/quick-operations.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
+import { syncRouter } from "./modules/sync/sync.routes.js";
 
 export function createApp() {
   const app = express();
@@ -70,6 +71,7 @@ export function createApp() {
   v1.use("/search", searchRouter);
   v1.use("/quick-operations", quickOperationsRouter);
   v1.use("/users", usersRouter);
+  v1.use("/sync", syncRouter);
 
   app.use("/api/v1", v1);
 
