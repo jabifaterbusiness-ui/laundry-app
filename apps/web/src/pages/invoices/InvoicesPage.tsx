@@ -10,6 +10,7 @@ import {
   listInvoices,
 } from "../../lib/invoices-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 import { CustomerReceipt } from "./receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "./receipt/CompanyReceipt.js";
 
@@ -128,6 +129,24 @@ export function InvoicesPage() {
       }
 
       event.preventDefault();
+
+      if (event.ctrlKey && event.shiftKey) {
+        const resendReceiptOperation = QUICK_OPERATIONS.find(
+          (operation) => operation.code === "RS",
+        );
+
+        if (!resendReceiptOperation) {
+          return;
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("quick-operation:open", {
+            detail: resendReceiptOperation,
+          }),
+        );
+        return;
+      }
+
       setPrintMode(event.ctrlKey ? "company" : "customer");
     }
 
