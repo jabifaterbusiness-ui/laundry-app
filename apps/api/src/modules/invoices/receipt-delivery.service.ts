@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getCustomerReceipt } from "./receipts.service.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
 import { sendReceiptEmail } from "./providers/resend.provider.js";
+import { sendWhatsAppReceipt } from "./providers/whatsapp.provider.js";
 
 export type ReceiptDeliveryChannel = "EMAIL" | "WHATSAPP";
 
@@ -99,8 +100,44 @@ export async function resendDigitalReceipt(
     }
   }
 
-  throw new AppError(
-    "WHATSAPP receipt delivery is not configured",
-    503,
-  );
+  const messageLines = [
+    receipt.companyName,
+    `Receipt: ${receipt.invoiceNumber}`,
+    `Order: ${receipt.orderNumber}`,
+    `Customer: ${receipt.customerName}`,
+    `Branch: ${receipt.branchName}`,
+    "",
+    ...receipt.items.map(
+      (item) =>
+        `${item.quantity} × ${item.itemName} — ${item.totalPieces} pcs — ₦${item.totalPrice.toLocaleString()}`,
+    ),
+    "",
+    `Total: ₦${receipt.totalAmount.toLocaleString()}`,
+  ];
+
+  if (receipt.garmentNote) {
+    messageLines.push("", `Garment note: ${receipt.garmentNote}`);
+  }
+
+  messageLines.push("", `Agreement: ${receipt.customerAgreement}`);
+
+  try {
+    const delivery = await sendWhatsAppReceipt({
+      to: destination,
+      message: messageLines.join("\n"),
+    });
+
+    return {
+      channel: input.channel,
+      destination,
+      providerMessageId: delivery.id,
+    };
+  } catch (error) {
+    throw new AppError(
+      error instanceof Error
+        ? error.message
+        : "WhatsApp receipt delivery failed",
+      503,
+    );
+  }
 }

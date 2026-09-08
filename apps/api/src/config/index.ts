@@ -28,5 +28,8 @@ export const config = {
   receiptDelivery: {
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.RECEIPT_EMAIL_FROM,
+    whatsappApiVersion: env.WHATSAPP_API_VERSION,
+    whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+    whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN,
   },
 } as const;

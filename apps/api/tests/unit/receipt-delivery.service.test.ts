@@ -5,11 +5,13 @@ const {
   getCustomerReceiptMock,
   renderCustomerReceiptEmailMock,
   sendReceiptEmailMock,
+  sendWhatsAppReceiptMock,
 } = vi.hoisted(() => ({
   customerFindFirstMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
   renderCustomerReceiptEmailMock: vi.fn(),
   sendReceiptEmailMock: vi.fn(),
+  sendWhatsAppReceiptMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -33,6 +35,10 @@ vi.mock(
 
 vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
   sendReceiptEmail: sendReceiptEmailMock,
+}));
+
+vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
+  sendWhatsAppReceipt: sendWhatsAppReceiptMock,
 }));
 
 import { resendDigitalReceipt } from "../../src/modules/invoices/receipt-delivery.service.js";
@@ -151,7 +157,7 @@ describe("receipt-delivery.service", () => {
     });
   });
 
-  it("resolves a WHATSAPP destination from the current customer", async () => {
+  it("sends a WHATSAPP receipt through the Meta provider", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
       name: "John Doe",
@@ -160,6 +166,41 @@ describe("receipt-delivery.service", () => {
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    sendWhatsAppReceiptMock.mockResolvedValue({
+      id: "wamid.test-123",
+    });
+
+    await expect(
+      resendDigitalReceipt({
+        ...INPUT,
+        channel: "WHATSAPP",
+      }),
+    ).resolves.toEqual({
+      channel: "WHATSAPP",
+      destination: "08000000000",
+      providerMessageId: "wamid.test-123",
+    });
+
+    expect(sendWhatsAppReceiptMock).toHaveBeenCalledWith({
+      to: "08000000000",
+      message: expect.stringContaining("INV-00001"),
+    });
+
+    expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when WhatsApp delivery fails", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A",
+      name: "John Doe",
+      email: null,
+      phone: "08000000000",
+    });
+
+    getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    sendWhatsAppReceiptMock.mockRejectedValue(
+      new Error("WhatsApp delivery failed: provider unavailable"),
+    );
 
     await expect(
       resendDigitalReceipt({
@@ -167,7 +208,7 @@ describe("receipt-delivery.service", () => {
         channel: "WHATSAPP",
       }),
     ).rejects.toMatchObject({
-      message: "WHATSAPP receipt delivery is not configured",
+      message: "WhatsApp delivery failed: provider unavailable",
       statusCode: 503,
     });
   });
@@ -302,5 +343,6 @@ describe("receipt-delivery.service", () => {
 
     expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
     expect(sendReceiptEmailMock).not.toHaveBeenCalled();
+    expect(sendWhatsAppReceiptMock).not.toHaveBeenCalled();
   });
 });

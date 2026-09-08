@@ -21,6 +21,9 @@ const envSchema = z.object({
   // --- Digital receipt delivery ---
   RESEND_API_KEY: z.string().min(1).optional(),
   RECEIPT_EMAIL_FROM: z.string().min(1).optional(),
+  WHATSAPP_API_VERSION: z.string().min(1).optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
