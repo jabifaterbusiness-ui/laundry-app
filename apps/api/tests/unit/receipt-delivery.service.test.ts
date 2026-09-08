@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   customerFindFirstMock,
   getCustomerReceiptMock,
+  renderCustomerReceiptEmailMock,
+  sendReceiptEmailMock,
 } = vi.hoisted(() => ({
   customerFindFirstMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
+  renderCustomerReceiptEmailMock: vi.fn(),
+  sendReceiptEmailMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -18,6 +22,17 @@ vi.mock("../../src/lib/prisma.js", () => ({
 
 vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
   getCustomerReceipt: getCustomerReceiptMock,
+}));
+
+vi.mock(
+  "../../src/modules/invoices/templates/customer-receipt-email.js",
+  () => ({
+    renderCustomerReceiptEmail: renderCustomerReceiptEmailMock,
+  }),
+);
+
+vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
+  sendReceiptEmail: sendReceiptEmailMock,
 }));
 
 import { resendDigitalReceipt } from "../../src/modules/invoices/receipt-delivery.service.js";
@@ -48,10 +63,11 @@ const RECEIPT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  renderCustomerReceiptEmailMock.mockReturnValue("<html>receipt</html>");
 });
 
 describe("receipt-delivery.service", () => {
-  it("resolves an EMAIL destination from the current customer", async () => {
+  it("sends an EMAIL receipt through the Resend provider", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
       name: "John Doe",
@@ -60,15 +76,27 @@ describe("receipt-delivery.service", () => {
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    sendReceiptEmailMock.mockResolvedValue({
+      id: "resend-message-123",
+    });
 
     await expect(
       resendDigitalReceipt({
         ...INPUT,
         channel: "EMAIL",
       }),
-    ).rejects.toMatchObject({
-      message: "EMAIL receipt delivery is not configured",
-      statusCode: 503,
+    ).resolves.toEqual({
+      channel: "EMAIL",
+      destination: "john@example.com",
+      providerMessageId: "resend-message-123",
+    });
+
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT);
+
+    expect(sendReceiptEmailMock).toHaveBeenCalledWith({
+      to: "john@example.com",
+      subject: "Test Laundry — Receipt INV-00001",
+      html: "<html>receipt</html>",
     });
 
     expect(customerFindFirstMock).toHaveBeenCalledWith({
@@ -97,6 +125,30 @@ describe("receipt-delivery.service", () => {
       INPUT.businessId,
       INPUT.branchId,
     );
+  });
+
+  it("returns 503 when Resend email delivery fails", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A",
+      name: "John Doe",
+      email: "john@example.com",
+      phone: "08000000000",
+    });
+
+    getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    sendReceiptEmailMock.mockRejectedValue(
+      new Error("Resend email delivery failed: provider unavailable"),
+    );
+
+    await expect(
+      resendDigitalReceipt({
+        ...INPUT,
+        channel: "EMAIL",
+      }),
+    ).rejects.toMatchObject({
+      message: "Resend email delivery failed: provider unavailable",
+      statusCode: 503,
+    });
   });
 
   it("resolves a WHATSAPP destination from the current customer", async () => {
@@ -228,7 +280,7 @@ describe("receipt-delivery.service", () => {
     });
   });
 
-  it("never reports successful delivery when no provider is configured", async () => {
+  it("does not call the email provider when the receipt cannot be found", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
       name: "John Doe",
@@ -236,7 +288,7 @@ describe("receipt-delivery.service", () => {
       phone: "08000000000",
     });
 
-    getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    getCustomerReceiptMock.mockResolvedValue(null);
 
     await expect(
       resendDigitalReceipt({
@@ -244,7 +296,11 @@ describe("receipt-delivery.service", () => {
         channel: "EMAIL",
       }),
     ).rejects.toMatchObject({
-      statusCode: 503,
+      message: "Invoice not found",
+      statusCode: 404,
     });
+
+    expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
+    expect(sendReceiptEmailMock).not.toHaveBeenCalled();
   });
 });

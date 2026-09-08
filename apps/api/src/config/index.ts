@@ -25,4 +25,8 @@ export const config = {
     maxUploadBytes: env.MIGRATION_MAX_UPLOAD_BYTES,
     maxUncompressedBytes: env.MIGRATION_MAX_UNCOMPRESSED_BYTES,
   },
+  receiptDelivery: {
+    resendApiKey: env.RESEND_API_KEY,
+    emailFrom: env.RECEIPT_EMAIL_FROM,
+  },
 } as const;

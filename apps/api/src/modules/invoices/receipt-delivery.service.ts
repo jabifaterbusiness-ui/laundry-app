@@ -1,6 +1,8 @@
 import { AppError } from "../../middleware/error-handler.js";
 import { prisma } from "../../lib/prisma.js";
 import { getCustomerReceipt } from "./receipts.service.js";
+import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
+import { sendReceiptEmail } from "./providers/resend.provider.js";
 
 export type ReceiptDeliveryChannel = "EMAIL" | "WHATSAPP";
 
@@ -18,7 +20,7 @@ export interface ResendReceiptInput {
  * - Receipt content comes exclusively from the immutable Invoice snapshot.
  * - Customer phone/email are delivery destinations only.
  * - Customer contact information is NEVER included in the receipt payload.
- * - Actual Email/WhatsApp providers must be connected behind this boundary.
+ * - Delivery providers are connected behind this boundary.
  */
 export async function resendDigitalReceipt(
   input: ResendReceiptInput,
@@ -72,14 +74,33 @@ export async function resendDigitalReceipt(
     );
   }
 
-  /*
-   * No provider is currently configured in this application.
-   *
-   * Deliberately fail rather than reporting a false successful delivery.
-   * The provider implementation will be connected behind this boundary.
-   */
+  if (input.channel === "EMAIL") {
+    const html = renderCustomerReceiptEmail(receipt);
+
+    try {
+      const delivery = await sendReceiptEmail({
+        to: destination,
+        subject: `${receipt.companyName} — Receipt ${receipt.invoiceNumber}`,
+        html,
+      });
+
+      return {
+        channel: input.channel,
+        destination,
+        providerMessageId: delivery.id,
+      };
+    } catch (error) {
+      throw new AppError(
+        error instanceof Error
+          ? error.message
+          : "Email receipt delivery failed",
+        503,
+      );
+    }
+  }
+
   throw new AppError(
-    `${input.channel} receipt delivery is not configured`,
+    "WHATSAPP receipt delivery is not configured",
     503,
   );
 }
