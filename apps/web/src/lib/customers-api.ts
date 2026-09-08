@@ -267,7 +267,8 @@ export async function updateCustomerWithOfflineQueue(
       );
     }
 
-    const { confirmDuplicate: _confirmDuplicate, ...data } = input;
+    const data = { ...input };
+    delete data.confirmDuplicate;
 
     const operation = await enqueueOfflineSyncOperation({
       businessId: syncContext.businessId,
