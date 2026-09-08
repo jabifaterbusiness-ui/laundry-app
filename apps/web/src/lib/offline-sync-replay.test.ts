@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  OfflineSyncOperationStatus,
-  OfflineSyncQueueEntry,
-} from "./offline-sync-queue.js";
+import type { OfflineSyncQueueEntry } from "./offline-sync-queue.js";
 
 const mocks = vi.hoisted(() => {
   class TestApiError extends Error {
