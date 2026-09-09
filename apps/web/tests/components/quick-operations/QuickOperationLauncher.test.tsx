@@ -7,6 +7,7 @@ const {
   executeQuickOperationMock,
   saveOrderWorkspaceStateMock,
   clearWorkspacesMock,
+  listOfflineSyncOperationsMock,
   useIsMutatingMock,
   getCustomerMock,
   getOrderMock,
@@ -14,6 +15,7 @@ const {
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
   clearWorkspacesMock: vi.fn(),
+  listOfflineSyncOperationsMock: vi.fn(),
   useIsMutatingMock: vi.fn(() => 0),
   getCustomerMock: vi.fn(),
   getOrderMock: vi.fn(),
@@ -94,6 +96,10 @@ vi.mock("../../../src/state/order-workspace-store.js", () => ({
 
 vi.mock("../../../src/lib/order-workspace-persistence.js", () => ({
   saveOrderWorkspaceState: saveOrderWorkspaceStateMock,
+}));
+
+vi.mock("../../../src/lib/offline-sync-queue.js", () => ({
+  listOfflineSyncOperations: listOfflineSyncOperationsMock,
 }));
 
 const operations: Record<string, QuickOperationDefinition> = {
@@ -776,6 +782,11 @@ describe("QuickOperationLauncher", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  beforeEach(() => {
+    listOfflineSyncOperationsMock.mockReset();
+    listOfflineSyncOperationsMock.mockResolvedValue([]);
+  });
+
   it("renders SOS without requiring a record ID", () => {
     render(
       <QuickOperationLauncher
@@ -822,10 +833,16 @@ describe("QuickOperationLauncher", () => {
       result: {
         stopped: true,
         safeStateSaved: true,
-        pendingOfflineOperationsHandled: false,
-        offlineQueueAvailable: false,
+        pendingOfflineOperationsPreserved: true,
+        pendingOfflineOperationCount: 2,
+        offlineQueueReconciled: false,
       },
     });
+
+    listOfflineSyncOperationsMock.mockResolvedValueOnce([
+      { id: "pending-1" },
+      { id: "pending-2" },
+    ]);
 
     render(
       <QuickOperationLauncher
@@ -848,10 +865,17 @@ describe("QuickOperationLauncher", () => {
     });
 
     await waitFor(() => {
+      expect(listOfflineSyncOperationsMock).toHaveBeenCalledWith(
+        "business-1",
+        "branch-1",
+        "PENDING",
+      );
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
           code: "SOS",
-          input: {},
+          input: {
+            pendingOfflineOperationCount: 2,
+          },
           confirmed: true,
         },
         { accessToken: "access-token" },

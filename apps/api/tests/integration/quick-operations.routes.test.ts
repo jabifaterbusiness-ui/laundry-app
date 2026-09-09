@@ -1111,7 +1111,9 @@ describe("Quick Operations routes - SOS", () => {
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "SOS",
-        input: {},
+        input: {
+          pendingOfflineOperationCount: 0,
+        },
         confirmed: true,
       });
 
@@ -1122,8 +1124,9 @@ describe("Quick Operations routes - SOS", () => {
         result: {
           stopped: true,
           safeStateSaved: true,
-          pendingOfflineOperationsHandled: false,
-          offlineQueueAvailable: false,
+          pendingOfflineOperationsPreserved: true,
+          pendingOfflineOperationCount: 0,
+          offlineQueueReconciled: false,
         },
       },
     });
@@ -1141,6 +1144,8 @@ describe("Quick Operations routes - SOS", () => {
           operationName: "Safe Stop / Safe Exit",
           safeStop: true,
           offlineQueueReconciled: false,
+          pendingOfflineOperationCount: 0,
+          pendingOfflineOperationsPreserved: true,
         }),
       }),
     );
@@ -1197,6 +1202,7 @@ describe("Quick Operations routes - SOS", () => {
         code: "SOS",
         input: {
           orderId: ORDER_A,
+          pendingOfflineOperationCount: 0,
         },
         confirmed: true,
       });

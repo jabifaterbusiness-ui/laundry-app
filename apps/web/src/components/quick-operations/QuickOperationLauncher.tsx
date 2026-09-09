@@ -4,6 +4,7 @@ import { ApiError } from "../../lib/api-client.js";
 import { getCustomer } from "../../lib/customers-api.js";
 import { getOrder } from "../../lib/orders-api.js";
 import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
+import { listOfflineSyncOperations } from "../../lib/offline-sync-queue.js";
 import {
   executeQuickOperation,
 } from "../../lib/quick-operations-api.js";
@@ -425,10 +426,20 @@ export function QuickOperationLauncher({
           activeWorkspaceId,
         );
 
+        const pendingOfflineOperations =
+          await listOfflineSyncOperations(
+            user.businessId,
+            activeBranchId,
+            "PENDING",
+          );
+
         await executeQuickOperation(
           {
             code: activeOperation.code,
-            input,
+            input: {
+              pendingOfflineOperationCount:
+                pendingOfflineOperations.length,
+            },
             confirmed,
           },
           { accessToken },

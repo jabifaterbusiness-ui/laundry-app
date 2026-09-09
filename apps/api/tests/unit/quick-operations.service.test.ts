@@ -1683,7 +1683,9 @@ describe("quick-operations.service", () => {
       const response = await executeQuickOperation(
         CONTEXT,
         "SOS",
-        {},
+        {
+          pendingOfflineOperationCount: 3,
+        },
         true,
       );
 
@@ -1692,8 +1694,9 @@ describe("quick-operations.service", () => {
         result: {
           stopped: true,
           safeStateSaved: true,
-          pendingOfflineOperationsHandled: false,
-          offlineQueueAvailable: false,
+          pendingOfflineOperationsPreserved: true,
+          pendingOfflineOperationCount: 3,
+          offlineQueueReconciled: false,
         },
       });
 
@@ -1717,6 +1720,8 @@ describe("quick-operations.service", () => {
           operationName: "Safe Stop / Safe Exit",
           safeStop: true,
           offlineQueueReconciled: false,
+          pendingOfflineOperationCount: 3,
+          pendingOfflineOperationsPreserved: true,
         },
       });
 
@@ -1774,11 +1779,46 @@ describe("quick-operations.service", () => {
           "SOS",
           {
             orderId: "11111111-1111-4111-8111-111111111111",
+            pendingOfflineOperationCount: 0,
           },
           true,
         ),
       ).rejects.toMatchObject({
         message: "SOS does not accept business record input",
+        statusCode: 400,
+      });
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects SOS when the pending offline operation count is missing", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SOS",
+          {},
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "SOS requires a valid pending offline operation count",
+        statusCode: 400,
+      });
+
+      expect(recordAuditEventMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects SOS when the pending offline operation count is negative", async () => {
+      await expect(
+        executeQuickOperation(
+          CONTEXT,
+          "SOS",
+          {
+            pendingOfflineOperationCount: -1,
+          },
+          true,
+        ),
+      ).rejects.toMatchObject({
+        message: "SOS requires a valid pending offline operation count",
         statusCode: 400,
       });
 

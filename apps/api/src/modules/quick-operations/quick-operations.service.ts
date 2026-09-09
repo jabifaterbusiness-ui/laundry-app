@@ -387,7 +387,23 @@ export async function executeQuickOperation(
     case "SOS": {
       const parsed = executeQuickOperationSchema.shape.input.parse(input);
 
-      if (Object.keys(parsed).length !== 0) {
+      const pendingOfflineOperationCount =
+        parsed.pendingOfflineOperationCount;
+
+      if (
+        typeof pendingOfflineOperationCount !== "number" ||
+        !Number.isInteger(pendingOfflineOperationCount) ||
+        pendingOfflineOperationCount < 0
+      ) {
+        throw new AppError(
+          "SOS requires a valid pending offline operation count",
+          400,
+        );
+      }
+
+      if (Object.keys(parsed).some(
+        (key) => key !== "pendingOfflineOperationCount",
+      )) {
         throw new AppError(
           "SOS does not accept business record input",
           400,
@@ -407,6 +423,8 @@ export async function executeQuickOperation(
           operationName: definition.name,
           safeStop: true,
           offlineQueueReconciled: false,
+          pendingOfflineOperationCount,
+          pendingOfflineOperationsPreserved: true,
         },
       });
 
@@ -415,8 +433,9 @@ export async function executeQuickOperation(
         result: {
           stopped: true,
           safeStateSaved: true,
-          pendingOfflineOperationsHandled: false,
-          offlineQueueAvailable: false,
+          pendingOfflineOperationsPreserved: true,
+          pendingOfflineOperationCount,
+          offlineQueueReconciled: false,
         },
       };
     }
