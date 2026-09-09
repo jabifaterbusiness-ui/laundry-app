@@ -2,6 +2,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { prisma } from "../../lib/prisma.js";
 import { getCustomerReceipt } from "./receipts.service.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
+import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
 import { sendReceiptEmail } from "./providers/resend.provider.js";
 import { sendWhatsAppReceipt } from "./providers/whatsapp.provider.js";
 
@@ -100,31 +101,12 @@ export async function resendDigitalReceipt(
     }
   }
 
-  const messageLines = [
-    receipt.companyName,
-    `Receipt: ${receipt.invoiceNumber}`,
-    `Order: ${receipt.orderNumber}`,
-    `Customer: ${receipt.customerName}`,
-    `Branch: ${receipt.branchName}`,
-    "",
-    ...receipt.items.map(
-      (item) =>
-        `${item.quantity} × ${item.itemName} — ${item.totalPieces} pcs — ₦${item.totalPrice.toLocaleString()}`,
-    ),
-    "",
-    `Total: ₦${receipt.totalAmount.toLocaleString()}`,
-  ];
-
-  if (receipt.garmentNote) {
-    messageLines.push("", `Garment note: ${receipt.garmentNote}`);
-  }
-
-  messageLines.push("", `Agreement: ${receipt.customerAgreement}`);
-
   try {
+    const image = await renderCustomerReceiptImage(receipt);
+
     const delivery = await sendWhatsAppReceipt({
       to: destination,
-      message: messageLines.join("\n"),
+      image,
     });
 
     return {

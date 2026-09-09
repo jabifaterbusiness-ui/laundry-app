@@ -513,6 +513,15 @@ model Invoice {
   companyWebsite String?
   companyAddress String?
 
+  // Historical receipt branding snapshot.
+  // Preserves the visual identity used when the invoice was created.
+  logoUrl                 String?
+  receiptPrimaryColor     String?
+  receiptAccentColor      String?
+  receiptBackgroundColor  String?
+  receiptTextColor        String?
+  receiptHeaderStyle      String?
+
   // Historical transaction totals.
   totalAmount Int
 

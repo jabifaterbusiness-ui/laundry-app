@@ -14,6 +14,12 @@ function makeReceipt(
     companyEmail: "hello@example.com",
     companyWebsite: "https://example.com",
     companyAddress: "12 Laundry Street",
+    logoUrl: "https://example.com/logo.png",
+    receiptPrimaryColor: "#123456",
+    receiptAccentColor: "#abcdef",
+    receiptBackgroundColor: "#f8f8f8",
+    receiptTextColor: "#222222",
+    receiptHeaderStyle: "centered",
     customerName: "John Customer",
     branchName: "Main Branch",
     createdAt: "2026-09-08T00:00:00.000Z",
@@ -48,6 +54,12 @@ describe("renderCustomerReceiptEmail", () => {
     expect(html).toContain("Customer agrees to the laundry service terms.");
     expect(html).toContain("₦9,000.00");
     expect(html).toContain("Handle with care");
+    expect(html).toContain('src="https://example.com/logo.png"');
+    expect(html).toContain("background: #f8f8f8");
+    expect(html).toContain("color: #222222");
+    expect(html).toContain("background: #123456");
+    expect(html).toContain("border-bottom: 2px solid #abcdef");
+    expect(html).toContain("header header-centered");
   });
 
   it("never includes customer contact information in the receipt", () => {

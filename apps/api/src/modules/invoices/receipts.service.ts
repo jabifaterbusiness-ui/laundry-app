@@ -9,6 +9,12 @@ export type CustomerReceipt = {
   companyEmail: string | null;
   companyWebsite: string | null;
   companyAddress: string | null;
+  logoUrl: string | null;
+  receiptPrimaryColor: string | null;
+  receiptAccentColor: string | null;
+  receiptBackgroundColor: string | null;
+  receiptTextColor: string | null;
+  receiptHeaderStyle: string | null;
   customerName: string;
   branchName: string;
   createdAt: string;
@@ -34,6 +40,12 @@ export type CompanyReceipt = {
   companyEmail: string | null;
   companyWebsite: string | null;
   companyAddress: string | null;
+  logoUrl: string | null;
+  receiptPrimaryColor: string | null;
+  receiptAccentColor: string | null;
+  receiptBackgroundColor: string | null;
+  receiptTextColor: string | null;
+  receiptHeaderStyle: string | null;
   customerName: string;
   branchName: string;
   createdAt: string;
@@ -128,6 +140,12 @@ export async function getCustomerReceipt(
     companyEmail: invoice.companyEmail,
     companyWebsite: invoice.companyWebsite,
     companyAddress: invoice.companyAddress,
+    logoUrl: invoice.logoUrl,
+    receiptPrimaryColor: invoice.receiptPrimaryColor,
+    receiptAccentColor: invoice.receiptAccentColor,
+    receiptBackgroundColor: invoice.receiptBackgroundColor,
+    receiptTextColor: invoice.receiptTextColor,
+    receiptHeaderStyle: invoice.receiptHeaderStyle,
     customerName: invoice.customerName,
     branchName: invoice.branch.name,
     createdAt: invoice.createdAt.toISOString(),
@@ -169,6 +187,12 @@ export async function getCompanyReceipt(
     companyEmail: invoice.companyEmail,
     companyWebsite: invoice.companyWebsite,
     companyAddress: invoice.companyAddress,
+    logoUrl: invoice.logoUrl,
+    receiptPrimaryColor: invoice.receiptPrimaryColor,
+    receiptAccentColor: invoice.receiptAccentColor,
+    receiptBackgroundColor: invoice.receiptBackgroundColor,
+    receiptTextColor: invoice.receiptTextColor,
+    receiptHeaderStyle: invoice.receiptHeaderStyle,
     customerName: invoice.customerName,
     branchName: invoice.branch.name,
     createdAt: invoice.createdAt.toISOString(),

@@ -4,12 +4,14 @@ const {
   customerFindFirstMock,
   getCustomerReceiptMock,
   renderCustomerReceiptEmailMock,
+  renderCustomerReceiptImageMock,
   sendReceiptEmailMock,
   sendWhatsAppReceiptMock,
 } = vi.hoisted(() => ({
   customerFindFirstMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
   renderCustomerReceiptEmailMock: vi.fn(),
+  renderCustomerReceiptImageMock: vi.fn(),
   sendReceiptEmailMock: vi.fn(),
   sendWhatsAppReceiptMock: vi.fn(),
 }));
@@ -30,6 +32,13 @@ vi.mock(
   "../../src/modules/invoices/templates/customer-receipt-email.js",
   () => ({
     renderCustomerReceiptEmail: renderCustomerReceiptEmailMock,
+  }),
+);
+
+vi.mock(
+  "../../src/modules/invoices/templates/customer-receipt-image.js",
+  () => ({
+    renderCustomerReceiptImage: renderCustomerReceiptImageMock,
   }),
 );
 
@@ -70,6 +79,9 @@ const RECEIPT = {
 beforeEach(() => {
   vi.clearAllMocks();
   renderCustomerReceiptEmailMock.mockReturnValue("<html>receipt</html>");
+  renderCustomerReceiptImageMock.mockResolvedValue(
+    Buffer.from("receipt-png"),
+  );
 });
 
 describe("receipt-delivery.service", () => {
@@ -181,9 +193,13 @@ describe("receipt-delivery.service", () => {
       providerMessageId: "wamid.test-123",
     });
 
+    expect(renderCustomerReceiptImageMock).toHaveBeenCalledWith(
+      RECEIPT,
+    );
+
     expect(sendWhatsAppReceiptMock).toHaveBeenCalledWith({
       to: "08000000000",
-      message: expect.stringContaining("INV-00001"),
+      image: Buffer.from("receipt-png"),
     });
 
     expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
@@ -198,6 +214,10 @@ describe("receipt-delivery.service", () => {
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    renderCustomerReceiptImageMock.mockResolvedValue(
+      Buffer.from("receipt-png"),
+    );
+
     sendWhatsAppReceiptMock.mockRejectedValue(
       new Error("WhatsApp delivery failed: provider unavailable"),
     );
@@ -342,6 +362,7 @@ describe("receipt-delivery.service", () => {
     });
 
     expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
+    expect(renderCustomerReceiptImageMock).not.toHaveBeenCalled();
     expect(sendReceiptEmailMock).not.toHaveBeenCalled();
     expect(sendWhatsAppReceiptMock).not.toHaveBeenCalled();
   });

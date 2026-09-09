@@ -23,6 +23,14 @@ function formatDate(value: string): string {
   });
 }
 
+function escapeAttribute(value: string): string {
+  return escapeHtml(value);
+}
+
+function safeColor(value: string | null, fallback: string): string {
+  return value && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : fallback;
+}
+
 export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
   const items = receipt.items
     .map(
@@ -47,6 +55,23 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     .map((value) => `<div>${escapeHtml(value as string)}</div>`)
     .join("");
 
+  const primaryColor = safeColor(receipt.receiptPrimaryColor, "#111827");
+  const accentColor = safeColor(receipt.receiptAccentColor, "#2563eb");
+  const backgroundColor = safeColor(receipt.receiptBackgroundColor, "#f3f4f6");
+  const textColor = safeColor(receipt.receiptTextColor, "#111827");
+  const headerStyle = receipt.receiptHeaderStyle?.trim() || "standard";
+
+  const logo = receipt.logoUrl
+    ? `<img src="${escapeAttribute(receipt.logoUrl)}" alt="${escapeAttribute(receipt.companyName)} logo" class="logo">`
+    : "";
+
+  const headerClass =
+    headerStyle.toLowerCase() === "compact"
+      ? "header header-compact"
+      : headerStyle.toLowerCase() === "centered"
+        ? "header header-centered"
+        : "header";
+
   const garmentNote = receipt.garmentNote
     ? `
       <div class="note">
@@ -65,8 +90,8 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     body {
       margin: 0;
       padding: 24px 12px;
-      background: #f3f4f6;
-      color: #111827;
+      background: ${backgroundColor};
+      color: ${textColor};
       font-family: Arial, Helvetica, sans-serif;
     }
 
@@ -74,7 +99,7 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
       max-width: 720px;
       margin: 0 auto;
       background: #ffffff;
-      border-top: 6px solid #111827;
+      border-top: 6px solid ${primaryColor};
       border-radius: 10px;
       overflow: hidden;
       box-shadow: 0 4px 18px rgba(0,0,0,.08);
@@ -82,8 +107,27 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
 
     .header {
       padding: 24px;
-      background: #111827;
+      background: ${primaryColor};
       color: #ffffff;
+    }
+
+    .logo {
+      display: block;
+      max-width: 140px;
+      max-height: 64px;
+      width: auto;
+      height: auto;
+      margin-bottom: 10px;
+      object-fit: contain;
+    }
+
+    .header-centered {
+      text-align: center;
+    }
+
+    .header-compact {
+      padding-top: 16px;
+      padding-bottom: 16px;
     }
 
     .company {
@@ -133,7 +177,7 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     th {
       padding: 10px 6px;
       text-align: left;
-      border-bottom: 2px solid #111827;
+      border-bottom: 2px solid ${accentColor};
       font-size: 11px;
       text-transform: uppercase;
     }
@@ -160,7 +204,7 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
       justify-content: space-between;
       margin-top: 18px;
       padding: 16px 0;
-      border-top: 3px solid #111827;
+      border-top: 3px solid ${primaryColor};
       font-size: 18px;
       font-weight: 700;
     }
@@ -176,7 +220,7 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     }
 
     .agreement {
-      border-left: 4px solid #111827;
+      border-left: 4px solid ${accentColor};
     }
 
     .note strong,
@@ -220,7 +264,8 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
 </head>
 <body>
   <div class="receipt">
-    <div class="header">
+    <div class="${headerClass}">
+      ${logo}
       <div class="company">${escapeHtml(receipt.companyName)}</div>
       <div class="contact">${companyContact}</div>
     </div>
