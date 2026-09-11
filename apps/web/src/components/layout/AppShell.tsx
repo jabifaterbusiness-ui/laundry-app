@@ -4,6 +4,7 @@ import { GlobalSearch } from "../search/GlobalSearch.js";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useNavigate } from "react-router-dom";
 
 interface NavItem {
   label: string;
@@ -26,7 +27,9 @@ const MANAGEMENT: NavItem[] = [
 
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const clearSession = useAuthStore((state) => state.clearSession);
   const [quickOperation, setQuickOperation] =
     useState<QuickOperationDefinition | null>(null);
 
@@ -117,7 +120,24 @@ export function AppShell({ children }: PropsWithChildren) {
               fontSize: 13,
             }}
           >
-            {user?.fullName ?? "User"}
+            <span>{user?.fullName ?? "User"}</span>
+            <button
+              type="button"
+              onClick={() => {
+                clearSession();
+                navigate("/login", { replace: true });
+              }}
+              style={{
+                marginLeft: 12,
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid #d4d4d4",
+                background: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
