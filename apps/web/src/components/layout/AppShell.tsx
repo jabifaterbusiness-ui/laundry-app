@@ -1,37 +1,41 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { useAuthStore } from "../../state/auth-store.js";
-import { useNavigate } from "react-router-dom";
 
 interface NavItem {
   label: string;
   href: string;
+  icon: string;
 }
 
 const OPERATIONS: NavItem[] = [
-  { label: "Dashboard", href: "/" },
-  { label: "Customers", href: "/customers" },
-  { label: "Orders", href: "/orders" },
-  { label: "Invoices & Receipts", href: "/invoices" },
-  { label: "Payments", href: "/payments" },
+  { label: "Dashboard", href: "/", icon: "⌂" },
+  { label: "Customers", href: "/customers", icon: "♙" },
+  { label: "Orders", href: "/orders", icon: "▣" },
+  { label: "Invoices & Receipts", href: "/invoices", icon: "▤" },
+  { label: "Payments", href: "/payments", icon: "₦" },
 ];
 
 const MANAGEMENT: NavItem[] = [
-  { label: "Services & Price List", href: "/services" },
-  { label: "Inventory", href: "/inventory" },
-  { label: "Users", href: "/users" },
+  { label: "Services & Price List", href: "/services", icon: "◈" },
+  { label: "Inventory", href: "/inventory", icon: "□" },
+  { label: "Users", href: "/users", icon: "♟" },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
+
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
+
   const [quickOperation, setQuickOperation] =
     useState<QuickOperationDefinition | null>(null);
+
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     function handleQuickOperationOpen(event: Event) {
@@ -71,70 +75,61 @@ export function AppShell({ children }: PropsWithChildren) {
       ? location.pathname === "/"
       : location.pathname.startsWith(href);
 
+  function logout() {
+    clearSession();
+    navigate("/login", { replace: true });
+  }
+
+  function closeMobileNav() {
+    setMobileNavOpen(false);
+  }
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f7f7f8",
-        color: "#171717",
-      }}
-    >
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 200,
-          background: "#fff",
-          borderBottom: "1px solid #e5e5e5",
-          padding: "14px 24px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 24,
-            maxWidth: 1400,
-            margin: "0 auto",
-          }}
-        >
-          <Link
-            to="/"
-            style={{
-              fontWeight: 800,
-              fontSize: 20,
-              color: "inherit",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="topbar-inner">
+          <button
+            type="button"
+            className="mobile-menu-button"
+            aria-label="Open navigation"
+            onClick={() => setMobileNavOpen(true)}
           >
-            Laundry App
+            ☰
+          </button>
+
+          <Link to="/" className="brand" onClick={closeMobileNav}>
+            <img
+              src="/brand/laundryangel-logo.jpg"
+              alt="Laundry Angel"
+              className="brand-logo"
+            />
+            <span className="brand-name">
+              Laundry<span>Angel</span>
+            </span>
           </Link>
 
-          <GlobalSearch />
+          <div className="topbar-search">
+            <GlobalSearch />
+          </div>
 
-          <div
-            style={{
-              marginLeft: "auto",
-              whiteSpace: "nowrap",
-              fontSize: 13,
-            }}
-          >
-            <span>{user?.fullName ?? "User"}</span>
+          <div className="topbar-user">
+            <div className="user-avatar">
+              {(user?.fullName?.charAt(0) ?? "U").toUpperCase()}
+            </div>
+
+            <div className="user-details">
+              <span className="user-name">
+                {user?.fullName ?? "User"}
+              </span>
+              <span className="user-role">
+                {user?.role?.replaceAll("_", " ") ?? "User"}
+              </span>
+            </div>
+
             <button
               type="button"
-              onClick={() => {
-                clearSession();
-                navigate("/login", { replace: true });
-              }}
-              style={{
-                marginLeft: 12,
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid #d4d4d4",
-                background: "#fff",
-                cursor: "pointer",
-              }}
+              className="logout-button"
+              onClick={logout}
             >
               Logout
             </button>
@@ -142,125 +137,109 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       </header>
 
-      <div
-        style={{
-          display: "flex",
-          maxWidth: 1400,
-          margin: "0 auto",
-          width: "100%",
-        }}
-      >
-        <aside
-          style={{
-            width: 220,
-            flexShrink: 0,
-            padding: "24px 16px",
-          }}
-        >
-          <nav aria-label="Main navigation">
-            <section>
-              <h2
-                style={{
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  margin: "0 8px 8px",
-                }}
-              >
-                Operations
-              </h2>
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="mobile-nav-overlay"
+          aria-label="Close navigation"
+          onClick={closeMobileNav}
+        />
+      ) : null}
 
-              {OPERATIONS.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  style={{
-                    display: "block",
-                    padding: "9px 10px",
-                    marginBottom: 3,
-                    borderRadius: 6,
-                    textDecoration: "none",
-                    fontWeight: isActive(item.href) ? 700 : 400,
-                    background: isActive(item.href)
-                      ? "#ececec"
-                      : "transparent",
-                    color: "inherit",
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
+      <div className="app-layout">
+        <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
+          <div className="sidebar-mobile-header">
+            <span>Menu</span>
+            <button
+              type="button"
+              onClick={closeMobileNav}
+              aria-label="Close navigation"
+            >
+              ×
+            </button>
+          </div>
+
+          <nav aria-label="Main navigation">
+            <section className="nav-section">
+              <h2>Operations</h2>
+
+              {OPERATIONS.map((item) => {
+                const active = isActive(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={`nav-item ${active ? "active" : ""}`}
+                    style={{ fontWeight: active ? 700 : undefined }}
+                    onClick={closeMobileNav}
+                  >
+                    <span className="nav-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
             </section>
 
-            <section style={{ marginTop: 24 }}>
-              <h2
-                style={{
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  margin: "0 8px 8px",
-                }}
-              >
-                Management
-              </h2>
+            <section className="nav-section management-section">
+              <h2>Management</h2>
 
-              {MANAGEMENT.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  style={{
-                    display: "block",
-                    padding: "9px 10px",
-                    marginBottom: 3,
-                    borderRadius: 6,
-                    textDecoration: "none",
-                    fontWeight: isActive(item.href) ? 700 : 400,
-                    background: isActive(item.href)
-                      ? "#ececec"
-                      : "transparent",
-                    color: "inherit",
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {MANAGEMENT.map((item) => {
+                const active = isActive(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={`nav-item ${active ? "active" : ""}`}
+                    style={{ fontWeight: active ? 700 : undefined }}
+                    onClick={closeMobileNav}
+                  >
+                    <span className="nav-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
 
               {canManageData ? (
                 <Link
                   to="/data-management"
-                  style={{
-                    display: "block",
-                    padding: "9px 10px",
-                    marginBottom: 3,
-                    borderRadius: 6,
-                    textDecoration: "none",
-                    fontWeight: isActive("/data-management") ? 700 : 400,
-                    background: isActive("/data-management")
-                      ? "#ececec"
-                      : "transparent",
-                    color: "inherit",
-                  }}
+                  className={`nav-item ${
+                    isActive("/data-management") ? "active" : ""
+                  }`}
+                  onClick={closeMobileNav}
                 >
-                  Backup & Data Migration
+                  <span className="nav-icon" aria-hidden="true">
+                    ⇅
+                  </span>
+                  <span>Backup & Data Migration</span>
                 </Link>
               ) : null}
             </section>
           </nav>
+
+          <div className="sidebar-footer">
+            <div className="sidebar-footer-mark">LA</div>
+            <div>
+              <strong>Laundry Angel</strong>
+              <span>Management System</span>
+            </div>
+          </div>
         </aside>
 
-        <main
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: "28px 24px",
-          }}
-        >
-          {children}
+        <main className="main-content">
+          <div className="page-container">{children}</div>
         </main>
-
-        <QuickOperationLauncher
-          operation={quickOperation}
-          onClose={() => setQuickOperation(null)}
-        />
       </div>
+
+      <QuickOperationLauncher
+        operation={quickOperation}
+        onClose={() => setQuickOperation(null)}
+      />
     </div>
   );
 }
