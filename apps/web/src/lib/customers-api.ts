@@ -91,7 +91,7 @@ export async function getCustomer(id: string, auth: { accessToken: string | null
   return apiFetch<Customer>(`/customers/${id}`, { accessToken: auth.accessToken });
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 // Does the POST directly (rather than via apiFetch) because apiFetch's
 // generic ApiError doesn't carry the response body, which would lose the

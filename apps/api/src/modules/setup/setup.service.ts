@@ -1,0 +1,119 @@
+import { prisma } from "../../lib/prisma.js";
+import { AppError } from "../../middleware/error-handler.js";
+import { hashPassword, issueTokenPair } from "../auth/auth.service.js";
+import type { SetupInput } from "./setup.validation.js";
+
+function slugify(value: string) {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || "laundryangel";
+}
+
+async function uniqueSlug(base: string) {
+  let slug = base;
+  let counter = 2;
+
+  while (await prisma.business.findUnique({ where: { slug }, select: { id: true } })) {
+    slug = `${base}-${counter++}`;
+  }
+
+  return slug;
+}
+
+export async function getSetupStatus() {
+  const [businessCount, userCount] = await Promise.all([
+    prisma.business.count(),
+    prisma.user.count(),
+  ]);
+
+  return {
+    setupRequired: businessCount === 0 && userCount === 0,
+  };
+}
+
+export async function completeSetup(input: SetupInput) {
+  const status = await getSetupStatus();
+
+  if (!status.setupRequired) {
+    throw new AppError("LaundryAngel has already been set up", 409);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email: input.ownerEmail },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new AppError("That email address is already registered", 409);
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const slug = await uniqueSlug(slugify(input.businessName));
+
+  const result = await prisma.$transaction(async (tx) => {
+    const business = await tx.business.create({
+      data: {
+        name: input.businessName,
+        slug,
+        isActive: true,
+      },
+    });
+
+    const branch = await tx.branch.create({
+      data: {
+        businessId: business.id,
+        name: input.branchName,
+        isActive: true,
+      },
+    });
+
+    const user = await tx.user.create({
+      data: {
+        email: input.ownerEmail,
+        passwordHash,
+        fullName: input.ownerName,
+        role: "BUSINESS_OWNER",
+        isActive: true,
+        businessId: business.id,
+      },
+    });
+
+    await tx.userBranch.create({
+      data: {
+        userId: user.id,
+        branchId: branch.id,
+      },
+    });
+
+    return { business, user };
+  });
+
+  const tokens = await issueTokenPair(result.user);
+
+  return {
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      fullName: result.user.fullName,
+      role: result.user.role,
+      businessId: result.user.businessId,
+      branches: [
+        {
+          id: (await prisma.branch.findFirstOrThrow({
+            where: { businessId: result.business.id },
+            select: { id: true, name: true },
+          })).id,
+          name: (await prisma.branch.findFirstOrThrow({
+            where: { businessId: result.business.id },
+            select: { id: true, name: true },
+          })).name,
+        },
+      ],
+    },
+    ...tokens,
+  };
+}

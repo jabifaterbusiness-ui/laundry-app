@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { LoginPage } from "./pages/auth/LoginPage.js";
+import { SetupPage } from "./pages/auth/SetupPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
@@ -40,6 +41,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="*" element={<AuthenticatedLayout />} />
     </Routes>
   );

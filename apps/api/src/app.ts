@@ -28,6 +28,8 @@ import { searchRouter } from "./modules/search/search.routes.js";
 import { quickOperationsRouter } from "./modules/quick-operations/quick-operations.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { syncRouter } from "./modules/sync/sync.routes.js";
+import { whatsappRouter } from "./modules/whatsapp/whatsapp.routes.js";
+import { setupRouter } from "./modules/setup/setup.routes.js";
 
 export function createApp() {
   const app = express();
@@ -51,6 +53,7 @@ export function createApp() {
 
   const v1 = express.Router();
   v1.use("/auth", authRouter);
+  v1.use("/setup", setupRouter);
   v1.use("/businesses", businessesRouter);
   v1.use("/branches", branchesRouter);
   v1.use("/customers", customersRouter);
@@ -72,6 +75,7 @@ export function createApp() {
   v1.use("/quick-operations", quickOperationsRouter);
   v1.use("/users", usersRouter);
   v1.use("/sync", syncRouter);
+  v1.use("/whatsapp", whatsappRouter);
 
   app.use("/api/v1", v1);
 

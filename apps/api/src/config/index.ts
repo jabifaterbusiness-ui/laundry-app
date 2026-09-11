@@ -31,5 +31,6 @@ export const config = {
     whatsappApiVersion: env.WHATSAPP_API_VERSION,
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN,
+    whatsappVerifyToken: env.WHATSAPP_VERIFY_TOKEN,
   },
 } as const;
