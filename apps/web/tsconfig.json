@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
