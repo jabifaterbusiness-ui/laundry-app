@@ -11,7 +11,7 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
   });
 
   it("renders the login form at /login", () => {

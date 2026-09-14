@@ -17,7 +17,12 @@ async function uniqueSlug(base: string) {
   let slug = base;
   let counter = 2;
 
-  while (await prisma.business.findUnique({ where: { slug }, select: { id: true } })) {
+  while (
+    await prisma.business.findUnique({
+      where: { slug },
+      select: { id: true },
+    })
+  ) {
     slug = `${base}-${counter++}`;
   }
 
@@ -59,6 +64,10 @@ export async function completeSetup(input: SetupInput) {
       data: {
         name: input.businessName,
         slug,
+        phone: input.businessPhone || null,
+        email: input.businessEmail || null,
+        website: input.businessWebsite || null,
+        address: input.businessAddress || null,
         isActive: true,
       },
     });
@@ -89,7 +98,7 @@ export async function completeSetup(input: SetupInput) {
       },
     });
 
-    return { business, user };
+    return { business, branch, user };
   });
 
   const tokens = await issueTokenPair(result.user);
@@ -103,14 +112,8 @@ export async function completeSetup(input: SetupInput) {
       businessId: result.user.businessId,
       branches: [
         {
-          id: (await prisma.branch.findFirstOrThrow({
-            where: { businessId: result.business.id },
-            select: { id: true, name: true },
-          })).id,
-          name: (await prisma.branch.findFirstOrThrow({
-            where: { businessId: result.business.id },
-            select: { id: true, name: true },
-          })).name,
+          id: result.branch.id,
+          name: result.branch.name,
         },
       ],
     },

@@ -394,6 +394,82 @@ a {
   color: var(--la-muted);
 }
 
+
+/* ---------- AUTH SETUP EXTENSIONS ---------- */
+
+.auth-card-wide {
+  width: min(100%, 720px);
+}
+
+.auth-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.auth-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  margin-bottom: -2px;
+}
+
+.auth-section-heading strong {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.auth-section-heading span {
+  color: var(--la-muted);
+  font-size: 11px;
+}
+
+.auth-field textarea {
+  width: 100%;
+  min-height: 82px;
+  padding: 12px 13px;
+
+  border: 1px solid var(--la-border);
+  border-radius: 9px;
+  outline: none;
+
+  background: #fff;
+  color: var(--la-text);
+
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.auth-field textarea::placeholder {
+  color: #a3aab5;
+}
+
+.auth-field textarea:hover {
+  border-color: #cbd5e1;
+}
+
+.auth-field textarea:focus {
+  border-color: var(--la-primary);
+  box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.1);
+}
+
+@media (max-width: 680px) {
+  .auth-card-wide {
+    width: 100%;
+  }
+
+  .auth-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- RESPONSIVE ---------- */
 
 @media (max-width: 1000px) {
