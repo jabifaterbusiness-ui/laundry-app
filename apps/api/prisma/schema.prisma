@@ -50,6 +50,16 @@ enum Role {
   STAFF
 }
 
+enum SubscriptionPlan {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+}
+
 // A tenant. Every business-scoped record in the system will eventually
 // carry a businessId pointing here.
 model Business {
@@ -81,6 +91,11 @@ model Business {
   // Kept as a string initially so the branding system can evolve
   // without unnecessary enum migrations.
   receiptHeaderStyle String?
+
+  // -------------------------------------------------------------------
+  // SUBSCRIPTION
+  // -------------------------------------------------------------------
+  subscription Subscription?
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -217,6 +232,27 @@ model UserBranch {
   @@index([userId])
   @@index([branchId])
   @@map("user_branches")
+}
+
+// Business subscription lifecycle.
+// Subscription state belongs to the tenant, not an individual user.
+// Expiry is evaluated from endsAt at request time rather than embedded
+// in access tokens, so access can be blocked immediately when a plan ends.
+model Subscription {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  plan     SubscriptionPlan
+  status   SubscriptionStatus @default(ACTIVE)
+  startsAt DateTime
+  endsAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, endsAt])
+  @@map("subscriptions")
 }
 
 // Refresh tokens stored server-side (hashed) so they can be revoked.
@@ -515,12 +551,12 @@ model Invoice {
 
   // Historical receipt branding snapshot.
   // Preserves the visual identity used when the invoice was created.
-  logoUrl                 String?
-  receiptPrimaryColor     String?
-  receiptAccentColor      String?
-  receiptBackgroundColor  String?
-  receiptTextColor        String?
-  receiptHeaderStyle      String?
+  logoUrl                String?
+  receiptPrimaryColor    String?
+  receiptAccentColor     String?
+  receiptBackgroundColor String?
+  receiptTextColor       String?
+  receiptHeaderStyle     String?
 
   // Historical transaction totals.
   totalAmount Int

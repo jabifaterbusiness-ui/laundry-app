@@ -4,6 +4,16 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    subscription: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "sub-test",
+        businessId: "biz-A",
+        plan: "MONTHLY",
+        status: "ACTIVE",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: new Date("2099-01-01T00:00:00.000Z"),
+      }),
+    },
     $transaction: vi.fn(),
     order: {
       findFirst: vi.fn(),

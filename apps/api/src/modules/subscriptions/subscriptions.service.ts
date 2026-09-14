@@ -1,0 +1,105 @@
+import type { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
+import { prisma } from "../../lib/prisma.js";
+import { AppError } from "../../middleware/error-handler.js";
+import type { CreateSubscriptionInput } from "./subscriptions.validation.js";
+
+function addPlanDuration(date: Date, plan: SubscriptionPlan) {
+  const result = new Date(date);
+
+  if (plan === "MONTHLY") {
+    result.setMonth(result.getMonth() + 1);
+  } else {
+    result.setFullYear(result.getFullYear() + 1);
+  }
+
+  return result;
+}
+
+export function getSubscriptionStatus(
+  endsAt: Date,
+  status: SubscriptionStatus,
+  now = new Date(),
+): SubscriptionStatus {
+  if (status === "EXPIRED" || endsAt <= now) {
+    return "EXPIRED";
+  }
+
+  return "ACTIVE";
+}
+
+export async function getBusinessSubscription(businessId: string) {
+  const subscription = await prisma.subscription.findUnique({
+    where: { businessId },
+  });
+
+  if (!subscription) {
+    throw new AppError("Business subscription not found", 404);
+  }
+
+  const effectiveStatus = getSubscriptionStatus(
+    subscription.endsAt,
+    subscription.status,
+  );
+
+  if (effectiveStatus !== subscription.status) {
+    return prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: effectiveStatus },
+    });
+  }
+
+  return subscription;
+}
+
+export async function createOrRenewSubscription(
+  businessId: string,
+  input: CreateSubscriptionInput,
+) {
+  const now = new Date();
+  const existing = await prisma.subscription.findUnique({
+    where: { businessId },
+  });
+
+  let startsAt: Date;
+
+  if (existing && existing.endsAt > now) {
+    // Preserve all remaining paid time by extending from the current end.
+    startsAt = existing.endsAt;
+  } else {
+    // Expired or new subscriptions begin now unless a future start was
+    // explicitly requested.
+    startsAt = input.startsAt ?? now;
+  }
+
+  const endsAt = addPlanDuration(startsAt, input.plan);
+
+  return prisma.subscription.upsert({
+    where: { businessId },
+    create: {
+      businessId,
+      plan: input.plan,
+      status: "ACTIVE",
+      startsAt,
+      endsAt,
+    },
+    update: {
+      plan: input.plan,
+      status: "ACTIVE",
+      startsAt,
+      endsAt,
+    },
+  });
+}
+
+export async function requireActiveSubscription(businessId: string) {
+  const subscription = await getBusinessSubscription(businessId);
+
+  if (subscription.status !== "ACTIVE" || subscription.endsAt <= new Date()) {
+    throw new AppError(
+      "Business subscription has expired. Please renew to continue.",
+      402,
+    );
+  }
+
+  return subscription;
+}

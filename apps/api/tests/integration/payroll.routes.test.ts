@@ -4,6 +4,16 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    subscription: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "sub-test",
+        businessId: "biz-A",
+        plan: "MONTHLY",
+        status: "ACTIVE",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: new Date("2099-01-01T00:00:00.000Z"),
+      }),
+    },
     business: {
       findFirst: vi.fn(),
     },
@@ -60,6 +70,7 @@ vi.mock("../../src/lib/audit.js", () => ({
 import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
+const subscriptionFindUnique = vi.mocked(prisma.subscription.findUnique);
 const businessFindFirst = vi.mocked(prisma.business.findFirst);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
@@ -120,6 +131,17 @@ const periodFixture = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+
+  subscriptionFindUnique.mockResolvedValue({
+    id: "sub-test",
+    businessId: "biz-A",
+    plan: "MONTHLY",
+    status: "ACTIVE",
+    startsAt: new Date("2026-01-01T00:00:00.000Z"),
+    endsAt: new Date("2099-01-01T00:00:00.000Z"),
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  });
 
   businessFindFirst.mockResolvedValue({
     id: "biz-A",

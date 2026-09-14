@@ -30,6 +30,9 @@ import { usersRouter } from "./modules/users/users.routes.js";
 import { syncRouter } from "./modules/sync/sync.routes.js";
 import { whatsappRouter } from "./modules/whatsapp/whatsapp.routes.js";
 import { setupRouter } from "./modules/setup/setup.routes.js";
+import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middleware.js";
+import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
+import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
 
 export function createApp() {
   const app = express();
@@ -52,30 +55,51 @@ export function createApp() {
   });
 
   const v1 = express.Router();
+
+  // Routes that must remain available when a business subscription expires.
+  // Subscription management must remain reachable so an owner can renew.
   v1.use("/auth", authRouter);
   v1.use("/setup", setupRouter);
-  v1.use("/businesses", businessesRouter);
-  v1.use("/branches", branchesRouter);
-  v1.use("/customers", customersRouter);
+  v1.use("/subscriptions", subscriptionsRouter);
   v1.use("/migrations", migrationsRouter);
-  v1.use("/services", servicesRouter);
-  v1.use("/orders", ordersRouter);
-  v1.use("/garments", garmentsRouter);
-  v1.use("/invoices", invoicesRouter);
-  v1.use("/inventory", inventoryRouter);
-  v1.use("/payments", paymentsRouter);
-  v1.use("/payroll/ious", iousRouter);
-  v1.use("/payroll/loans", loansRouter);
-  v1.use("/payroll/repayments", repaymentsRouter);
-  v1.use("/payroll/compensation", compensationRouter);
-  v1.use("/payroll", payrollRouter);
-  v1.use("/permissions", permissionsRouter);
-  v1.use("/reports", reportsRouter);
-  v1.use("/search", searchRouter);
-  v1.use("/quick-operations", quickOperationsRouter);
-  v1.use("/users", usersRouter);
-  v1.use("/sync", syncRouter);
   v1.use("/whatsapp", whatsappRouter);
+
+  // Normal tenant operations require an active subscription.
+  // Apply the boundary only to known tenant route prefixes so unknown
+  // /api/v1/* requests can reach the application's 404 handler.
+  const mountProtectedTenantRoute = (
+    path: string,
+    router: express.Router,
+  ) => {
+    v1.use(
+      path,
+      requireAuth,
+      requireBusinessContext,
+      requireActiveBusinessSubscription,
+      router,
+    );
+  };
+
+  mountProtectedTenantRoute("/businesses", businessesRouter);
+  mountProtectedTenantRoute("/branches", branchesRouter);
+  mountProtectedTenantRoute("/customers", customersRouter);
+  mountProtectedTenantRoute("/services", servicesRouter);
+  mountProtectedTenantRoute("/orders", ordersRouter);
+  mountProtectedTenantRoute("/garments", garmentsRouter);
+  mountProtectedTenantRoute("/invoices", invoicesRouter);
+  mountProtectedTenantRoute("/inventory", inventoryRouter);
+  mountProtectedTenantRoute("/payments", paymentsRouter);
+  mountProtectedTenantRoute("/payroll/ious", iousRouter);
+  mountProtectedTenantRoute("/payroll/loans", loansRouter);
+  mountProtectedTenantRoute("/payroll/repayments", repaymentsRouter);
+  mountProtectedTenantRoute("/payroll/compensation", compensationRouter);
+  mountProtectedTenantRoute("/payroll", payrollRouter);
+  mountProtectedTenantRoute("/permissions", permissionsRouter);
+  mountProtectedTenantRoute("/reports", reportsRouter);
+  mountProtectedTenantRoute("/search", searchRouter);
+  mountProtectedTenantRoute("/quick-operations", quickOperationsRouter);
+  mountProtectedTenantRoute("/users", usersRouter);
+  mountProtectedTenantRoute("/sync", syncRouter);
 
   app.use("/api/v1", v1);
 
