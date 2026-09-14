@@ -17,6 +17,8 @@ const envSchema = z.object({
   MIGRATION_STORAGE_KEY: z.string().min(16).default("dev-only-migration-storage-key-change-me"),
   MIGRATION_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(250 * 1024 * 1024),
   MIGRATION_MAX_UNCOMPRESSED_BYTES: z.coerce.number().int().positive().default(500 * 1024 * 1024),
+  BUSINESS_BRANDING_STORAGE_DIR: z.string().default("./data/business-branding"),
+  BUSINESS_BRANDING_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
 
   // --- Digital receipt delivery ---
   RESEND_API_KEY: z.string().min(1).optional(),

@@ -1,3 +1,4 @@
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
@@ -14,7 +15,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 
 import {
+  clearBusinessLogo,
   getBusinessBranding,
+  setBusinessLogo,
   updateBusinessBranding,
 } from "../../src/modules/businesses/businesses.service.js";
 import { AppError } from "../../src/middleware/error-handler.js";
@@ -192,5 +195,66 @@ describe("updateBusinessBranding", () => {
     });
 
     expect(prismaMock.business.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("setBusinessLogo", () => {
+  it("persists the authenticated business logo URL", async () => {
+    prismaMock.business.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: "biz-1",
+      name: "Clean Laundry",
+      logoUrl: "http://localhost:4000/api/v1/businesses/logo",
+    });
+
+    const result = await setBusinessLogo(
+      "biz-1",
+      "http://localhost:4000/api/v1/businesses/logo",
+    );
+
+    expect(result.logoUrl).toBe(
+      "http://localhost:4000/api/v1/businesses/logo",
+    );
+
+    expect(prismaMock.business.updateMany).toHaveBeenCalledWith({
+      where: { id: "biz-1" },
+      data: {
+        logoUrl: "http://localhost:4000/api/v1/businesses/logo",
+      },
+    });
+  });
+
+  it("throws 404 when the business does not exist", async () => {
+    prismaMock.business.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      setBusinessLogo("missing-business", "http://localhost:4000/api/v1/businesses/logo"),
+    ).rejects.toMatchObject({
+      message: "Business not found",
+      statusCode: 404,
+    });
+  });
+});
+
+describe("clearBusinessLogo", () => {
+  it("clears only the authenticated business logo URL", async () => {
+    prismaMock.business.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: "biz-1",
+      name: "Clean Laundry",
+      logoUrl: null,
+    });
+
+    const result = await clearBusinessLogo("biz-1");
+
+    expect(result.logoUrl).toBeNull();
+
+    expect(prismaMock.business.updateMany).toHaveBeenCalledWith({
+      where: { id: "biz-1" },
+      data: {
+        logoUrl: null,
+      },
+    });
   });
 });

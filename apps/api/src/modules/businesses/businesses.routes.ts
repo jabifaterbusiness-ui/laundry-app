@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import {
   requireAuth,
   requireBusinessContext,
@@ -7,7 +7,10 @@ import { requireRole } from "../../middleware/rbac.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import {
   getBranding,
+  getLogo,
+  removeLogo,
   updateBranding,
+  uploadLogo,
 } from "./businesses.controller.js";
 
 const VIEW_ROLES = [
@@ -37,4 +40,26 @@ businessesRouter.patch(
   "/branding",
   requireRole(...OWNER_ONLY),
   asyncHandler(updateBranding),
+);
+
+businessesRouter.get(
+  "/logo",
+  requireRole(...VIEW_ROLES),
+  asyncHandler(getLogo),
+);
+
+businessesRouter.post(
+  "/logo",
+  express.raw({
+      type: ["image/png", "image/jpeg", "image/webp"],
+      limit: "5mb",
+  }),
+  requireRole(...OWNER_ONLY),
+  asyncHandler(uploadLogo),
+);
+
+businessesRouter.delete(
+  "/logo",
+  requireRole(...OWNER_ONLY),
+  asyncHandler(removeLogo),
 );

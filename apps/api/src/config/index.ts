@@ -25,6 +25,10 @@ export const config = {
     maxUploadBytes: env.MIGRATION_MAX_UPLOAD_BYTES,
     maxUncompressedBytes: env.MIGRATION_MAX_UNCOMPRESSED_BYTES,
   },
+  businessBranding: {
+    storageDir: env.BUSINESS_BRANDING_STORAGE_DIR,
+    maxUploadBytes: env.BUSINESS_BRANDING_MAX_UPLOAD_BYTES,
+  },
   receiptDelivery: {
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.RECEIPT_EMAIL_FROM,

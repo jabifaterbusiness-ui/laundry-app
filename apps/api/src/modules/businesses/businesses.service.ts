@@ -40,6 +40,45 @@ export async function getBusinessBranding(businessId: string) {
   return business;
 }
 
+export async function setBusinessLogo(
+  businessId: string,
+  logoUrl: string,
+) {
+  const result = await prisma.business.updateMany({
+    where: {
+      id: businessId,
+    },
+    data: {
+      logoUrl,
+    },
+  });
+
+  if (result.count === 0) {
+    throw new AppError("Business not found", 404);
+  }
+
+  return getBusinessBranding(businessId);
+}
+
+export async function clearBusinessLogo(
+  businessId: string,
+) {
+  const result = await prisma.business.updateMany({
+    where: {
+      id: businessId,
+    },
+    data: {
+      logoUrl: null,
+    },
+  });
+
+  if (result.count === 0) {
+    throw new AppError("Business not found", 404);
+  }
+
+  return getBusinessBranding(businessId);
+}
+
 export async function updateBusinessBranding(
   businessId: string,
   data: UpdateBusinessBrandingData,
