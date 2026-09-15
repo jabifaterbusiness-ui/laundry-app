@@ -205,6 +205,21 @@ export function AppShell({ children }: PropsWithChildren) {
                 );
               })}
 
+              {user?.role === "BUSINESS_OWNER" ? (
+                <Link
+                  to="/subscription"
+                  className={`nav-item ${
+                    isActive("/subscription") ? "active" : ""
+                  }`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">
+                    ◉
+                  </span>
+                  <span>Subscription</span>
+                </Link>
+              ) : null}
+
               {canManageData ? (
                 <Link
                   to="/data-management"
