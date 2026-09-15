@@ -21,7 +21,18 @@ export default defineConfig({
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#1d4ed8",
-        icons: [],
+        icons: [
+          {
+            src: "/icons/laundryangel-192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/icons/laundryangel-512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),
