@@ -9,6 +9,7 @@ import {
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
   getPlatformGlobalStatistics,
+  getPlatformHealth,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -64,6 +65,14 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const healthQuery = useQuery({
+    queryKey: ["platform", "health"],
+    queryFn: () => getPlatformHealth(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+    retry: 1,
+    refetchInterval: 30_000,
+  });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -79,6 +88,7 @@ export function PlatformOwnerPage() {
       revenueQuery.refetch(),
       growthQuery.refetch(),
       globalStatisticsQuery.refetch(),
+      healthQuery.refetch(),
       auditQuery.refetch(),
     ]);
   };
@@ -176,6 +186,7 @@ export function PlatformOwnerPage() {
               void revenueQuery.refetch();
               void growthQuery.refetch();
               void globalStatisticsQuery.refetch();
+              void healthQuery.refetch();
               void auditQuery.refetch();
             }}
           >
@@ -746,15 +757,98 @@ export function PlatformOwnerPage() {
 
       <div className="platform-footer-grid">
         <section className="platform-panel platform-control-panel">
-          <div className="platform-eyebrow">CONTROL CENTER</div>
-          <h2>Platform administration</h2>
-          <p>
-            Company controls, subscription administration, controlled support
-            access, system health, global analytics, and protected platform
-            configuration will be added through audited platform-owner
-            controls.
-          </p>
-          <span className="platform-status active">Secure foundation active</span>
+          <div className="platform-panel-header">
+            <div>
+              <div className="platform-eyebrow">SYSTEM HEALTH</div>
+              <h2>Platform health & error center</h2>
+            </div>
+            {healthQuery.data?.checkedAt ? (
+              <span>Checked {formatDate(healthQuery.data.checkedAt)}</span>
+            ) : null}
+          </div>
+
+          {healthQuery.isLoading ? (
+            <p className="platform-feedback">Checking platform health...</p>
+          ) : healthQuery.isError ? (
+            <div className="platform-feedback platform-error">
+              <strong>Health check unavailable.</strong>
+              <span>
+                The platform health service could not be reached. Retry the
+                health check to verify API and database status.
+              </span>
+            </div>
+          ) : healthQuery.data ? (
+            <>
+              <div className="platform-growth-summary">
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Overall status</span>
+                  <strong>
+                    {healthQuery.data.status === "healthy"
+                      ? "Healthy"
+                      : "Degraded"}
+                  </strong>
+                  <small>
+                    {healthQuery.data.status === "healthy"
+                      ? "All monitored services are responding"
+                      : "One or more monitored services need attention"}
+                  </small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">API</span>
+                  <strong>Healthy</strong>
+                  <small>Platform API responding</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Database</span>
+                  <strong>
+                    {healthQuery.data.database === "healthy"
+                      ? "Healthy"
+                      : "Unhealthy"}
+                  </strong>
+                  <small>
+                    {healthQuery.data.database === "healthy"
+                      ? "Database connectivity confirmed"
+                      : "Database connectivity failed"}
+                  </small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Environment</span>
+                  <strong>{healthQuery.data.env}</strong>
+                  <small>Active runtime environment</small>
+                </article>
+              </div>
+
+              <div className="platform-control-actions">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => void healthQuery.refetch()}
+                  disabled={healthQuery.isFetching}
+                >
+                  {healthQuery.isFetching ? "Checking..." : "Run health check"}
+                </button>
+
+                <span
+                  className={`platform-status ${
+                    healthQuery.data.status === "healthy"
+                      ? "active"
+                      : "inactive"
+                  }`}
+                >
+                  {healthQuery.data.status === "healthy"
+                    ? "System operational"
+                    : "Attention required"}
+                </span>
+              </div>
+            </>
+          ) : (
+            <p className="platform-feedback">
+              No platform health information is currently available.
+            </p>
+          )}
         </section>
 
         <section className="platform-panel platform-control-panel">

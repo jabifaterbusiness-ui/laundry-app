@@ -117,6 +117,22 @@ export interface PlatformGlobalStatistics {
   countries: PlatformGlobalCountryStatistics[];
 }
 
+export interface PlatformHealth {
+  status: "healthy" | "degraded";
+  api: "healthy";
+  database: "healthy" | "unhealthy";
+  env: string;
+  checkedAt: string;
+}
+
+export async function getPlatformHealth(
+  accessToken: string | null,
+): Promise<PlatformHealth> {
+  return apiFetch<PlatformHealth>("/platform/health", {
+    accessToken,
+  });
+}
+
 export interface PlatformAuditLog {
   id: string;
   timestamp: string;

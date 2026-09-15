@@ -12,6 +12,7 @@ import {
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
   getPlatformGlobalStatistics,
+  getPlatformHealth,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -25,6 +26,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformRevenueAnalytics: vi.fn(),
   getPlatformGrowthAnalytics: vi.fn(),
   getPlatformGlobalStatistics: vi.fn(),
+  getPlatformHealth: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -35,6 +37,7 @@ const mockedAudits = vi.mocked(getPlatformAuditLogs);
 const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
 const mockedGrowth = vi.mocked(getPlatformGrowthAnalytics);
 const mockedGlobalStatistics = vi.mocked(getPlatformGlobalStatistics);
+const mockedHealth = vi.mocked(getPlatformHealth);
 
 const growth = {
   generatedAt: "2026-09-15T00:10:00.000Z",
@@ -116,6 +119,14 @@ const revenue = {
   },
 };
 
+
+const platformHealth = {
+  status: "healthy" as const,
+  api: "healthy" as const,
+  database: "healthy" as const,
+  env: "test",
+  checkedAt: "2026-09-15T00:12:00.000Z",
+};
 
 const globalStatistics = {
   generatedAt: "2026-09-15T00:12:00.000Z",
@@ -226,9 +237,73 @@ beforeEach(() => {
   mockedRevenue.mockResolvedValue(revenue);
   mockedGrowth.mockResolvedValue(growth);
   mockedGlobalStatistics.mockResolvedValue(globalStatistics);
+  mockedHealth.mockResolvedValue(platformHealth);
 });
 
 describe("PlatformOwnerPage", () => {
+  it("renders the system health and error center", async () => {
+    renderPage();
+
+    const heading = await screen.findByRole("heading", {
+      name: "Platform health & error center",
+    });
+
+    expect(heading).toBeInTheDocument();
+    expect(screen.getByText("SYSTEM HEALTH")).toBeInTheDocument();
+
+    const section = heading.closest("section");
+    expect(section).not.toBeNull();
+    expect(section).toHaveTextContent("Healthy");
+    expect(section).toHaveTextContent("System operational");
+    expect(section).toHaveTextContent("test");
+
+    expect(
+      screen.getByRole("button", { name: "Run health check" }),
+    ).toBeInTheDocument();
+    expect(mockedHealth).toHaveBeenCalledWith("platform-token");
+  });
+
+  it("shows degraded database health", async () => {
+    mockedHealth.mockResolvedValue({
+      ...platformHealth,
+      status: "degraded",
+      database: "unhealthy",
+    });
+
+    renderPage();
+
+    const heading = await screen.findByRole("heading", {
+      name: "Platform health & error center",
+    });
+    const section = heading.closest("section");
+
+    expect(section).not.toBeNull();
+    expect(section).toHaveTextContent("Degraded");
+    expect(section).toHaveTextContent("Unhealthy");
+    expect(section).toHaveTextContent("Attention required");
+    expect(section).toHaveTextContent(
+      "One or more monitored services need attention",
+    );
+  });
+
+  it("shows a health-service error without hiding the control center", async () => {
+    mockedHealth.mockRejectedValue(
+      new Error("Health service unavailable"),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Health check unavailable.", {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Platform Owner Control Center",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("renders platform-wide KPIs and company directory", async () => {
     renderPage();
 
