@@ -10,6 +10,8 @@ import {
   getPlatformGrowthAnalytics,
   getPlatformGlobalStatistics,
   getPlatformHealth,
+  getPlatformConfiguration,
+  updatePlatformConfiguration,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -73,6 +75,12 @@ export function PlatformOwnerPage() {
     refetchInterval: 30_000,
   });
 
+  const configurationQuery = useQuery({
+    queryKey: ["platform", "configuration"],
+    queryFn: () => getPlatformConfiguration(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -89,6 +97,7 @@ export function PlatformOwnerPage() {
       growthQuery.refetch(),
       globalStatisticsQuery.refetch(),
       healthQuery.refetch(),
+      configurationQuery.refetch(),
       auditQuery.refetch(),
     ]);
   };
@@ -118,6 +127,51 @@ export function PlatformOwnerPage() {
         error instanceof Error
           ? error.message
           : "Unable to update company status.",
+      );
+    },
+  });
+
+  const [configurationFeedback, setConfigurationFeedback] =
+    useState<string | null>(null);
+
+  const configurationMutation = useMutation({
+    mutationFn: async ({
+      field,
+      value,
+    }: {
+      field:
+        | "allowNewBusinessRegistration"
+        | "maintenanceMode"
+        | "whatsappMessagingEnabled"
+        | "automatedNotificationsEnabled"
+        | "offlineSyncEnabled";
+      value: boolean;
+    }) => {
+      const configuration = configurationQuery.data;
+      if (!configuration) {
+        throw new Error("Platform configuration is not loaded.");
+      }
+
+      return updatePlatformConfiguration(
+        {
+          [field]: value,
+          expectedVersion: configuration.version,
+        },
+        accessToken,
+      );
+    },
+    onMutate: () => {
+      setConfigurationFeedback(null);
+    },
+    onSuccess: async () => {
+      setConfigurationFeedback("Platform configuration updated successfully.");
+      await configurationQuery.refetch();
+    },
+    onError: (error) => {
+      setConfigurationFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update platform configuration.",
       );
     },
   });
@@ -187,6 +241,7 @@ export function PlatformOwnerPage() {
               void growthQuery.refetch();
               void globalStatisticsQuery.refetch();
               void healthQuery.refetch();
+              void configurationQuery.refetch();
               void auditQuery.refetch();
             }}
           >
@@ -847,6 +902,137 @@ export function PlatformOwnerPage() {
           ) : (
             <p className="platform-feedback">
               No platform health information is currently available.
+            </p>
+          )}
+        </section>
+
+        <section className="platform-panel platform-control-panel">
+          <div className="platform-panel-header">
+            <div>
+              <div className="platform-eyebrow">PLATFORM CONTROLS</div>
+              <h2>Platform configuration</h2>
+            </div>
+            {configurationQuery.data ? (
+              <span>Version {configurationQuery.data.version}</span>
+            ) : null}
+          </div>
+
+          {configurationQuery.isLoading ? (
+            <p className="platform-feedback">
+              Loading platform configuration...
+            </p>
+          ) : configurationQuery.isError ? (
+            <div className="platform-feedback platform-error">
+              <strong>Configuration unavailable.</strong>
+              <span>
+                The platform configuration could not be loaded. Refresh the
+                control center and try again.
+              </span>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => void configurationQuery.refetch()}
+                disabled={configurationQuery.isFetching}
+              >
+                {configurationQuery.isFetching ? "Refreshing..." : "Refresh configuration"}
+              </button>
+            </div>
+          ) : configurationQuery.data ? (
+            <>
+              <div className="platform-config-list">
+                {(
+                  [
+                    [
+                      "allowNewBusinessRegistration",
+                      "New business registration",
+                      "Allow new companies to register on the platform.",
+                    ],
+                    [
+                      "maintenanceMode",
+                      "Maintenance mode",
+                      "Place the platform into controlled maintenance mode.",
+                    ],
+                    [
+                      "whatsappMessagingEnabled",
+                      "WhatsApp messaging",
+                      "Allow WhatsApp-based customer messaging and delivery.",
+                    ],
+                    [
+                      "automatedNotificationsEnabled",
+                      "Automated notifications",
+                      "Allow automated platform notification workflows.",
+                    ],
+                    [
+                      "offlineSyncEnabled",
+                      "Offline sync",
+                      "Allow clients to synchronize queued offline work.",
+                    ],
+                  ] as const
+                ).map(([key, label, description]) => {
+                  const enabled = configurationQuery.data?.[key] ?? false;
+
+                  return (
+                    <div className="platform-config-row" key={key}>
+                      <div>
+                        <strong>{label}</strong>
+                        <span>{description}</span>
+                      </div>
+
+                      <div className="platform-config-action">
+                        <span
+                          className={`platform-status ${
+                            enabled ? "active" : "inactive"
+                          }`}
+                        >
+                          {enabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={configurationMutation.isPending}
+                          onClick={() => {
+                            if (
+                              enabled &&
+                              !window.confirm(
+                                `Disable ${label.toLowerCase()} platform-wide?`,
+                              )
+                            ) {
+                              return;
+                            }
+
+                            configurationMutation.mutate({
+                              field: key,
+                              value: !enabled,
+                            });
+                          }}
+                        >
+                          {configurationMutation.isPending
+                            ? "Saving..."
+                            : enabled
+                              ? "Disable"
+                              : "Enable"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {configurationFeedback ? (
+                <div
+                  className={`platform-feedback ${
+                    configurationMutation.isError ? "platform-error" : ""
+                  }`}
+                  role={configurationMutation.isError ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {configurationFeedback}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="platform-feedback">
+              No platform configuration is currently available.
             </p>
           )}
         </section>

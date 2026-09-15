@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformOwnerPage } from "./PlatformOwnerPage.js";
@@ -13,6 +14,8 @@ import {
   getPlatformGrowthAnalytics,
   getPlatformGlobalStatistics,
   getPlatformHealth,
+  getPlatformConfiguration,
+  updatePlatformConfiguration,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -27,6 +30,8 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformGrowthAnalytics: vi.fn(),
   getPlatformGlobalStatistics: vi.fn(),
   getPlatformHealth: vi.fn(),
+  getPlatformConfiguration: vi.fn(),
+  updatePlatformConfiguration: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -38,6 +43,8 @@ const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
 const mockedGrowth = vi.mocked(getPlatformGrowthAnalytics);
 const mockedGlobalStatistics = vi.mocked(getPlatformGlobalStatistics);
 const mockedHealth = vi.mocked(getPlatformHealth);
+const mockedConfiguration = vi.mocked(getPlatformConfiguration);
+const mockedUpdateConfiguration = vi.mocked(updatePlatformConfiguration);
 
 const growth = {
   generatedAt: "2026-09-15T00:10:00.000Z",
@@ -126,6 +133,18 @@ const platformHealth = {
   database: "healthy" as const,
   env: "test",
   checkedAt: "2026-09-15T00:12:00.000Z",
+};
+
+const platformConfiguration = {
+  id: "platform-config",
+  allowNewBusinessRegistration: true,
+  maintenanceMode: false,
+  whatsappMessagingEnabled: true,
+  automatedNotificationsEnabled: true,
+  offlineSyncEnabled: true,
+  version: 1,
+  createdAt: "2026-09-15T00:00:00.000Z",
+  updatedAt: "2026-09-15T00:00:00.000Z",
 };
 
 const globalStatistics = {
@@ -238,9 +257,53 @@ beforeEach(() => {
   mockedGrowth.mockResolvedValue(growth);
   mockedGlobalStatistics.mockResolvedValue(globalStatistics);
   mockedHealth.mockResolvedValue(platformHealth);
+  mockedConfiguration.mockResolvedValue(platformConfiguration);
+  mockedUpdateConfiguration.mockResolvedValue({
+    ...platformConfiguration,
+    maintenanceMode: true,
+    version: 2,
+  });
 });
 
 describe("PlatformOwnerPage", () => {
+  it("loads platform configuration and updates a setting with optimistic version", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform Owner Control Center",
+      }),
+    ).toBeInTheDocument();
+
+    expect(mockedConfiguration).toHaveBeenCalledWith("platform-token");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform configuration",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("New business registration"),
+    ).toBeInTheDocument();
+
+    const maintenanceButton = screen.getByRole("button", {
+      name: "Enable",
+    });
+
+    expect(maintenanceButton).toBeInTheDocument();
+
+    await userEvent.click(maintenanceButton);
+
+    expect(mockedUpdateConfiguration).toHaveBeenCalledWith(
+      {
+        maintenanceMode: true,
+        expectedVersion: 1,
+      },
+      "platform-token",
+    );
+  });
+
   it("renders the system health and error center", async () => {
     renderPage();
 

@@ -117,6 +117,46 @@ export interface PlatformGlobalStatistics {
   countries: PlatformGlobalCountryStatistics[];
 }
 
+export interface PlatformConfiguration {
+  id: string;
+  allowNewBusinessRegistration: boolean;
+  maintenanceMode: boolean;
+  whatsappMessagingEnabled: boolean;
+  automatedNotificationsEnabled: boolean;
+  offlineSyncEnabled: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdatePlatformConfigurationInput {
+  allowNewBusinessRegistration?: boolean;
+  maintenanceMode?: boolean;
+  whatsappMessagingEnabled?: boolean;
+  automatedNotificationsEnabled?: boolean;
+  offlineSyncEnabled?: boolean;
+  expectedVersion?: number;
+}
+
+export async function getPlatformConfiguration(
+  accessToken: string | null,
+): Promise<PlatformConfiguration> {
+  return apiFetch<PlatformConfiguration>("/platform/configuration", {
+    accessToken,
+  });
+}
+
+export async function updatePlatformConfiguration(
+  input: UpdatePlatformConfigurationInput,
+  accessToken: string | null,
+): Promise<PlatformConfiguration> {
+  return apiFetch<PlatformConfiguration>("/platform/configuration", {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
 export interface PlatformHealth {
   status: "healthy" | "degraded";
   api: "healthy";

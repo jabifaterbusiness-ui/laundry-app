@@ -2389,6 +2389,61 @@ a {
   line-height: 1.65;
 }
 
+.platform-config-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+.platform-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid #eef1f4;
+}
+
+.platform-config-row > div:first-child {
+  min-width: 0;
+}
+
+.platform-config-row strong,
+.platform-config-row span {
+  display: block;
+}
+
+.platform-config-row strong {
+  color: #293447;
+  font-size: 12px;
+}
+
+.platform-config-row > div:first-child span {
+  margin-top: 4px;
+  color: #8993a1;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.platform-config-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.platform-config-action .button {
+  min-width: 76px;
+  padding: 7px 10px;
+  font-size: 10px;
+}
+
+.platform-config-action .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+
 .platform-coming-soon {
   display: inline-flex;
   padding: 6px 9px;
@@ -2533,6 +2588,16 @@ a {
 
   .platform-business-row {
     grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .platform-config-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .platform-config-action {
+    justify-content: space-between;
   }
 
   .platform-business-mark {
