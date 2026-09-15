@@ -24,12 +24,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     subscription: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
     },
     payment: {
       aggregate: vi.fn(),
     },
     auditLog: {
       findMany: vi.fn(),
+      create: vi.fn(),
     },
   },
 }));
@@ -409,4 +412,86 @@ describe("Platform Owner routes - audit visibility", () => {
     expect(response.status).toBe(403);
     expect(prisma.auditLog.findMany).not.toHaveBeenCalled();
   });
+
+  it("renews a company subscription for PLATFORM_ADMIN and audits the action", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+    } as never);
+
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+      id: "sub-A",
+      businessId: "biz-A",
+      plan: "MONTHLY",
+      status: "ACTIVE",
+      startsAt: new Date("2026-09-01T00:00:00.000Z"),
+      endsAt: new Date("2026-10-01T00:00:00.000Z"),
+    } as never);
+
+    vi.mocked(prisma.subscription.upsert).mockResolvedValue({
+      id: "sub-A",
+      businessId: "biz-A",
+      plan: "YEARLY",
+      status: "ACTIVE",
+      startsAt: new Date("2026-10-01T00:00:00.000Z"),
+      endsAt: new Date("2027-10-01T00:00:00.000Z"),
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ plan: "YEARLY" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: "sub-A",
+        businessId: "biz-A",
+        plan: "YEARLY",
+        status: "ACTIVE",
+      }),
+    );
+
+    expect(prisma.business.findUnique).toHaveBeenCalledWith({
+      where: { id: "biz-A" },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+    expect(prisma.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A" },
+        update: expect.objectContaining({
+          plan: "YEARLY",
+          status: "ACTIVE",
+        }),
+      }),
+    );
+  });
+
+  it("returns 404 when a platform admin renews a nonexistent company", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue(null);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/missing-business/subscription")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ plan: "MONTHLY" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.message).toBe("Business not found");
+    expect(prisma.subscription.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from platform subscription controls", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ plan: "MONTHLY" });
+
+    expect(response.status).toBe(403);
+    expect(prisma.business.findUnique).not.toHaveBeenCalled();
+    expect(prisma.subscription.upsert).not.toHaveBeenCalled();
+  });
+
 });

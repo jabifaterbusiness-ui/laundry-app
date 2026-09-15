@@ -6,6 +6,7 @@ import {
   auditLogs,
   businesses,
   businessDetails,
+  renewBusinessSubscription,
   overview,
 } from "./platform.controller.js";
 
@@ -18,5 +19,9 @@ platformRouter.get("/businesses", asyncHandler(businesses));
 platformRouter.get(
   "/businesses/:businessId",
   asyncHandler(businessDetails),
+);
+platformRouter.post(
+  "/businesses/:businessId/subscription",
+  asyncHandler(renewBusinessSubscription),
 );
 platformRouter.get("/audit-logs", asyncHandler(auditLogs));

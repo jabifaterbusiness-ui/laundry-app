@@ -1,5 +1,10 @@
 import { prisma } from "../../lib/prisma.js";
+import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
+import {
+  createOrRenewSubscription,
+} from "../subscriptions/subscriptions.service.js";
+import type { CreateSubscriptionInput } from "../subscriptions/subscriptions.validation.js";
 
 export async function getPlatformOverview() {
   const now = new Date();
@@ -246,4 +251,43 @@ export async function getPlatformBusinessDetails(businessId: string) {
     recentBranches,
     recentAuditLogs,
   };
+}
+
+
+export async function renewPlatformBusinessSubscription(
+  businessId: string,
+  input: CreateSubscriptionInput,
+  actorUserId: string,
+  correlationId?: string,
+) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (!business) {
+    throw new AppError("Business not found", 404);
+  }
+
+  const subscription = await createOrRenewSubscription(businessId, input);
+
+  await recordAuditEvent({
+    action: "PLATFORM_SUBSCRIPTION_RENEWED",
+    entityType: "SUBSCRIPTION",
+    entityId: subscription.id,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: {
+      businessName: business.name,
+      plan: subscription.plan,
+      startsAt: subscription.startsAt,
+      endsAt: subscription.endsAt,
+    },
+  });
+
+  return subscription;
 }
