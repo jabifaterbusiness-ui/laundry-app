@@ -74,6 +74,16 @@ model Business {
   address String?
 
   // -------------------------------------------------------------------
+  // ORGANISATION MARKET SETTINGS
+  // -------------------------------------------------------------------
+  // Nigeria is the default v1 market. Each organisation can configure
+  // its own country, currency, timezone, and locale.
+  countryCode  String @default("NG")
+  currencyCode String @default("NGN")
+  timezone     String @default("Africa/Lagos")
+  locale       String @default("en-NG")
+
+  // -------------------------------------------------------------------
   // RECEIPT BRANDING
   // -------------------------------------------------------------------
   // The logo is stored outside PostgreSQL; this field stores its

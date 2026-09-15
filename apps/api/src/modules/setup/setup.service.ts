@@ -68,6 +68,10 @@ export async function completeSetup(input: SetupInput) {
         email: input.businessEmail || null,
         website: input.businessWebsite || null,
         address: input.businessAddress || null,
+        countryCode: input.countryCode,
+        currencyCode: input.currencyCode,
+        timezone: input.timezone,
+        locale: input.locale,
         isActive: true,
       },
     });

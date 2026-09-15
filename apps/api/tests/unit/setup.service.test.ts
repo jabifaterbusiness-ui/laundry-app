@@ -41,6 +41,10 @@ const input = {
   businessEmail: "hello@freshpress.example",
   businessWebsite: "https://freshpress.example",
   businessAddress: "12 Independence Avenue",
+  countryCode: "NG",
+  currencyCode: "NGN",
+  timezone: "Africa/Lagos",
+  locale: "en-NG",
   ownerName: "Peter Jabi",
   ownerEmail: "owner@freshpress.example",
   password: "password123",
@@ -128,6 +132,10 @@ describe("setup service", () => {
         email: input.businessEmail,
         website: input.businessWebsite,
         address: input.businessAddress,
+        countryCode: input.countryCode,
+        currencyCode: input.currencyCode,
+        timezone: input.timezone,
+        locale: input.locale,
         isActive: true,
       },
     });
@@ -167,6 +175,36 @@ describe("setup service", () => {
         email: null,
         website: null,
         address: null,
+        countryCode: input.countryCode,
+        currencyCode: input.currencyCode,
+        timezone: input.timezone,
+        locale: input.locale,
+        isActive: true,
+      },
+    });
+  });
+
+  it("stores custom organisation market settings", async () => {
+    await completeSetup({
+      ...input,
+      countryCode: "GB",
+      currencyCode: "GBP",
+      timezone: "Europe/London",
+      locale: "en-GB",
+    });
+
+    expect(prismaMock.business.create).toHaveBeenCalledWith({
+      data: {
+        name: input.businessName,
+        slug: "fresh-press-laundry",
+        phone: input.businessPhone,
+        email: input.businessEmail,
+        website: input.businessWebsite,
+        address: input.businessAddress,
+        countryCode: "GB",
+        currencyCode: "GBP",
+        timezone: "Europe/London",
+        locale: "en-GB",
         isActive: true,
       },
     });
