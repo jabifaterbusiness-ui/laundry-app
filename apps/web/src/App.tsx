@@ -13,6 +13,7 @@ import { InventoryPage } from "./pages/inventory/InventoryPage.js";
 import { UsersPage } from "./pages/users/UsersPage.js";
 import { ReportsPage } from "./pages/reports/ReportsPage.js";
 import { SubscriptionPage } from "./pages/subscriptions/SubscriptionPage.js";
+import { PlatformOwnerPage } from "./pages/platform/PlatformOwnerPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 
@@ -33,6 +34,7 @@ function AuthenticatedLayout() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
+          <Route path="/platform" element={<PlatformOwnerPage />} />
         </Routes>
       </AppShell>
     </RequireAuth>

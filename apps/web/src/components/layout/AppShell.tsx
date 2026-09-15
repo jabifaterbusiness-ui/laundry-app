@@ -220,6 +220,21 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
+              {user?.role === "PLATFORM_ADMIN" ? (
+                <Link
+                  to="/platform"
+                  className={`nav-item ${
+                    isActive("/platform") ? "active" : ""
+                  }`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">
+                    ◆
+                  </span>
+                  <span>Platform Control Center</span>
+                </Link>
+              ) : null}
+
               {canManageData ? (
                 <Link
                   to="/data-management"
