@@ -7,6 +7,7 @@ import {
   getPlatformBusinesses,
   getPlatformOverview,
   getPlatformRevenueAnalytics,
+  getPlatformGrowthAnalytics,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -50,6 +51,12 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const growthQuery = useQuery({
+    queryKey: ["platform", "growth"],
+    queryFn: () => getPlatformGrowthAnalytics(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -63,6 +70,7 @@ export function PlatformOwnerPage() {
       overviewQuery.refetch(),
       businessesQuery.refetch(),
       revenueQuery.refetch(),
+      growthQuery.refetch(),
       auditQuery.refetch(),
     ]);
   };
@@ -158,6 +166,7 @@ export function PlatformOwnerPage() {
               void overviewQuery.refetch();
               void businessesQuery.refetch();
               void revenueQuery.refetch();
+              void growthQuery.refetch();
               void auditQuery.refetch();
             }}
           >
@@ -325,6 +334,160 @@ export function PlatformOwnerPage() {
           </>
         ) : (
           <p className="platform-feedback">No revenue analytics available.</p>
+        )}
+      </section>
+
+      <section className="platform-panel">
+        <div className="platform-panel-header">
+          <div>
+            <div className="platform-eyebrow">GROWTH ANALYTICS</div>
+            <h2>Platform growth</h2>
+          </div>
+          {growthQuery.data?.generatedAt ? (
+            <span>Updated {formatDate(growthQuery.data.generatedAt)}</span>
+          ) : null}
+        </div>
+
+        {growthQuery.isLoading ? (
+          <p className="platform-feedback">Loading growth analytics...</p>
+        ) : growthQuery.isError ? (
+          <p className="platform-feedback platform-error">
+            Growth analytics could not be loaded.
+          </p>
+        ) : growthQuery.data ? (
+          <>
+            <div className="platform-growth-summary">
+              {(
+                [
+                  ["Businesses", growthQuery.data.businesses],
+                  ["Users", growthQuery.data.users],
+                  ["Customers", growthQuery.data.customers],
+                  ["Orders", growthQuery.data.orders],
+                ] as const
+              ).map(([label, series]) => (
+                <article className="platform-growth-card" key={label}>
+                  <span className="platform-kpi-label">{label}</span>
+                  <strong>{formatNumber(series.total)}</strong>
+                  <small>Platform-wide total</small>
+                </article>
+              ))}
+            </div>
+
+            <div className="platform-growth-chart">
+              <div className="platform-growth-chart-header">
+                <div>
+                  <strong>Monthly activity</strong>
+                  <span>New records created by month</span>
+                </div>
+              </div>
+
+              {(() => {
+                const months = Array.from(
+                  new Set([
+                    ...growthQuery.data.businesses.monthly.map(
+                      (item) => item.month,
+                    ),
+                    ...growthQuery.data.users.monthly.map(
+                      (item) => item.month,
+                    ),
+                    ...growthQuery.data.customers.monthly.map(
+                      (item) => item.month,
+                    ),
+                    ...growthQuery.data.orders.monthly.map(
+                      (item) => item.month,
+                    ),
+                  ]),
+                ).sort();
+
+                const series = [
+                  {
+                    key: "businesses",
+                    label: "Businesses",
+                    data: growthQuery.data.businesses.monthly,
+                  },
+                  {
+                    key: "users",
+                    label: "Users",
+                    data: growthQuery.data.users.monthly,
+                  },
+                  {
+                    key: "customers",
+                    label: "Customers",
+                    data: growthQuery.data.customers.monthly,
+                  },
+                  {
+                    key: "orders",
+                    label: "Orders",
+                    data: growthQuery.data.orders.monthly,
+                  },
+                ] as const;
+
+                const maxValue = Math.max(
+                  1,
+                  ...series.flatMap(({ data }) =>
+                    data.map((item) => item.count),
+                  ),
+                );
+
+                return (
+                  <>
+                    <div className="platform-growth-legend">
+                      {series.map(({ key, label }) => (
+                        <span key={key}>
+                          <i
+                            className={`platform-growth-dot ${key}`}
+                            aria-hidden="true"
+                          />
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div
+                      className="platform-growth-grid"
+                      role="img"
+                      aria-label="Monthly platform growth chart"
+                    >
+                      {months.map((month) => (
+                        <div className="platform-growth-column" key={month}>
+                          <div className="platform-growth-bars">
+                            {series.map(({ key, data }) => {
+                              const value =
+                                data.find((item) => item.month === month)
+                                  ?.count ?? 0;
+
+                              return (
+                                <div
+                                  className={`platform-growth-bar ${key}`}
+                                  key={key}
+                                  title={`${key}: ${formatNumber(value)}`}
+                                  style={{
+                                    height: `${Math.max(
+                                      value > 0 ? 4 : 0,
+                                      (value / maxValue) * 100,
+                                    )}%`,
+                                  }}
+                                >
+                                  {value > 0 ? (
+                                    <span>{formatNumber(value)}</span>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <span className="platform-growth-month">
+                            {month}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </>
+        ) : (
+          <p className="platform-feedback">No growth analytics available.</p>
         )}
       </section>
 

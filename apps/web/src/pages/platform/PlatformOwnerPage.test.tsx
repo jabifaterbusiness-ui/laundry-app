@@ -10,6 +10,7 @@ import {
   getPlatformBusinesses,
   getPlatformOverview,
   getPlatformRevenueAnalytics,
+  getPlatformGrowthAnalytics,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -21,6 +22,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformBusinesses: vi.fn(),
   getPlatformOverview: vi.fn(),
   getPlatformRevenueAnalytics: vi.fn(),
+  getPlatformGrowthAnalytics: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -29,6 +31,39 @@ const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
 const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
+const mockedGrowth = vi.mocked(getPlatformGrowthAnalytics);
+
+const growth = {
+  generatedAt: "2026-09-15T00:10:00.000Z",
+  businesses: {
+    total: 3,
+    monthly: [
+      { month: "2026-01", count: 1 },
+      { month: "2026-02", count: 2 },
+    ],
+  },
+  users: {
+    total: 12,
+    monthly: [
+      { month: "2026-01", count: 4 },
+      { month: "2026-02", count: 8 },
+    ],
+  },
+  customers: {
+    total: 40,
+    monthly: [
+      { month: "2026-01", count: 15 },
+      { month: "2026-02", count: 25 },
+    ],
+  },
+  orders: {
+    total: 75,
+    monthly: [
+      { month: "2026-01", count: 30 },
+      { month: "2026-02", count: 45 },
+    ],
+  },
+};
 
 const overview = {
   generatedAt: "2026-09-15T00:00:00.000Z",
@@ -149,6 +184,7 @@ beforeEach(() => {
   mockedBusinesses.mockResolvedValue(businesses);
   mockedAudits.mockResolvedValue([]);
   mockedRevenue.mockResolvedValue(revenue);
+  mockedGrowth.mockResolvedValue(growth);
 });
 
 describe("PlatformOwnerPage", () => {
@@ -162,7 +198,9 @@ describe("PlatformOwnerPage", () => {
     ).toBeInTheDocument();
 
     expect(await screen.findByText("Registered companies")).toBeInTheDocument();
-    expect(await screen.findByText("3")).toBeInTheDocument();
+    expect(
+      screen.getByText("Registered companies").parentElement?.querySelector("strong"),
+    ).toHaveTextContent("3");
     expect(await screen.findByText("Laundry A")).toBeInTheDocument();
     expect(screen.getByText("₦150,000")).toBeInTheDocument();
   });
@@ -198,6 +236,58 @@ describe("PlatformOwnerPage", () => {
     expect(screen.getByText("₦50,000")).toBeInTheDocument();
 
     expect(mockedRevenue).toHaveBeenCalledWith("platform-token");
+  });
+
+  it("renders platform growth analytics and monthly activity", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform growth",
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("GROWTH ANALYTICS")).toBeInTheDocument();
+    expect(screen.getByText("Monthly activity")).toBeInTheDocument();
+    expect(screen.getByText("New records created by month")).toBeInTheDocument();
+    expect(screen.getAllByText("Businesses").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Users").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Customers").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Orders").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("2026-01")).toBeInTheDocument();
+    expect(screen.getByText("2026-02")).toBeInTheDocument();
+    expect(mockedGrowth).toHaveBeenCalledWith("platform-token");
+  });
+
+  it("shows a growth error without hiding the rest of the control center", async () => {
+    mockedGrowth.mockRejectedValue(new Error("Growth service unavailable"));
+
+    renderPage();
+
+    expect(
+      await screen.findByText(
+        "Growth analytics could not be loaded.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Laundry A")).toBeInTheDocument();
+  });
+
+  it("shows growth analytics only for platform administrators", () => {
+    useAuthStore.setState({
+      user: {
+        id: "owner-1",
+        email: "owner@example.com",
+        fullName: "Business Owner",
+        role: "BUSINESS_OWNER",
+        businessId: "business-1",
+        branches: [{ id: "branch-1", name: "Main Branch" }],
+      },
+    });
+
+    renderPage();
+
+    expect(mockedGrowth).not.toHaveBeenCalled();
   });
 
   it("shows a revenue error without hiding the rest of the control center", async () => {
@@ -316,5 +406,6 @@ describe("PlatformOwnerPage", () => {
     expect(mockedBusinesses).not.toHaveBeenCalled();
     expect(mockedAudits).not.toHaveBeenCalled();
     expect(mockedRevenue).not.toHaveBeenCalled();
+    expect(mockedGrowth).not.toHaveBeenCalled();
   });
 });

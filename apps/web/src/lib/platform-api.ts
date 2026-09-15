@@ -75,6 +75,22 @@ export interface PlatformRevenueAnalytics {
   };
 }
 
+export interface PlatformGrowthSeries {
+  total: number;
+  monthly: Array<{
+    month: string;
+    count: number;
+  }>;
+}
+
+export interface PlatformGrowthAnalytics {
+  generatedAt: string;
+  businesses: PlatformGrowthSeries;
+  users: PlatformGrowthSeries;
+  customers: PlatformGrowthSeries;
+  orders: PlatformGrowthSeries;
+}
+
 export interface PlatformAuditLog {
   id: string;
   timestamp: string;
@@ -100,6 +116,14 @@ export async function getPlatformRevenueAnalytics(
   accessToken: string | null,
 ): Promise<PlatformRevenueAnalytics> {
   return apiFetch<PlatformRevenueAnalytics>("/platform/revenue", {
+    accessToken,
+  });
+}
+
+export async function getPlatformGrowthAnalytics(
+  accessToken: string | null,
+): Promise<PlatformGrowthAnalytics> {
+  return apiFetch<PlatformGrowthAnalytics>("/platform/growth", {
     accessToken,
   });
 }
