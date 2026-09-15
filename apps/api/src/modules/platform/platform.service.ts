@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { AppError } from "../../middleware/error-handler.js";
 
 export async function getPlatformOverview() {
   const now = new Date();
@@ -145,4 +146,104 @@ export async function listPlatformAuditLogs(limit = 100) {
       correlationId: true,
     },
   });
+}
+
+
+export async function getPlatformBusinessDetails(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      phone: true,
+      email: true,
+      website: true,
+      address: true,
+      logoUrl: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      subscription: {
+        select: {
+          id: true,
+          plan: true,
+          status: true,
+          startsAt: true,
+          endsAt: true,
+        },
+      },
+      _count: {
+        select: {
+          users: true,
+          customers: true,
+          orders: true,
+          branches: true,
+          services: true,
+          invoices: true,
+          payments: true,
+        },
+      },
+    },
+  });
+
+  if (!business) {
+    throw new AppError("Business not found", 404);
+  }
+
+  const [recentUsers, recentBranches, recentAuditLogs] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        businessId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    }),
+    prisma.branch.findMany({
+      where: {
+        businessId,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        businessId,
+      },
+      orderBy: { timestamp: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        timestamp: true,
+        actorUserId: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        metadata: true,
+        correlationId: true,
+      },
+    }),
+  ]);
+
+  return {
+    ...business,
+    recentUsers,
+    recentBranches,
+    recentAuditLogs,
+  };
 }

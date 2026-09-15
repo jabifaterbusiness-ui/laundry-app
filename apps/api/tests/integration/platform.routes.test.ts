@@ -7,9 +7,14 @@ vi.mock("../../src/lib/prisma.js", () => ({
     business: {
       count: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
     },
     user: {
       count: vi.fn(),
+      findMany: vi.fn(),
+    },
+    branch: {
+      findMany: vi.fn(),
     },
     customer: {
       count: vi.fn(),
@@ -198,6 +203,170 @@ describe("Platform Owner routes - company visibility", () => {
         orderBy: { createdAt: "desc" },
       }),
     );
+  });
+});
+
+describe("Platform Owner routes - company details", () => {
+  it("returns detailed company information to PLATFORM_ADMIN", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+      slug: "laundry-a",
+      phone: "08000000000",
+      email: "a@example.com",
+      website: "https://laundry-a.example",
+      address: "Enugu",
+      logoUrl: null,
+      isActive: true,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      subscription: {
+        id: "sub-A",
+        plan: "MONTHLY",
+        status: "ACTIVE",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: new Date("2099-01-01T00:00:00.000Z"),
+      },
+      _count: {
+        users: 5,
+        customers: 20,
+        orders: 40,
+        branches: 2,
+        services: 12,
+        invoices: 35,
+        payments: 28,
+      },
+    } as never);
+
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      {
+        id: "user-A",
+        fullName: "Owner A",
+        email: "owner@example.com",
+        role: "BUSINESS_OWNER",
+        isActive: true,
+        createdAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+    ] as never);
+
+    vi.mocked(prisma.branch.findMany).mockResolvedValue([
+      {
+        id: "branch-A",
+        name: "Main Branch",
+        isActive: true,
+        createdAt: new Date("2026-01-04T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-05T00:00:00.000Z"),
+      },
+    ] as never);
+
+    vi.mocked(prisma.auditLog.findMany).mockResolvedValue([
+      {
+        id: new Date("2026-09-01T00:00:00.000Z"),
+        timestamp: new Date("2026-09-01T00:00:00.000Z"),
+        actorUserId: "user-A",
+        action: "BUSINESS_BRANDING_UPDATED",
+        entityType: "BUSINESS",
+        entityId: "biz-A",
+        metadata: { safe: true },
+        correlationId: "request-A",
+      },
+    ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/businesses/biz-A")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: "biz-A",
+        name: "Laundry A",
+        isActive: true,
+        subscription: expect.objectContaining({
+          plan: "MONTHLY",
+          status: "ACTIVE",
+        }),
+        _count: expect.objectContaining({
+          users: 5,
+          customers: 20,
+          orders: 40,
+          branches: 2,
+          services: 12,
+          invoices: 35,
+          payments: 28,
+        }),
+        recentUsers: [
+          expect.objectContaining({
+            id: "user-A",
+            fullName: "Owner A",
+            role: "BUSINESS_OWNER",
+          }),
+        ],
+        recentBranches: [
+          expect.objectContaining({
+            id: "branch-A",
+            name: "Main Branch",
+          }),
+        ],
+        recentAuditLogs: [
+          expect.objectContaining({
+            action: "BUSINESS_BRANDING_UPDATED",
+            entityId: "biz-A",
+          }),
+        ],
+      }),
+    );
+
+    expect(prisma.business.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "biz-A" },
+      }),
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A" },
+        take: 10,
+      }),
+    );
+
+    expect(prisma.branch.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A" },
+        take: 10,
+      }),
+    );
+
+    expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A" },
+        take: 20,
+      }),
+    );
+  });
+
+  it("returns 404 when the requested company does not exist", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue(null);
+
+    const response = await request(app)
+      .get("/api/v1/platform/businesses/missing-business")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.message).toBe("Business not found");
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.branch.findMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from company details", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/businesses/biz-A")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.business.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.branch.findMany).not.toHaveBeenCalled();
   });
 });
 

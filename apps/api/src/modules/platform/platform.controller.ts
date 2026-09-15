@@ -3,6 +3,7 @@ import {
   getPlatformOverview,
   listPlatformAuditLogs,
   listPlatformBusinesses,
+  getPlatformBusinessDetails,
 } from "./platform.service.js";
 
 export async function overview(_req: Request, res: Response) {
@@ -18,4 +19,16 @@ export async function auditLogs(req: Request, res: Response) {
   const limit = Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 100;
 
   res.status(200).json(await listPlatformAuditLogs(limit));
+}
+
+
+export async function businessDetails(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+
+  if (!businessId) {
+    res.status(400).json({ message: "Business ID is required" });
+    return;
+  }
+
+  res.status(200).json(await getPlatformBusinessDetails(businessId));
 }

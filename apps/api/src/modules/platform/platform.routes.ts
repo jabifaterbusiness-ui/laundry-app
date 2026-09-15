@@ -5,6 +5,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import {
   auditLogs,
   businesses,
+  businessDetails,
   overview,
 } from "./platform.controller.js";
 
@@ -14,4 +15,8 @@ platformRouter.use(requireAuth, requireRole("PLATFORM_ADMIN"));
 
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/businesses", asyncHandler(businesses));
+platformRouter.get(
+  "/businesses/:businessId",
+  asyncHandler(businessDetails),
+);
 platformRouter.get("/audit-logs", asyncHandler(auditLogs));
