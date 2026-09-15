@@ -33,6 +33,7 @@ import { setupRouter } from "./modules/setup/setup.routes.js";
 import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middleware.js";
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
+import { platformRouter } from "./modules/platform/platform.routes.js";
 
 export function createApp() {
   const app = express();
@@ -63,6 +64,9 @@ export function createApp() {
   v1.use("/subscriptions", subscriptionsRouter);
   v1.use("/migrations", migrationsRouter);
   v1.use("/whatsapp", whatsappRouter);
+  // Platform Owner / Super-Admin routes intentionally bypass tenant context.
+  // The platform router itself requires authenticated PLATFORM_ADMIN access.
+  v1.use("/platform", platformRouter);
 
   // Normal tenant operations require an active subscription.
   // Apply the boundary only to known tenant route prefixes so unknown
