@@ -123,6 +123,86 @@ export async function getPlatformOverview() {
   };
 }
 
+export async function getPlatformRevenueAnalytics() {
+  const [payments, paymentMethods] = await Promise.all([
+    prisma.payment.groupBy({
+      by: ["type"],
+      where: {
+        status: "POSTED",
+      },
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+    prisma.payment.groupBy({
+      by: ["method", "type"],
+      where: {
+        status: "POSTED",
+      },
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+  ]);
+
+  const grossPaymentRow = payments.find((row) => row.type === "PAYMENT");
+  const refundRow = payments.find((row) => row.type === "REFUND");
+
+  const grossPayments = grossPaymentRow?._sum.amount ?? 0;
+  const refunds = refundRow?._sum.amount ?? 0;
+
+  const methodBreakdown = {
+    CASH: {
+      payments: 0,
+      refunds: 0,
+      net: 0,
+    },
+    TRANSFER: {
+      payments: 0,
+      refunds: 0,
+      net: 0,
+    },
+    POS: {
+      payments: 0,
+      refunds: 0,
+      net: 0,
+    },
+  };
+
+  for (const row of paymentMethods) {
+    const amount = row._sum.amount ?? 0;
+
+    if (row.type === "PAYMENT") {
+      methodBreakdown[row.method].payments = amount;
+    } else {
+      methodBreakdown[row.method].refunds = amount;
+    }
+  }
+
+  for (const method of Object.keys(methodBreakdown) as Array<
+    keyof typeof methodBreakdown
+  >) {
+    methodBreakdown[method].net =
+      methodBreakdown[method].payments - methodBreakdown[method].refunds;
+  }
+
+  return {
+    generatedAt: new Date(),
+    grossPayments,
+    refunds,
+    netCollected: grossPayments - refunds,
+    paymentCount: grossPaymentRow?._count._all ?? 0,
+    refundCount: refundRow?._count._all ?? 0,
+    methodBreakdown,
+  };
+}
+
 export async function listPlatformBusinesses() {
   return prisma.business.findMany({
     orderBy: { createdAt: "desc" },

@@ -31,6 +31,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     payment: {
       aggregate: vi.fn(),
+      groupBy: vi.fn(),
     },
     auditLog: {
       findMany: vi.fn(),
@@ -225,6 +226,127 @@ describe("Platform Owner routes - security boundary", () => {
 
     expect(response.status).toBe(403);
     expect(prisma.business.count).not.toHaveBeenCalled();
+  });
+});
+
+describe("Platform Owner routes - revenue analytics", () => {
+  it("returns platform-wide posted payment, refund, net, and method analytics", async () => {
+    vi.mocked(prisma.payment.groupBy)
+      .mockResolvedValueOnce([
+        {
+          type: "PAYMENT",
+          _sum: { amount: 250000 },
+          _count: { _all: 30 },
+        },
+        {
+          type: "REFUND",
+          _sum: { amount: 40000 },
+          _count: { _all: 5 },
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          method: "CASH",
+          type: "PAYMENT",
+          _sum: { amount: 100000 },
+          _count: { _all: 12 },
+        },
+        {
+          method: "CASH",
+          type: "REFUND",
+          _sum: { amount: 10000 },
+          _count: { _all: 2 },
+        },
+        {
+          method: "TRANSFER",
+          type: "PAYMENT",
+          _sum: { amount: 90000 },
+          _count: { _all: 10 },
+        },
+        {
+          method: "TRANSFER",
+          type: "REFUND",
+          _sum: { amount: 20000 },
+          _count: { _all: 2 },
+        },
+        {
+          method: "POS",
+          type: "PAYMENT",
+          _sum: { amount: 60000 },
+          _count: { _all: 8 },
+        },
+        {
+          method: "POS",
+          type: "REFUND",
+          _sum: { amount: 10000 },
+          _count: { _all: 1 },
+        },
+      ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/revenue")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        grossPayments: 250000,
+        refunds: 40000,
+        netCollected: 210000,
+        paymentCount: 30,
+        refundCount: 5,
+        methodBreakdown: {
+          CASH: {
+            payments: 100000,
+            refunds: 10000,
+            net: 90000,
+          },
+          TRANSFER: {
+            payments: 90000,
+            refunds: 20000,
+            net: 70000,
+          },
+          POS: {
+            payments: 60000,
+            refunds: 10000,
+            net: 50000,
+          },
+        },
+      }),
+    );
+
+    expect(response.body.generatedAt).toEqual(expect.any(String));
+    expect(prisma.payment.groupBy).toHaveBeenCalledTimes(2);
+
+    expect(prisma.payment.groupBy).toHaveBeenNthCalledWith(1, {
+      by: ["type"],
+      where: { status: "POSTED" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+
+    expect(prisma.payment.groupBy).toHaveBeenNthCalledWith(2, {
+      by: ["method", "type"],
+      where: { status: "POSTED" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+  });
+
+  it("rejects tenant users from platform revenue analytics", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/revenue")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.payment.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated revenue analytics access", async () => {
+    const response = await request(app).get("/api/v1/platform/revenue");
+
+    expect(response.status).toBe(401);
+    expect(prisma.payment.groupBy).not.toHaveBeenCalled();
   });
 });
 
