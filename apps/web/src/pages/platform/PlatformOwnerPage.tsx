@@ -1,6 +1,8 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  activatePlatformBusiness,
+  deactivatePlatformBusiness,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
@@ -45,6 +47,45 @@ export function PlatformOwnerPage() {
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
     enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+
+  const refreshPlatformData = async () => {
+    await Promise.all([
+      overviewQuery.refetch(),
+      businessesQuery.refetch(),
+      auditQuery.refetch(),
+    ]);
+  };
+
+  const statusMutation = useMutation({
+    mutationFn: async ({
+      businessId,
+      isActive,
+    }: {
+      businessId: string;
+      isActive: boolean;
+    }) =>
+      isActive
+        ? activatePlatformBusiness(businessId, accessToken)
+        : deactivatePlatformBusiness(businessId, accessToken),
+    onMutate: () => {
+      setStatusFeedback(null);
+    },
+    onSuccess: async (_, variables) => {
+      setStatusFeedback(
+        `Company ${variables.isActive ? "activated" : "deactivated"} successfully.`,
+      );
+      await refreshPlatformData();
+    },
+    onError: (error) => {
+      setStatusFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update company status.",
+      );
+    },
   });
 
   const businesses = useMemo(
@@ -120,6 +161,20 @@ export function PlatformOwnerPage() {
 
   const overview = overviewQuery.data;
 
+  const handleStatusChange = (businessId: string, isActive: boolean) => {
+    const action = isActive ? "activate" : "deactivate";
+
+    if (
+      !window.confirm(
+        `Are you sure you want to ${action} this company?`,
+      )
+    ) {
+      return;
+    }
+
+    statusMutation.mutate({ businessId, isActive });
+  };
+
   return (
     <section className="platform-page">
       <header className="platform-hero">
@@ -184,6 +239,18 @@ export function PlatformOwnerPage() {
         </article>
       </div>
 
+      {statusFeedback ? (
+        <div
+          className={`platform-feedback ${
+            statusMutation.isError ? "platform-error" : ""
+          }`}
+          role={statusMutation.isError ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {statusFeedback}
+        </div>
+      ) : null}
+
       <div className="platform-content-grid">
         <section className="platform-panel">
           <div className="platform-panel-header">
@@ -223,24 +290,41 @@ export function PlatformOwnerPage() {
                     </span>
                   </div>
 
-                  <div>
-                    <span
-                      className={`platform-status ${
-                        business.isActive ? "active" : "inactive"
-                      }`}
+                  <div className="platform-business-actions">
+                    <div>
+                      <span
+                        className={`platform-status ${
+                          business.isActive ? "active" : "inactive"
+                        }`}
+                      >
+                        {business.isActive ? "Active" : "Inactive"}
+                      </span>
+                      {business.subscription ? (
+                        <span className="platform-subscription">
+                          {business.subscription.plan} ·{" "}
+                          {business.subscription.status}
+                        </span>
+                      ) : (
+                        <span className="platform-subscription">
+                          No subscription
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={statusMutation.isPending}
+                      onClick={() =>
+                        handleStatusChange(business.id, !business.isActive)
+                      }
                     >
-                      {business.isActive ? "Active" : "Inactive"}
-                    </span>
-                    {business.subscription ? (
-                      <span className="platform-subscription">
-                        {business.subscription.plan} ·{" "}
-                        {business.subscription.status}
-                      </span>
-                    ) : (
-                      <span className="platform-subscription">
-                        No subscription
-                      </span>
-                    )}
+                      {statusMutation.isPending
+                        ? "Updating..."
+                        : business.isActive
+                          ? "Deactivate"
+                          : "Activate"}
+                    </button>
                   </div>
                 </article>
               ))}

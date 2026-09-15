@@ -87,3 +87,29 @@ export async function getPlatformAuditLogs(
     { accessToken },
   );
 }
+
+export async function activatePlatformBusiness(
+  businessId: string,
+  accessToken: string | null,
+): Promise<PlatformBusiness> {
+  return apiFetch<PlatformBusiness>(
+    `/platform/businesses/${businessId}/activate`,
+    {
+      method: "POST",
+      accessToken,
+    },
+  );
+}
+
+export async function deactivatePlatformBusiness(
+  businessId: string,
+  accessToken: string | null,
+): Promise<PlatformBusiness> {
+  return apiFetch<PlatformBusiness>(
+    `/platform/businesses/${businessId}/deactivate`,
+    {
+      method: "POST",
+      accessToken,
+    },
+  );
+}

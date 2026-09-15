@@ -1,21 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformOwnerPage } from "./PlatformOwnerPage.js";
 import {
+  activatePlatformBusiness,
+  deactivatePlatformBusiness,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
 } from "../../lib/platform-api.js";
+import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 vi.mock("../../lib/platform-api.js", () => ({
+  activatePlatformBusiness: vi.fn(),
+  deactivatePlatformBusiness: vi.fn(),
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
   getPlatformOverview: vi.fn(),
 }));
 
+const mockedActivate = vi.mocked(activatePlatformBusiness);
+const mockedDeactivate = vi.mocked(deactivatePlatformBusiness);
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
@@ -42,7 +49,7 @@ const overview = {
   recentBusinesses: [],
 };
 
-const businesses = [
+const businesses: PlatformBusiness[] = [
   {
     id: "biz-A",
     name: "Laundry A",
@@ -104,6 +111,11 @@ beforeEach(() => {
     activeBranchId: null,
   });
 
+  mockedActivate.mockResolvedValue(businesses[0]!);
+  mockedDeactivate.mockResolvedValue({
+    ...businesses[0]!,
+    isActive: false,
+  });
   mockedOverview.mockResolvedValue(overview);
   mockedBusinesses.mockResolvedValue(businesses);
   mockedAudits.mockResolvedValue([]);
@@ -123,6 +135,80 @@ describe("PlatformOwnerPage", () => {
     expect(await screen.findByText("3")).toBeInTheDocument();
     expect(await screen.findByText("Laundry A")).toBeInTheDocument();
     expect(screen.getByText("₦150,000")).toBeInTheDocument();
+  });
+
+  it("activates an inactive company after confirmation", async () => {
+    const inactiveBusiness: PlatformBusiness = {
+      ...businesses[0]!,
+      id: "biz-inactive",
+      name: "Laundry Inactive",
+      isActive: false,
+    };
+
+    mockedBusinesses.mockResolvedValue([inactiveBusiness]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockedActivate.mockResolvedValue({
+      ...inactiveBusiness,
+      isActive: true,
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Laundry Inactive"),
+    ).toBeInTheDocument();
+
+    const activateButton = screen.getByRole("button", { name: "Activate" });
+    activateButton.click();
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Are you sure you want to activate this company?",
+    );
+    await waitFor(() =>
+      expect(mockedActivate).toHaveBeenCalledWith(
+        "biz-inactive",
+        "platform-token",
+      ),
+    );
+  });
+
+  it("deactivates an active company after confirmation", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockedDeactivate.mockResolvedValue({
+      ...businesses[0]!,
+      isActive: false,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Laundry A")).toBeInTheDocument();
+
+    const deactivateButton = screen.getByRole("button", {
+      name: "Deactivate",
+    });
+    deactivateButton.click();
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Are you sure you want to deactivate this company?",
+    );
+    await waitFor(() =>
+      expect(mockedDeactivate).toHaveBeenCalledWith(
+        "biz-A",
+        "platform-token",
+      ),
+    );
+  });
+
+  it("does not change company status when confirmation is cancelled", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderPage();
+
+    expect(await screen.findByText("Laundry A")).toBeInTheDocument();
+
+    screen.getByRole("button", { name: "Deactivate" }).click();
+
+    expect(mockedDeactivate).not.toHaveBeenCalled();
   });
 
   it("does not expose the control center to tenant roles", () => {
