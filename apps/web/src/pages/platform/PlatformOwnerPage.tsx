@@ -6,6 +6,7 @@ import {
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
+  getPlatformRevenueAnalytics,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -43,6 +44,12 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const revenueQuery = useQuery({
+    queryKey: ["platform", "revenue"],
+    queryFn: () => getPlatformRevenueAnalytics(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -55,6 +62,7 @@ export function PlatformOwnerPage() {
     await Promise.all([
       overviewQuery.refetch(),
       businessesQuery.refetch(),
+      revenueQuery.refetch(),
       auditQuery.refetch(),
     ]);
   };
@@ -149,6 +157,7 @@ export function PlatformOwnerPage() {
             onClick={() => {
               void overviewQuery.refetch();
               void businessesQuery.refetch();
+              void revenueQuery.refetch();
               void auditQuery.refetch();
             }}
           >
@@ -250,6 +259,74 @@ export function PlatformOwnerPage() {
           {statusFeedback}
         </div>
       ) : null}
+
+      <section className="platform-panel">
+        <div className="platform-panel-header">
+          <div>
+            <div className="platform-eyebrow">REVENUE OVERVIEW</div>
+            <h2>Platform-wide financial activity</h2>
+          </div>
+          {revenueQuery.data?.generatedAt ? (
+            <span>Updated {formatDate(revenueQuery.data.generatedAt)}</span>
+          ) : null}
+        </div>
+
+        {revenueQuery.isLoading ? (
+          <p className="platform-feedback">Loading revenue analytics...</p>
+        ) : revenueQuery.isError ? (
+          <p className="platform-feedback platform-error">
+            Revenue analytics could not be loaded.
+          </p>
+        ) : revenueQuery.data ? (
+          <>
+            <div className="platform-revenue-summary">
+              <article className="platform-kpi-card">
+                <span className="platform-kpi-label">Gross payments</span>
+                <strong>{formatCurrency(revenueQuery.data.grossPayments)}</strong>
+                <small>
+                  {formatNumber(revenueQuery.data.paymentCount)} posted payments
+                </small>
+              </article>
+
+              <article className="platform-kpi-card">
+                <span className="platform-kpi-label">Refunds</span>
+                <strong>{formatCurrency(revenueQuery.data.refunds)}</strong>
+                <small>
+                  {formatNumber(revenueQuery.data.refundCount)} posted refunds
+                </small>
+              </article>
+
+              <article className="platform-kpi-card">
+                <span className="platform-kpi-label">Net collected</span>
+                <strong>{formatCurrency(revenueQuery.data.netCollected)}</strong>
+                <small>Gross payments less refunds</small>
+              </article>
+            </div>
+
+            <div className="platform-revenue-methods">
+              {(["CASH", "TRANSFER", "POS"] as const).map((method) => {
+                const breakdown = revenueQuery.data!.methodBreakdown[method];
+
+                return (
+                  <article className="platform-revenue-method" key={method}>
+                    <div>
+                      <strong>{method}</strong>
+                      <span>Net collected</span>
+                    </div>
+                    <strong>{formatCurrency(breakdown.net)}</strong>
+                    <div>
+                      <span>Payments {formatCurrency(breakdown.payments)}</span>
+                      <span>Refunds {formatCurrency(breakdown.refunds)}</span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <p className="platform-feedback">No revenue analytics available.</p>
+        )}
+      </section>
 
       <div className="platform-content-grid">
         <section className="platform-panel">

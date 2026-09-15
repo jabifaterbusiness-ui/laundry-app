@@ -9,6 +9,7 @@ import {
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
+  getPlatformRevenueAnalytics,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -19,6 +20,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
   getPlatformOverview: vi.fn(),
+  getPlatformRevenueAnalytics: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -26,6 +28,7 @@ const mockedDeactivate = vi.mocked(deactivatePlatformBusiness);
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
+const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
 
 const overview = {
   generatedAt: "2026-09-15T00:00:00.000Z",
@@ -47,6 +50,32 @@ const overview = {
     totalCollected: 150000,
   },
   recentBusinesses: [],
+};
+
+const revenue = {
+  generatedAt: "2026-09-15T00:05:00.000Z",
+  grossPayments: 250000,
+  refunds: 40000,
+  netCollected: 210000,
+  paymentCount: 30,
+  refundCount: 5,
+  methodBreakdown: {
+    CASH: {
+      payments: 100000,
+      refunds: 10000,
+      net: 90000,
+    },
+    TRANSFER: {
+      payments: 90000,
+      refunds: 20000,
+      net: 70000,
+    },
+    POS: {
+      payments: 60000,
+      refunds: 10000,
+      net: 50000,
+    },
+  },
 };
 
 const businesses: PlatformBusiness[] = [
@@ -119,6 +148,7 @@ beforeEach(() => {
   mockedOverview.mockResolvedValue(overview);
   mockedBusinesses.mockResolvedValue(businesses);
   mockedAudits.mockResolvedValue([]);
+  mockedRevenue.mockResolvedValue(revenue);
 });
 
 describe("PlatformOwnerPage", () => {
@@ -135,6 +165,59 @@ describe("PlatformOwnerPage", () => {
     expect(await screen.findByText("3")).toBeInTheDocument();
     expect(await screen.findByText("Laundry A")).toBeInTheDocument();
     expect(screen.getByText("₦150,000")).toBeInTheDocument();
+  });
+
+  it("renders platform-wide revenue analytics and payment method breakdown", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform-wide financial activity",
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Gross payments")).toBeInTheDocument();
+    expect(screen.getByText("₦250,000")).toBeInTheDocument();
+    expect(screen.getByText("Refunds")).toBeInTheDocument();
+    expect(screen.getByText("₦40,000")).toBeInTheDocument();
+
+    const netCollectedLabels = screen.getAllByText("Net collected");
+    expect(netCollectedLabels).toHaveLength(4);
+    expect(netCollectedLabels[0]).toBeInTheDocument();
+
+    expect(screen.getByText("₦210,000")).toBeInTheDocument();
+
+    expect(screen.getByText("30 posted payments")).toBeInTheDocument();
+    expect(screen.getByText("5 posted refunds")).toBeInTheDocument();
+
+    expect(screen.getByText("CASH")).toBeInTheDocument();
+    expect(screen.getByText("TRANSFER")).toBeInTheDocument();
+    expect(screen.getByText("POS")).toBeInTheDocument();
+    expect(screen.getByText("₦90,000")).toBeInTheDocument();
+    expect(screen.getByText("₦70,000")).toBeInTheDocument();
+    expect(screen.getByText("₦50,000")).toBeInTheDocument();
+
+    expect(mockedRevenue).toHaveBeenCalledWith("platform-token");
+  });
+
+  it("shows a revenue error without hiding the rest of the control center", async () => {
+    mockedRevenue.mockRejectedValue(new Error("Revenue service unavailable"));
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform Owner Control Center",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText(
+        "Revenue analytics could not be loaded.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Laundry A")).toBeInTheDocument();
   });
 
   it("activates an inactive company after confirmation", async () => {
@@ -232,5 +315,6 @@ describe("PlatformOwnerPage", () => {
     expect(mockedOverview).not.toHaveBeenCalled();
     expect(mockedBusinesses).not.toHaveBeenCalled();
     expect(mockedAudits).not.toHaveBeenCalled();
+    expect(mockedRevenue).not.toHaveBeenCalled();
   });
 });

@@ -49,6 +49,32 @@ export interface PlatformOverview {
   recentBusinesses: PlatformBusiness[];
 }
 
+export interface PlatformRevenueAnalytics {
+  generatedAt: string;
+  grossPayments: number;
+  refunds: number;
+  netCollected: number;
+  paymentCount: number;
+  refundCount: number;
+  methodBreakdown: {
+    CASH: {
+      payments: number;
+      refunds: number;
+      net: number;
+    };
+    TRANSFER: {
+      payments: number;
+      refunds: number;
+      net: number;
+    };
+    POS: {
+      payments: number;
+      refunds: number;
+      net: number;
+    };
+  };
+}
+
 export interface PlatformAuditLog {
   id: string;
   timestamp: string;
@@ -66,6 +92,14 @@ export async function getPlatformOverview(
   accessToken: string | null,
 ): Promise<PlatformOverview> {
   return apiFetch<PlatformOverview>("/platform/overview", {
+    accessToken,
+  });
+}
+
+export async function getPlatformRevenueAnalytics(
+  accessToken: string | null,
+): Promise<PlatformRevenueAnalytics> {
+  return apiFetch<PlatformRevenueAnalytics>("/platform/revenue", {
     accessToken,
   });
 }
