@@ -8,6 +8,7 @@ import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
+  getPlatformGlobalStatistics,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -57,6 +58,12 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const globalStatisticsQuery = useQuery({
+    queryKey: ["platform", "global-statistics"],
+    queryFn: () => getPlatformGlobalStatistics(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -71,6 +78,7 @@ export function PlatformOwnerPage() {
       businessesQuery.refetch(),
       revenueQuery.refetch(),
       growthQuery.refetch(),
+      globalStatisticsQuery.refetch(),
       auditQuery.refetch(),
     ]);
   };
@@ -167,6 +175,7 @@ export function PlatformOwnerPage() {
               void businessesQuery.refetch();
               void revenueQuery.refetch();
               void growthQuery.refetch();
+              void globalStatisticsQuery.refetch();
               void auditQuery.refetch();
             }}
           >
@@ -488,6 +497,129 @@ export function PlatformOwnerPage() {
           </>
         ) : (
           <p className="platform-feedback">No growth analytics available.</p>
+        )}
+      </section>
+
+      <section className="platform-panel">
+        <div className="platform-panel-header">
+          <div>
+            <div className="platform-eyebrow">GLOBAL STATISTICS</div>
+            <h2>Worldwide platform coverage</h2>
+          </div>
+          {globalStatisticsQuery.data?.generatedAt ? (
+            <span>
+              Updated {formatDate(globalStatisticsQuery.data.generatedAt)}
+            </span>
+          ) : null}
+        </div>
+
+        {globalStatisticsQuery.isLoading ? (
+          <p className="platform-feedback">
+            Loading global statistics...
+          </p>
+        ) : globalStatisticsQuery.isError ? (
+          <p className="platform-feedback platform-error">
+            Global statistics could not be loaded.
+          </p>
+        ) : globalStatisticsQuery.data ? (
+          <>
+            <div className="platform-growth-summary">
+              <article className="platform-growth-card">
+                <span className="platform-kpi-label">Countries</span>
+                <strong>
+                  {formatNumber(
+                    globalStatisticsQuery.data.totals.countries,
+                  )}
+                </strong>
+                <small>Markets represented</small>
+              </article>
+
+              <article className="platform-growth-card">
+                <span className="platform-kpi-label">Businesses</span>
+                <strong>
+                  {formatNumber(
+                    globalStatisticsQuery.data.totals.businesses,
+                  )}
+                </strong>
+                <small>
+                  {formatNumber(
+                    globalStatisticsQuery.data.totals.activeBusinesses,
+                  )}{" "}
+                  active
+                </small>
+              </article>
+
+              <article className="platform-growth-card">
+                <span className="platform-kpi-label">Branches</span>
+                <strong>
+                  {formatNumber(globalStatisticsQuery.data.totals.branches)}
+                </strong>
+                <small>Across all markets</small>
+              </article>
+
+              <article className="platform-growth-card">
+                <span className="platform-kpi-label">Orders</span>
+                <strong>
+                  {formatNumber(globalStatisticsQuery.data.totals.orders)}
+                </strong>
+                <small>Worldwide order records</small>
+              </article>
+            </div>
+
+            {globalStatisticsQuery.data.countries.length ? (
+              <div className="platform-business-list">
+                {globalStatisticsQuery.data.countries.map((country) => (
+                  <article
+                    className="platform-business-row"
+                    key={country.countryCode}
+                  >
+                    <div
+                      className="platform-business-mark"
+                      aria-hidden="true"
+                    >
+                      {country.countryCode}
+                    </div>
+
+                    <div className="platform-business-main">
+                      <strong>{country.countryCode}</strong>
+                      <span>
+                        {formatNumber(country.businesses)}{" "}
+                        {country.businesses === 1
+                          ? "business"
+                          : "businesses"}
+                      </span>
+                    </div>
+
+                    <div className="platform-business-stats">
+                      <span>
+                        {formatNumber(country.activeBusinesses)} active
+                      </span>
+                      <span>
+                        {formatNumber(country.users)} users
+                      </span>
+                      <span>
+                        {formatNumber(country.customers)} customers
+                      </span>
+                      <span>
+                        {formatNumber(country.orders)} orders
+                      </span>
+                      <span>
+                        {formatNumber(country.branches)} branches
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="platform-feedback">
+                No country statistics are currently available.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="platform-feedback">
+            No global statistics available.
+          </p>
         )}
       </section>
 

@@ -91,6 +91,32 @@ export interface PlatformGrowthAnalytics {
   orders: PlatformGrowthSeries;
 }
 
+export interface PlatformGlobalCountryStatistics {
+  countryCode: string;
+  businesses: number;
+  activeBusinesses: number;
+  inactiveBusinesses: number;
+  users: number;
+  customers: number;
+  orders: number;
+  branches: number;
+}
+
+export interface PlatformGlobalStatistics {
+  generatedAt: string;
+  totals: {
+    businesses: number;
+    activeBusinesses: number;
+    inactiveBusinesses: number;
+    users: number;
+    customers: number;
+    orders: number;
+    branches: number;
+    countries: number;
+  };
+  countries: PlatformGlobalCountryStatistics[];
+}
+
 export interface PlatformAuditLog {
   id: string;
   timestamp: string;
@@ -124,6 +150,14 @@ export async function getPlatformGrowthAnalytics(
   accessToken: string | null,
 ): Promise<PlatformGrowthAnalytics> {
   return apiFetch<PlatformGrowthAnalytics>("/platform/growth", {
+    accessToken,
+  });
+}
+
+export async function getPlatformGlobalStatistics(
+  accessToken: string | null,
+): Promise<PlatformGlobalStatistics> {
+  return apiFetch<PlatformGlobalStatistics>("/platform/global-statistics", {
     accessToken,
   });
 }

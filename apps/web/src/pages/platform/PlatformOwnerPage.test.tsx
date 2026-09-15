@@ -11,6 +11,7 @@ import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
+  getPlatformGlobalStatistics,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -23,6 +24,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformOverview: vi.fn(),
   getPlatformRevenueAnalytics: vi.fn(),
   getPlatformGrowthAnalytics: vi.fn(),
+  getPlatformGlobalStatistics: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -32,6 +34,7 @@ const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
 const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
 const mockedGrowth = vi.mocked(getPlatformGrowthAnalytics);
+const mockedGlobalStatistics = vi.mocked(getPlatformGlobalStatistics);
 
 const growth = {
   generatedAt: "2026-09-15T00:10:00.000Z",
@@ -113,6 +116,43 @@ const revenue = {
   },
 };
 
+
+const globalStatistics = {
+  generatedAt: "2026-09-15T00:12:00.000Z",
+  totals: {
+    businesses: 3,
+    activeBusinesses: 2,
+    inactiveBusinesses: 1,
+    users: 12,
+    customers: 40,
+    orders: 75,
+    branches: 4,
+    countries: 2,
+  },
+  countries: [
+    {
+      countryCode: "NG",
+      businesses: 2,
+      activeBusinesses: 2,
+      inactiveBusinesses: 0,
+      users: 9,
+      customers: 30,
+      orders: 60,
+      branches: 3,
+    },
+    {
+      countryCode: "GH",
+      businesses: 1,
+      activeBusinesses: 0,
+      inactiveBusinesses: 1,
+      users: 3,
+      customers: 10,
+      orders: 15,
+      branches: 1,
+    },
+  ],
+};
+
 const businesses: PlatformBusiness[] = [
   {
     id: "biz-A",
@@ -185,6 +225,7 @@ beforeEach(() => {
   mockedAudits.mockResolvedValue([]);
   mockedRevenue.mockResolvedValue(revenue);
   mockedGrowth.mockResolvedValue(growth);
+  mockedGlobalStatistics.mockResolvedValue(globalStatistics);
 });
 
 describe("PlatformOwnerPage", () => {
@@ -204,6 +245,41 @@ describe("PlatformOwnerPage", () => {
     expect(await screen.findByText("Laundry A")).toBeInTheDocument();
     expect(screen.getByText("₦150,000")).toBeInTheDocument();
   });
+
+
+    it("renders worldwide global statistics and country coverage", async () => {
+      renderPage();
+
+      expect(
+        await screen.findByRole("heading", {
+          name: "Worldwide platform coverage",
+        }),
+      ).toBeInTheDocument();
+
+      expect(screen.getByText("GLOBAL STATISTICS")).toBeInTheDocument();
+
+      const countriesLabel = screen.getByText("Countries");
+      expect(
+        countriesLabel.parentElement?.querySelector("strong"),
+      ).toHaveTextContent("2");
+
+      const branchesLabel = screen.getByText("Branches");
+      expect(
+        branchesLabel.parentElement?.querySelector("strong"),
+      ).toHaveTextContent("4");
+
+      const globalStatisticsHeading = screen.getByRole("heading", {
+        name: "Worldwide platform coverage",
+      });
+      const globalStatisticsSection = globalStatisticsHeading.closest("section");
+
+      expect(globalStatisticsSection).not.toBeNull();
+      expect(globalStatisticsSection).toHaveTextContent("NG");
+      expect(globalStatisticsSection).toHaveTextContent("GH");
+      expect(globalStatisticsSection).toHaveTextContent("60");
+      expect(globalStatisticsSection).toHaveTextContent("15");
+      expect(mockedGlobalStatistics).toHaveBeenCalledWith("platform-token");
+    });
 
   it("renders platform-wide revenue analytics and payment method breakdown", async () => {
     renderPage();
