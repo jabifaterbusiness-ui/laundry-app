@@ -203,6 +203,72 @@ export async function getPlatformRevenueAnalytics() {
   };
 }
 
+export async function getPlatformGrowthAnalytics() {
+  const [businesses, users, customers, orders] = await Promise.all([
+    prisma.business.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+      },
+    }),
+    prisma.user.findMany({
+      where: { businessId: { not: null } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+      },
+    }),
+    prisma.customer.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+      },
+    }),
+    prisma.order.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const buildMonthlySeries = (
+    dates: Array<{ createdAt: Date }>,
+  ): Array<{ month: string; count: number }> => {
+    const counts = new Map<string, number>();
+
+    for (const item of dates) {
+      const month = item.createdAt.toISOString().slice(0, 7);
+      counts.set(month, (counts.get(month) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries()).map(([month, count]) => ({
+      month,
+      count,
+    }));
+  };
+
+  return {
+    generatedAt: new Date(),
+    businesses: {
+      total: businesses.length,
+      monthly: buildMonthlySeries(businesses),
+    },
+    users: {
+      total: users.length,
+      monthly: buildMonthlySeries(users),
+    },
+    customers: {
+      total: customers.length,
+      monthly: buildMonthlySeries(customers),
+    },
+    orders: {
+      total: orders.length,
+      monthly: buildMonthlySeries(orders),
+    },
+  };
+}
+
 export async function listPlatformBusinesses() {
   return prisma.business.findMany({
     orderBy: { createdAt: "desc" },

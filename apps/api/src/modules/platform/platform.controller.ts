@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
+  getPlatformGrowthAnalytics,
   getPlatformHealth,
   listPlatformAuditLogs,
   listPlatformBusinesses,
@@ -22,6 +23,10 @@ export async function overview(_req: Request, res: Response) {
 
 export async function revenue(_req: Request, res: Response) {
   res.status(200).json(await getPlatformRevenueAnalytics());
+}
+
+export async function growth(_req: Request, res: Response) {
+  res.status(200).json(await getPlatformGrowthAnalytics());
 }
 
 export async function businesses(_req: Request, res: Response) {

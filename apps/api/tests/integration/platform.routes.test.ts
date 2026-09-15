@@ -20,9 +20,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       count: vi.fn(),
+      findMany: vi.fn(),
     },
     order: {
       count: vi.fn(),
+      findMany: vi.fn(),
     },
     subscription: {
       findMany: vi.fn(),
@@ -347,6 +349,73 @@ describe("Platform Owner routes - revenue analytics", () => {
 
     expect(response.status).toBe(401);
     expect(prisma.payment.groupBy).not.toHaveBeenCalled();
+  });
+});
+
+describe("Platform Owner routes - growth analytics", () => {
+  it("returns platform-wide monthly growth analytics", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValueOnce([
+      { createdAt: new Date("2026-01-10T00:00:00.000Z") },
+      { createdAt: new Date("2026-01-20T00:00:00.000Z") },
+      { createdAt: new Date("2026-03-05T00:00:00.000Z") },
+    ] as never);
+
+    vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
+      { createdAt: new Date("2026-01-15T00:00:00.000Z") },
+      { createdAt: new Date("2026-02-15T00:00:00.000Z") },
+    ] as never);
+
+    vi.mocked(prisma.customer.findMany).mockResolvedValue([
+      { createdAt: new Date("2026-02-01T00:00:00.000Z") },
+      { createdAt: new Date("2026-02-20T00:00:00.000Z") },
+    ] as never);
+
+    vi.mocked(prisma.order.findMany).mockResolvedValue([
+      { createdAt: new Date("2026-03-01T00:00:00.000Z") },
+      { createdAt: new Date("2026-03-02T00:00:00.000Z") },
+      { createdAt: new Date("2026-03-03T00:00:00.000Z") },
+    ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/growth")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.businesses).toEqual({
+      total: 3,
+      monthly: [
+        { month: "2026-01", count: 2 },
+        { month: "2026-03", count: 1 },
+      ],
+    });
+    expect(response.body.users).toEqual({
+      total: 2,
+      monthly: [
+        { month: "2026-01", count: 1 },
+        { month: "2026-02", count: 1 },
+      ],
+    });
+    expect(response.body.customers).toEqual({
+      total: 2,
+      monthly: [{ month: "2026-02", count: 2 }],
+    });
+    expect(response.body.orders).toEqual({
+      total: 3,
+      monthly: [{ month: "2026-03", count: 3 }],
+    });
+    expect(response.body.generatedAt).toEqual(expect.any(String));
+  });
+
+  it("rejects tenant users from platform growth analytics", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/growth")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.business.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.customer.findMany).not.toHaveBeenCalled();
+    expect(prisma.order.findMany).not.toHaveBeenCalled();
   });
 });
 

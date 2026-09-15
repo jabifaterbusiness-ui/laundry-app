@@ -11,6 +11,7 @@ import {
   deactivateBusiness,
   overview,
   revenue,
+  growth,
   health,
 } from "./platform.controller.js";
 
@@ -21,6 +22,7 @@ platformRouter.use(requireAuth, requireRole("PLATFORM_ADMIN"));
 platformRouter.get("/health", asyncHandler(health));
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/revenue", asyncHandler(revenue));
+platformRouter.get("/growth", asyncHandler(growth));
 platformRouter.get("/businesses", asyncHandler(businesses));
 platformRouter.get(
   "/businesses/:businessId",
