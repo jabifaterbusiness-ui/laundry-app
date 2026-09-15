@@ -1443,3 +1443,17 @@ model OfflineSyncOperation {
   @@index([correlationId])
   @@map("offline_sync_operations")
 }
+
+model PlatformConfig {
+  id                            String   @id
+  allowNewBusinessRegistration  Boolean  @default(true)
+  maintenanceMode               Boolean  @default(false)
+  whatsappMessagingEnabled      Boolean  @default(true)
+  automatedNotificationsEnabled Boolean  @default(true)
+  offlineSyncEnabled            Boolean  @default(true)
+  version                       Int      @default(1)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@map("platform_config")
+}

@@ -39,6 +39,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    platformConfig: {
+      upsert: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -143,6 +147,30 @@ beforeEach(() => {
   ] as never);
 
   vi.mocked(prisma.auditLog.findMany).mockResolvedValue([] as never);
+
+  vi.mocked(prisma.platformConfig.upsert).mockResolvedValue({
+    id: "00000000-0000-4000-8000-000000000001",
+    allowNewBusinessRegistration: true,
+    maintenanceMode: false,
+    whatsappMessagingEnabled: true,
+    automatedNotificationsEnabled: true,
+    offlineSyncEnabled: true,
+    version: 1,
+    createdAt: new Date("2026-09-15T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-15T00:00:00.000Z"),
+  } as never);
+
+  vi.mocked(prisma.platformConfig.update).mockResolvedValue({
+    id: "00000000-0000-4000-8000-000000000001",
+    allowNewBusinessRegistration: false,
+    maintenanceMode: true,
+    whatsappMessagingEnabled: true,
+    automatedNotificationsEnabled: false,
+    offlineSyncEnabled: true,
+    version: 2,
+    createdAt: new Date("2026-09-15T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-15T00:01:00.000Z"),
+  } as never);
 });
 
 describe("Platform Owner routes - health", () => {
@@ -1024,5 +1052,101 @@ describe("Platform Owner routes - audit visibility", () => {
     expect(prisma.business.findUnique).not.toHaveBeenCalled();
     expect(prisma.subscription.upsert).not.toHaveBeenCalled();
   });
+
+
+describe("Platform Owner routes - configuration", () => {
+  it("returns platform configuration to PLATFORM_ADMIN", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/configuration")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      allowNewBusinessRegistration: true,
+      maintenanceMode: false,
+      whatsappMessagingEnabled: true,
+      automatedNotificationsEnabled: true,
+      offlineSyncEnabled: true,
+      version: 1,
+    });
+
+    expect(prisma.platformConfig.upsert).toHaveBeenCalledWith({
+      where: {
+        id: "00000000-0000-4000-8000-000000000001",
+      },
+      update: {},
+      create: {
+        id: "00000000-0000-4000-8000-000000000001",
+      },
+    });
+  });
+
+  it("updates platform configuration to PLATFORM_ADMIN", async () => {
+    const response = await request(app)
+      .patch("/api/v1/platform/configuration")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({
+        maintenanceMode: true,
+        automatedNotificationsEnabled: false,
+        expectedVersion: 1,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      maintenanceMode: true,
+      automatedNotificationsEnabled: false,
+      version: 2,
+    });
+
+    expect(prisma.platformConfig.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "00000000-0000-4000-8000-000000000001",
+        },
+        data: expect.objectContaining({
+          maintenanceMode: true,
+          automatedNotificationsEnabled: false,
+          version: 2,
+        }),
+      }),
+    );
+  });
+
+  it("rejects stale platform configuration updates", async () => {
+    const response = await request(app)
+      .patch("/api/v1/platform/configuration")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({
+        maintenanceMode: true,
+        expectedVersion: 99,
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toBe(
+      "Platform configuration has changed. Refresh the configuration and try again.",
+    );
+    expect(prisma.platformConfig.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from platform configuration", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/configuration")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.platformConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty platform configuration update", async () => {
+    const response = await request(app)
+      .patch("/api/v1/platform/configuration")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({});
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.message).toBe("Validation failed");
+    expect(prisma.platformConfig.update).not.toHaveBeenCalled();
+  });
+});
 
 });

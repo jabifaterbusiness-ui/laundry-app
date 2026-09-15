@@ -12,6 +12,11 @@ import {
   setPlatformBusinessActiveStatus,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
+import { updatePlatformConfigSchema } from "./platform-config.validation.js";
+import {
+  getPlatformConfig,
+  updatePlatformConfig,
+} from "./platform-config.service.js";
 
 export async function health(_req: Request, res: Response) {
   const result = await getPlatformHealth();
@@ -122,6 +127,28 @@ export async function renewBusinessSubscription(req: Request, res: Response) {
   res.status(200).json(
     await renewPlatformBusinessSubscription(
       businessId,
+      input,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+
+export async function configuration(req: Request, res: Response) {
+  res.status(200).json(await getPlatformConfig());
+}
+
+export async function updateConfiguration(req: Request, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const input = updatePlatformConfigSchema.parse(req.body);
+
+  res.status(200).json(
+    await updatePlatformConfig(
       input,
       req.user.id,
       req.correlationId,
