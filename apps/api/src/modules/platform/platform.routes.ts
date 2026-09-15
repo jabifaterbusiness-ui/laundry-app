@@ -10,12 +10,14 @@ import {
   activateBusiness,
   deactivateBusiness,
   overview,
+  health,
 } from "./platform.controller.js";
 
 export const platformRouter = Router();
 
 platformRouter.use(requireAuth, requireRole("PLATFORM_ADMIN"));
 
+platformRouter.get("/health", asyncHandler(health));
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/businesses", asyncHandler(businesses));
 platformRouter.get(

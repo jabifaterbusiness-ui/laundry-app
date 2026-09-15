@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
   getPlatformOverview,
+  getPlatformHealth,
   listPlatformAuditLogs,
   listPlatformBusinesses,
   getPlatformBusinessDetails,
@@ -8,6 +9,11 @@ import {
   setPlatformBusinessActiveStatus,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
+
+export async function health(_req: Request, res: Response) {
+  const result = await getPlatformHealth();
+  res.status(result.status === "healthy" ? 200 : 503).json(result);
+}
 
 export async function overview(_req: Request, res: Response) {
   res.status(200).json(await getPlatformOverview());

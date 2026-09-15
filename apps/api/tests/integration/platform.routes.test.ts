@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    $queryRaw: vi.fn(),
     business: {
       count: vi.fn(),
       findMany: vi.fn(),
@@ -79,6 +80,8 @@ const STAFF_A = jwt.sign(
 beforeEach(() => {
   vi.clearAllMocks();
 
+  vi.mocked(prisma.$queryRaw).mockResolvedValue([{ ok: 1 }] as never);
+
   vi.mocked(prisma.business.count)
     .mockResolvedValueOnce(3)
     .mockResolvedValueOnce(2);
@@ -137,6 +140,55 @@ beforeEach(() => {
   ] as never);
 
   vi.mocked(prisma.auditLog.findMany).mockResolvedValue([] as never);
+});
+
+describe("Platform Owner routes - health", () => {
+  it("returns healthy platform status to PLATFORM_ADMIN", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/health")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        status: "healthy",
+        api: "healthy",
+        database: "healthy",
+        env: "test",
+      }),
+    );
+    expect(response.body.checkedAt).toEqual(expect.any(String));
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it("returns degraded status when the database health check fails", async () => {
+    vi.mocked(prisma.$queryRaw).mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
+
+    const response = await request(app)
+      .get("/api/v1/platform/health")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        status: "degraded",
+        api: "healthy",
+        database: "unhealthy",
+        env: "test",
+      }),
+    );
+  });
+
+  it("rejects tenant users from platform health", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/health")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
 });
 
 describe("Platform Owner routes - security boundary", () => {

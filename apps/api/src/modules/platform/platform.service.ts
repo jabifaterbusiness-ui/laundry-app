@@ -1,10 +1,35 @@
 import { prisma } from "../../lib/prisma.js";
+import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import {
   createOrRenewSubscription,
 } from "../subscriptions/subscriptions.service.js";
 import type { CreateSubscriptionInput } from "../subscriptions/subscriptions.validation.js";
+
+export async function getPlatformHealth() {
+  const checkedAt = new Date();
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    return {
+      status: "healthy" as const,
+      api: "healthy" as const,
+      database: "healthy" as const,
+      env: config.env,
+      checkedAt,
+    };
+  } catch {
+    return {
+      status: "degraded" as const,
+      api: "healthy" as const,
+      database: "unhealthy" as const,
+      env: config.env,
+      checkedAt,
+    };
+  }
+}
 
 export async function getPlatformOverview() {
   const now = new Date();
