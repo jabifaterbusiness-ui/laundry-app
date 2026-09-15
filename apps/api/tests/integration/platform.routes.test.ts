@@ -8,6 +8,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     user: {
       count: vi.fn(),
@@ -370,6 +371,180 @@ describe("Platform Owner routes - company details", () => {
     expect(prisma.business.findUnique).not.toHaveBeenCalled();
     expect(prisma.user.findMany).not.toHaveBeenCalled();
     expect(prisma.branch.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("Platform Owner routes - company status controls", () => {
+  it("deactivates an active company for PLATFORM_ADMIN and audits the action", async () => {
+    vi.mocked(prisma.business.findUnique)
+      .mockResolvedValueOnce({
+        id: "biz-A",
+        name: "Laundry A",
+        isActive: true,
+      } as never)
+      .mockResolvedValueOnce({
+        id: "biz-A",
+        name: "Laundry A",
+        slug: "laundry-a",
+        phone: null,
+        email: "a@example.com",
+        website: null,
+        address: null,
+        logoUrl: null,
+        isActive: false,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-09-15T00:00:00.000Z"),
+      } as never);
+
+    vi.mocked(prisma.business.update).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+      isActive: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/deactivate")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: "biz-A",
+        name: "Laundry A",
+        isActive: false,
+      }),
+    );
+
+    expect(prisma.business.update).toHaveBeenCalledWith({
+      where: { id: "biz-A" },
+      data: { isActive: false },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "platform.business.deactivated",
+        entityType: "Business",
+        entityId: "biz-A",
+        businessId: "biz-A",
+        actorUserId: "55555555-5555-4555-8555-555555555555",
+        metadata: expect.objectContaining({
+          businessName: "Laundry A",
+          isActive: false,
+        }),
+      }),
+    });
+  });
+
+  it("activates an inactive company for PLATFORM_ADMIN and audits the action", async () => {
+    vi.mocked(prisma.business.findUnique)
+      .mockResolvedValueOnce({
+        id: "biz-A",
+        name: "Laundry A",
+        isActive: false,
+      } as never)
+      .mockResolvedValueOnce({
+        id: "biz-A",
+        name: "Laundry A",
+        slug: "laundry-a",
+        phone: null,
+        email: "a@example.com",
+        website: null,
+        address: null,
+        logoUrl: null,
+        isActive: true,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-09-15T00:00:00.000Z"),
+      } as never);
+
+    vi.mocked(prisma.business.update).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+      isActive: true,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/activate")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: "biz-A",
+        name: "Laundry A",
+        isActive: true,
+      }),
+    );
+
+    expect(prisma.business.update).toHaveBeenCalledWith({
+      where: { id: "biz-A" },
+      data: { isActive: true },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "platform.business.activated",
+        entityType: "Business",
+        entityId: "biz-A",
+        businessId: "biz-A",
+        actorUserId: "55555555-5555-4555-8555-555555555555",
+        metadata: expect.objectContaining({
+          businessName: "Laundry A",
+          isActive: true,
+        }),
+      }),
+    });
+  });
+
+  it("rejects redundant deactivation", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+      isActive: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/deactivate")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe("Business is already inactive");
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects redundant activation", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A",
+      name: "Laundry A",
+      isActive: true,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/activate")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe("Business is already active");
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when changing status of a nonexistent company", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue(null);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/missing-business/deactivate")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.message).toBe("Business not found");
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from company status controls", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/deactivate")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.business.findUnique).not.toHaveBeenCalled();
+    expect(prisma.business.update).not.toHaveBeenCalled();
   });
 });
 

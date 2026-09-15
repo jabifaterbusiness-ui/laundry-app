@@ -7,6 +7,8 @@ import {
   businesses,
   businessDetails,
   renewBusinessSubscription,
+  activateBusiness,
+  deactivateBusiness,
   overview,
 } from "./platform.controller.js";
 
@@ -23,5 +25,13 @@ platformRouter.get(
 platformRouter.post(
   "/businesses/:businessId/subscription",
   asyncHandler(renewBusinessSubscription),
+);
+platformRouter.post(
+  "/businesses/:businessId/activate",
+  asyncHandler(activateBusiness),
+);
+platformRouter.post(
+  "/businesses/:businessId/deactivate",
+  asyncHandler(deactivateBusiness),
 );
 platformRouter.get("/audit-logs", asyncHandler(auditLogs));

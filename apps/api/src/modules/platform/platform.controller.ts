@@ -5,6 +5,7 @@ import {
   listPlatformBusinesses,
   getPlatformBusinessDetails,
   renewPlatformBusinessSubscription,
+  setPlatformBusinessActiveStatus,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
 
@@ -34,6 +35,53 @@ export async function businessDetails(req: Request, res: Response) {
 
   res.status(200).json(await getPlatformBusinessDetails(businessId));
 }
+
+export async function activateBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+
+  if (!businessId) {
+    res.status(400).json({ message: "Business ID is required" });
+    return;
+  }
+
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  res.status(200).json(
+    await setPlatformBusinessActiveStatus(
+      businessId,
+      true,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function deactivateBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+
+  if (!businessId) {
+    res.status(400).json({ message: "Business ID is required" });
+    return;
+  }
+
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  res.status(200).json(
+    await setPlatformBusinessActiveStatus(
+      businessId,
+      false,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
 
 export async function renewBusinessSubscription(req: Request, res: Response) {
   const businessId = req.params.businessId;

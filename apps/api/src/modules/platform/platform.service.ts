@@ -254,6 +254,72 @@ export async function getPlatformBusinessDetails(businessId: string) {
 }
 
 
+export async function setPlatformBusinessActiveStatus(
+  businessId: string,
+  isActive: boolean,
+  actorUserId: string,
+  correlationId?: string,
+) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+    },
+  });
+
+  if (!business) {
+    throw new AppError("Business not found", 404);
+  }
+
+  if (business.isActive === isActive) {
+    throw new AppError(
+      isActive
+        ? "Business is already active"
+        : "Business is already inactive",
+      400,
+    );
+  }
+
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { isActive },
+  });
+
+  await recordAuditEvent({
+    action: isActive
+      ? "platform.business.activated"
+      : "platform.business.deactivated",
+    entityType: "Business",
+    entityId: businessId,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: {
+      businessName: business.name,
+      isActive,
+    },
+  });
+
+  return prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      phone: true,
+      email: true,
+      website: true,
+      address: true,
+      logoUrl: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
+
 export async function renewPlatformBusinessSubscription(
   businessId: string,
   input: CreateSubscriptionInput,
