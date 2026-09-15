@@ -3,6 +3,7 @@ import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
+  getPlatformGlobalStatistics,
   getPlatformHealth,
   listPlatformAuditLogs,
   listPlatformBusinesses,
@@ -27,6 +28,10 @@ export async function revenue(_req: Request, res: Response) {
 
 export async function growth(_req: Request, res: Response) {
   res.status(200).json(await getPlatformGrowthAnalytics());
+}
+
+export async function globalStatistics(_req: Request, res: Response) {
+  res.status(200).json(await getPlatformGlobalStatistics());
 }
 
 export async function businesses(_req: Request, res: Response) {

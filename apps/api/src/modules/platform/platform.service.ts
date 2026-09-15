@@ -269,6 +269,94 @@ export async function getPlatformGrowthAnalytics() {
   };
 }
 
+export async function getPlatformGlobalStatistics() {
+  const businesses = await prisma.business.findMany({
+    select: {
+      countryCode: true,
+      isActive: true,
+      _count: {
+        select: {
+          users: true,
+          customers: true,
+          orders: true,
+          branches: true,
+        },
+      },
+    },
+  });
+
+  const countries = new Map<
+    string,
+    {
+      businesses: number;
+      activeBusinesses: number;
+      inactiveBusinesses: number;
+      users: number;
+      customers: number;
+      orders: number;
+      branches: number;
+    }
+  >();
+
+  for (const business of businesses) {
+    const current = countries.get(business.countryCode) ?? {
+      businesses: 0,
+      activeBusinesses: 0,
+      inactiveBusinesses: 0,
+      users: 0,
+      customers: 0,
+      orders: 0,
+      branches: 0,
+    };
+
+    current.businesses += 1;
+    if (business.isActive) {
+      current.activeBusinesses += 1;
+    } else {
+      current.inactiveBusinesses += 1;
+    }
+    current.users += business._count.users;
+    current.customers += business._count.customers;
+    current.orders += business._count.orders;
+    current.branches += business._count.branches;
+
+    countries.set(business.countryCode, current);
+  }
+
+  return {
+    generatedAt: new Date(),
+    totals: {
+      businesses: businesses.length,
+      activeBusinesses: businesses.filter((business) => business.isActive).length,
+      inactiveBusinesses: businesses.filter((business) => !business.isActive).length,
+      users: businesses.reduce((total, business) => total + business._count.users, 0),
+      customers: businesses.reduce(
+        (total, business) => total + business._count.customers,
+        0,
+      ),
+      orders: businesses.reduce(
+        (total, business) => total + business._count.orders,
+        0,
+      ),
+      branches: businesses.reduce(
+        (total, business) => total + business._count.branches,
+        0,
+      ),
+      countries: countries.size,
+    },
+    countries: Array.from(countries.entries())
+      .map(([countryCode, statistics]) => ({
+        countryCode,
+        ...statistics,
+      }))
+      .sort(
+        (a, b) =>
+          b.businesses - a.businesses ||
+          a.countryCode.localeCompare(b.countryCode),
+      ),
+  };
+}
+
 export async function listPlatformBusinesses() {
   return prisma.business.findMany({
     orderBy: { createdAt: "desc" },

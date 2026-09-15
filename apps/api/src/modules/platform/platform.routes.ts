@@ -12,6 +12,7 @@ import {
   overview,
   revenue,
   growth,
+  globalStatistics,
   health,
 } from "./platform.controller.js";
 
@@ -23,6 +24,7 @@ platformRouter.get("/health", asyncHandler(health));
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/revenue", asyncHandler(revenue));
 platformRouter.get("/growth", asyncHandler(growth));
+platformRouter.get("/global-statistics", asyncHandler(globalStatistics));
 platformRouter.get("/businesses", asyncHandler(businesses));
 platformRouter.get(
   "/businesses/:businessId",

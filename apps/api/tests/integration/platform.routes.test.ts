@@ -419,6 +419,119 @@ describe("Platform Owner routes - growth analytics", () => {
   });
 });
 
+describe("Platform Owner routes - global statistics", () => {
+  it("returns platform-wide and country-level statistics", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValueOnce([
+      {
+        countryCode: "NG",
+        isActive: true,
+        _count: {
+          users: 5,
+          customers: 20,
+          orders: 40,
+          branches: 2,
+        },
+      },
+      {
+        countryCode: "NG",
+        isActive: false,
+        _count: {
+          users: 2,
+          customers: 8,
+          orders: 12,
+          branches: 1,
+        },
+      },
+      {
+        countryCode: "GB",
+        isActive: true,
+        _count: {
+          users: 3,
+          customers: 10,
+          orders: 18,
+          branches: 2,
+        },
+      },
+    ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/global-statistics")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        totals: {
+          businesses: 3,
+          activeBusinesses: 2,
+          inactiveBusinesses: 1,
+          users: 10,
+          customers: 38,
+          orders: 70,
+          branches: 5,
+          countries: 2,
+        },
+        countries: [
+          {
+            countryCode: "NG",
+            businesses: 2,
+            activeBusinesses: 1,
+            inactiveBusinesses: 1,
+            users: 7,
+            customers: 28,
+            orders: 52,
+            branches: 3,
+          },
+          {
+            countryCode: "GB",
+            businesses: 1,
+            activeBusinesses: 1,
+            inactiveBusinesses: 0,
+            users: 3,
+            customers: 10,
+            orders: 18,
+            branches: 2,
+          },
+        ],
+        generatedAt: expect.any(String),
+      }),
+    );
+
+    expect(prisma.business.findMany).toHaveBeenCalledWith({
+      select: {
+        countryCode: true,
+        isActive: true,
+        _count: {
+          select: {
+            users: true,
+            customers: true,
+            orders: true,
+            branches: true,
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects tenant users from global statistics", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/global-statistics")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.business.findMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated global statistics access", async () => {
+    const response = await request(app).get(
+      "/api/v1/platform/global-statistics",
+    );
+
+    expect(response.status).toBe(401);
+    expect(prisma.business.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("Platform Owner routes - company visibility", () => {
   it("returns platform-wide company directory only to PLATFORM_ADMIN", async () => {
     const response = await request(app)
