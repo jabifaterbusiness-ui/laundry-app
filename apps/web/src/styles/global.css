@@ -1409,6 +1409,21 @@ a {
   opacity: 0.65;
 }
 
+.auth-success {
+  margin-bottom: 20px;
+
+  padding: 12px 14px;
+
+  color: #176b45;
+  background: #effaf4;
+
+  border: 1px solid #c6ead7;
+  border-radius: 10px;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .auth-error {
   margin-bottom: 20px;
 

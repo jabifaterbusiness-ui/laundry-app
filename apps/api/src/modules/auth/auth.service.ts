@@ -105,3 +105,107 @@ export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "
 }
 
 export type { Role };
+
+
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+export async function createPasswordResetToken(userId: string): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.passwordResetToken.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    await tx.passwordResetToken.create({
+      data: {
+        tokenHash,
+        userId,
+        expiresAt,
+      },
+    });
+  });
+
+  return rawToken;
+}
+
+export async function invalidatePasswordResetToken(rawToken: string): Promise<void> {
+  const tokenHash = hashToken(rawToken);
+
+  await prisma.passwordResetToken.updateMany({
+    where: {
+      tokenHash,
+      usedAt: null,
+    },
+    data: {
+      usedAt: new Date(),
+    },
+  });
+}
+
+export async function resetPassword(rawToken: string, newPassword: string): Promise<string> {
+  const tokenHash = hashToken(rawToken);
+
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      userId: true,
+      expiresAt: true,
+      usedAt: true,
+      user: {
+        select: {
+          id: true,
+          businessId: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (
+    !resetToken ||
+    resetToken.usedAt ||
+    resetToken.expiresAt <= new Date() ||
+    !resetToken.user.isActive
+  ) {
+    throw new AppError("Invalid or expired password reset token", 400);
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  const consumed = await prisma.$transaction(async (tx) => {
+    const result = await tx.passwordResetToken.updateMany({
+      where: {
+        id: resetToken.id,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+
+    if (result.count !== 1) {
+      throw new AppError("Invalid or expired password reset token", 400);
+    }
+
+    await tx.user.update({
+      where: { id: resetToken.userId },
+      data: { passwordHash },
+    });
+
+    await tx.refreshToken.updateMany({
+      where: {
+        userId: resetToken.userId,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    return resetToken.user;
+  });
+
+  return consumed.id;
+}

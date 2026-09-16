@@ -1,9 +1,18 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
+import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { issueTokenPair, revokeRefreshToken, rotateRefreshToken, verifyPassword } from "./auth.service.js";
+import {
+  createPasswordResetToken,
+  invalidatePasswordResetToken,
+  issueTokenPair,
+  resetPassword,
+  revokeRefreshToken,
+  rotateRefreshToken,
+  verifyPassword,
+} from "./auth.service.js";
 
 async function branchMemberships(userId: string) {
   const memberships = await prisma.userBranch.findMany({
@@ -104,5 +113,92 @@ export async function me(req: Request, res: Response) {
     role: user.role,
     businessId: user.businessId,
     branches,
+  });
+}
+
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export async function forgotPassword(req: Request, res: Response) {
+  const { email } = forgotPasswordSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, isActive: true },
+  });
+
+  if (user?.isActive) {
+    const token = await createPasswordResetToken(user.id);
+    const resetUrl = `${config.webAppUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+    const { sendReceiptEmail } = await import("../invoices/providers/resend.provider.js");
+
+    try {
+      await sendReceiptEmail({
+        to: user.email,
+        subject: "Reset your LaundryAngel password",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#172033">
+            <h1 style="margin:0 0 16px">LaundryAngel</h1>
+            <h2 style="margin:0 0 12px">Reset your password</h2>
+            <p>We received a request to reset your LaundryAngel password.</p>
+            <p>
+              <a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">
+                Reset password
+              </a>
+            </p>
+            <p>This link expires in 30 minutes and can only be used once.</p>
+            <p>If you did not request this, you can safely ignore this email.</p>
+          </div>
+        `,
+      });
+    } catch {
+      await invalidatePasswordResetToken(token);
+      throw new AppError("Unable to send password reset email", 503);
+    }
+
+    await recordAuditEvent({
+      action: "user.password_reset_requested",
+      entityType: "User",
+      entityId: user.id,
+      businessId: null,
+      actorUserId: null,
+      correlationId: req.correlationId ?? null,
+    });
+  }
+
+  res.status(200).json({
+    message: "If an account exists for that email, a password reset link has been sent.",
+  });
+}
+
+export async function resetPasswordController(req: Request, res: Response) {
+  const { token, password } = resetPasswordSchema.parse(req.body);
+
+  const userId = await resetPassword(token, password);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, businessId: true },
+  });
+
+  await recordAuditEvent({
+    action: "user.password_reset_completed",
+    entityType: "User",
+    entityId: userId,
+    businessId: user?.businessId ?? null,
+    actorUserId: userId,
+    correlationId: req.correlationId ?? null,
+  });
+
+  res.status(200).json({
+    message: "Password reset successfully. Please sign in with your new password.",
   });
 }

@@ -200,7 +200,8 @@ model User {
   // baked into a long-lived token).
   branches UserBranch[]
 
-  refreshTokens RefreshToken[]
+  refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   auditLogs     AuditLog[]
   migrationJobs MigrationJob[]
 
@@ -1457,4 +1458,18 @@ model PlatformConfig {
   updatedAt                     DateTime @updatedAt
 
   @@map("platform_config")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
