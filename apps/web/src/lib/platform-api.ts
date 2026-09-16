@@ -1,4 +1,5 @@
 import { apiFetch } from "./api-client.js";
+import type { SubscriptionPlan } from "./subscriptions-api.js";
 
 export interface PlatformBusiness {
   id: string;
@@ -258,6 +259,21 @@ export async function deactivatePlatformBusiness(
     {
       method: "POST",
       accessToken,
+    },
+  );
+}
+
+export async function renewPlatformBusinessSubscription(
+  businessId: string,
+  plan: SubscriptionPlan,
+  accessToken: string | null,
+): Promise<PlatformBusiness["subscription"]> {
+  return apiFetch<PlatformBusiness["subscription"]>(
+    `/platform/businesses/${businessId}/subscription`,
+    {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ plan }),
     },
   );
 }

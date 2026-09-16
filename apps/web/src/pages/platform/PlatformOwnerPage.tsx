@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
+  renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
@@ -88,6 +89,8 @@ export function PlatformOwnerPage() {
   });
 
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [subscriptionFeedback, setSubscriptionFeedback] =
+    useState<string | null>(null);
 
   const refreshPlatformData = async () => {
     await Promise.all([
@@ -127,6 +130,27 @@ export function PlatformOwnerPage() {
         error instanceof Error
           ? error.message
           : "Unable to update company status.",
+      );
+    },
+  });
+
+  const subscriptionMutation = useMutation({
+    mutationFn: async (businessId: string) =>
+      renewPlatformBusinessSubscription(businessId, "MONTHLY", accessToken),
+    onMutate: () => {
+      setSubscriptionFeedback(null);
+    },
+    onSuccess: async () => {
+      setSubscriptionFeedback(
+        "Company subscription created or renewed successfully.",
+      );
+      await refreshPlatformData();
+    },
+    onError: (error) => {
+      setSubscriptionFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to create or renew the company subscription.",
       );
     },
   });
@@ -268,6 +292,18 @@ export function PlatformOwnerPage() {
     statusMutation.mutate({ businessId, isActive });
   };
 
+  const handleSubscriptionRenewal = (businessId: string, businessName: string) => {
+    if (
+      !window.confirm(
+        `Create or renew a one-month subscription for ${businessName}?`,
+      )
+    ) {
+      return;
+    }
+
+    subscriptionMutation.mutate(businessId);
+  };
+
   return (
     <section className="platform-page">
       <header className="platform-hero">
@@ -341,6 +377,18 @@ export function PlatformOwnerPage() {
           aria-live="polite"
         >
           {statusFeedback}
+        </div>
+      ) : null}
+
+      {subscriptionFeedback ? (
+        <div
+          className={`platform-feedback ${
+            subscriptionMutation.isError ? "platform-error" : ""
+          }`}
+          role={subscriptionMutation.isError ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {subscriptionFeedback}
         </div>
       ) : null}
 
@@ -749,20 +797,46 @@ export function PlatformOwnerPage() {
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      disabled={statusMutation.isPending}
-                      onClick={() =>
-                        handleStatusChange(business.id, !business.isActive)
-                      }
-                    >
-                      {statusMutation.isPending
-                        ? "Updating..."
-                        : business.isActive
-                          ? "Deactivate"
-                          : "Activate"}
-                    </button>
+                    <div className="platform-control-actions">
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={
+                          statusMutation.isPending ||
+                          subscriptionMutation.isPending
+                        }
+                        onClick={() =>
+                          handleStatusChange(business.id, !business.isActive)
+                        }
+                      >
+                        {statusMutation.isPending
+                          ? "Updating..."
+                          : business.isActive
+                            ? "Deactivate"
+                            : "Activate"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={
+                          statusMutation.isPending ||
+                          subscriptionMutation.isPending
+                        }
+                        onClick={() =>
+                          handleSubscriptionRenewal(
+                            business.id,
+                            business.name,
+                          )
+                        }
+                      >
+                        {subscriptionMutation.isPending
+                          ? "Updating..."
+                          : business.subscription
+                            ? "Renew Monthly"
+                            : "Create Monthly Subscription"}
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}

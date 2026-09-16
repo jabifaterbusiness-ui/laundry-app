@@ -7,6 +7,7 @@ import { PlatformOwnerPage } from "./PlatformOwnerPage.js";
 import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
+  renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformOverview,
@@ -23,6 +24,7 @@ import { useAuthStore } from "../../state/auth-store.js";
 vi.mock("../../lib/platform-api.js", () => ({
   activatePlatformBusiness: vi.fn(),
   deactivatePlatformBusiness: vi.fn(),
+  renewPlatformBusinessSubscription: vi.fn(),
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
   getPlatformOverview: vi.fn(),
@@ -36,6 +38,9 @@ vi.mock("../../lib/platform-api.js", () => ({
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
 const mockedDeactivate = vi.mocked(deactivatePlatformBusiness);
+const mockedRenewSubscription = vi.mocked(
+  renewPlatformBusinessSubscription,
+);
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
@@ -596,6 +601,59 @@ describe("PlatformOwnerPage", () => {
     screen.getByRole("button", { name: "Deactivate" }).click();
 
     expect(mockedDeactivate).not.toHaveBeenCalled();
+  });
+
+  it("creates a monthly subscription for a company without a subscription", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const businessWithoutSubscription: PlatformBusiness = {
+      ...businesses[0]!,
+      id: "biz-no-subscription",
+      name: "Laundry No Subscription",
+      subscription: null,
+    };
+
+    mockedBusinesses.mockResolvedValue([
+      businessWithoutSubscription,
+    ]);
+    mockedRenewSubscription.mockResolvedValue({
+      id: "sub-new",
+      plan: "MONTHLY",
+      status: "ACTIVE",
+      startsAt: "2026-09-16T00:00:00.000Z",
+      endsAt: "2026-10-16T00:00:00.000Z",
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Laundry No Subscription"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Create Monthly Subscription",
+      }),
+    );
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Create or renew a one-month subscription for Laundry No Subscription?",
+    );
+
+    await waitFor(() => {
+      expect(mockedRenewSubscription).toHaveBeenCalledWith(
+        "biz-no-subscription",
+        "MONTHLY",
+        expect.anything(),
+      );
+    });
+
+    expect(
+      await screen.findByText(
+        "Company subscription created or renewed successfully.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not expose the control center to tenant roles", () => {
