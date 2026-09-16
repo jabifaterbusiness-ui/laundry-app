@@ -31,6 +31,7 @@ const STATUSES: OrderStatus[] = [
 interface OrderLine {
   serviceId: string;
   quantity: number;
+  colors: string[];
 }
 
 function formatMoney(value: number) {
@@ -173,6 +174,7 @@ export function OrdersPage() {
           items: lines.map((line) => ({
             serviceId: line.serviceId,
             quantity: line.quantity,
+            colors: line.colors ?? [],
           })),
           garmentNote: garmentNote.trim() || undefined,
           internalNote: internalNote.trim() || undefined,
@@ -203,7 +205,7 @@ export function OrdersPage() {
         updateWorkspace(activeWorkspaceId, {
           activeOrder: order,
           draft: {
-            lines: [{ serviceId: "", quantity: 1 }],
+            lines: [{ serviceId: "", quantity: 1, colors: [] }],
             garmentNote: "",
             internalNote: "",
             expectedReadyAt: "",
@@ -270,7 +272,7 @@ export function OrdersPage() {
 
   const lines =
     activeWorkspace?.draft.lines ?? [
-      { serviceId: "", quantity: 1 },
+      { serviceId: "", quantity: 1, colors: [] },
     ];
 
   const garmentNote =
@@ -313,7 +315,7 @@ export function OrdersPage() {
       draft: {
         lines: [
           ...lines,
-          { serviceId: "", quantity: 1 },
+          { serviceId: "", quantity: 1, colors: [] },
         ],
       },
     });
@@ -332,7 +334,7 @@ export function OrdersPage() {
   function updateLine(
     index: number,
     field: keyof OrderLine,
-    value: string | number,
+    value: OrderLine[typeof field],
   ) {
     if (!activeWorkspaceId) return;
 
@@ -598,6 +600,7 @@ export function OrdersPage() {
                 <tr>
                   <th>QTY</th>
                   <th>Item</th>
+                  <th>Colors</th>
                   <th>PCS</th>
                   <th>Unit Price</th>
                   <th>Total Price</th>
@@ -661,6 +664,25 @@ export function OrdersPage() {
                             </option>
                           ))}
                         </select>
+                      </td>
+
+                      <td>
+                        <input
+                          type="text"
+                          value={(line.colors ?? []).join(", ")}
+                          onChange={(event) =>
+                            updateLine(
+                              index,
+                              "colors",
+                              event.target.value
+                                .split(",")
+                                .map((color) => color.trim())
+                                .filter(Boolean),
+                            )
+                          }
+                          placeholder="White, Blue, Black"
+                          aria-label={`Colors for item ${index + 1}`}
+                        />
                       </td>
 
                       <td>{totalPieces}</td>

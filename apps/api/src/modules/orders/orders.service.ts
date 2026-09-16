@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error-handler.js";
 export interface CreateOrderItemData {
   serviceId: string;
   quantity: number;
+  colors?: string[];
 }
 
 export interface CreateOrderData {
@@ -147,6 +148,7 @@ async function createOrderWithTx(
           piecesPerUnit: service.pieces,
           quantity: item.quantity,
           totalPieces,
+          colors: item.colors ?? [],
           unitPrice: service.unitPrice,
           lineTotal,
         };

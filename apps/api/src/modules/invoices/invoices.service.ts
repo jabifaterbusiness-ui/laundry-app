@@ -66,6 +66,7 @@ export async function createInvoice(data: CreateInvoiceData) {
     const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] =
       order.items.map((item) => ({
         itemName: item.serviceName,
+        colors: item.colors,
         piecesPerUnit: item.piecesPerUnit,
         quantity: item.quantity,
         totalPieces: item.totalPieces,

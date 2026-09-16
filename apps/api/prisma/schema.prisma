@@ -510,6 +510,7 @@ model OrderItem {
 
   // Historical snapshot from Service at order creation.
   serviceName   String
+  colors        String[] @default([])
   piecesPerUnit Int
   quantity      Int
   totalPieces   Int
@@ -605,6 +606,7 @@ model InvoiceItem {
 
   // Historical snapshots from OrderItem.
   itemName      String
+  colors        String[] @default([])
   piecesPerUnit Int
   quantity      Int
   totalPieces   Int

@@ -72,6 +72,7 @@ export type ReceiptItem = {
   id: string;
   quantity: number;
   itemName: string;
+  colors: string[];
   totalPieces: number;
   unitPrice: number;
   totalPrice: number;

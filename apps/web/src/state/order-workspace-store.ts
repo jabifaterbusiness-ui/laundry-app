@@ -6,6 +6,7 @@ export interface OrderWorkspaceDraft {
   lines: Array<{
     serviceId: string;
     quantity: number;
+    colors: string[];
   }>;
   garmentNote: string;
   internalNote: string;
@@ -53,7 +54,7 @@ interface OrderWorkspaceState {
 }
 
 const DEFAULT_DRAFT: Omit<OrderWorkspaceDraft, "customerId"> = {
-  lines: [{ serviceId: "", quantity: 1 }],
+  lines: [{ serviceId: "", quantity: 1, colors: [] }],
   garmentNote: "",
   internalNote: "",
   expectedReadyAt: "",
@@ -185,7 +186,16 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
 
     restoreWorkspaces: (workspaces, activeWorkspaceId) =>
       set({
-        workspaces,
+        workspaces: workspaces.map((workspace) => ({
+          ...workspace,
+          draft: {
+            ...workspace.draft,
+            lines: workspace.draft.lines.map((line) => ({
+              ...line,
+              colors: line.colors ?? [],
+            })),
+          },
+        })),
         activeWorkspaceId:
           activeWorkspaceId &&
           workspaces.some(

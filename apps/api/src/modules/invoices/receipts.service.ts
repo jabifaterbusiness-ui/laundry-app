@@ -22,6 +22,7 @@ export type CustomerReceipt = {
     id: string;
     quantity: number;
     itemName: string;
+    colors: string[];
     totalPieces: number;
     unitPrice: number;
     totalPrice: number;
@@ -53,6 +54,7 @@ export type CompanyReceipt = {
     id: string;
     quantity: number;
     itemName: string;
+    colors: string[];
     totalPieces: number;
     unitPrice: number;
     totalPrice: number;
@@ -102,6 +104,7 @@ function projectItems(invoice: NonNullable<InvoiceForReceipt>) {
     id: item.id,
     quantity: item.quantity,
     itemName: item.itemName,
+    colors: item.colors,
     totalPieces: item.totalPieces,
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice,

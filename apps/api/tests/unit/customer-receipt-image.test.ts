@@ -27,6 +27,7 @@ const RECEIPT = {
       id: "item-1",
       quantity: 2,
       itemName: "Complete Agbada",
+      colors: ["White", "Royal Blue"],
       totalPieces: 6,
       unitPrice: 4500,
       totalPrice: 9000,

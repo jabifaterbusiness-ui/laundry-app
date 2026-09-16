@@ -9,6 +9,10 @@ const orderItemSchema = z
       .number()
       .int()
       .positive("Quantity must be a positive whole number"),
+    colors: z
+      .array(z.string().trim().min(1).max(100))
+      .max(50)
+      .default([]),
   })
   .strict();
 

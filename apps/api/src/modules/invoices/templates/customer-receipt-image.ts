@@ -95,29 +95,78 @@ export async function renderCustomerReceiptImage(
   const backgroundColor = receipt.receiptBackgroundColor ?? "#ffffff";
   const textColor = receipt.receiptTextColor ?? "#111827";
 
+  const totalPieces = receipt.items.reduce(
+    (total, item) => total + item.totalPieces,
+    0,
+  );
+
+  const tableTop = 350;
+  const headerHeight = 48;
+  const rowHeight = 78;
+
   const itemRows = receipt.items
     .map((item, index) => {
-      const y = 430 + index * 78;
+      const y = tableTop + headerHeight + index * rowHeight;
+      const piecesPerUnit =
+        item.quantity > 0 && item.totalPieces > 0
+          ? item.totalPieces / item.quantity
+          : 1;
+      const ratePerPiece = item.unitPrice / piecesPerUnit;
+      const amount = item.totalPieces * ratePerPiece;
+      const colors =
+        item.colors.length > 0
+          ? item.colors.join(", ")
+          : "";
 
       return `
-        <text x="${padding}" y="${y}" font-size="27" font-family="Arial" fill="${textColor}">
-          ${escapeXml(`${item.quantity} × ${item.itemName}`)}
+        <line
+          x1="${padding}"
+          y1="${y + 24}"
+          x2="${width - padding}"
+          y2="${y + 24}"
+          stroke="#e5e7eb"
+          stroke-width="1"
+        />
+
+        <text x="${padding + 12}" y="${y}" font-size="24"
+          font-family="Arial" font-weight="700" fill="${textColor}">
+          ${escapeXml(String(item.quantity))}
         </text>
+
+        <text x="${padding + 92}" y="${y}" font-size="24"
+          font-family="Arial" font-weight="700" fill="${textColor}">
+          ${escapeXml(item.itemName)}
+        </text>
+
+        ${
+          colors
+            ? `
+              <text x="${padding + 92}" y="${y + 29}" font-size="17"
+                font-family="Arial" fill="#6b7280">
+                ${escapeXml(colors)}
+              </text>
+            `
+            : ""
+        }
+
+        <text x="${width - 250}" y="${y}" text-anchor="end"
+          font-size="21" font-family="Arial" fill="${textColor}">
+          ${escapeXml(formatAmount(ratePerPiece))}
+        </text>
+
         <text x="${width - padding}" y="${y}" text-anchor="end"
-          font-size="27" font-family="Arial" fill="${textColor}">
-          ${escapeXml(formatAmount(item.totalPrice))}
-        </text>
-        <text x="${padding}" y="${y + 31}" font-size="21" font-family="Arial" fill="#6b7280">
-          ${escapeXml(`${item.totalPieces} pcs · ${formatAmount(item.unitPrice)} / unit`)}
+          font-size="24" font-family="Arial" font-weight="700" fill="${textColor}">
+          ${escapeXml(formatAmount(amount))}
         </text>
       `;
     })
     .join("");
 
   const itemCount = receipt.items.length;
-  const agreementY = 510 + itemCount * 78;
-  const totalY = agreementY + 150;
-  const footerY = totalY + 155;
+  const tableBottom = tableTop + headerHeight + itemCount * rowHeight;
+  const agreementY = tableBottom + 35;
+  const totalY = agreementY + (receipt.garmentNote ? 130 : 45);
+  const footerY = totalY + 205;
   const height = footerY + 80;
 
   // Do not fetch or embed arbitrary remote logo URLs during server-side
@@ -209,13 +258,38 @@ export async function renderCustomerReceiptImage(
 
       <line x1="${padding}" y1="340" x2="${width - padding}" y2="340" stroke="#e5e7eb" stroke-width="2" />
 
-      <text x="${padding}" y="385" font-size="22" font-family="Arial" font-weight="700" fill="#6b7280">
-        ITEMS
+      <rect
+        x="${padding}"
+        y="${tableTop}"
+        width="${width - padding * 2}"
+        height="${headerHeight}"
+        rx="8"
+        fill="${primaryColor}"
+      />
+
+      <text x="${padding + 12}" y="${tableTop + 31}" font-size="17"
+        font-family="Arial" font-weight="700" fill="#ffffff">
+        QTY
+      </text>
+
+      <text x="${padding + 92}" y="${tableTop + 31}" font-size="17"
+        font-family="Arial" font-weight="700" fill="#ffffff">
+        ITEM / COLORS
+      </text>
+
+      <text x="${width - 250}" y="${tableTop + 31}" text-anchor="end"
+        font-size="17" font-family="Arial" font-weight="700" fill="#ffffff">
+        RATE / PC
+      </text>
+
+      <text x="${width - padding - 12}" y="${tableTop + 31}" text-anchor="end"
+        font-size="17" font-family="Arial" font-weight="700" fill="#ffffff">
+        AMOUNT
       </text>
 
       ${itemRows}
 
-      <line x1="${padding}" y1="${agreementY - 30}" x2="${width - padding}" y2="${agreementY - 30}"
+      <line x1="${padding}" y1="${tableBottom + 8}" x2="${width - padding}" y2="${tableBottom + 8}"
         stroke="#e5e7eb" stroke-width="2" />
 
       ${
@@ -231,21 +305,32 @@ export async function renderCustomerReceiptImage(
           : ""
       }
 
+      <text x="${padding}" y="${totalY - 8}" font-size="20"
+        font-family="Arial" font-weight="700" fill="${textColor}">
+        TOTAL PCS
+      </text>
+
+      <text x="${padding}" y="${totalY + 25}" font-size="30"
+        font-family="Arial" font-weight="700" fill="${textColor}">
+        ${escapeXml(String(totalPieces))}
+      </text>
+
       <rect
-        x="${padding}"
-        y="${totalY - 55}"
-        width="${width - padding * 2}"
-        height="100"
-        rx="18"
+        x="${width - 390}"
+        y="${totalY - 45}"
+        width="334"
+        height="92"
+        rx="16"
         fill="${accentColor}"
       />
 
-      <text x="${padding + 28}" y="${totalY + 8}" font-size="27" font-family="Arial" font-weight="700" fill="#ffffff">
-        TOTAL
+      <text x="${width - 362}" y="${totalY - 7}" font-size="19"
+        font-family="Arial" font-weight="700" fill="#ffffff">
+        TOTAL AMOUNT
       </text>
 
-      <text x="${width - padding - 28}" y="${totalY + 8}" text-anchor="end"
-        font-size="38" font-family="Arial" font-weight="700" fill="#ffffff">
+      <text x="${width - padding - 28}" y="${totalY + 27}" text-anchor="end"
+        font-size="34" font-family="Arial" font-weight="700" fill="#ffffff">
         ${escapeXml(formatAmount(receipt.totalAmount))}
       </text>
 

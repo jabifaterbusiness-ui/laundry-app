@@ -33,17 +33,34 @@ function safeColor(value: string | null, fallback: string): string {
 
 export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
   const items = receipt.items
-    .map(
-      (item) => `
+    .map((item) => {
+      const piecesPerUnit =
+        item.quantity > 0 && item.totalPieces > 0
+          ? item.totalPieces / item.quantity
+          : 1;
+      const ratePerPiece = item.unitPrice / piecesPerUnit;
+      const colors =
+        item.colors.length > 0
+          ? `<div class="colors">${escapeHtml(item.colors.join(", "))}</div>`
+          : "";
+
+      return `
         <tr>
           <td>${item.quantity}</td>
-          <td>${escapeHtml(item.itemName)}</td>
-          <td>${item.totalPieces}</td>
-          <td>${formatAmount(item.unitPrice)}</td>
-          <td>${formatAmount(item.totalPrice)}</td>
-        </tr>`,
-    )
+          <td>
+            <strong>${escapeHtml(item.itemName)}</strong>
+            ${colors}
+          </td>
+          <td>${formatAmount(ratePerPiece)}</td>
+          <td>${formatAmount(item.totalPieces * ratePerPiece)}</td>
+        </tr>`;
+    })
     .join("");
+
+  const totalPieces = receipt.items.reduce(
+    (total, item) => total + item.totalPieces,
+    0,
+  );
 
   const companyContact = [
     receipt.companyPhone,
@@ -188,18 +205,66 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     }
 
     th:nth-child(1),
-    th:nth-child(3),
-    td:nth-child(1),
-    td:nth-child(3) {
+    td:nth-child(1) {
+      width: 10%;
       text-align: center;
     }
 
-    th:nth-child(n+4),
-    td:nth-child(n+4) {
+    th:nth-child(2),
+    td:nth-child(2) {
+      width: 48%;
+      text-align: left;
+    }
+
+    th:nth-child(3),
+    td:nth-child(3) {
+      width: 20%;
       text-align: right;
     }
 
+    th:nth-child(4),
+    td:nth-child(4) {
+      width: 22%;
+      text-align: right;
+    }
+
+    .colors {
+      margin-top: 3px;
+      color: #6b7280;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 3px solid ${primaryColor};
+    }
+
+    .summary-pcs {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .summary-pcs strong {
+      display: block;
+      margin-top: 3px;
+      color: ${textColor};
+      font-size: 17px;
+    }
+
     .total {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0;
+      padding: 0;
+      border-top: 0;
+      font-size: 18px;
+      font-weight: 700;
       display: flex;
       justify-content: space-between;
       margin-top: 18px;
@@ -288,10 +353,9 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
         <thead>
           <tr>
             <th>QTY</th>
-            <th>Item</th>
-            <th>PCS</th>
-            <th>Unit Price</th>
-            <th>Total Price</th>
+            <th>ITEM / COLORS</th>
+            <th>RATE / PC</th>
+            <th>AMOUNT</th>
           </tr>
         </thead>
         <tbody>
@@ -301,9 +365,16 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
 
       ${garmentNote}
 
-      <div class="total">
-        <span>Total</span>
-        <span>${formatAmount(receipt.totalAmount)}</span>
+      <div class="summary">
+        <div class="summary-pcs">
+          TOTAL PCS
+          <strong>${totalPieces}</strong>
+        </div>
+
+        <div class="total">
+          <span>TOTAL AMOUNT</span>
+          <span>${formatAmount(receipt.totalAmount)}</span>
+        </div>
       </div>
 
       <div class="agreement">

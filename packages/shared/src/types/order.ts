@@ -11,6 +11,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export interface OrderItem {
   id: string;
   serviceId: string;
+  colors: string[];
   serviceName: string;
   piecesPerUnit: number;
   quantity: number;
@@ -43,6 +44,7 @@ export interface Order {
 export interface CreateOrderItemInput {
   serviceId: string;
   quantity: number;
+  colors: string[];
 }
 
 export interface CreateOrderInput {

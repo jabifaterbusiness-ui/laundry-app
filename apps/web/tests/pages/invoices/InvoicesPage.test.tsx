@@ -218,10 +218,15 @@ describe("InvoicesPage digital receipt shortcut", () => {
     expect(customerReceipt).toHaveTextContent("Customer agreement");
 
     expect(customerReceipt).toHaveTextContent("QTY");
-    expect(customerReceipt).toHaveTextContent("ITEM");
-    expect(customerReceipt).toHaveTextContent("PCS");
-    expect(customerReceipt).toHaveTextContent("UNIT PRICE");
-    expect(customerReceipt).toHaveTextContent("TOTAL PRICE");
+    expect(customerReceipt).toHaveTextContent("ITEM / COLORS");
+    expect(customerReceipt).toHaveTextContent("RATE / PC");
+    expect(customerReceipt).toHaveTextContent("AMOUNT");
+    expect(customerReceipt).toHaveTextContent("TOTAL PCS");
+    expect(customerReceipt).toHaveTextContent("TOTAL AMOUNT");
+    expect(customerReceipt).toHaveTextContent("₦2,500");
+    expect(customerReceipt).toHaveTextContent("₦5,000");
+    expect(customerReceipt).not.toHaveTextContent("UNIT PRICE");
+    expect(customerReceipt).not.toHaveTextContent("TOTAL PRICE");
 
     expect(screen.queryByText("PRIVATE / INTERNAL NOTE")).not.toBeInTheDocument();
     expect(screen.queryByText("Company internal note")).not.toBeInTheDocument();

@@ -28,6 +28,7 @@ function makeReceipt(
         id: "item-1",
         quantity: 2,
         itemName: "Complete Agbada",
+        colors: ["White", "Royal Blue"],
         totalPieces: 6,
         unitPrice: 4500,
         totalPrice: 9000,
@@ -50,9 +51,21 @@ describe("renderCustomerReceiptEmail", () => {
     expect(html).toContain("John Customer");
     expect(html).toContain("Main Branch");
     expect(html).toContain("Complete Agbada");
+    expect(html).toContain("White, Royal Blue");
+    expect(html).toContain("ITEM / COLORS");
+    expect(html).toContain("RATE / PC");
+    expect(html).toContain("AMOUNT");
+    expect(html).toContain("₦1,500.00");
+    expect(html).toContain("TOTAL PCS");
+    expect(html).toContain(">6</strong>");
+    expect(html).toContain("TOTAL AMOUNT");
+    expect(html).toContain("₦9,000.00");
+    expect(html).not.toContain("TOTAL ITEMS");
+    expect(html).not.toContain("<th>PCS</th>");
+    expect(html).not.toContain("Unit Price");
+    expect(html).not.toContain("Total Price");
     expect(html).toContain("Customer Agreement");
     expect(html).toContain("Customer agrees to the laundry service terms.");
-    expect(html).toContain("₦9,000.00");
     expect(html).toContain("Handle with care");
     expect(html).toContain('src="https://example.com/logo.png"');
     expect(html).toContain("background: #f8f8f8");
@@ -83,6 +96,7 @@ describe("renderCustomerReceiptEmail", () => {
             id: "item-1",
             quantity: 1,
             itemName: "<script>alert('item')</script>",
+            colors: ["Black"],
             totalPieces: 3,
             unitPrice: 4500,
             totalPrice: 4500,

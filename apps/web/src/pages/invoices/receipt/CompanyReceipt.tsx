@@ -80,23 +80,40 @@ export function CompanyReceipt({
         <thead>
           <tr>
             <th>QTY</th>
-            <th>ITEM</th>
-            <th>PCS</th>
-            <th>UNIT PRICE</th>
-            <th>TOTAL PRICE</th>
+            <th>ITEM / COLORS</th>
+            <th>RATE / PC</th>
+            <th>AMOUNT</th>
           </tr>
         </thead>
 
         <tbody>
-          {receipt.items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.quantity}</td>
-              <td>{item.itemName}</td>
-              <td>{item.totalPieces}</td>
-              <td>{formatReceiptMoney(item.unitPrice)}</td>
-              <td>{formatReceiptMoney(item.totalPrice)}</td>
-            </tr>
-          ))}
+          {receipt.items.map((item) => {
+            const piecesPerUnit =
+              item.quantity > 0 && item.totalPieces > 0
+                ? item.totalPieces / item.quantity
+                : 1;
+            const ratePerPiece = item.unitPrice / piecesPerUnit;
+
+            return (
+              <tr key={item.id}>
+                <td>{item.quantity}</td>
+                <td>
+                  <strong className="receipt__item-name">
+                    {item.itemName}
+                  </strong>
+                  {(item.colors ?? []).length > 0 && (
+                    <span className="receipt__colors">
+                      {(item.colors ?? []).join(", ")}
+                    </span>
+                  )}
+                </td>
+                <td>{formatReceiptMoney(ratePerPiece)}</td>
+                <td>
+                  {formatReceiptMoney(item.totalPieces * ratePerPiece)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -114,9 +131,18 @@ export function CompanyReceipt({
         </section>
       )}
 
-      <div className="receipt__total">
-        <span>TOTAL AMOUNT</span>
-        <strong>{formatReceiptMoney(receipt.totalAmount)}</strong>
+      <div className="receipt__summary">
+        <div>
+          <span>TOTAL PCS</span>
+          <strong>
+            {receipt.items.reduce((total, item) => total + item.totalPieces, 0)}
+          </strong>
+        </div>
+
+        <div className="receipt__total">
+          <span>TOTAL AMOUNT</span>
+          <strong>{formatReceiptMoney(receipt.totalAmount)}</strong>
+        </div>
       </div>
 
       <footer className="receipt__footer">
