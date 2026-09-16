@@ -1,4 +1,4 @@
-import { bootstrapPlatformOwner } from "../src/modules/platform/platform-owner-bootstrap.service.js";
+import { bootstrapPlatformOwner } from "./modules/platform/platform-owner-bootstrap.service.js";
 
 const email = process.env.PLATFORM_OWNER_EMAIL;
 const fullName = process.env.PLATFORM_OWNER_NAME;

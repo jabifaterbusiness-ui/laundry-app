@@ -15,7 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "platform:bootstrap": "tsx prisma/platform-owner-bootstrap.ts"
+    "platform:bootstrap": "node dist/platform-owner-bootstrap.js"
   },
   "dependencies": {
     "@laundry-app/shared": "*",
