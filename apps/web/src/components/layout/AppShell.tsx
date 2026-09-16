@@ -188,6 +188,15 @@ export function AppShell({ children }: PropsWithChildren) {
 
               {MANAGEMENT.map((item) => {
                 const active = isActive(item.href);
+                const isBusinessUserManagement =
+                  item.href === "/users";
+                const canViewBusinessUsers =
+                  user?.role === "BUSINESS_OWNER" ||
+                  user?.role === "BRANCH_MANAGER";
+
+                if (isBusinessUserManagement && !canViewBusinessUsers) {
+                  return null;
+                }
 
                 return (
                   <Link
