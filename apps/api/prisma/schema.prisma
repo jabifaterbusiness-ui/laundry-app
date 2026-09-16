@@ -52,7 +52,9 @@ enum Role {
 }
 
 enum SubscriptionPlan {
+  WEEKLY
   MONTHLY
+  QUARTERLY
   YEARLY
 }
 

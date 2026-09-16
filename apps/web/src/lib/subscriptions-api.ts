@@ -1,6 +1,10 @@
 import { apiFetch } from "./api-client.js";
 
-export type SubscriptionPlan = "MONTHLY" | "YEARLY";
+export type SubscriptionPlan =
+  | "WEEKLY"
+  | "MONTHLY"
+  | "QUARTERLY"
+  | "YEARLY";
 export type SubscriptionStatus = "ACTIVE" | "EXPIRED";
 
 export interface Subscription {

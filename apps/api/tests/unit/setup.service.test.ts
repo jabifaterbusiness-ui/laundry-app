@@ -18,6 +18,9 @@ const { prismaMock, hashPasswordMock, issueTokenPairMock } = vi.hoisted(() => ({
     userBranch: {
       create: vi.fn(),
     },
+    subscription: {
+      create: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   hashPasswordMock: vi.fn(),
@@ -74,6 +77,9 @@ beforeEach(() => {
       userBranch: {
         create: prismaMock.userBranch.create,
       },
+      subscription: {
+        create: prismaMock.subscription.create,
+      },
     }),
   );
 
@@ -107,6 +113,13 @@ beforeEach(() => {
     userId: "user-1",
     branchId: "branch-1",
   });
+
+  prismaMock.subscription.create.mockImplementation(async ({ data }) => ({
+    id: "subscription-1",
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
 
   issueTokenPairMock.mockResolvedValue({
     accessToken: "access-token",
@@ -147,6 +160,32 @@ describe("setup service", () => {
         isActive: true,
       },
     });
+
+    const subscriptionCreateCall =
+      prismaMock.subscription.create.mock.calls[0]?.[0];
+
+    expect(subscriptionCreateCall).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: "business-1",
+          plan: "MONTHLY",
+          status: "ACTIVE",
+        }),
+      }),
+    );
+
+    const subscriptionData = subscriptionCreateCall?.data as
+      | { startsAt: Date; endsAt: Date }
+      | undefined;
+
+    expect(subscriptionData).toBeDefined();
+
+    if (subscriptionData) {
+      const expectedEnd = new Date(subscriptionData.startsAt);
+      expectedEnd.setMonth(expectedEnd.getMonth() + 1);
+
+      expect(subscriptionData.endsAt).toEqual(expectedEnd);
+    }
 
     expect(result.user.branches).toEqual([
       {

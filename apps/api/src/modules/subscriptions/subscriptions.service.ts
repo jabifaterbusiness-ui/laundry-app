@@ -6,10 +6,19 @@ import type { CreateSubscriptionInput } from "./subscriptions.validation.js";
 function addPlanDuration(date: Date, plan: SubscriptionPlan) {
   const result = new Date(date);
 
-  if (plan === "MONTHLY") {
-    result.setMonth(result.getMonth() + 1);
-  } else {
-    result.setFullYear(result.getFullYear() + 1);
+  switch (plan) {
+    case "WEEKLY":
+      result.setDate(result.getDate() + 7);
+      break;
+    case "MONTHLY":
+      result.setMonth(result.getMonth() + 1);
+      break;
+    case "QUARTERLY":
+      result.setMonth(result.getMonth() + 3);
+      break;
+    case "YEARLY":
+      result.setFullYear(result.getFullYear() + 1);
+      break;
   }
 
   return result;

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createSubscriptionSchema = z.object({
-  plan: z.enum(["MONTHLY", "YEARLY"]),
+  plan: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]),
   startsAt: z.coerce.date().optional(),
 });
 

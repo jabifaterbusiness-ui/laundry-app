@@ -49,6 +49,46 @@ describe("subscription service", () => {
     expect(getSubscriptionStatus(endsAt, "EXPIRED", now)).toBe("EXPIRED");
   });
 
+  it("creates a weekly subscription for seven days", async () => {
+    const startsAt = new Date("2026-09-15T00:00:00.000Z");
+
+    upsert.mockResolvedValue({} as never);
+
+    await createOrRenewSubscription("biz-1", {
+      plan: "WEEKLY",
+      startsAt,
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          plan: "WEEKLY",
+          endsAt: new Date("2026-09-22T00:00:00.000Z"),
+        }),
+      }),
+    );
+  });
+
+  it("creates a quarterly subscription for three months", async () => {
+    const startsAt = new Date("2026-09-15T00:00:00.000Z");
+
+    upsert.mockResolvedValue({} as never);
+
+    await createOrRenewSubscription("biz-1", {
+      plan: "QUARTERLY",
+      startsAt,
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          plan: "QUARTERLY",
+          endsAt: new Date("2026-12-15T00:00:00.000Z"),
+        }),
+      }),
+    );
+  });
+
   it("creates a monthly subscription for one month", async () => {
     const startsAt = new Date("2026-09-15T00:00:00.000Z");
     const subscription = {

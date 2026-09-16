@@ -14,7 +14,7 @@ export interface PlatformBusiness {
   updatedAt: string;
   subscription: {
     id: string;
-    plan: "MONTHLY" | "YEARLY";
+    plan: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
     status: "ACTIVE" | "EXPIRED";
     startsAt: string;
     endsAt: string;

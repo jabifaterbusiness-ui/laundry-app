@@ -102,6 +102,20 @@ export async function completeSetup(input: SetupInput) {
       },
     });
 
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt);
+    endsAt.setMonth(endsAt.getMonth() + 1);
+
+    await tx.subscription.create({
+      data: {
+        businessId: business.id,
+        plan: "MONTHLY",
+        status: "ACTIVE",
+        startsAt,
+        endsAt,
+      },
+    });
+
     return { business, branch, user };
   });
 

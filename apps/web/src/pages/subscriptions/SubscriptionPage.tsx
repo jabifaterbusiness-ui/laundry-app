@@ -17,7 +17,16 @@ function formatDate(value: string) {
 }
 
 function formatPlan(plan: SubscriptionPlan) {
-  return plan === "YEARLY" ? "Yearly" : "Monthly";
+  switch (plan) {
+    case "WEEKLY":
+      return "Weekly";
+    case "MONTHLY":
+      return "Monthly";
+    case "QUARTERLY":
+      return "Quarterly";
+    case "YEARLY":
+      return "Yearly";
+  }
 }
 
 function getRemainingDays(endsAt: string) {
@@ -182,12 +191,38 @@ export function SubscriptionPage() {
                 type="button"
                 className="subscription-plan-option"
                 disabled={renewalMutation.isPending}
+                onClick={() => renewalMutation.mutate("WEEKLY")}
+              >
+                <span className="subscription-plan-icon">W</span>
+                <span>
+                  <strong>Weekly</strong>
+                  <small>Renew for one week</small>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="subscription-plan-option"
+                disabled={renewalMutation.isPending}
                 onClick={() => renewalMutation.mutate("MONTHLY")}
               >
                 <span className="subscription-plan-icon">M</span>
                 <span>
                   <strong>Monthly</strong>
                   <small>Renew for one month</small>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="subscription-plan-option"
+                disabled={renewalMutation.isPending}
+                onClick={() => renewalMutation.mutate("QUARTERLY")}
+              >
+                <span className="subscription-plan-icon">Q</span>
+                <span>
+                  <strong>Quarterly</strong>
+                  <small>Renew for three months</small>
                 </span>
               </button>
 
@@ -202,7 +237,6 @@ export function SubscriptionPage() {
                   <strong>Yearly</strong>
                   <small>Renew for one year</small>
                 </span>
-                <em>Best for continuity</em>
               </button>
             </div>
 
