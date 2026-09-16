@@ -372,6 +372,77 @@ describe("PlatformOwnerPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("makes platform KPI cards navigate to their detailed platform sections", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Platform Owner Control Center",
+      }),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll("a.platform-kpi-link"),
+      ).toHaveLength(6);
+    });
+
+    const kpiLinks = Array.from(
+      document.querySelectorAll("a.platform-kpi-link"),
+    );
+
+    expect(kpiLinks).toHaveLength(6);
+
+    expect(kpiLinks[0]).toHaveAttribute(
+      "href",
+      "#platform-company-directory",
+    );
+    expect(kpiLinks[1]).toHaveAttribute(
+      "href",
+      "#platform-global-statistics",
+    );
+    expect(kpiLinks[2]).toHaveAttribute(
+      "href",
+      "#platform-global-statistics",
+    );
+    expect(kpiLinks[3]).toHaveAttribute(
+      "href",
+      "#platform-global-statistics",
+    );
+    expect(kpiLinks[4]).toHaveAttribute(
+      "href",
+      "#platform-company-directory",
+    );
+    expect(kpiLinks[5]).toHaveAttribute(
+      "href",
+      "#platform-revenue-overview",
+    );
+
+    expect(
+      screen.getByText("Worldwide platform coverage").closest("section"),
+    ).toHaveAttribute("id", "platform-global-statistics");
+
+    expect(
+      screen.getByText("Platform-wide financial activity").closest("section"),
+    ).toHaveAttribute("id", "platform-revenue-overview");
+
+    expect(
+      screen.getByText("Platform growth").closest("section"),
+    ).toHaveAttribute("id", "platform-growth-analytics");
+
+    expect(
+      screen.getByText("Registered laundry companies").closest("section"),
+    ).toHaveAttribute("id", "platform-company-directory");
+
+    expect(
+      screen.getByText("Recent platform activity").closest("section"),
+    ).toHaveAttribute("id", "platform-audit-activity");
+
+    expect(
+      screen.getByText("Platform health & error center").closest("section"),
+    ).toHaveAttribute("id", "platform-health");
+  });
+
   it("renders platform-wide KPIs and company directory", async () => {
     renderPage();
 

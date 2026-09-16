@@ -323,41 +323,41 @@ export function PlatformOwnerPage() {
       </header>
 
       <div className="platform-kpi-grid">
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-company-directory">
           <span className="platform-kpi-label">Registered companies</span>
           <strong>{formatNumber(overview?.totals.businesses ?? 0)}</strong>
           <small>
             {formatNumber(overview?.totals.activeBusinesses ?? 0)} active
           </small>
-        </article>
+        </a>
 
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-global-statistics">
           <span className="platform-kpi-label">Platform users</span>
           <strong>{formatNumber(overview?.totals.users ?? 0)}</strong>
           <small>Across registered companies</small>
-        </article>
+        </a>
 
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-global-statistics">
           <span className="platform-kpi-label">Customers</span>
           <strong>{formatNumber(overview?.totals.customers ?? 0)}</strong>
           <small>Platform-wide customer records</small>
-        </article>
+        </a>
 
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-global-statistics">
           <span className="platform-kpi-label">Orders</span>
           <strong>{formatNumber(overview?.totals.orders ?? 0)}</strong>
           <small>All tenant orders</small>
-        </article>
+        </a>
 
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-company-directory">
           <span className="platform-kpi-label">Active subscriptions</span>
           <strong>{formatNumber(overview?.subscriptions.active ?? 0)}</strong>
           <small>
             {formatNumber(overview?.subscriptions.expired ?? 0)} expired
           </small>
-        </article>
+        </a>
 
-        <article className="platform-kpi-card">
+        <a className="platform-kpi-card platform-kpi-link" href="#platform-revenue-overview">
           <span className="platform-kpi-label">Total collected</span>
           <strong>
             {formatCurrency(overview?.revenue.totalCollected ?? 0)}
@@ -365,7 +365,7 @@ export function PlatformOwnerPage() {
           <small>
             {formatNumber(overview?.revenue.paymentCount ?? 0)} payments
           </small>
-        </article>
+        </a>
       </div>
 
       {statusFeedback ? (
@@ -392,7 +392,7 @@ export function PlatformOwnerPage() {
         </div>
       ) : null}
 
-      <section className="platform-panel">
+      <section className="platform-panel" id="platform-revenue-overview">
         <div className="platform-panel-header">
           <div>
             <div className="platform-eyebrow">REVENUE OVERVIEW</div>
@@ -460,7 +460,7 @@ export function PlatformOwnerPage() {
         )}
       </section>
 
-      <section className="platform-panel">
+      <section className="platform-panel" id="platform-growth-analytics">
         <div className="platform-panel-header">
           <div>
             <div className="platform-eyebrow">GROWTH ANALYTICS</div>
@@ -614,7 +614,7 @@ export function PlatformOwnerPage() {
         )}
       </section>
 
-      <section className="platform-panel">
+      <section className="platform-panel" id="platform-global-statistics">
         <div className="platform-panel-header">
           <div>
             <div className="platform-eyebrow">GLOBAL STATISTICS</div>
@@ -738,7 +738,7 @@ export function PlatformOwnerPage() {
       </section>
 
       <div className="platform-content-grid">
-        <section className="platform-panel">
+        <section className="platform-panel" id="platform-company-directory">
           <div className="platform-panel-header">
             <div>
               <div className="platform-eyebrow">COMPANY DIRECTORY</div>
@@ -844,7 +844,7 @@ export function PlatformOwnerPage() {
           )}
         </section>
 
-        <section className="platform-panel">
+        <section className="platform-panel" id="platform-audit-activity">
           <div className="platform-panel-header">
             <div>
               <div className="platform-eyebrow">AUDIT ACTIVITY</div>
@@ -885,7 +885,7 @@ export function PlatformOwnerPage() {
       </div>
 
       <div className="platform-footer-grid">
-        <section className="platform-panel platform-control-panel">
+        <section className="platform-panel platform-control-panel" id="platform-health">
           <div className="platform-panel-header">
             <div>
               <div className="platform-eyebrow">SYSTEM HEALTH</div>

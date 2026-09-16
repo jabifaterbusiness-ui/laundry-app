@@ -121,6 +121,36 @@ describe("DashboardPage", () => {
     });
   });
 
+  it("makes every business KPI card clickable to its relevant workflow", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+
+    renderDashboard();
+
+    await screen.findByText("120");
+
+    expect(screen.getByRole("link", { name: "View orders" })).toHaveAttribute(
+      "href",
+      "/orders",
+    );
+    expect(screen.getByRole("link", { name: "View invoices" })).toHaveAttribute(
+      "href",
+      "/invoices",
+    );
+    expect(
+      screen.getByRole("link", { name: "View outstanding invoices" }),
+    ).toHaveAttribute("href", "/invoices");
+    expect(screen.getByRole("link", { name: "View payments" })).toHaveAttribute(
+      "href",
+      "/payments",
+    );
+    expect(
+      screen.getByRole("link", { name: "View customers" }),
+    ).toHaveAttribute("href", "/customers");
+    expect(
+      screen.getByRole("link", { name: "View inventory" }),
+    ).toHaveAttribute("href", "/inventory");
+  });
+
   it("renders quick actions for core business workflows", async () => {
     mockedGetDashboardReport.mockResolvedValue(report);
 
@@ -128,9 +158,27 @@ describe("DashboardPage", () => {
 
     await screen.findByText("120");
 
-    expect(screen.getByRole("link", { name: /Orders/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Customers/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Invoices/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Payments/i })).toBeInTheDocument();
+    const quickActions = screen.getByRole("heading", {
+      name: "Quick actions",
+    }).closest("section");
+
+    expect(quickActions).not.toBeNull();
+    expect(quickActions).toHaveTextContent("Orders");
+    expect(quickActions).toHaveTextContent("Customers");
+    expect(quickActions).toHaveTextContent("Invoices");
+    expect(quickActions).toHaveTextContent("Payments");
+
+    expect(
+      quickActions?.querySelector('a[href="/orders"]'),
+    ).toBeInTheDocument();
+    expect(
+      quickActions?.querySelector('a[href="/customers"]'),
+    ).toBeInTheDocument();
+    expect(
+      quickActions?.querySelector('a[href="/invoices"]'),
+    ).toBeInTheDocument();
+    expect(
+      quickActions?.querySelector('a[href="/payments"]'),
+    ).toBeInTheDocument();
   });
 });

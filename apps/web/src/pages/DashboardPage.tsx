@@ -191,51 +191,51 @@ export function DashboardPage() {
       {report && (
         <>
           <section className="dashboard-kpi-grid" aria-label="Business performance">
-            <article className="dashboard-kpi-card">
+            <Link className="dashboard-kpi-card" to="/orders" aria-label="View orders">
               <div className="dashboard-kpi-icon">↗</div>
               <p>Orders</p>
               <strong>{formatNumber(report.orders.total)}</strong>
               <span>Orders in period</span>
-            </article>
+            </Link>
 
-            <article className="dashboard-kpi-card">
+            <Link className="dashboard-kpi-card" to="/invoices" aria-label="View invoices">
               <div className="dashboard-kpi-icon">₦</div>
               <p>Total invoiced</p>
               <strong>{formatMoney(report.invoices.totalAmount)}</strong>
               <span>{formatNumber(report.invoices.total)} invoices</span>
-            </article>
+            </Link>
 
-            <article className="dashboard-kpi-card dashboard-kpi-card-warning">
+            <Link className="dashboard-kpi-card dashboard-kpi-card-warning" to="/invoices" aria-label="View outstanding invoices">
               <div className="dashboard-kpi-icon">!</div>
               <p>Outstanding</p>
               <strong>{formatMoney(report.invoices.outstandingAmount)}</strong>
               <span>Amount still outstanding</span>
-            </article>
+            </Link>
 
-            <article className="dashboard-kpi-card">
+            <Link className="dashboard-kpi-card" to="/payments" aria-label="View payments">
               <div className="dashboard-kpi-icon">✓</div>
               <p>Net received</p>
               <strong>{formatMoney(report.payments.netReceived)}</strong>
               <span>
                 {formatMoney(report.payments.received)} received
               </span>
-            </article>
+            </Link>
 
-            <article className="dashboard-kpi-card">
+            <Link className="dashboard-kpi-card" to="/customers" aria-label="View customers">
               <div className="dashboard-kpi-icon">♙</div>
               <p>Active customers</p>
               <strong>{formatNumber(report.customers.active)}</strong>
               <span>Active customer accounts</span>
-            </article>
+            </Link>
 
-            <article className="dashboard-kpi-card">
+            <Link className="dashboard-kpi-card" to="/inventory" aria-label="View inventory">
               <div className="dashboard-kpi-icon">▦</div>
               <p>Stock items</p>
               <strong>{formatNumber(report.inventory.stockItems)}</strong>
               <span>
                 {formatNumber(report.inventory.movements)} movements
               </span>
-            </article>
+            </Link>
           </section>
 
           {!hasActivity && (
