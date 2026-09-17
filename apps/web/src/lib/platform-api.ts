@@ -227,6 +227,50 @@ export async function getPlatformBusinesses(
   });
 }
 
+export interface PlatformBusinessDetails extends PlatformBusiness {
+  subscription: PlatformBusiness["subscription"];
+  _count: PlatformBusiness["_count"] & {
+    services: number;
+    invoices: number;
+    payments: number;
+  };
+  recentUsers: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    createdAt: string;
+  }>;
+  recentBranches: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  recentAuditLogs: Array<{
+    id: string;
+    timestamp: string;
+    actorUserId: string | null;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    metadata: unknown;
+    correlationId: string | null;
+  }>;
+}
+
+export async function getPlatformBusinessDetails(
+  businessId: string,
+  accessToken: string | null,
+): Promise<PlatformBusinessDetails> {
+  return apiFetch<PlatformBusinessDetails>(
+    `/platform/businesses/${encodeURIComponent(businessId)}`,
+    { accessToken },
+  );
+}
+
 export async function getPlatformAuditLogs(
   accessToken: string | null,
   limit = 100,

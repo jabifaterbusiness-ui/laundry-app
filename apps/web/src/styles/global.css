@@ -2646,3 +2646,13 @@ a {
     display: none;
   }
 }
+
+
+.platform-growth-chart[tabindex] {
+  cursor: pointer;
+}
+
+.platform-growth-chart[tabindex]:focus-visible {
+  outline: 3px solid rgba(36, 165, 169, 0.28);
+  outline-offset: 3px;
+}

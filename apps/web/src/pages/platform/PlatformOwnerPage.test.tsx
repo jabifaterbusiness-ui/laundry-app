@@ -10,6 +10,7 @@ import {
   renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
+  getPlatformBusinessDetails,
   getPlatformOverview,
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
@@ -27,6 +28,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   renewPlatformBusinessSubscription: vi.fn(),
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
+    getPlatformBusinessDetails: vi.fn(),
   getPlatformOverview: vi.fn(),
   getPlatformRevenueAnalytics: vi.fn(),
   getPlatformGrowthAnalytics: vi.fn(),
@@ -43,6 +45,7 @@ const mockedRenewSubscription = vi.mocked(
 );
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
+const mockedBusinessDetails = vi.mocked(getPlatformBusinessDetails);
 const mockedAudits = vi.mocked(getPlatformAuditLogs);
 const mockedRevenue = vi.mocked(getPlatformRevenueAnalytics);
 const mockedGrowth = vi.mocked(getPlatformGrowthAnalytics);
@@ -257,6 +260,18 @@ beforeEach(() => {
   });
   mockedOverview.mockResolvedValue(overview);
   mockedBusinesses.mockResolvedValue(businesses);
+  mockedBusinessDetails.mockResolvedValue({
+    ...businesses[0]!,
+    _count: {
+      ...businesses[0]!._count,
+      services: 8,
+      invoices: 35,
+      payments: 30,
+    },
+    recentUsers: [],
+    recentBranches: [],
+    recentAuditLogs: [],
+  });
   mockedAudits.mockResolvedValue([]);
   mockedRevenue.mockResolvedValue(revenue);
   mockedGrowth.mockResolvedValue(growth);
@@ -383,12 +398,16 @@ describe("PlatformOwnerPage", () => {
 
     await waitFor(() => {
       expect(
-        document.querySelectorAll("a.platform-kpi-link"),
+        document.querySelector(".platform-kpi-grid")?.querySelectorAll(
+          "a.platform-kpi-link",
+        ),
       ).toHaveLength(6);
     });
 
     const kpiLinks = Array.from(
-      document.querySelectorAll("a.platform-kpi-link"),
+      document
+        .querySelector(".platform-kpi-grid")!
+        .querySelectorAll("a.platform-kpi-link"),
     );
 
     expect(kpiLinks).toHaveLength(6);
@@ -441,6 +460,77 @@ describe("PlatformOwnerPage", () => {
     expect(
       screen.getByText("Platform health & error center").closest("section"),
     ).toHaveAttribute("id", "platform-health");
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(
+          '.platform-revenue-summary a.platform-kpi-link',
+        ),
+      ).toHaveLength(3);
+
+      expect(
+        document.querySelectorAll(
+          '.platform-growth-summary a.platform-kpi-link',
+        ).length,
+      ).toBeGreaterThanOrEqual(4);
+    });
+
+    const revenueLinks = Array.from(
+      document.querySelectorAll(
+        '.platform-revenue-summary a.platform-kpi-link',
+      ),
+    );
+
+    expect(revenueLinks[0]).toHaveAttribute(
+      "href",
+      "#platform-revenue-methods",
+    );
+    expect(revenueLinks[1]).toHaveAttribute(
+      "href",
+      "#platform-revenue-methods",
+    );
+    expect(revenueLinks[2]).toHaveAttribute(
+      "href",
+      "#platform-revenue-methods",
+    );
+
+    const growthChart = document.getElementById("platform-growth-chart");
+    expect(growthChart).not.toBeNull();
+    expect(growthChart).toHaveAttribute(
+      "aria-label",
+      "View monthly platform growth details",
+    );
+    expect(growthChart).toHaveAttribute("role", "link");
+    expect(growthChart).toHaveAttribute("tabindex", "0");
+
+    const globalSection = document.getElementById(
+      "platform-global-statistics",
+    );
+    expect(globalSection).not.toBeNull();
+
+    const globalLinks = Array.from(
+      globalSection!.querySelectorAll(
+        ".platform-growth-summary a.platform-kpi-link",
+      ),
+    );
+
+    expect(globalLinks).toHaveLength(4);
+    expect(globalLinks[0]).toHaveAttribute(
+      "href",
+      "#platform-country-breakdown",
+    );
+    expect(globalLinks[1]).toHaveAttribute(
+      "href",
+      "#platform-company-directory",
+    );
+    expect(globalLinks[2]).toHaveAttribute(
+      "href",
+      "#platform-country-breakdown",
+    );
+    expect(globalLinks[3]).toHaveAttribute(
+      "href",
+      "#platform-country-breakdown",
+    );
   });
 
   it("renders platform-wide KPIs and company directory", async () => {
@@ -751,4 +841,35 @@ describe("PlatformOwnerPage", () => {
     expect(mockedRevenue).not.toHaveBeenCalled();
     expect(mockedGrowth).not.toHaveBeenCalled();
   });
+
+  it("opens a company control center from the company directory", async () => {
+    renderPage();
+
+    const companyLink = await screen.findByRole("button", {
+      name: /Open Laundry A company control center/i,
+    });
+
+    await userEvent.click(companyLink);
+
+    expect(
+      await screen.findByRole("heading", { name: "Laundry A" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Business information"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Company staff"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Recent company activity"),
+    ).toBeInTheDocument();
+
+    expect(
+      mockedBusinessDetails,
+    ).toHaveBeenCalledWith("biz-A", "platform-token");
+  });
+
 });

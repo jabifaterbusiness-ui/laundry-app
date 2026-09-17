@@ -6,6 +6,7 @@ import {
   renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
+  getPlatformBusinessDetails,
   getPlatformOverview,
   getPlatformRevenueAnalytics,
   getPlatformGrowthAnalytics,
@@ -48,6 +49,20 @@ export function PlatformOwnerPage() {
     queryKey: ["platform", "businesses"],
     queryFn: () => getPlatformBusinesses(accessToken),
     enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(
+    null,
+  );
+
+  const businessDetailsQuery = useQuery({
+    queryKey: ["platform", "business-details", selectedBusinessId],
+    queryFn: () =>
+      getPlatformBusinessDetails(selectedBusinessId!, accessToken),
+    enabled:
+      isPlatformAdmin &&
+      Boolean(accessToken) &&
+      Boolean(selectedBusinessId),
   });
 
   const revenueQuery = useQuery({
@@ -412,30 +427,45 @@ export function PlatformOwnerPage() {
         ) : revenueQuery.data ? (
           <>
             <div className="platform-revenue-summary">
-              <article className="platform-kpi-card">
+              <a
+                className="platform-kpi-card platform-kpi-link"
+                href="#platform-revenue-methods"
+                aria-label="View gross payment details"
+              >
                 <span className="platform-kpi-label">Gross payments</span>
                 <strong>{formatCurrency(revenueQuery.data.grossPayments)}</strong>
                 <small>
                   {formatNumber(revenueQuery.data.paymentCount)} posted payments
                 </small>
-              </article>
+              </a>
 
-              <article className="platform-kpi-card">
+              <a
+                className="platform-kpi-card platform-kpi-link"
+                href="#platform-revenue-methods"
+                aria-label="View refund details"
+              >
                 <span className="platform-kpi-label">Refunds</span>
                 <strong>{formatCurrency(revenueQuery.data.refunds)}</strong>
                 <small>
                   {formatNumber(revenueQuery.data.refundCount)} posted refunds
                 </small>
-              </article>
+              </a>
 
-              <article className="platform-kpi-card">
+              <a
+                className="platform-kpi-card platform-kpi-link"
+                href="#platform-revenue-methods"
+                aria-label="View net collected payment details"
+              >
                 <span className="platform-kpi-label">Net collected</span>
                 <strong>{formatCurrency(revenueQuery.data.netCollected)}</strong>
                 <small>Gross payments less refunds</small>
-              </article>
+              </a>
             </div>
 
-            <div className="platform-revenue-methods">
+            <div
+              className="platform-revenue-methods"
+              id="platform-revenue-methods"
+            >
               {(["CASH", "TRANSFER", "POS"] as const).map((method) => {
                 const breakdown = revenueQuery.data!.methodBreakdown[method];
 
@@ -488,15 +518,39 @@ export function PlatformOwnerPage() {
                   ["Orders", growthQuery.data.orders],
                 ] as const
               ).map(([label, series]) => (
-                <article className="platform-growth-card" key={label}>
+                <a
+                  className="platform-growth-card platform-kpi-link"
+                  key={label}
+                  href="#platform-growth-chart"
+                  aria-label={`View ${label.toLowerCase()} growth details`}
+                >
                   <span className="platform-kpi-label">{label}</span>
                   <strong>{formatNumber(series.total)}</strong>
                   <small>Platform-wide total</small>
-                </article>
+                </a>
               ))}
             </div>
 
-            <div className="platform-growth-chart">
+            <div
+              className="platform-growth-chart"
+              id="platform-growth-chart"
+              tabIndex={0}
+              role="link"
+              aria-label="View monthly platform growth details"
+              onClick={() =>
+                document
+                  .getElementById("platform-growth-chart")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  document
+                    .getElementById("platform-growth-chart")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+              }}
+            >
               <div className="platform-growth-chart-header">
                 <div>
                   <strong>Monthly activity</strong>
@@ -638,7 +692,11 @@ export function PlatformOwnerPage() {
         ) : globalStatisticsQuery.data ? (
           <>
             <div className="platform-growth-summary">
-              <article className="platform-growth-card">
+              <a
+                className="platform-growth-card platform-kpi-link"
+                href="#platform-country-breakdown"
+                aria-label="View country and market breakdown"
+              >
                 <span className="platform-kpi-label">Countries</span>
                 <strong>
                   {formatNumber(
@@ -646,9 +704,13 @@ export function PlatformOwnerPage() {
                   )}
                 </strong>
                 <small>Markets represented</small>
-              </article>
+              </a>
 
-              <article className="platform-growth-card">
+              <a
+                className="platform-growth-card platform-kpi-link"
+                href="#platform-company-directory"
+                aria-label="View all platform businesses"
+              >
                 <span className="platform-kpi-label">Businesses</span>
                 <strong>
                   {formatNumber(
@@ -661,27 +723,38 @@ export function PlatformOwnerPage() {
                   )}{" "}
                   active
                 </small>
-              </article>
+              </a>
 
-              <article className="platform-growth-card">
+              <a
+                className="platform-growth-card platform-kpi-link"
+                href="#platform-country-breakdown"
+                aria-label="View platform branch coverage"
+              >
                 <span className="platform-kpi-label">Branches</span>
                 <strong>
                   {formatNumber(globalStatisticsQuery.data.totals.branches)}
                 </strong>
                 <small>Across all markets</small>
-              </article>
+              </a>
 
-              <article className="platform-growth-card">
+              <a
+                className="platform-growth-card platform-kpi-link"
+                href="#platform-country-breakdown"
+                aria-label="View worldwide order statistics"
+              >
                 <span className="platform-kpi-label">Orders</span>
                 <strong>
                   {formatNumber(globalStatisticsQuery.data.totals.orders)}
                 </strong>
                 <small>Worldwide order records</small>
-              </article>
+              </a>
             </div>
 
             {globalStatisticsQuery.data.countries.length ? (
-              <div className="platform-business-list">
+              <div
+                className="platform-business-list"
+                id="platform-country-breakdown"
+              >
                 {globalStatisticsQuery.data.countries.map((country) => (
                   <article
                     className="platform-business-row"
@@ -737,6 +810,263 @@ export function PlatformOwnerPage() {
         )}
       </section>
 
+      {selectedBusinessId ? (
+        <section
+          className="platform-panel platform-business-control-center"
+          id="platform-business-control-center"
+        >
+          <div className="platform-panel-header">
+            <div>
+              <div className="platform-eyebrow">COMPANY CONTROL CENTER</div>
+              <h2>
+                {businessDetailsQuery.data?.name ?? "Company details"}
+              </h2>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSelectedBusinessId(null)}
+            >
+              Close
+            </button>
+          </div>
+
+          {businessDetailsQuery.isLoading ? (
+            <p className="platform-feedback">
+              Loading company control center...
+            </p>
+          ) : businessDetailsQuery.isError ? (
+            <div className="platform-feedback platform-error">
+              <strong>Company details unavailable.</strong>
+              <span>
+                The selected company could not be loaded. Close this panel and
+                try again.
+              </span>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => void businessDetailsQuery.refetch()}
+              >
+                Retry
+              </button>
+            </div>
+          ) : businessDetailsQuery.data ? (
+            <>
+              <div className="platform-growth-summary">
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Status</span>
+                  <strong>
+                    {businessDetailsQuery.data.isActive
+                      ? "Active"
+                      : "Inactive"}
+                  </strong>
+                  <small>{businessDetailsQuery.data.slug}</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Subscription</span>
+                  <strong>
+                    {businessDetailsQuery.data.subscription?.plan ??
+                      "No subscription"}
+                  </strong>
+                  <small>
+                    {businessDetailsQuery.data.subscription
+                      ? `${businessDetailsQuery.data.subscription.status} · ends ${formatDate(
+                          businessDetailsQuery.data.subscription.endsAt,
+                        )}`
+                      : "No active subscription"}
+                  </small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Users</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.users)}
+                  </strong>
+                  <small>Company users</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Orders</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.orders)}
+                  </strong>
+                  <small>Company orders</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Customers</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.customers)}
+                  </strong>
+                  <small>Company customers</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Branches</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.branches)}
+                  </strong>
+                  <small>Company branches</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Services</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.services)}
+                  </strong>
+                  <small>Configured services</small>
+                </article>
+
+                <article className="platform-growth-card">
+                  <span className="platform-kpi-label">Invoices</span>
+                  <strong>
+                    {formatNumber(businessDetailsQuery.data._count.invoices)}
+                  </strong>
+                  <small>Company invoices</small>
+                </article>
+              </div>
+
+              <div className="platform-content-grid">
+                <div className="platform-panel">
+                  <div className="platform-panel-header">
+                    <div>
+                      <div className="platform-eyebrow">COMPANY PROFILE</div>
+                      <h3>Business information</h3>
+                    </div>
+                  </div>
+                  <div className="platform-audit-list">
+                    <div className="platform-audit-row">
+                      <div>
+                        <strong>Email</strong>
+                        <span>{businessDetailsQuery.data.email ?? "Not provided"}</span>
+                      </div>
+                    </div>
+                    <div className="platform-audit-row">
+                      <div>
+                        <strong>Phone</strong>
+                        <span>{businessDetailsQuery.data.phone ?? "Not provided"}</span>
+                      </div>
+                    </div>
+                    <div className="platform-audit-row">
+                      <div>
+                        <strong>Address</strong>
+                        <span>{businessDetailsQuery.data.address ?? "Not provided"}</span>
+                      </div>
+                    </div>
+                    <div className="platform-audit-row">
+                      <div>
+                        <strong>Website</strong>
+                        <span>{businessDetailsQuery.data.website ?? "Not provided"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="platform-panel">
+                  <div className="platform-panel-header">
+                    <div>
+                      <div className="platform-eyebrow">RECENT USERS</div>
+                      <h3>Company staff</h3>
+                    </div>
+                  </div>
+                  {businessDetailsQuery.data.recentUsers.length ? (
+                    <div className="platform-audit-list">
+                      {businessDetailsQuery.data.recentUsers.map((staff) => (
+                        <article className="platform-audit-row" key={staff.id}>
+                          <div>
+                            <strong>{staff.fullName}</strong>
+                            <span>
+                              {staff.email} · {staff.role}
+                            </span>
+                          </div>
+                          <span
+                            className={`platform-status ${
+                              staff.isActive ? "active" : "inactive"
+                            }`}
+                          >
+                            {staff.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="platform-feedback">
+                      No recent company users.
+                    </p>
+                  )}
+                </div>
+
+                <div className="platform-panel">
+                  <div className="platform-panel-header">
+                    <div>
+                      <div className="platform-eyebrow">BRANCHES</div>
+                      <h3>Recent branches</h3>
+                    </div>
+                  </div>
+                  {businessDetailsQuery.data.recentBranches.length ? (
+                    <div className="platform-audit-list">
+                      {businessDetailsQuery.data.recentBranches.map((branch) => (
+                        <article className="platform-audit-row" key={branch.id}>
+                          <div>
+                            <strong>{branch.name}</strong>
+                            <span>
+                              Created {formatDate(branch.createdAt)}
+                            </span>
+                          </div>
+                          <span
+                            className={`platform-status ${
+                              branch.isActive ? "active" : "inactive"
+                            }`}
+                          >
+                            {branch.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="platform-feedback">
+                      No company branches are currently available.
+                    </p>
+                  )}
+                </div>
+
+                <div className="platform-panel">
+                  <div className="platform-panel-header">
+                    <div>
+                      <div className="platform-eyebrow">AUDIT TRAIL</div>
+                      <h3>Recent company activity</h3>
+                    </div>
+                  </div>
+                  {businessDetailsQuery.data.recentAuditLogs.length ? (
+                    <div className="platform-audit-list">
+                      {businessDetailsQuery.data.recentAuditLogs.map((entry) => (
+                        <article className="platform-audit-row" key={entry.id}>
+                          <div>
+                            <strong>{entry.action}</strong>
+                            <span>
+                              {entry.entityType}
+                              {entry.entityId ? ` · ${entry.entityId}` : ""}
+                            </span>
+                          </div>
+                          <time dateTime={entry.timestamp}>
+                            {formatDate(entry.timestamp)}
+                          </time>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="platform-feedback">
+                      No recent company audit activity.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
       <div className="platform-content-grid">
         <section className="platform-panel" id="platform-company-directory">
           <div className="platform-panel-header">
@@ -755,14 +1085,15 @@ export function PlatformOwnerPage() {
             <div className="platform-business-list">
               {businesses.map((business) => (
                 <article className="platform-business-row" key={business.id}>
-                  <div className="platform-business-mark" aria-hidden="true">
-                    {business.name.slice(0, 1).toUpperCase()}
-                  </div>
-
-                  <div className="platform-business-main">
+                  <button
+                    type="button"
+                    className="platform-business-main platform-business-control-link"
+                    onClick={() => setSelectedBusinessId(business.id)}
+                    aria-label={`Open ${business.name} company control center`}
+                  >
                     <strong>{business.name}</strong>
                     <span>{business.slug}</span>
-                  </div>
+                  </button>
 
                   <div className="platform-business-stats">
                     <span>
