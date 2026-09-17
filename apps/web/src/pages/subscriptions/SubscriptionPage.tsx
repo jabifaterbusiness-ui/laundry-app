@@ -4,6 +4,7 @@ import { ApiError } from "../../lib/api-client.js";
 import {
   createOrRenewSubscription,
   getSubscription,
+  getSubscriptionPrices,
   type SubscriptionPlan,
 } from "../../lib/subscriptions-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -39,6 +40,18 @@ function getRemainingDays(endsAt: string) {
   return Math.ceil(difference / (1000 * 60 * 60 * 24));
 }
 
+function formatPrice(amount: number, currencyCode: string) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currencyCode,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${currencyCode} ${amount.toLocaleString()}`;
+  }
+}
+
 export function SubscriptionPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const user = useAuthStore((state) => state.user);
@@ -52,6 +65,12 @@ export function SubscriptionPage() {
     queryFn: () => getSubscription(accessToken ?? ""),
   });
 
+  const subscriptionPricesQuery = useQuery({
+    queryKey: ["subscription-prices"],
+    enabled: Boolean(accessToken && isOwner),
+    queryFn: () => getSubscriptionPrices(accessToken ?? ""),
+  });
+
   const renewalMutation = useMutation({
     mutationFn: (plan: SubscriptionPlan) =>
       createOrRenewSubscription(accessToken ?? "", { plan }),
@@ -61,6 +80,17 @@ export function SubscriptionPage() {
   });
 
   const subscription = subscriptionQuery.data;
+
+  const configuredPrices = useMemo(
+    () =>
+      new Map(
+        (subscriptionPricesQuery.data?.prices ?? []).map((price) => [
+          price.plan,
+          price,
+        ]),
+      ),
+    [subscriptionPricesQuery.data?.prices],
+  );
 
   const remainingDays = useMemo(
     () => (subscription ? getRemainingDays(subscription.endsAt) : 0),
@@ -186,59 +216,53 @@ export function SubscriptionPage() {
               </div>
             ) : null}
 
-            <div className="subscription-plan-options">
-              <button
-                type="button"
-                className="subscription-plan-option"
-                disabled={renewalMutation.isPending}
-                onClick={() => renewalMutation.mutate("WEEKLY")}
-              >
-                <span className="subscription-plan-icon">W</span>
-                <span>
-                  <strong>Weekly</strong>
-                  <small>Renew for one week</small>
-                </span>
-              </button>
+            {subscriptionPricesQuery.isLoading ? (
+              <p className="subscription-action-message">
+                Loading current subscription prices...
+              </p>
+            ) : subscriptionPricesQuery.isError ? (
+              <p className="subscription-error-text" role="alert">
+                Unable to load current subscription prices. Please try again.
+              </p>
+            ) : (
+              <div className="subscription-plan-options">
+                {(
+                  [
+                    ["WEEKLY", "W", "Weekly", "Renew for one week"],
+                    ["MONTHLY", "M", "Monthly", "Renew for one month"],
+                    ["QUARTERLY", "Q", "Quarterly", "Renew for three months"],
+                    ["YEARLY", "Y", "Yearly", "Renew for one year"],
+                  ] as const
+                ).map(([plan, icon, label, description]) => {
+                  const price = configuredPrices.get(plan);
 
-              <button
-                type="button"
-                className="subscription-plan-option"
-                disabled={renewalMutation.isPending}
-                onClick={() => renewalMutation.mutate("MONTHLY")}
-              >
-                <span className="subscription-plan-icon">M</span>
-                <span>
-                  <strong>Monthly</strong>
-                  <small>Renew for one month</small>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="subscription-plan-option"
-                disabled={renewalMutation.isPending}
-                onClick={() => renewalMutation.mutate("QUARTERLY")}
-              >
-                <span className="subscription-plan-icon">Q</span>
-                <span>
-                  <strong>Quarterly</strong>
-                  <small>Renew for three months</small>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="subscription-plan-option subscription-plan-option-featured"
-                disabled={renewalMutation.isPending}
-                onClick={() => renewalMutation.mutate("YEARLY")}
-              >
-                <span className="subscription-plan-icon">Y</span>
-                <span>
-                  <strong>Yearly</strong>
-                  <small>Renew for one year</small>
-                </span>
-              </button>
-            </div>
+                  return (
+                    <button
+                      key={plan}
+                      type="button"
+                      className={`subscription-plan-option ${
+                        plan === "YEARLY"
+                          ? "subscription-plan-option-featured"
+                          : ""
+                      }`}
+                      disabled={renewalMutation.isPending || !price}
+                      onClick={() => renewalMutation.mutate(plan)}
+                    >
+                      <span className="subscription-plan-icon">{icon}</span>
+                      <span>
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                        <small>
+                          {price
+                            ? formatPrice(price.amount, price.currencyCode)
+                            : "Price not configured"}
+                        </small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {renewalMutation.isPending && (
               <p className="subscription-action-message">

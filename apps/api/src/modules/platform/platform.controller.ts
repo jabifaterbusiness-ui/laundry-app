@@ -17,6 +17,15 @@ import {
   getPlatformConfig,
   updatePlatformConfig,
 } from "./platform-config.service.js";
+import {
+  listSubscriptionPrices,
+  setSubscriptionPriceActive,
+  upsertSubscriptionPrice,
+} from "../subscriptions/subscription-pricing.service.js";
+import {
+  subscriptionPricingSchema,
+  subscriptionPriceStatusSchema,
+} from "../subscriptions/subscription-pricing.validation.js";
 
 export async function health(_req: Request, res: Response) {
   const result = await getPlatformHealth();
@@ -150,6 +159,58 @@ export async function updateConfiguration(req: Request, res: Response) {
   res.status(200).json(
     await updatePlatformConfig(
       input,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function subscriptionPrices(_req: Request, res: Response) {
+  res.status(200).json(await listSubscriptionPrices());
+}
+
+export async function upsertSubscriptionPriceController(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const input = subscriptionPricingSchema.parse(req.body);
+
+  res.status(200).json(
+    await upsertSubscriptionPrice(
+      input,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function updateSubscriptionPriceStatus(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const priceId = req.params.id;
+
+  if (!priceId) {
+    res.status(400).json({ message: "Subscription price ID is required" });
+    return;
+  }
+
+  const input = subscriptionPriceStatusSchema.parse(req.body);
+
+  res.status(200).json(
+    await setSubscriptionPriceActive(
+      priceId,
+      input.isActive,
       req.user.id,
       req.correlationId,
     ),

@@ -10,6 +10,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
       update: vi.fn(),
       upsert: vi.fn(),
     },
+    business: {
+      findUnique: vi.fn(),
+    },
+    subscriptionPlanPrice: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -31,6 +37,10 @@ const app = createApp();
 const findUnique = vi.mocked(prisma.subscription.findUnique);
 const update = vi.mocked(prisma.subscription.update);
 const upsert = vi.mocked(prisma.subscription.upsert);
+const businessFindUnique = vi.mocked(prisma.business.findUnique);
+const subscriptionPlanPriceFindMany = vi.mocked(
+  prisma.subscriptionPlanPrice.findMany,
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -58,6 +68,71 @@ describe("subscriptions routes", () => {
     expect(findUnique).toHaveBeenCalledWith({
       where: { businessId: "biz-A" },
     });
+  });
+
+  it("returns subscription prices for the authenticated business owner", async () => {
+    businessFindUnique.mockResolvedValue({
+      countryCode: "NG",
+      currencyCode: "NGN",
+    } as never);
+
+    subscriptionPlanPriceFindMany.mockResolvedValue([
+      {
+        id: "price-monthly-ngn",
+        plan: "MONTHLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 5000,
+        isActive: true,
+      },
+      {
+        id: "price-yearly-ngn",
+        plan: "YEARLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 50000,
+        isActive: true,
+      },
+    ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/subscriptions/prices")
+      .set("x-test-business-id", "biz-A");
+
+    expect(response.status).toBe(200);
+    expect(response.body.countryCode).toBe("NG");
+    expect(response.body.currencyCode).toBe("NGN");
+    expect(response.body.prices).toHaveLength(2);
+
+    expect(businessFindUnique).toHaveBeenCalledWith({
+      where: { id: "biz-A" },
+      select: {
+        countryCode: true,
+        currencyCode: true,
+      },
+    });
+
+    expect(subscriptionPlanPriceFindMany).toHaveBeenCalledWith({
+      where: {
+        platformConfigId:
+          "00000000-0000-4000-8000-000000000001",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        isActive: true,
+      },
+      orderBy: { plan: "asc" },
+    });
+  });
+
+  it("rejects subscription prices for non-owners", async () => {
+    const response = await request(app)
+      .get("/api/v1/subscriptions/prices")
+      .set("x-test-role", "STAFF")
+      .set("x-test-business-id", "biz-A");
+
+    expect(response.status).toBe(403);
+    expect(businessFindUnique).not.toHaveBeenCalled();
+    expect(subscriptionPlanPriceFindMany).not.toHaveBeenCalled();
   });
 
   it("renews the authenticated business subscription as the owner", async () => {

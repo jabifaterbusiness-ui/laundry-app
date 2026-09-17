@@ -23,10 +23,35 @@ export interface CreateSubscriptionInput {
   startsAt?: string;
 }
 
+export interface SubscriptionPrice {
+  id: string;
+  plan: SubscriptionPlan;
+  countryCode: string;
+  currencyCode: string;
+  amount: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SubscriptionPricesResponse {
+  countryCode: string;
+  currencyCode: string;
+  prices: SubscriptionPrice[];
+}
+
 export async function getSubscription(
   accessToken: string,
 ): Promise<Subscription> {
   return apiFetch<Subscription>("/subscriptions", {
+    accessToken,
+  });
+}
+
+export async function getSubscriptionPrices(
+  accessToken: string,
+): Promise<SubscriptionPricesResponse> {
+  return apiFetch<SubscriptionPricesResponse>("/subscriptions/prices", {
     accessToken,
   });
 }

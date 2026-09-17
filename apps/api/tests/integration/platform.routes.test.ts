@@ -43,6 +43,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
       upsert: vi.fn(),
       update: vi.fn(),
     },
+    subscriptionPlanPrice: {
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -171,6 +177,172 @@ beforeEach(() => {
     createdAt: new Date("2026-09-15T00:00:00.000Z"),
     updatedAt: new Date("2026-09-15T00:01:00.000Z"),
   } as never);
+});
+
+describe("Platform Owner routes - subscription pricing", () => {
+  it("lists subscription prices for PLATFORM_ADMIN", async () => {
+    vi.mocked(prisma.subscriptionPlanPrice.findMany).mockResolvedValue([
+      {
+        id: "price-weekly-ngn",
+        platformConfigId: "00000000-0000-4000-8000-000000000001",
+        plan: "WEEKLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 1500,
+        isActive: true,
+        createdAt: new Date("2026-09-17T00:00:00.000Z"),
+        updatedAt: new Date("2026-09-17T00:00:00.000Z"),
+      },
+    ] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/subscription-prices")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toEqual(
+      expect.objectContaining({
+        plan: "WEEKLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 1500,
+        isActive: true,
+      }),
+    );
+
+    expect(prisma.subscriptionPlanPrice.findMany).toHaveBeenCalledWith({
+      where: {
+        platformConfigId: "00000000-0000-4000-8000-000000000001",
+      },
+      orderBy: [
+        { countryCode: "asc" },
+        { currencyCode: "asc" },
+        { plan: "asc" },
+      ],
+    });
+  });
+
+  it("creates or updates a subscription price for PLATFORM_ADMIN", async () => {
+    const price = {
+      id: "price-monthly-ngn",
+      platformConfigId: "00000000-0000-4000-8000-000000000001",
+      plan: "MONTHLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 5000,
+      isActive: true,
+      createdAt: new Date("2026-09-17T00:00:00.000Z"),
+      updatedAt: new Date("2026-09-17T00:00:00.000Z"),
+    };
+
+    vi.mocked(prisma.subscriptionPlanPrice.upsert).mockResolvedValue(
+      price as never,
+    );
+
+    const response = await request(app)
+      .post("/api/v1/platform/subscription-prices")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({
+        plan: "MONTHLY",
+        countryCode: " ng ",
+        currencyCode: "ngn",
+        amount: 5000,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        plan: "MONTHLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 5000,
+        isActive: true,
+      }),
+    );
+
+    expect(prisma.subscriptionPlanPrice.upsert).toHaveBeenCalledWith({
+      where: {
+        plan_countryCode_currencyCode: {
+          plan: "MONTHLY",
+          countryCode: "NG",
+          currencyCode: "NGN",
+        },
+      },
+      create: {
+        platformConfigId: "00000000-0000-4000-8000-000000000001",
+        plan: "MONTHLY",
+        countryCode: "NG",
+        currencyCode: "NGN",
+        amount: 5000,
+        isActive: true,
+      },
+      update: {
+        amount: 5000,
+        isActive: true,
+      },
+    });
+  });
+
+  it("enables or disables an existing subscription price", async () => {
+    const existing = {
+      id: "price-yearly-ngn",
+      platformConfigId: "00000000-0000-4000-8000-000000000001",
+      plan: "YEARLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 50000,
+      isActive: true,
+    };
+
+    const updated = {
+      ...existing,
+      isActive: false,
+    };
+
+    vi.mocked(prisma.subscriptionPlanPrice.findUnique).mockResolvedValue(
+      existing as never,
+    );
+    vi.mocked(prisma.subscriptionPlanPrice.update).mockResolvedValue(
+      updated as never,
+    );
+
+    const response = await request(app)
+      .patch("/api/v1/platform/subscription-prices/price-yearly-ngn/status")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: "price-yearly-ngn",
+        isActive: false,
+      }),
+    );
+
+    expect(prisma.subscriptionPlanPrice.update).toHaveBeenCalledWith({
+      where: { id: "price-yearly-ngn" },
+      data: { isActive: false },
+    });
+  });
+
+  it("rejects BUSINESS_OWNER from subscription pricing administration", async () => {
+    const response = await request(app)
+      .get("/api/v1/platform/subscription-prices")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.subscriptionPlanPrice.findMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated subscription pricing administration", async () => {
+    const response = await request(app).get(
+      "/api/v1/platform/subscription-prices",
+    );
+
+    expect(response.status).toBe(401);
+    expect(prisma.subscriptionPlanPrice.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("Platform Owner routes - health", () => {

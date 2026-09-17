@@ -16,6 +16,9 @@ import {
   health,
   configuration,
   updateConfiguration,
+  subscriptionPrices,
+  upsertSubscriptionPriceController,
+  updateSubscriptionPriceStatus,
 } from "./platform.controller.js";
 
 export const platformRouter = Router();
@@ -27,6 +30,18 @@ platformRouter.get("/configuration", asyncHandler(configuration));
 platformRouter.patch(
   "/configuration",
   asyncHandler(updateConfiguration),
+);
+platformRouter.get(
+  "/subscription-prices",
+  asyncHandler(subscriptionPrices),
+);
+platformRouter.post(
+  "/subscription-prices",
+  asyncHandler(upsertSubscriptionPriceController),
+);
+platformRouter.patch(
+  "/subscription-prices/:id/status",
+  asyncHandler(updateSubscriptionPriceStatus),
 );
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/revenue", asyncHandler(revenue));
