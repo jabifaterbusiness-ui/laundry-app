@@ -108,7 +108,8 @@ model Business {
   // -------------------------------------------------------------------
   // SUBSCRIPTION
   // -------------------------------------------------------------------
-  subscription Subscription?
+  subscription    Subscription?
+  paymentIdentity BusinessPaymentIdentity?
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -127,19 +128,22 @@ model Business {
   migrationJobs       MigrationJob[]
   garments            Garment[]
 
-  payrollPeriods          PayrollPeriod[]
-  payrollRecords          PayrollRecord[]
-  ious                    IOU[]
-  loans                   Loan[]
-  payrollDeductions       PayrollDeduction[]
-  employeeCompensations   EmployeeCompensation[]
-  financialRepayments     FinancialRepayment[]
-  inventoryItems          InventoryItem[]
-  inventoryStocks         InventoryStock[]
-  inventoryMovements      InventoryMovement[]
-  businessRolePermissions BusinessRolePermission[]
-  userPermissionOverrides UserPermissionOverride[]
-  offlineSyncOperations   OfflineSyncOperation[]
+  payrollPeriods             PayrollPeriod[]
+  payrollRecords             PayrollRecord[]
+  ious                       IOU[]
+  loans                      Loan[]
+  payrollDeductions          PayrollDeduction[]
+  employeeCompensations      EmployeeCompensation[]
+  financialRepayments        FinancialRepayment[]
+  inventoryItems             InventoryItem[]
+  inventoryStocks            InventoryStock[]
+  inventoryMovements         InventoryMovement[]
+  businessRolePermissions    BusinessRolePermission[]
+  userPermissionOverrides    UserPermissionOverride[]
+  offlineSyncOperations      OfflineSyncOperation[]
+  subscriptionPaymentIntents SubscriptionPaymentIntent[]
+  subscriptionPayments       SubscriptionPayment[]
+  paymentWebhookEvents       PaymentWebhookEvent[]
 
   @@map("businesses")
 }
@@ -202,10 +206,10 @@ model User {
   // baked into a long-lived token).
   branches UserBranch[]
 
-  refreshTokens      RefreshToken[]
+  refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
-  auditLogs     AuditLog[]
-  migrationJobs MigrationJob[]
+  auditLogs           AuditLog[]
+  migrationJobs       MigrationJob[]
 
   payrollRecords        PayrollRecord[]
   payrollPayments       PayrollPayment[]
@@ -262,8 +266,9 @@ model Subscription {
   startsAt DateTime
   endsAt   DateTime
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  SubscriptionPayment SubscriptionPayment[]
 
   @@index([status, endsAt])
   @@map("subscriptions")
@@ -1461,19 +1466,250 @@ model PlatformConfig {
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 
+  subscriptionPlanPrices SubscriptionPlanPrice[]
+  paymentProviderConfigs PaymentProviderConfig[]
+  paymentMethodConfigs   PaymentMethodConfig[]
+
   @@map("platform_config")
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------
+// SUBSCRIPTION BILLING FOUNDATION
+// ---------------------------------------------------------------------
+// Subscription entitlement remains separate from payment accounting.
+// These models track payment identity, pricing, payment intents,
+// verified subscription payments, and provider webhook idempotency.
+//
+// SECURITY RULE:
+// A locally recorded/offline payment intent NEVER grants subscription
+// access. Entitlement changes occur only after authoritative payment
+// verification or an explicitly audited Platform Owner recovery action.
+// ---------------------------------------------------------------------
+
+enum SubscriptionPaymentStatus {
+  CREATED
+  PENDING
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+  EXPIRED
+  REQUIRES_VERIFICATION
+}
+
+enum PaymentIntentOrigin {
+  ONLINE
+  OFFLINE
+  PLATFORM_OWNER
+}
+
+model BusinessPaymentIdentity {
+  id String @id @default(uuid())
+
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Permanent LaundryAngel business identity. It must never be derived
+  // from the company name and must never be recycled to another business.
+  businessCode String @unique
+  // Permanent payment reference linked to this business.
+  paymentCode  String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("business_payment_identities")
+}
+
+model SubscriptionPlanPrice {
+  id String @id @default(uuid())
+
+  platformConfigId String
+  platformConfig   PlatformConfig @relation(fields: [platformConfigId], references: [id], onDelete: Cascade)
+
+  plan         SubscriptionPlan
+  countryCode  String
+  currencyCode String
+  amount       Int
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([plan, countryCode, currencyCode])
+  @@index([countryCode, currencyCode, isActive])
+  @@map("subscription_plan_prices")
+}
+
+model PaymentProviderConfig {
+  id String @id @default(uuid())
+
+  platformConfigId String
+  platformConfig   PlatformConfig @relation(fields: [platformConfigId], references: [id], onDelete: Cascade)
+
+  providerKey String
+  displayName String
+  enabled     Boolean @default(false)
+
+  // Non-secret provider capabilities/configuration.
+  supportedCountries  Json
+  supportedCurrencies Json
+  supportedMethods    Json
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platformConfigId, providerKey])
+  @@index([enabled, displayOrder])
+  @@map("payment_provider_configs")
+}
+
+model PaymentMethodConfig {
+  id String @id @default(uuid())
+
+  platformConfigId String
+  platformConfig   PlatformConfig @relation(fields: [platformConfigId], references: [id], onDelete: Cascade)
+
+  // Stable configurable key, e.g. card, bank_transfer, ussd, opay.
+  methodKey   String
+  displayName String
+
+  // Optional provider restriction. Null means the method may be available
+  // through any compatible enabled provider.
+  providerKey String?
+
+  enabled Boolean @default(false)
+
+  supportedCountries  Json
+  supportedCurrencies Json
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platformConfigId, methodKey])
+  @@index([enabled, displayOrder])
+  @@index([providerKey, enabled])
+  @@map("payment_method_configs")
+}
+
+model SubscriptionPaymentIntent {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  plan         SubscriptionPlan
+  amount       Int
+  currencyCode String
+
+  // Stable reference exposed to providers/customers where applicable.
+  paymentReference String @unique
+
+  // Client-generated idempotency key for safe online/offline retries.
+  idempotencyKey String @unique
+
+  origin PaymentIntentOrigin
+  status SubscriptionPaymentStatus @default(CREATED)
+
+  providerKey      String?
+  paymentMethodKey String?
+
+  providerCheckoutReference String?
+  expiresAt                 DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payment SubscriptionPayment?
+
+  @@index([businessId, status, createdAt])
+  @@index([businessId, plan, createdAt])
+  @@map("subscription_payment_intents")
+}
+
+model SubscriptionPayment {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  intentId String                    @unique
+  intent   SubscriptionPaymentIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+
+  // Permanent LaundryAngel payment reference.
+  paymentReference String @unique
+
+  // Provider's transaction/reference identifier.
+  providerTransactionId String?
+
+  providerKey      String
+  paymentMethodKey String
+
+  amount       Int
+  currencyCode String
+  status       SubscriptionPaymentStatus
+
+  receivedAt DateTime?
+  verifiedAt DateTime?
+
+  // Prevents duplicate business processing even if a provider retries.
+  idempotencyKey String @unique
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([providerKey, providerTransactionId])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, paymentReference])
+  @@index([providerKey, status, createdAt])
+  @@map("subscription_payments")
+}
+
+model PaymentWebhookEvent {
+  id String @id @default(uuid())
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  providerKey     String
+  providerEventId String
+
+  eventType   String
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+
+  // Provider payload may be retained for reconciliation, but secrets
+  // must never be stored here.
+  payload Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([providerKey, providerEventId])
+  @@index([businessId, createdAt])
+  @@index([providerKey, processed, createdAt])
+  @@map("payment_webhook_events")
 }

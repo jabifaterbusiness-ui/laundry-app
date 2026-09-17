@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { hashPassword, issueTokenPair } from "../auth/auth.service.js";
 import type { SetupInput } from "./setup.validation.js";
+import { createBusinessPaymentIdentity } from "../payments/business-payment-identity.service.js";
 
 function slugify(value: string) {
   const slug = value
@@ -75,6 +76,8 @@ export async function completeSetup(input: SetupInput) {
         isActive: true,
       },
     });
+
+    await createBusinessPaymentIdentity(tx, business.id);
 
     const branch = await tx.branch.create({
       data: {

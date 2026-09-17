@@ -21,6 +21,9 @@ const { prismaMock, hashPasswordMock, issueTokenPairMock } = vi.hoisted(() => ({
     subscription: {
       create: vi.fn(),
     },
+    businessPaymentIdentity: {
+      create: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   hashPasswordMock: vi.fn(),
@@ -80,6 +83,9 @@ beforeEach(() => {
       subscription: {
         create: prismaMock.subscription.create,
       },
+      businessPaymentIdentity: {
+        create: prismaMock.businessPaymentIdentity.create,
+      },
     }),
   );
 
@@ -121,6 +127,13 @@ beforeEach(() => {
     updatedAt: new Date(),
   }));
 
+  prismaMock.businessPaymentIdentity.create.mockImplementation(async ({ data }) => ({
+    id: "payment-identity-1",
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
+
   issueTokenPairMock.mockResolvedValue({
     accessToken: "access-token",
     refreshToken: "refresh-token",
@@ -150,6 +163,19 @@ describe("setup service", () => {
         timezone: input.timezone,
         locale: input.locale,
         isActive: true,
+      },
+    });
+
+    expect(prismaMock.businessPaymentIdentity.create).toHaveBeenCalledTimes(1);
+
+    const paymentIdentityCreateCall =
+      prismaMock.businessPaymentIdentity.create.mock.calls[0]?.[0];
+
+    expect(paymentIdentityCreateCall).toEqual({
+      data: {
+        businessId: "business-1",
+        businessCode: expect.stringMatching(/^LA-BIZ-[A-Z0-9]{8}$/),
+        paymentCode: expect.stringMatching(/^LA-[A-Z0-9]{8}$/),
       },
     });
 
