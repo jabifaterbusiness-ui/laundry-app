@@ -27,6 +27,10 @@ const envSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
+
+  // --- Subscription payment providers ---
+  PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
+  PAYSTACK_BASE_URL: z.string().url().default("https://api.paystack.co"),
 });
 
 const parsed = envSchema.safeParse(process.env);

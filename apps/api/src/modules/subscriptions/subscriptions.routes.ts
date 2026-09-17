@@ -3,9 +3,12 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { requireRole } from "../../middleware/rbac.js";
 import {
-  createOrRenew,
+  createPaymentIntent,
+  initializePayment,
+  verifyPayment,
   getSubscription,
   getSubscriptionPrices,
+  getPaymentOptions,
 } from "./subscriptions.controller.js";
 
 export const subscriptionsRouter = Router();
@@ -20,8 +23,27 @@ subscriptionsRouter.get(
   asyncHandler(getSubscriptionPrices),
 );
 
-subscriptionsRouter.post(
-  "/",
+subscriptionsRouter.get(
+  "/payment-options",
   requireRole("BUSINESS_OWNER"),
-  asyncHandler(createOrRenew),
+  asyncHandler(getPaymentOptions),
+);
+subscriptionsRouter.post(
+  "/payment-intents",
+  requireRole("BUSINESS_OWNER"),
+  asyncHandler(createPaymentIntent),
+);
+
+
+subscriptionsRouter.post(
+  "/payment-initialize",
+  requireRole("BUSINESS_OWNER"),
+  asyncHandler(initializePayment),
+);
+
+
+subscriptionsRouter.post(
+  "/payment-verify",
+  requireRole("BUSINESS_OWNER"),
+  asyncHandler(verifyPayment),
 );

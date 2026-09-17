@@ -19,6 +19,14 @@ import {
   subscriptionPrices,
   upsertSubscriptionPriceController,
   updateSubscriptionPriceStatus,
+  paymentProviders,
+  upsertPaymentProviderController,
+  updatePaymentProviderStatus,
+  deletePaymentProvider,
+  paymentMethods,
+  upsertPaymentMethodController,
+  updatePaymentMethodStatus,
+  deletePaymentMethod,
 } from "./platform.controller.js";
 
 export const platformRouter = Router();
@@ -42,6 +50,38 @@ platformRouter.post(
 platformRouter.patch(
   "/subscription-prices/:id/status",
   asyncHandler(updateSubscriptionPriceStatus),
+);
+platformRouter.get(
+  "/payment-providers",
+  asyncHandler(paymentProviders),
+);
+platformRouter.post(
+  "/payment-providers",
+  asyncHandler(upsertPaymentProviderController),
+);
+platformRouter.patch(
+  "/payment-providers/:id/status",
+  asyncHandler(updatePaymentProviderStatus),
+);
+platformRouter.delete(
+  "/payment-providers/:id",
+  asyncHandler(deletePaymentProvider),
+);
+platformRouter.get(
+  "/payment-methods",
+  asyncHandler(paymentMethods),
+);
+platformRouter.post(
+  "/payment-methods",
+  asyncHandler(upsertPaymentMethodController),
+);
+platformRouter.patch(
+  "/payment-methods/:id/status",
+  asyncHandler(updatePaymentMethodStatus),
+);
+platformRouter.delete(
+  "/payment-methods/:id",
+  asyncHandler(deletePaymentMethod),
 );
 platformRouter.get("/overview", asyncHandler(overview));
 platformRouter.get("/revenue", asyncHandler(revenue));

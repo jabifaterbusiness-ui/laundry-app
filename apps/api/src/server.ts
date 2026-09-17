@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { config } from "./config/index.js";
 import { logger } from "./lib/logger.js";
 import { backfillBusinessPaymentIdentities } from "./modules/payments/business-payment-identity.service.js";
+import { registerConfiguredSubscriptionPaymentProviders } from "./modules/subscriptions/providers/payment-provider.bootstrap.js";
 
 async function startServer() {
   const identityBackfill = await backfillBusinessPaymentIdentities();
@@ -9,6 +10,8 @@ async function startServer() {
   logger.info(
     `Business payment identity backfill complete: scanned=${identityBackfill.scanned}, created=${identityBackfill.created}`,
   );
+
+  registerConfiguredSubscriptionPaymentProviders();
 
   const app = createApp();
 

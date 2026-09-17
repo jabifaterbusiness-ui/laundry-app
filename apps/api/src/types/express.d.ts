@@ -25,6 +25,10 @@ declare global {
       // Echoed on the X-Request-Id response header and attached to any
       // audit log rows written during the request.
       correlationId?: string;
+
+      // Original request bytes captured by the JSON parser when raw-body
+      // verification is required, such as payment-provider webhooks.
+      rawBody?: Buffer;
     }
   }
 }

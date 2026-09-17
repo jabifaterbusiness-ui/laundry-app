@@ -34,6 +34,7 @@ import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middlew
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
+import { subscriptionPaymentWebhookRouter } from "./modules/subscriptions/subscription-payment-webhook.routes.js";
 
 export function createApp() {
   const app = express();
@@ -43,6 +44,11 @@ export function createApp() {
   app.use(
     express.json({
       limit: "2mb",
+      // Preserve the exact original bytes for payment-provider webhook
+      // signature verification while still exposing the parsed JSON body.
+      verify: (req, _res, buffer) => {
+        (req as typeof req & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      },
       // Large JSON files used by the migration endpoint must remain raw so
       // the migration controller can enforce its own upload-size limit.
       type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
@@ -67,6 +73,8 @@ export function createApp() {
   // Platform Owner / Super-Admin routes intentionally bypass tenant context.
   // The platform router itself requires authenticated PLATFORM_ADMIN access.
   v1.use("/platform", platformRouter);
+  // Payment-provider webhooks are authenticated by provider signatures, not user JWTs.
+  v1.use("/webhooks", subscriptionPaymentWebhookRouter);
 
   // Normal tenant operations require an active subscription.
   // Apply the boundary only to known tenant route prefixes so unknown

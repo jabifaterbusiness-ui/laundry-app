@@ -1633,6 +1633,7 @@ model SubscriptionPaymentIntent {
   paymentMethodKey String?
 
   providerCheckoutReference String?
+  providerCheckoutUrl       String?
   expiresAt                 DateTime?
 
   createdAt DateTime @default(now())

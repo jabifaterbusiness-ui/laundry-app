@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
-  createOrRenewSubscription,
+  createSubscriptionPaymentIntent,
   getSubscription,
+  getSubscriptionPaymentOptions,
   getSubscriptionPrices,
+  initializeSubscriptionPayment,
+  verifySubscriptionPayment,
   type SubscriptionPlan,
 } from "../../lib/subscriptions-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -57,6 +60,10 @@ export function SubscriptionPage() {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
 
+  const [selectedProvider, setSelectedProvider] = useState("");
+  const [selectedMethod, setSelectedMethod] = useState("");
+  const [checkoutMessage, setCheckoutMessage] = useState("");
+
   const isOwner = user?.role === "BUSINESS_OWNER";
 
   const subscriptionQuery = useQuery({
@@ -71,13 +78,86 @@ export function SubscriptionPage() {
     queryFn: () => getSubscriptionPrices(accessToken ?? ""),
   });
 
-  const renewalMutation = useMutation({
-    mutationFn: (plan: SubscriptionPlan) =>
-      createOrRenewSubscription(accessToken ?? "", { plan }),
-    onSuccess: (subscription) => {
-      queryClient.setQueryData(["subscription"], subscription);
+  const paymentOptionsQuery = useQuery({
+    queryKey: ["subscription-payment-options"],
+    enabled: Boolean(accessToken && isOwner),
+    queryFn: () => getSubscriptionPaymentOptions(accessToken ?? ""),
+  });
+
+  const paymentMutation = useMutation({
+    mutationFn: async (plan: SubscriptionPlan) => {
+      if (!selectedProvider || !selectedMethod) {
+        throw new Error("Select a payment provider and payment method.");
+      }
+
+      const idempotencyKey =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `subscription-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const intent = await createSubscriptionPaymentIntent(
+        accessToken ?? "",
+        {
+          plan,
+          origin: "ONLINE",
+          idempotencyKey,
+          providerKey: selectedProvider,
+          paymentMethodKey: selectedMethod,
+        },
+      );
+
+      return initializeSubscriptionPayment(accessToken ?? "", intent.id);
+    },
+    onSuccess: (intent) => {
+      if (!intent.providerCheckoutUrl) {
+        throw new Error(
+          "The payment provider did not return a checkout page. Please try again.",
+        );
+      }
+
+      setCheckoutMessage("Redirecting to secure payment checkout...");
+      window.location.assign(intent.providerCheckoutUrl);
     },
   });
+
+  const verifyMutation = useMutation({
+    mutationFn: (intentId: string) =>
+      verifySubscriptionPayment(accessToken ?? "", intentId),
+    onSuccess: async (result) => {
+      if (result.subscription) {
+        queryClient.setQueryData(["subscription"], result.subscription);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      setCheckoutMessage(
+        result.alreadyProcessed
+          ? "Payment was already verified and your subscription is active."
+          : result.payment
+            ? "Payment verified successfully. Your subscription is now active."
+            : "Payment is still being processed. Please try again shortly.",
+      );
+    },
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentIntentId = params.get("payment_intent");
+
+    if (!paymentIntentId || !accessToken || !isOwner) {
+      return;
+    }
+
+    setCheckoutMessage("Verifying your subscription payment...");
+    verifyMutation.mutate(paymentIntentId);
+
+    params.delete("payment_intent");
+    const cleanedQuery = params.toString();
+    const cleanUrl = `${window.location.pathname}${
+      cleanedQuery ? `?${cleanedQuery}` : ""
+    }${window.location.hash}`;
+
+    window.history.replaceState({}, "", cleanUrl);
+  }, [accessToken, isOwner]);
 
   const subscription = subscriptionQuery.data;
 
@@ -90,6 +170,15 @@ export function SubscriptionPage() {
         ]),
       ),
     [subscriptionPricesQuery.data?.prices],
+  );
+
+  const paymentMethods = useMemo(
+    () =>
+      (paymentOptionsQuery.data?.methods ?? []).filter(
+        (method) =>
+          !selectedProvider || !method.providerKey || method.providerKey === selectedProvider,
+      ),
+    [paymentOptionsQuery.data?.methods, selectedProvider],
   );
 
   const remainingDays = useMemo(
@@ -140,10 +229,7 @@ export function SubscriptionPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => subscriptionQuery.refetch()}
-          >
+          <button type="button" onClick={() => subscriptionQuery.refetch()}>
             Try again
           </button>
         </section>
@@ -185,9 +271,7 @@ export function SubscriptionPage() {
 
             <article className="subscription-card">
               <p className="subscription-card-label">Access remaining</p>
-              <strong>
-                {remainingDays > 0 ? remainingDays : 0}
-              </strong>
+              <strong>{remainingDays}</strong>
               <span>
                 {remainingDays === 1 ? "day remaining" : "days remaining"}
               </span>
@@ -216,71 +300,147 @@ export function SubscriptionPage() {
               </div>
             ) : null}
 
-            {subscriptionPricesQuery.isLoading ? (
+            {paymentOptionsQuery.isLoading ? (
               <p className="subscription-action-message">
-                Loading current subscription prices...
+                Loading available payment methods...
               </p>
-            ) : subscriptionPricesQuery.isError ? (
+            ) : paymentOptionsQuery.isError ? (
               <p className="subscription-error-text" role="alert">
-                Unable to load current subscription prices. Please try again.
+                Unable to load available payment methods. Please try again.
               </p>
             ) : (
-              <div className="subscription-plan-options">
-                {(
-                  [
-                    ["WEEKLY", "W", "Weekly", "Renew for one week"],
-                    ["MONTHLY", "M", "Monthly", "Renew for one month"],
-                    ["QUARTERLY", "Q", "Quarterly", "Renew for three months"],
-                    ["YEARLY", "Y", "Yearly", "Renew for one year"],
-                  ] as const
-                ).map(([plan, icon, label, description]) => {
-                  const price = configuredPrices.get(plan);
-
-                  return (
-                    <button
-                      key={plan}
-                      type="button"
-                      className={`subscription-plan-option ${
-                        plan === "YEARLY"
-                          ? "subscription-plan-option-featured"
-                          : ""
-                      }`}
-                      disabled={renewalMutation.isPending || !price}
-                      onClick={() => renewalMutation.mutate(plan)}
+              <>
+                <div className="subscription-payment-selection">
+                  <label>
+                    <span>Payment provider</span>
+                    <select
+                      value={selectedProvider}
+                      onChange={(event) => {
+                        setSelectedProvider(event.target.value);
+                        setSelectedMethod("");
+                      }}
+                      disabled={paymentMutation.isPending}
                     >
-                      <span className="subscription-plan-icon">{icon}</span>
-                      <span>
-                        <strong>{label}</strong>
-                        <small>{description}</small>
-                        <small>
-                          {price
-                            ? formatPrice(price.amount, price.currencyCode)
-                            : "Price not configured"}
-                        </small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                      <option value="">Select provider</option>
+                      {paymentOptionsQuery.data?.providers.map((provider) => (
+                        <option
+                          key={provider.providerKey}
+                          value={provider.providerKey}
+                        >
+                          {provider.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Payment method</span>
+                    <select
+                      value={selectedMethod}
+                      onChange={(event) => setSelectedMethod(event.target.value)}
+                      disabled={paymentMutation.isPending || !selectedProvider}
+                    >
+                      <option value="">Select payment method</option>
+                      {paymentMethods.map((method) => (
+                        <option key={method.methodKey} value={method.methodKey}>
+                          {method.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {paymentOptionsQuery.data?.providers.length === 0 ? (
+                  <p className="subscription-error-text" role="alert">
+                    No online payment provider is currently configured for your
+                    business country and currency.
+                  </p>
+                ) : null}
+
+                <div className="subscription-plan-options">
+                  {(
+                    [
+                      ["WEEKLY", "W", "Weekly", "Renew for one week"],
+                      ["MONTHLY", "M", "Monthly", "Renew for one month"],
+                      ["QUARTERLY", "Q", "Quarterly", "Renew for three months"],
+                      ["YEARLY", "Y", "Yearly", "Renew for one year"],
+                    ] as const
+                  ).map(([plan, icon, label, description]) => {
+                    const price = configuredPrices.get(plan);
+
+                    return (
+                      <button
+                        key={plan}
+                        type="button"
+                        className={`subscription-plan-option ${
+                          plan === "YEARLY"
+                            ? "subscription-plan-option-featured"
+                            : ""
+                        }`}
+                        disabled={
+                          paymentMutation.isPending ||
+                          !price ||
+                          !selectedProvider ||
+                          !selectedMethod
+                        }
+                        onClick={() => paymentMutation.mutate(plan)}
+                      >
+                        <span className="subscription-plan-icon">{icon}</span>
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{description}</small>
+                          <small>
+                            {price
+                              ? formatPrice(price.amount, price.currencyCode)
+                              : "Price not configured"}
+                          </small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
-            {renewalMutation.isPending && (
+            {!selectedProvider || !selectedMethod ? (
               <p className="subscription-action-message">
-                Updating your subscription...
+                Select a payment provider and payment method to continue.
+              </p>
+            ) : null}
+
+            {paymentMutation.isPending && (
+              <p className="subscription-action-message">
+                Creating secure payment checkout...
               </p>
             )}
 
-            {renewalMutation.isSuccess && (
+            {checkoutMessage && (
               <p className="subscription-success" role="status">
-                Subscription updated successfully.
+                {checkoutMessage}
               </p>
             )}
 
-            {renewalMutation.isError && (
+            {verifyMutation.isPending && (
+              <p className="subscription-action-message">
+                Verifying your payment...
+              </p>
+            )}
+
+            {paymentMutation.isError && (
               <p className="subscription-error-text" role="alert">
-                {renewalMutation.error instanceof ApiError
-                  ? renewalMutation.error.message
-                  : "Unable to update your subscription. Please try again."}
+                {paymentMutation.error instanceof ApiError
+                  ? paymentMutation.error.message
+                  : paymentMutation.error instanceof Error
+                    ? paymentMutation.error.message
+                    : "Unable to start payment. Please try again."}
+              </p>
+            )}
+
+            {verifyMutation.isError && (
+              <p className="subscription-error-text" role="alert">
+                {verifyMutation.error instanceof ApiError
+                  ? verifyMutation.error.message
+                  : "Unable to verify the payment. Please try again."}
               </p>
             )}
           </section>

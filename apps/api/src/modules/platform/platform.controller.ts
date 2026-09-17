@@ -26,6 +26,22 @@ import {
   subscriptionPricingSchema,
   subscriptionPriceStatusSchema,
 } from "../subscriptions/subscription-pricing.validation.js";
+import {
+  listPaymentProviders,
+  upsertPaymentProvider,
+  setPaymentProviderActive,
+  removePaymentProvider,
+  listPaymentMethods,
+  upsertPaymentMethod,
+  setPaymentMethodActive,
+  removePaymentMethod,
+} from "./payment-config.service.js";
+import {
+  paymentProviderSchema,
+  paymentProviderStatusSchema,
+  paymentMethodSchema,
+  paymentMethodStatusSchema,
+} from "./payment-config.validation.js";
 
 export async function health(_req: Request, res: Response) {
   const result = await getPlatformHealth();
@@ -211,6 +227,161 @@ export async function updateSubscriptionPriceStatus(
     await setSubscriptionPriceActive(
       priceId,
       input.isActive,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+
+export async function paymentProviders(_req: Request, res: Response) {
+  res.status(200).json(await listPaymentProviders());
+}
+
+export async function upsertPaymentProviderController(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const input = paymentProviderSchema.parse(req.body);
+
+  res.status(200).json(
+    await upsertPaymentProvider(
+      input,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function updatePaymentProviderStatus(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const id = req.params.id;
+
+  if (!id) {
+    res.status(400).json({ message: "Payment provider ID is required" });
+    return;
+  }
+
+  const input = paymentProviderStatusSchema.parse(req.body);
+
+  res.status(200).json(
+    await setPaymentProviderActive(
+      id,
+      input.enabled,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function deletePaymentProvider(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const id = req.params.id;
+
+  if (!id) {
+    res.status(400).json({ message: "Payment provider ID is required" });
+    return;
+  }
+
+  res.status(200).json(
+    await removePaymentProvider(
+      id,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function paymentMethods(_req: Request, res: Response) {
+  res.status(200).json(await listPaymentMethods());
+}
+
+export async function upsertPaymentMethodController(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const input = paymentMethodSchema.parse(req.body);
+
+  res.status(200).json(
+    await upsertPaymentMethod(
+      input,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function updatePaymentMethodStatus(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const id = req.params.id;
+
+  if (!id) {
+    res.status(400).json({ message: "Payment method ID is required" });
+    return;
+  }
+
+  const input = paymentMethodStatusSchema.parse(req.body);
+
+  res.status(200).json(
+    await setPaymentMethodActive(
+      id,
+      input.enabled,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+export async function deletePaymentMethod(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const id = req.params.id;
+
+  if (!id) {
+    res.status(400).json({ message: "Payment method ID is required" });
+    return;
+  }
+
+  res.status(200).json(
+    await removePaymentMethod(
+      id,
       req.user.id,
       req.correlationId,
     ),

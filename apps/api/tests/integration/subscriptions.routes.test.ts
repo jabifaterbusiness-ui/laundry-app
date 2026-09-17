@@ -135,52 +135,26 @@ describe("subscriptions routes", () => {
     expect(subscriptionPlanPriceFindMany).not.toHaveBeenCalled();
   });
 
-  it("renews the authenticated business subscription as the owner", async () => {
-    const subscription = {
-      id: "sub-1",
-      businessId: "biz-A",
-      plan: "YEARLY",
-      status: "ACTIVE",
-      startsAt: new Date("2026-09-01T00:00:00.000Z"),
-      endsAt: new Date("2027-09-01T00:00:00.000Z"),
-    };
-
-    upsert.mockResolvedValue(subscription as never);
-
+  it("does not expose direct subscription activation to business owners", async () => {
     const response = await request(app)
       .post("/api/v1/subscriptions")
       .set("x-test-business-id", "biz-A")
       .send({
         plan: "YEARLY",
-        startsAt: "2026-09-01T00:00:00.000Z",
       });
 
-    expect(response.status).toBe(200);
-    expect(response.body.plan).toBe("YEARLY");
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { businessId: "biz-A" },
-        create: expect.objectContaining({
-          businessId: "biz-A",
-          plan: "YEARLY",
-          status: "ACTIVE",
-        }),
-        update: expect.objectContaining({
-          plan: "YEARLY",
-          status: "ACTIVE",
-        }),
-      }),
-    );
+    expect(response.status).toBe(404);
+    expect(upsert).not.toHaveBeenCalled();
   });
 
-  it("rejects subscription changes from non-owners", async () => {
+  it("does not expose direct subscription activation to non-owners", async () => {
     const response = await request(app)
       .post("/api/v1/subscriptions")
       .set("x-test-role", "STAFF")
       .set("x-test-business-id", "biz-A")
       .send({ plan: "MONTHLY" });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(upsert).not.toHaveBeenCalled();
   });
 
