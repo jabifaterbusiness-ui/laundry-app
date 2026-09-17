@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { getSubscriptionPaymentProvider } from "./providers/payment-provider.registry.js";
+import { sendSubscriptionPaymentConfirmationEmail } from "./subscription-payment-confirmation-email.service.js";
 
 function addPlanDuration(date: Date, plan: SubscriptionPlan) {
   const result = new Date(date);
@@ -99,12 +100,20 @@ export async function verifySubscriptionPayment(
   });
 
   if (existingPayment?.status === "SUCCESSFUL") {
+    const subscription = await prisma.subscription.findUnique({
+      where: { businessId },
+    });
+
+    await sendSubscriptionPaymentConfirmationEmail(
+      existingPayment.id,
+      actorUserId,
+      correlationId,
+    );
+
     return {
       intent,
       payment: existingPayment,
-      subscription: await prisma.subscription.findUnique({
-        where: { businessId },
-      }),
+      subscription,
       alreadyProcessed: true,
     };
   }
@@ -276,6 +285,12 @@ export async function verifySubscriptionPayment(
       subscriptionEndsAt: result.subscription?.endsAt,
     },
   });
+
+  await sendSubscriptionPaymentConfirmationEmail(
+    result.payment.id,
+    actorUserId,
+    correlationId,
+  );
 
   return result;
 }

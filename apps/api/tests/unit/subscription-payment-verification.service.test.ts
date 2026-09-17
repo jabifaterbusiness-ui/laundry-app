@@ -22,6 +22,10 @@ const providerMock = vi.hoisted(() => ({
   verifyPayment: vi.fn(),
 }));
 
+const confirmationEmailMock = vi.hoisted(() => ({
+  sendSubscriptionPaymentConfirmationEmail: vi.fn(),
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: prismaMock,
 }));
@@ -31,6 +35,11 @@ vi.mock("../../src/lib/audit.js", () => auditMock);
 vi.mock("../../src/modules/subscriptions/providers/payment-provider.registry.js", () => ({
   getSubscriptionPaymentProvider: vi.fn(() => providerMock),
 }));
+
+vi.mock(
+  "../../src/modules/subscriptions/subscription-payment-confirmation-email.service.js",
+  () => confirmationEmailMock,
+);
 
 import { verifySubscriptionPayment } from "../../src/modules/subscriptions/subscription-payment-verification.service.js";
 
@@ -77,6 +86,12 @@ describe("verifySubscriptionPayment", () => {
 
     prismaMock.subscriptionPayment.findUnique.mockResolvedValue(null);
     prismaMock.subscription.findUnique.mockResolvedValue(subscription);
+
+    confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail.mockResolvedValue({
+      sent: true,
+      skipped: false,
+      messageId: "email-123",
+    });
 
     prismaMock.$transaction.mockImplementation(async (callback) => {
       const tx = {
@@ -133,6 +148,13 @@ describe("verifySubscriptionPayment", () => {
     expect(result.payment).not.toBeNull();
     expect(result.payment?.status).toBe("SUCCESSFUL");
     expect(result.subscription?.status).toBe("ACTIVE");
+    expect(
+      confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail,
+    ).toHaveBeenCalledWith(
+      "payment-1",
+      "owner-1",
+      "correlation-1",
+    );
     expect(auditMock.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "subscription.payment.verified",
@@ -232,6 +254,8 @@ describe("verifySubscriptionPayment", () => {
       intentId: intent.id,
       status: "SUCCESSFUL",
       paymentReference: intent.paymentReference,
+      confirmationEmailSentAt: new Date("2026-09-17T10:01:00.000Z"),
+      confirmationEmailProviderMessageId: "email-existing",
     };
 
     prismaMock.subscriptionPayment.findUnique.mockResolvedValueOnce(payment);
@@ -245,5 +269,34 @@ describe("verifySubscriptionPayment", () => {
     expect(result.payment).toBe(payment);
     expect(providerMock.verifyPayment).not.toHaveBeenCalled();
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(
+      confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail,
+    ).toHaveBeenCalledWith(
+      "payment-existing",
+      undefined,
+      undefined,
+    );
+  });
+
+  it("does not fail successful payment verification when confirmation email delivery fails", async () => {
+    confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail.mockResolvedValueOnce({
+      sent: false,
+      skipped: false,
+    });
+
+    const result = await verifySubscriptionPayment(
+      "business-1",
+      intent.id,
+    );
+
+    expect(result.payment?.status).toBe("SUCCESSFUL");
+    expect(result.subscription?.status).toBe("ACTIVE");
+    expect(
+      confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail,
+    ).toHaveBeenCalledWith(
+      "payment-1",
+      undefined,
+      undefined,
+    );
   });
 });

@@ -1,14 +1,14 @@
 import { Resend } from "resend";
 import { config } from "../../../config/index.js";
 
-export interface SendReceiptEmailInput {
+export interface SendHtmlEmailInput {
   to: string;
   subject: string;
   html: string;
 }
 
-export async function sendReceiptEmail(
-  input: SendReceiptEmailInput,
+export async function sendHtmlEmail(
+  input: SendHtmlEmailInput,
 ): Promise<{ id: string }> {
   const { resendApiKey, emailFrom } = config.receiptDelivery;
 
@@ -34,4 +34,12 @@ export async function sendReceiptEmail(
   }
 
   return { id: data.id };
+}
+
+export interface SendReceiptEmailInput extends SendHtmlEmailInput {}
+
+export async function sendReceiptEmail(
+  input: SendReceiptEmailInput,
+): Promise<{ id: string }> {
+  return sendHtmlEmail(input);
 }

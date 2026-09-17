@@ -1679,6 +1679,11 @@ model SubscriptionPayment {
 
   metadata Json?
 
+  // Subscription payment confirmation email delivery state.
+  confirmationEmailSentAt           DateTime?
+  confirmationEmailProviderMessageId String?
+  confirmationEmailLastError        String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
