@@ -166,6 +166,201 @@ export interface PlatformHealth {
   checkedAt: string;
 }
 
+export interface PlatformSubscriptionPrice {
+  id: string;
+  plan: SubscriptionPlan;
+  countryCode: string;
+  currencyCode: string;
+  amount: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertPlatformSubscriptionPriceInput {
+  plan: SubscriptionPlan;
+  countryCode: string;
+  currencyCode: string;
+  amount: number;
+  isActive?: boolean;
+}
+
+export interface PlatformPaymentProvider {
+  id: string;
+  platformConfigId: string;
+  providerKey: string;
+  displayName: string;
+  enabled: boolean;
+  supportedCountries: unknown;
+  supportedCurrencies: unknown;
+  supportedMethods: unknown;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertPlatformPaymentProviderInput {
+  providerKey: string;
+  displayName: string;
+  enabled?: boolean;
+  supportedCountries: string[];
+  supportedCurrencies: string[];
+  supportedMethods: string[];
+  displayOrder?: number;
+}
+
+export interface PlatformPaymentMethod {
+  id: string;
+  platformConfigId: string;
+  methodKey: string;
+  displayName: string;
+  providerKey: string | null;
+  enabled: boolean;
+  supportedCountries: unknown;
+  supportedCurrencies: unknown;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertPlatformPaymentMethodInput {
+  methodKey: string;
+  displayName: string;
+  providerKey?: string | null;
+  enabled?: boolean;
+  supportedCountries: string[];
+  supportedCurrencies: string[];
+  displayOrder?: number;
+}
+
+export async function getPlatformSubscriptionPrices(
+  accessToken: string | null,
+): Promise<PlatformSubscriptionPrice[]> {
+  return apiFetch<PlatformSubscriptionPrice[]>("/platform/subscription-prices", {
+    accessToken,
+  });
+}
+
+export async function upsertPlatformSubscriptionPrice(
+  input: UpsertPlatformSubscriptionPriceInput,
+  accessToken: string | null,
+): Promise<PlatformSubscriptionPrice> {
+  return apiFetch<PlatformSubscriptionPrice>("/platform/subscription-prices", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePlatformSubscriptionPriceStatus(
+  id: string,
+  isActive: boolean,
+  accessToken: string | null,
+): Promise<PlatformSubscriptionPrice> {
+  return apiFetch<PlatformSubscriptionPrice>(
+    `/platform/subscription-prices/${encodeURIComponent(id)}/status`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ isActive }),
+    },
+  );
+}
+
+export async function getPlatformPaymentProviders(
+  accessToken: string | null,
+): Promise<PlatformPaymentProvider[]> {
+  return apiFetch<PlatformPaymentProvider[]>("/platform/payment-providers", {
+    accessToken,
+  });
+}
+
+export async function upsertPlatformPaymentProvider(
+  input: UpsertPlatformPaymentProviderInput,
+  accessToken: string | null,
+): Promise<PlatformPaymentProvider> {
+  return apiFetch<PlatformPaymentProvider>("/platform/payment-providers", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePlatformPaymentProviderStatus(
+  id: string,
+  enabled: boolean,
+  accessToken: string | null,
+): Promise<PlatformPaymentProvider> {
+  return apiFetch<PlatformPaymentProvider>(
+    `/platform/payment-providers/${encodeURIComponent(id)}/status`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ enabled }),
+    },
+  );
+}
+
+export async function deletePlatformPaymentProvider(
+  id: string,
+  accessToken: string | null,
+): Promise<{ id: string; removed: boolean }> {
+  return apiFetch<{ id: string; removed: boolean }>(
+    `/platform/payment-providers/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      accessToken,
+    },
+  );
+}
+
+export async function getPlatformPaymentMethods(
+  accessToken: string | null,
+): Promise<PlatformPaymentMethod[]> {
+  return apiFetch<PlatformPaymentMethod[]>("/platform/payment-methods", {
+    accessToken,
+  });
+}
+
+export async function upsertPlatformPaymentMethod(
+  input: UpsertPlatformPaymentMethodInput,
+  accessToken: string | null,
+): Promise<PlatformPaymentMethod> {
+  return apiFetch<PlatformPaymentMethod>("/platform/payment-methods", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePlatformPaymentMethodStatus(
+  id: string,
+  enabled: boolean,
+  accessToken: string | null,
+): Promise<PlatformPaymentMethod> {
+  return apiFetch<PlatformPaymentMethod>(
+    `/platform/payment-methods/${encodeURIComponent(id)}/status`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ enabled }),
+    },
+  );
+}
+
+export async function deletePlatformPaymentMethod(
+  id: string,
+  accessToken: string | null,
+): Promise<{ id: string; removed: boolean }> {
+  return apiFetch<{ id: string; removed: boolean }>(
+    `/platform/payment-methods/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      accessToken,
+    },
+  );
+}
+
 export async function getPlatformHealth(
   accessToken: string | null,
 ): Promise<PlatformHealth> {

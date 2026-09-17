@@ -18,6 +18,17 @@ import {
   getPlatformHealth,
   getPlatformConfiguration,
   updatePlatformConfiguration,
+  getPlatformSubscriptionPrices,
+  upsertPlatformSubscriptionPrice,
+  updatePlatformSubscriptionPriceStatus,
+  getPlatformPaymentProviders,
+  upsertPlatformPaymentProvider,
+  updatePlatformPaymentProviderStatus,
+  deletePlatformPaymentProvider,
+  getPlatformPaymentMethods,
+  upsertPlatformPaymentMethod,
+  updatePlatformPaymentMethodStatus,
+  deletePlatformPaymentMethod,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -36,6 +47,17 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformHealth: vi.fn(),
   getPlatformConfiguration: vi.fn(),
   updatePlatformConfiguration: vi.fn(),
+  getPlatformSubscriptionPrices: vi.fn(),
+  upsertPlatformSubscriptionPrice: vi.fn(),
+  updatePlatformSubscriptionPriceStatus: vi.fn(),
+  getPlatformPaymentProviders: vi.fn(),
+  upsertPlatformPaymentProvider: vi.fn(),
+  updatePlatformPaymentProviderStatus: vi.fn(),
+  deletePlatformPaymentProvider: vi.fn(),
+  getPlatformPaymentMethods: vi.fn(),
+  upsertPlatformPaymentMethod: vi.fn(),
+  updatePlatformPaymentMethodStatus: vi.fn(),
+  deletePlatformPaymentMethod: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -53,6 +75,21 @@ const mockedGlobalStatistics = vi.mocked(getPlatformGlobalStatistics);
 const mockedHealth = vi.mocked(getPlatformHealth);
 const mockedConfiguration = vi.mocked(getPlatformConfiguration);
 const mockedUpdateConfiguration = vi.mocked(updatePlatformConfiguration);
+const mockedSubscriptionPrices = vi.mocked(getPlatformSubscriptionPrices);
+const mockedUpsertSubscriptionPrice = vi.mocked(upsertPlatformSubscriptionPrice);
+const mockedSubscriptionPriceStatus = vi.mocked(
+  updatePlatformSubscriptionPriceStatus,
+);
+const mockedPaymentProviders = vi.mocked(getPlatformPaymentProviders);
+const mockedUpsertPaymentProvider = vi.mocked(upsertPlatformPaymentProvider);
+const mockedPaymentProviderStatus = vi.mocked(
+  updatePlatformPaymentProviderStatus,
+);
+const mockedDeletePaymentProvider = vi.mocked(deletePlatformPaymentProvider);
+const mockedPaymentMethods = vi.mocked(getPlatformPaymentMethods);
+const mockedUpsertPaymentMethod = vi.mocked(upsertPlatformPaymentMethod);
+const mockedPaymentMethodStatus = vi.mocked(updatePlatformPaymentMethodStatus);
+const mockedDeletePaymentMethod = vi.mocked(deletePlatformPaymentMethod);
 
 const growth = {
   generatedAt: "2026-09-15T00:10:00.000Z",
@@ -282,6 +319,131 @@ beforeEach(() => {
     ...platformConfiguration,
     maintenanceMode: true,
     version: 2,
+  });
+
+  mockedSubscriptionPrices.mockResolvedValue([
+    {
+      id: "price-monthly",
+      plan: "MONTHLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 10000,
+      isActive: true,
+      createdAt: "2026-09-15T00:00:00.000Z",
+      updatedAt: "2026-09-15T00:00:00.000Z",
+    },
+  ]);
+  mockedUpsertSubscriptionPrice.mockResolvedValue({
+    id: "price-monthly",
+    plan: "MONTHLY",
+    countryCode: "NG",
+    currencyCode: "NGN",
+    amount: 10000,
+    isActive: true,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+  mockedSubscriptionPriceStatus.mockResolvedValue({
+    id: "price-monthly",
+    plan: "MONTHLY",
+    countryCode: "NG",
+    currencyCode: "NGN",
+    amount: 10000,
+    isActive: false,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+
+  mockedPaymentProviders.mockResolvedValue([
+    {
+      id: "provider-paystack",
+      platformConfigId: "platform-config",
+      providerKey: "paystack",
+      displayName: "Paystack",
+      enabled: true,
+      supportedCountries: ["NG"],
+      supportedCurrencies: ["NGN"],
+      supportedMethods: ["CARD", "BANK_TRANSFER"],
+      displayOrder: 0,
+      createdAt: "2026-09-15T00:00:00.000Z",
+      updatedAt: "2026-09-15T00:00:00.000Z",
+    },
+  ]);
+  mockedUpsertPaymentProvider.mockResolvedValue({
+    id: "provider-paystack",
+    platformConfigId: "platform-config",
+    providerKey: "paystack",
+    displayName: "Paystack",
+    enabled: true,
+    supportedCountries: ["NG"],
+    supportedCurrencies: ["NGN"],
+    supportedMethods: ["CARD", "BANK_TRANSFER"],
+    displayOrder: 0,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+  mockedPaymentProviderStatus.mockResolvedValue({
+    id: "provider-paystack",
+    platformConfigId: "platform-config",
+    providerKey: "paystack",
+    displayName: "Paystack",
+    enabled: false,
+    supportedCountries: ["NG"],
+    supportedCurrencies: ["NGN"],
+    supportedMethods: ["CARD", "BANK_TRANSFER"],
+    displayOrder: 0,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+  mockedDeletePaymentProvider.mockResolvedValue({
+    id: "provider-paystack",
+    removed: true,
+  });
+
+  mockedPaymentMethods.mockResolvedValue([
+    {
+      id: "method-card",
+      platformConfigId: "platform-config",
+      methodKey: "CARD",
+      displayName: "Card",
+      providerKey: "paystack",
+      enabled: true,
+      supportedCountries: ["NG"],
+      supportedCurrencies: ["NGN"],
+      displayOrder: 0,
+      createdAt: "2026-09-15T00:00:00.000Z",
+      updatedAt: "2026-09-15T00:00:00.000Z",
+    },
+  ]);
+  mockedUpsertPaymentMethod.mockResolvedValue({
+    id: "method-card",
+    platformConfigId: "platform-config",
+    methodKey: "CARD",
+    displayName: "Card",
+    providerKey: "paystack",
+    enabled: true,
+    supportedCountries: ["NG"],
+    supportedCurrencies: ["NGN"],
+    displayOrder: 0,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+  mockedPaymentMethodStatus.mockResolvedValue({
+    id: "method-card",
+    platformConfigId: "platform-config",
+    methodKey: "CARD",
+    displayName: "Card",
+    providerKey: "paystack",
+    enabled: false,
+    supportedCountries: ["NG"],
+    supportedCurrencies: ["NGN"],
+    displayOrder: 0,
+    createdAt: "2026-09-15T00:00:00.000Z",
+    updatedAt: "2026-09-15T00:00:00.000Z",
+  });
+  mockedDeletePaymentMethod.mockResolvedValue({
+    id: "method-card",
+    removed: true,
   });
 });
 
@@ -814,6 +976,38 @@ describe("PlatformOwnerPage", () => {
       await screen.findByText(
         "Company subscription created or renewed successfully.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders billing configuration for subscription prices, providers, and methods", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Subscription & payment configuration",
+      }),
+    ).toBeInTheDocument();
+
+    expect(mockedSubscriptionPrices).toHaveBeenCalledWith("platform-token");
+    expect(mockedPaymentProviders).toHaveBeenCalledWith("platform-token");
+    expect(mockedPaymentMethods).toHaveBeenCalledWith("platform-token");
+
+    const priceLabel = screen.getByText((text) => text.includes("MONTHLY") && text.includes("NG") && text.includes("NGN"), { selector: "strong" }); const priceRow = priceLabel.closest(".platform-config-row"); expect(priceRow).toBeInTheDocument(); expect(priceRow).toHaveTextContent("10,000");
+    const billingSection = screen
+      .getByRole("heading", { name: "Subscription & payment configuration" })
+      .closest("section");
+    expect(billingSection).toBeInTheDocument();
+    expect(billingSection).toHaveTextContent("Paystack · paystack");
+    expect(billingSection).toHaveTextContent("Card · CARD");
+
+    expect(
+      screen.getByRole("button", { name: "Save price" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save provider" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save method" }),
     ).toBeInTheDocument();
   });
 

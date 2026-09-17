@@ -14,6 +14,17 @@ import {
   getPlatformHealth,
   getPlatformConfiguration,
   updatePlatformConfiguration,
+  getPlatformSubscriptionPrices,
+  upsertPlatformSubscriptionPrice,
+  updatePlatformSubscriptionPriceStatus,
+  getPlatformPaymentProviders,
+  upsertPlatformPaymentProvider,
+  updatePlatformPaymentProviderStatus,
+  deletePlatformPaymentProvider,
+  getPlatformPaymentMethods,
+  upsertPlatformPaymentMethod,
+  updatePlatformPaymentMethodStatus,
+  deletePlatformPaymentMethod,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -103,6 +114,24 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const subscriptionPricesQuery = useQuery({
+    queryKey: ["platform", "subscription-prices"],
+    queryFn: () => getPlatformSubscriptionPrices(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
+  const paymentProvidersQuery = useQuery({
+    queryKey: ["platform", "payment-providers"],
+    queryFn: () => getPlatformPaymentProviders(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
+  const paymentMethodsQuery = useQuery({
+    queryKey: ["platform", "payment-methods"],
+    queryFn: () => getPlatformPaymentMethods(accessToken),
+    enabled: isPlatformAdmin && Boolean(accessToken),
+  });
+
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [subscriptionFeedback, setSubscriptionFeedback] =
     useState<string | null>(null);
@@ -173,6 +202,42 @@ export function PlatformOwnerPage() {
   const [configurationFeedback, setConfigurationFeedback] =
     useState<string | null>(null);
 
+  const [billingFeedback, setBillingFeedback] = useState<string | null>(null);
+
+  const [priceForm, setPriceForm] = useState<{
+    plan: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+    countryCode: string;
+    currencyCode: string;
+    amount: string;
+    isActive: boolean;
+  }>({
+    plan: "MONTHLY",
+    countryCode: "NG",
+    currencyCode: "NGN",
+    amount: "",
+    isActive: true,
+  });
+
+  const [providerForm, setProviderForm] = useState({
+    providerKey: "",
+    displayName: "",
+    supportedCountries: "NG",
+    supportedCurrencies: "NGN",
+    supportedMethods: "CARD, BANK_TRANSFER",
+    displayOrder: "0",
+    enabled: false,
+  });
+
+  const [methodForm, setMethodForm] = useState({
+    methodKey: "",
+    displayName: "",
+    providerKey: "",
+    supportedCountries: "NG",
+    supportedCurrencies: "NGN",
+    displayOrder: "0",
+    enabled: false,
+  });
+
   const configurationMutation = useMutation({
     mutationFn: async ({
       field,
@@ -211,6 +276,181 @@ export function PlatformOwnerPage() {
         error instanceof Error
           ? error.message
           : "Unable to update platform configuration.",
+      );
+    },
+  });
+
+  const subscriptionPriceMutation = useMutation({
+    mutationFn: async (input: Parameters<typeof upsertPlatformSubscriptionPrice>[0]) =>
+      upsertPlatformSubscriptionPrice(input, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Subscription price saved successfully.");
+      await subscriptionPricesQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to save the subscription price.",
+      );
+    },
+  });
+
+  const subscriptionPriceStatusMutation = useMutation({
+    mutationFn: async ({
+      id,
+      isActive,
+    }: {
+      id: string;
+      isActive: boolean;
+    }) =>
+      updatePlatformSubscriptionPriceStatus(id, isActive, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Subscription price status updated.");
+      await subscriptionPricesQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update subscription price status.",
+      );
+    },
+  });
+
+  const paymentProviderMutation = useMutation({
+    mutationFn: async (
+      input: Parameters<typeof upsertPlatformPaymentProvider>[0],
+    ) => upsertPlatformPaymentProvider(input, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment provider saved successfully.");
+      await paymentProvidersQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to save the payment provider.",
+      );
+    },
+  });
+
+  const paymentProviderStatusMutation = useMutation({
+    mutationFn: async ({
+      id,
+      enabled,
+    }: {
+      id: string;
+      enabled: boolean;
+    }) =>
+      updatePlatformPaymentProviderStatus(id, enabled, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment provider status updated.");
+      await paymentProvidersQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update payment provider status.",
+      );
+    },
+  });
+
+  const paymentProviderDeleteMutation = useMutation({
+    mutationFn: async (id: string) =>
+      deletePlatformPaymentProvider(id, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment provider removed successfully.");
+      await Promise.all([
+        paymentProvidersQuery.refetch(),
+        paymentMethodsQuery.refetch(),
+      ]);
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to remove the payment provider.",
+      );
+    },
+  });
+
+  const paymentMethodMutation = useMutation({
+    mutationFn: async (
+      input: Parameters<typeof upsertPlatformPaymentMethod>[0],
+    ) => upsertPlatformPaymentMethod(input, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment method saved successfully.");
+      await paymentMethodsQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to save the payment method.",
+      );
+    },
+  });
+
+  const paymentMethodStatusMutation = useMutation({
+    mutationFn: async ({
+      id,
+      enabled,
+    }: {
+      id: string;
+      enabled: boolean;
+    }) =>
+      updatePlatformPaymentMethodStatus(id, enabled, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment method status updated.");
+      await paymentMethodsQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update payment method status.",
+      );
+    },
+  });
+
+  const paymentMethodDeleteMutation = useMutation({
+    mutationFn: async (id: string) =>
+      deletePlatformPaymentMethod(id, accessToken),
+    onMutate: () => {
+      setBillingFeedback(null);
+    },
+    onSuccess: async () => {
+      setBillingFeedback("Payment method removed successfully.");
+      await paymentMethodsQuery.refetch();
+    },
+    onError: (error) => {
+      setBillingFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to remove the payment method.",
       );
     },
   });
@@ -1214,6 +1454,644 @@ export function PlatformOwnerPage() {
           )}
         </section>
       </div>
+
+      <section className="platform-panel platform-control-panel" id="platform-billing-configuration">
+        <div className="platform-panel-header">
+          <div>
+            <div className="platform-eyebrow">BILLING ADMINISTRATION</div>
+            <h2>Subscription & payment configuration</h2>
+          </div>
+          <span className="platform-status active">Platform controlled</span>
+        </div>
+
+        <p>
+          Configure authoritative subscription prices, payment providers, and
+          payment methods. Availability remains subject to provider,
+          country, currency, merchant, and KYC support.
+        </p>
+
+        {billingFeedback ? (
+          <div className="platform-feedback">{billingFeedback}</div>
+        ) : null}
+
+        <div className="platform-config-list">
+          <div className="platform-config-row">
+            <div>
+              <strong>Subscription pricing</strong>
+              <span>
+                Prices used by Business Owners during subscription checkout.
+              </span>
+            </div>
+            <span className="platform-status active">
+              {subscriptionPricesQuery.data?.length ?? 0} configured
+            </span>
+          </div>
+
+          <div className="platform-config-row">
+            <div>
+              <strong>Add or update subscription price</strong>
+              <span>
+                One price is uniquely identified by plan, country, and
+                currency.
+              </span>
+            </div>
+            <form
+              className="platform-billing-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                const amount = Number(priceForm.amount);
+                if (!Number.isInteger(amount) || amount <= 0) {
+                  setBillingFeedback("Enter a valid positive whole-number price.");
+                  return;
+                }
+
+                subscriptionPriceMutation.mutate({
+                  plan: priceForm.plan,
+                  countryCode: priceForm.countryCode.trim().toUpperCase(),
+                  currencyCode: priceForm.currencyCode.trim().toUpperCase(),
+                  amount,
+                  isActive: priceForm.isActive,
+                });
+              }}
+            >
+              <select
+                aria-label="Subscription plan"
+                value={priceForm.plan}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    plan: event.target.value as
+                      | "WEEKLY"
+                      | "MONTHLY"
+                      | "QUARTERLY"
+                      | "YEARLY",
+                  }))
+                }
+              >
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="QUARTERLY">Quarterly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+
+              <input
+                aria-label="Price country"
+                value={priceForm.countryCode}
+                maxLength={3}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    countryCode: event.target.value,
+                  }))
+                }
+                placeholder="Country"
+              />
+
+              <input
+                aria-label="Price currency"
+                value={priceForm.currencyCode}
+                maxLength={3}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    currencyCode: event.target.value,
+                  }))
+                }
+                placeholder="Currency"
+              />
+
+              <input
+                aria-label="Subscription price amount"
+                type="number"
+                min="1"
+                step="1"
+                value={priceForm.amount}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    amount: event.target.value,
+                  }))
+                }
+                placeholder="Amount"
+              />
+
+              <label className="platform-billing-checkbox">
+                <input
+                  type="checkbox"
+                  checked={priceForm.isActive}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      isActive: event.target.checked,
+                    }))
+                  }
+                />
+                Active
+              </label>
+
+              <button
+                type="submit"
+                className="button button-secondary"
+                disabled={subscriptionPriceMutation.isPending}
+              >
+                {subscriptionPriceMutation.isPending ? "Saving..." : "Save price"}
+              </button>
+            </form>
+          </div>
+
+          {subscriptionPricesQuery.isLoading ? (
+            <p className="platform-feedback">Loading subscription prices...</p>
+          ) : subscriptionPricesQuery.isError ? (
+            <p className="platform-feedback platform-error">
+              Subscription prices could not be loaded.
+            </p>
+          ) : subscriptionPricesQuery.data?.length ? (
+            subscriptionPricesQuery.data.map((price) => (
+              <div className="platform-config-row" key={price.id}>
+                <div>
+                  <strong>
+                    {price.plan} · {price.countryCode}/{price.currencyCode}
+                  </strong>
+                  <span>
+                    {new Intl.NumberFormat("en-NG", {
+                      style: "currency",
+                      currency: price.currencyCode,
+                      maximumFractionDigits: 0,
+                    }).format(price.amount)}
+                  </span>
+                </div>
+                <div className="platform-config-action">
+                  <span
+                    className={`platform-status ${
+                      price.isActive ? "active" : "inactive"
+                    }`}
+                  >
+                    {price.isActive ? "Active" : "Inactive"}
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={subscriptionPriceStatusMutation.isPending}
+                    onClick={() =>
+                      subscriptionPriceStatusMutation.mutate({
+                        id: price.id,
+                        isActive: !price.isActive,
+                      })
+                    }
+                  >
+                    {price.isActive ? "Disable" : "Enable"}
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="platform-feedback">
+              No subscription prices configured yet.
+            </p>
+          )}
+
+          <div className="platform-config-row">
+            <div>
+              <strong>Payment providers</strong>
+              <span>
+                Providers are configurable and can be enabled or disabled
+                independently.
+              </span>
+            </div>
+            <span className="platform-status active">
+              {paymentProvidersQuery.data?.length ?? 0} configured
+            </span>
+          </div>
+
+          <div className="platform-config-row">
+            <div>
+              <strong>Add or update payment provider</strong>
+              <span>
+                Example: Paystack. Capability lists control where and how the
+                provider may be selected.
+              </span>
+            </div>
+            <form
+              className="platform-billing-form platform-billing-form-wide"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                if (!providerForm.providerKey.trim() || !providerForm.displayName.trim()) {
+                  setBillingFeedback("Provider key and display name are required.");
+                  return;
+                }
+
+                paymentProviderMutation.mutate({
+                  providerKey: providerForm.providerKey.trim(),
+                  displayName: providerForm.displayName.trim(),
+                  enabled: providerForm.enabled,
+                  supportedCountries: providerForm.supportedCountries
+                    .split(",")
+                    .map((value) => value.trim().toUpperCase())
+                    .filter(Boolean),
+                  supportedCurrencies: providerForm.supportedCurrencies
+                    .split(",")
+                    .map((value) => value.trim().toUpperCase())
+                    .filter(Boolean),
+                  supportedMethods: providerForm.supportedMethods
+                    .split(",")
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+                  displayOrder: Number(providerForm.displayOrder) || 0,
+                });
+              }}
+            >
+              <input
+                aria-label="Provider key"
+                value={providerForm.providerKey}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    providerKey: event.target.value,
+                  }))
+                }
+                placeholder="Provider key"
+              />
+
+              <input
+                aria-label="Provider display name"
+                value={providerForm.displayName}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }))
+                }
+                placeholder="Display name"
+              />
+
+              <input
+                aria-label="Provider countries"
+                value={providerForm.supportedCountries}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    supportedCountries: event.target.value,
+                  }))
+                }
+                placeholder="Countries: NG, GH"
+              />
+
+              <input
+                aria-label="Provider currencies"
+                value={providerForm.supportedCurrencies}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    supportedCurrencies: event.target.value,
+                  }))
+                }
+                placeholder="Currencies: NGN, GHS"
+              />
+
+              <input
+                aria-label="Provider methods"
+                value={providerForm.supportedMethods}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    supportedMethods: event.target.value,
+                  }))
+                }
+                placeholder="Methods: CARD, BANK_TRANSFER"
+              />
+
+              <input
+                aria-label="Provider display order"
+                type="number"
+                min="0"
+                step="1"
+                value={providerForm.displayOrder}
+                onChange={(event) =>
+                  setProviderForm((current) => ({
+                    ...current,
+                    displayOrder: event.target.value,
+                  }))
+                }
+                placeholder="Order"
+              />
+
+              <label className="platform-billing-checkbox">
+                <input
+                  type="checkbox"
+                  checked={providerForm.enabled}
+                  onChange={(event) =>
+                    setProviderForm((current) => ({
+                      ...current,
+                      enabled: event.target.checked,
+                    }))
+                  }
+                />
+                Enabled
+              </label>
+
+              <button
+                type="submit"
+                className="button button-secondary"
+                disabled={paymentProviderMutation.isPending}
+              >
+                {paymentProviderMutation.isPending
+                  ? "Saving..."
+                  : "Save provider"}
+              </button>
+            </form>
+          </div>
+
+          {paymentProvidersQuery.isLoading ? (
+            <p className="platform-feedback">Loading payment providers...</p>
+          ) : paymentProvidersQuery.isError ? (
+            <p className="platform-feedback platform-error">
+              Payment providers could not be loaded.
+            </p>
+          ) : paymentProvidersQuery.data?.length ? (
+            paymentProvidersQuery.data.map((provider) => (
+              <div className="platform-config-row" key={provider.id}>
+                <div>
+                  <strong>
+                    {provider.displayName} · {provider.providerKey}
+                  </strong>
+                  <span>
+                    Countries: {Array.isArray(provider.supportedCountries)
+                      ? provider.supportedCountries.join(", ")
+                      : "—"}
+                    {" · "}
+                    Currencies: {Array.isArray(provider.supportedCurrencies)
+                      ? provider.supportedCurrencies.join(", ")
+                      : "—"}
+                  </span>
+                </div>
+                <div className="platform-config-action">
+                  <span
+                    className={`platform-status ${
+                      provider.enabled ? "active" : "inactive"
+                    }`}
+                  >
+                    {provider.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={paymentProviderStatusMutation.isPending}
+                    onClick={() =>
+                      paymentProviderStatusMutation.mutate({
+                        id: provider.id,
+                        enabled: !provider.enabled,
+                      })
+                    }
+                  >
+                    {provider.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={paymentProviderDeleteMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Remove payment provider "${provider.displayName}"?`,
+                        )
+                      ) {
+                        paymentProviderDeleteMutation.mutate(provider.id);
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="platform-feedback">
+              No payment providers configured yet.
+            </p>
+          )}
+
+          <div className="platform-config-row">
+            <div>
+              <strong>Payment methods</strong>
+              <span>
+                Configure the channels Business Owners can select for
+                subscription payments.
+              </span>
+            </div>
+            <span className="platform-status active">
+              {paymentMethodsQuery.data?.length ?? 0} configured
+            </span>
+          </div>
+
+          <div className="platform-config-row">
+            <div>
+              <strong>Add or update payment method</strong>
+              <span>
+                Provider can be left blank for a provider-independent method.
+              </span>
+            </div>
+            <form
+              className="platform-billing-form platform-billing-form-wide"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                if (!methodForm.methodKey.trim() || !methodForm.displayName.trim()) {
+                  setBillingFeedback("Method key and display name are required.");
+                  return;
+                }
+
+                paymentMethodMutation.mutate({
+                  methodKey: methodForm.methodKey.trim(),
+                  displayName: methodForm.displayName.trim(),
+                  providerKey: methodForm.providerKey.trim() || null,
+                  enabled: methodForm.enabled,
+                  supportedCountries: methodForm.supportedCountries
+                    .split(",")
+                    .map((value) => value.trim().toUpperCase())
+                    .filter(Boolean),
+                  supportedCurrencies: methodForm.supportedCurrencies
+                    .split(",")
+                    .map((value) => value.trim().toUpperCase())
+                    .filter(Boolean),
+                  displayOrder: Number(methodForm.displayOrder) || 0,
+                });
+              }}
+            >
+              <input
+                aria-label="Payment method key"
+                value={methodForm.methodKey}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    methodKey: event.target.value,
+                  }))
+                }
+                placeholder="Method key"
+              />
+
+              <input
+                aria-label="Payment method display name"
+                value={methodForm.displayName}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }))
+                }
+                placeholder="Display name"
+              />
+
+              <input
+                aria-label="Payment method provider"
+                value={methodForm.providerKey}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    providerKey: event.target.value,
+                  }))
+                }
+                placeholder="Provider key (optional)"
+              />
+
+              <input
+                aria-label="Payment method countries"
+                value={methodForm.supportedCountries}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    supportedCountries: event.target.value,
+                  }))
+                }
+                placeholder="Countries: NG, GH"
+              />
+
+              <input
+                aria-label="Payment method currencies"
+                value={methodForm.supportedCurrencies}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    supportedCurrencies: event.target.value,
+                  }))
+                }
+                placeholder="Currencies: NGN, GHS"
+              />
+
+              <input
+                aria-label="Payment method display order"
+                type="number"
+                min="0"
+                step="1"
+                value={methodForm.displayOrder}
+                onChange={(event) =>
+                  setMethodForm((current) => ({
+                    ...current,
+                    displayOrder: event.target.value,
+                  }))
+                }
+                placeholder="Order"
+              />
+
+              <label className="platform-billing-checkbox">
+                <input
+                  type="checkbox"
+                  checked={methodForm.enabled}
+                  onChange={(event) =>
+                    setMethodForm((current) => ({
+                      ...current,
+                      enabled: event.target.checked,
+                    }))
+                  }
+                />
+                Enabled
+              </label>
+
+              <button
+                type="submit"
+                className="button button-secondary"
+                disabled={paymentMethodMutation.isPending}
+              >
+                {paymentMethodMutation.isPending
+                  ? "Saving..."
+                  : "Save method"}
+              </button>
+            </form>
+          </div>
+
+          {paymentMethodsQuery.isLoading ? (
+            <p className="platform-feedback">Loading payment methods...</p>
+          ) : paymentMethodsQuery.isError ? (
+            <p className="platform-feedback platform-error">
+              Payment methods could not be loaded.
+            </p>
+          ) : paymentMethodsQuery.data?.length ? (
+            paymentMethodsQuery.data.map((method) => (
+              <div className="platform-config-row" key={method.id}>
+                <div>
+                  <strong>
+                    {method.displayName} · {method.methodKey}
+                  </strong>
+                  <span>
+                    Provider: {method.providerKey || "Any compatible provider"}
+                    {" · "}
+                    Countries: {Array.isArray(method.supportedCountries)
+                      ? method.supportedCountries.join(", ")
+                      : "—"}
+                    {" · "}
+                    Currencies: {Array.isArray(method.supportedCurrencies)
+                      ? method.supportedCurrencies.join(", ")
+                      : "—"}
+                  </span>
+                </div>
+                <div className="platform-config-action">
+                  <span
+                    className={`platform-status ${
+                      method.enabled ? "active" : "inactive"
+                    }`}
+                  >
+                    {method.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={paymentMethodStatusMutation.isPending}
+                    onClick={() =>
+                      paymentMethodStatusMutation.mutate({
+                        id: method.id,
+                        enabled: !method.enabled,
+                      })
+                    }
+                  >
+                    {method.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={paymentMethodDeleteMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Remove payment method "${method.displayName}"?`,
+                        )
+                      ) {
+                        paymentMethodDeleteMutation.mutate(method.id);
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="platform-feedback">
+              No payment methods configured yet.
+            </p>
+          )}
+        </div>
+      </section>
 
       <div className="platform-footer-grid">
         <section className="platform-panel platform-control-panel" id="platform-health">
