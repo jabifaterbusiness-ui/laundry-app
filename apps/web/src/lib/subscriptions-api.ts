@@ -145,6 +145,24 @@ export async function createSubscriptionPaymentIntent(
   });
 }
 
+export async function reconcileOfflineSubscriptionPayment(
+  accessToken: string,
+  input: {
+    intentId: string;
+    providerKey: string;
+    paymentMethodKey: string;
+  },
+): Promise<SubscriptionPaymentIntent> {
+  return apiFetch<SubscriptionPaymentIntent>(
+    "/subscriptions/payment-reconcile",
+    {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify(input),
+    },
+  );
+}
+
 export async function initializeSubscriptionPayment(
   accessToken: string,
   intentId: string,

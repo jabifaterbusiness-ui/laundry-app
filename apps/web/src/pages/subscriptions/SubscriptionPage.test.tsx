@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +9,14 @@ import {
   getSubscriptionPrices,
   initializeSubscriptionPayment,
 } from "../../lib/subscriptions-api.js";
+import {
+  cacheSubscriptionBillingConfig,
+  enqueueOfflineSubscriptionPayment,
+  getCachedSubscriptionBillingConfig,
+  getOfflineSubscriptionPaymentByIntent,
+  listOfflineSubscriptionPayments,
+  updateOfflineSubscriptionPayment,
+} from "../../lib/offline-subscription-payment-queue.js";
 import { SubscriptionPage } from "./SubscriptionPage.js";
 
 vi.mock("../../lib/subscriptions-api.js", () => ({
@@ -20,13 +28,33 @@ vi.mock("../../lib/subscriptions-api.js", () => ({
   verifySubscriptionPayment: vi.fn(),
 }));
 
+
+vi.mock("../../lib/offline-subscription-payment-queue.js", () => ({
+  cacheSubscriptionBillingConfig: vi.fn(),
+  enqueueOfflineSubscriptionPayment: vi.fn(),
+  getCachedSubscriptionBillingConfig: vi.fn(),
+  getOfflineSubscriptionPaymentByIntent: vi.fn(),
+  listOfflineSubscriptionPayments: vi.fn(),
+  updateOfflineSubscriptionPayment: vi.fn(),
+}));
+
 vi.mock("../../state/auth-store.js", () => ({
   useAuthStore: (selector: (state: {
-    user: { fullName: string; role: string };
+    user: {
+      id: string;
+      businessId: string;
+      fullName: string;
+      role: string;
+    };
     accessToken: string;
   }) => unknown) =>
     selector({
-      user: { fullName: "Jane Owner", role: "BUSINESS_OWNER" },
+      user: {
+        id: "owner-1",
+        businessId: "business-1",
+        fullName: "Jane Owner",
+        role: "BUSINESS_OWNER",
+      },
       accessToken: "token",
     }),
 }));
@@ -41,6 +69,20 @@ const mockedCreateSubscriptionPaymentIntent = vi.mocked(
 );
 const mockedInitializeSubscriptionPayment = vi.mocked(
   initializeSubscriptionPayment,
+);
+const mockedCacheBillingConfig = vi.mocked(cacheSubscriptionBillingConfig);
+const mockedEnqueueOfflineSubscriptionPayment = vi.mocked(
+  enqueueOfflineSubscriptionPayment,
+);
+const mockedGetCachedBillingConfig = vi.mocked(getCachedSubscriptionBillingConfig);
+const mockedGetOfflinePaymentByIntent = vi.mocked(
+  getOfflineSubscriptionPaymentByIntent,
+);
+const mockedListOfflineSubscriptionPayments = vi.mocked(
+  listOfflineSubscriptionPayments,
+);
+const mockedUpdateOfflineSubscriptionPayment = vi.mocked(
+  updateOfflineSubscriptionPayment,
 );
 
 const subscription = {
@@ -166,6 +208,31 @@ beforeEach(() => {
   mockedInitializeSubscriptionPayment.mockResolvedValue(
     initializedPaymentIntent,
   );
+  mockedCacheBillingConfig.mockResolvedValue(undefined);
+  mockedGetCachedBillingConfig.mockResolvedValue(undefined);
+  mockedGetOfflinePaymentByIntent.mockResolvedValue(undefined);
+  mockedListOfflineSubscriptionPayments.mockResolvedValue([]);
+  mockedUpdateOfflineSubscriptionPayment.mockResolvedValue(undefined);
+  mockedEnqueueOfflineSubscriptionPayment.mockResolvedValue({
+    id: 1,
+    businessId: "business-1",
+    actorUserId: "owner-1",
+    plan: "MONTHLY",
+    amount: 8000,
+    currencyCode: "NGN",
+    providerKey: "paystack",
+    paymentMethodKey: "CARD",
+    idempotencyKey: "offline-idempotency-12345678",
+    status: "PENDING",
+    intentId: null,
+    paymentReference: null,
+    providerCheckoutUrl: null,
+    attemptCount: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    createdAt: 1,
+    updatedAt: 1,
+  });
 });
 
 describe("SubscriptionPage", () => {
@@ -193,7 +260,7 @@ describe("SubscriptionPage", () => {
     renderSubscription();
 
     expect(await screen.findByText("Price not configured")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Yearly/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Yearly subscription plan" })).toBeDisabled();
   });
 
   it("keeps configured plans enabled after payment selection", async () => {
@@ -209,8 +276,6 @@ describe("SubscriptionPage", () => {
       expect(methodSelect).toBeDisabled();
     });
 
-    const { fireEvent } = await import("@testing-library/react");
-
     fireEvent.change(providerSelect, {
       target: { value: "paystack" },
     });
@@ -224,10 +289,123 @@ describe("SubscriptionPage", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Weekly/i })).toBeEnabled();
-      expect(screen.getByRole("button", { name: /Monthly/i })).toBeEnabled();
-      expect(screen.getByRole("button", { name: /Quarterly/i })).toBeEnabled();
-      expect(screen.getByRole("button", { name: /Yearly/i })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Weekly subscription plan" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Monthly subscription plan" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Quarterly subscription plan" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Yearly subscription plan" })).toBeEnabled();
+    });
+  });
+
+
+  it("queues a configured plan for offline payment", async () => {
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    renderSubscription();
+
+    const providerSelect = await screen.findByLabelText("Payment provider");
+    const methodSelect = screen.getByLabelText("Payment method");
+
+    fireEvent.change(providerSelect, {
+      target: { value: "paystack" },
+    });
+
+    await waitFor(() => {
+      expect(methodSelect).toBeEnabled();
+    });
+
+    fireEvent.change(methodSelect, {
+      target: { value: "CARD" },
+    });
+
+    const offlineButton = await screen.findByRole("button", {
+      name: "Save Monthly payment offline",
+    });
+
+    await waitFor(() => {
+      expect(offlineButton).toBeEnabled();
+    });
+
+    fireEvent.click(offlineButton);
+
+    await waitFor(() => {
+      expect(mockedEnqueueOfflineSubscriptionPayment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          businessId: "business-1",
+          actorUserId: "owner-1",
+          plan: "MONTHLY",
+          amount: 8000,
+          currencyCode: "NGN",
+          providerKey: "paystack",
+          paymentMethodKey: "CARD",
+        }),
+      );
+    });
+
+    expect(
+      screen.getByText(/saved securely on this device/i),
+    ).toBeInTheDocument();
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
+  });
+
+  it("shows a ready offline payment with a secure checkout continuation", async () => {
+    const queued = {
+      id: 2,
+      businessId: "business-1",
+      actorUserId: "owner-1",
+      plan: "MONTHLY" as const,
+      amount: 8000,
+      currencyCode: "NGN",
+      providerKey: "paystack",
+      paymentMethodKey: "CARD",
+      idempotencyKey: "offline-ready-12345678",
+      status: "READY" as const,
+      intentId: paymentIntent.id,
+      paymentReference: paymentIntent.paymentReference,
+      providerCheckoutUrl: "https://example.com/checkout/offline",
+      attemptCount: 1,
+      lastAttemptAt: Date.now(),
+      lastError: null,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    mockedListOfflineSubscriptionPayments.mockResolvedValue([queued]);
+
+    renderSubscription();
+
+    expect(
+      await screen.findByText(/Offline payment queue/i),
+    ).toBeInTheDocument();
+
+    const originalLocation = window.location;
+    const assignSpy = vi.fn();
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        assign: assignSpy,
+      },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue payment" }),
+    );
+
+    expect(assignSpy).toHaveBeenCalledWith(
+      "https://example.com/checkout/offline",
+    );
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
     });
   });
 
@@ -237,8 +415,6 @@ describe("SubscriptionPage", () => {
     const providerSelect = await screen.findByLabelText("Payment provider");
     const methodSelect = screen.getByLabelText("Payment method");
 
-    const { fireEvent } = await import("@testing-library/react");
-
     fireEvent.change(providerSelect, {
       target: { value: "paystack" },
     });
@@ -251,9 +427,7 @@ describe("SubscriptionPage", () => {
       target: { value: "CARD" },
     });
 
-    const monthlyButton = await screen.findByRole("button", {
-      name: /Monthly/i,
-    });
+    const monthlyButton = await screen.findByRole("button", { name: "Monthly subscription plan" });
 
     await waitFor(() => {
       expect(monthlyButton).toBeEnabled();

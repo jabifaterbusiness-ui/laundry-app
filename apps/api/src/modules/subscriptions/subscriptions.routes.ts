@@ -4,6 +4,8 @@ import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js"
 import { requireRole } from "../../middleware/rbac.js";
 import {
   createPaymentIntent,
+  getPaymentIntent,
+  reconcilePayment,
   initializePayment,
   verifyPayment,
   getSubscription,
@@ -32,6 +34,19 @@ subscriptionsRouter.post(
   "/payment-intents",
   requireRole("BUSINESS_OWNER"),
   asyncHandler(createPaymentIntent),
+);
+
+
+subscriptionsRouter.get(
+  "/payment-intents/:intentId",
+  requireRole("BUSINESS_OWNER"),
+  asyncHandler(getPaymentIntent),
+);
+
+subscriptionsRouter.post(
+  "/payment-reconcile",
+  requireRole("BUSINESS_OWNER"),
+  asyncHandler(reconcilePayment),
 );
 
 

@@ -9,6 +9,14 @@ import { initializeSubscriptionPayment } from "./subscription-payment-initializa
 import { initializeSubscriptionPaymentSchema } from "./subscription-payment-initialization.validation.js";
 import { verifySubscriptionPayment } from "./subscription-payment-verification.service.js";
 import { verifySubscriptionPaymentSchema } from "./subscription-payment-verification.validation.js";
+import {
+  reconcileOfflineSubscriptionPaymentSchema,
+  subscriptionPaymentIntentIdParamSchema,
+} from "./subscription-payment-reconciliation.validation.js";
+import {
+  getSubscriptionPaymentIntent,
+  reconcileOfflineSubscriptionPayment,
+} from "./subscription-payment-reconciliation.service.js";
 
 export async function getSubscription(req: Request, res: Response) {
   if (!req.user?.businessId) {
@@ -61,6 +69,37 @@ export async function createPaymentIntent(req: Request, res: Response) {
   );
 }
 
+
+export async function getPaymentIntent(req: Request, res: Response) {
+  if (!req.user?.businessId) {
+    res.status(403).json({ message: "Business context required" });
+    return;
+  }
+
+  const { intentId } = subscriptionPaymentIntentIdParamSchema.parse(req.params);
+
+  res.status(200).json(
+    await getSubscriptionPaymentIntent(req.user.businessId, intentId),
+  );
+}
+
+export async function reconcilePayment(req: Request, res: Response) {
+  if (!req.user?.businessId) {
+    res.status(403).json({ message: "Business context required" });
+    return;
+  }
+
+  const input = reconcileOfflineSubscriptionPaymentSchema.parse(req.body);
+
+  res.status(200).json(
+    await reconcileOfflineSubscriptionPayment(
+      req.user.businessId,
+      input,
+      req.user.id,
+      req.correlationId ?? null,
+    ),
+  );
+}
 
 export async function initializePayment(req: Request, res: Response) {
   if (!req.user?.businessId) {

@@ -18,11 +18,13 @@ import { SubscriptionPage } from "./pages/subscriptions/SubscriptionPage.js";
 import { PlatformOwnerPage } from "./pages/platform/PlatformOwnerPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
+import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
 
 function AuthenticatedLayout() {
   return (
     <RequireAuth>
       <OfflineSyncManager />
+      <OfflineSubscriptionPaymentManager />
       <AppShell>
         <Routes>
           <Route path="/" element={<DashboardPage />} />

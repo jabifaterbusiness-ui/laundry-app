@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -10,6 +10,15 @@ import {
   verifySubscriptionPayment,
   type SubscriptionPlan,
 } from "../../lib/subscriptions-api.js";
+import {
+  cacheSubscriptionBillingConfig,
+  enqueueOfflineSubscriptionPayment,
+  getCachedSubscriptionBillingConfig,
+  getOfflineSubscriptionPaymentByIntent,
+  listOfflineSubscriptionPayments,
+  updateOfflineSubscriptionPayment,
+  type OfflineSubscriptionPaymentQueueEntry,
+} from "../../lib/offline-subscription-payment-queue.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 function formatDate(value: string) {
@@ -63,6 +72,15 @@ export function SubscriptionPage() {
   const [selectedProvider, setSelectedProvider] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("");
   const [checkoutMessage, setCheckoutMessage] = useState("");
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine,
+  );
+  const [cachedBillingConfig, setCachedBillingConfig] = useState<Awaited<
+    ReturnType<typeof getCachedSubscriptionBillingConfig>
+  > | null>(null);
+  const [offlinePayments, setOfflinePayments] = useState<
+    OfflineSubscriptionPaymentQueueEntry[]
+  >([]);
 
   const isOwner = user?.role === "BUSINESS_OWNER";
 
@@ -83,6 +101,64 @@ export function SubscriptionPage() {
     enabled: Boolean(accessToken && isOwner),
     queryFn: () => getSubscriptionPaymentOptions(accessToken ?? ""),
   });
+
+  const refreshOfflinePayments = useCallback(async () => {
+    if (!user?.businessId) {
+      setOfflinePayments([]);
+      return;
+    }
+
+    const entries = await listOfflineSubscriptionPayments(user.businessId);
+    entries.sort((a, b) => b.createdAt - a.createdAt);
+    setOfflinePayments(entries);
+  }, [user?.businessId]);
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+
+    return () => {
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.businessId) {
+      return;
+    }
+
+    void getCachedSubscriptionBillingConfig(user.businessId).then((cached) => {
+      setCachedBillingConfig(cached ?? null);
+    });
+
+    void refreshOfflinePayments();
+  }, [refreshOfflinePayments, user?.businessId]);
+
+  useEffect(() => {
+    if (
+      !user?.businessId ||
+      !subscriptionPricesQuery.data ||
+      !paymentOptionsQuery.data
+    ) {
+      return;
+    }
+
+    void cacheSubscriptionBillingConfig({
+      businessId: user.businessId,
+      countryCode: subscriptionPricesQuery.data.countryCode,
+      currencyCode: subscriptionPricesQuery.data.currencyCode,
+      prices: subscriptionPricesQuery.data.prices,
+      providers: paymentOptionsQuery.data.providers,
+      methods: paymentOptionsQuery.data.methods,
+    });
+  }, [
+    paymentOptionsQuery.data,
+    subscriptionPricesQuery.data,
+    user?.businessId,
+  ]);
 
   const paymentMutation = useMutation({
     mutationFn: async (plan: SubscriptionPlan) => {
@@ -120,12 +196,83 @@ export function SubscriptionPage() {
     },
   });
 
+  const offlinePaymentMutation = useMutation({
+    mutationFn: async (plan: SubscriptionPlan) => {
+      if (!user?.businessId || !user.id) {
+        throw new Error("Business account context is required.");
+      }
+
+      if (!selectedProvider || !selectedMethod) {
+        throw new Error("Select a payment provider and payment method.");
+      }
+
+      const price = new Map(
+        (
+          subscriptionPricesQuery.data?.prices ??
+          cachedBillingConfig?.prices ??
+          []
+        ).map((configuredPrice) => [configuredPrice.plan, configuredPrice]),
+      ).get(plan);
+
+      if (!price || !price.isActive) {
+        throw new Error("The selected subscription price is not configured.");
+      }
+
+      return enqueueOfflineSubscriptionPayment({
+        businessId: user.businessId,
+        actorUserId: user.id,
+        plan,
+        amount: price.amount,
+        currencyCode: price.currencyCode,
+        providerKey: selectedProvider,
+        paymentMethodKey: selectedMethod,
+        idempotencyKey:
+          typeof crypto !== "undefined" &&
+          typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `offline-subscription-${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2)}`,
+      });
+    },
+    onSuccess: () => {
+      setCheckoutMessage(
+        isOnline
+          ? "Payment saved locally and will be prepared for secure checkout."
+          : "Payment saved securely on this device. It will sync when internet returns.",
+      );
+      void refreshOfflinePayments();
+    },
+    onError: (error) => {
+      setCheckoutMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save the subscription payment offline.",
+      );
+    },
+  });
+
   const verifyMutation = useMutation({
     mutationFn: (intentId: string) =>
       verifySubscriptionPayment(accessToken ?? "", intentId),
     onSuccess: async (result) => {
       if (result.subscription) {
         queryClient.setQueryData(["subscription"], result.subscription);
+      }
+
+      if (result.intent?.id && user?.businessId) {
+        const queuedPayment = await getOfflineSubscriptionPaymentByIntent(
+          user.businessId,
+          result.intent.id,
+        );
+
+        if (queuedPayment?.id !== undefined) {
+          await updateOfflineSubscriptionPayment(queuedPayment.id, {
+            status: "COMPLETED",
+            lastError: null,
+          });
+          await refreshOfflinePayments();
+        }
       }
 
       await queryClient.invalidateQueries({ queryKey: ["subscription"] });
@@ -164,22 +311,44 @@ export function SubscriptionPage() {
   const configuredPrices = useMemo(
     () =>
       new Map(
-        (subscriptionPricesQuery.data?.prices ?? []).map((price) => [
-          price.plan,
-          price,
-        ]),
+        (
+          subscriptionPricesQuery.data?.prices ??
+          cachedBillingConfig?.prices ??
+          []
+        )
+          .filter((price) => price.isActive)
+          .map((price) => [price.plan, price]),
       ),
-    [subscriptionPricesQuery.data?.prices],
+    [cachedBillingConfig?.prices, subscriptionPricesQuery.data?.prices],
+  );
+
+  const paymentProviders = useMemo(
+    () =>
+      paymentOptionsQuery.data?.providers ??
+      cachedBillingConfig?.providers ??
+      [],
+    [cachedBillingConfig?.providers, paymentOptionsQuery.data?.providers],
   );
 
   const paymentMethods = useMemo(
     () =>
-      (paymentOptionsQuery.data?.methods ?? []).filter(
+      (
+        paymentOptionsQuery.data?.methods ??
+        cachedBillingConfig?.methods ??
+        []
+      ).filter(
         (method) =>
-          !selectedProvider || !method.providerKey || method.providerKey === selectedProvider,
+          !selectedProvider ||
+          !method.providerKey ||
+          method.providerKey === selectedProvider,
       ),
-    [paymentOptionsQuery.data?.methods, selectedProvider],
+    [cachedBillingConfig?.methods, paymentOptionsQuery.data?.methods, selectedProvider],
   );
+
+  const latestOfflinePayment = offlinePayments[0] ?? null;
+  const hasCachedPaymentOptions =
+    Boolean(paymentOptionsQuery.data) || Boolean(cachedBillingConfig);
+
 
   const remainingDays = useMemo(
     () => (subscription ? getRemainingDays(subscription.endsAt) : 0),
@@ -300,11 +469,11 @@ export function SubscriptionPage() {
               </div>
             ) : null}
 
-            {paymentOptionsQuery.isLoading ? (
+            {paymentOptionsQuery.isLoading && !hasCachedPaymentOptions ? (
               <p className="subscription-action-message">
                 Loading available payment methods...
               </p>
-            ) : paymentOptionsQuery.isError ? (
+            ) : paymentOptionsQuery.isError && !hasCachedPaymentOptions ? (
               <p className="subscription-error-text" role="alert">
                 Unable to load available payment methods. Please try again.
               </p>
@@ -322,7 +491,7 @@ export function SubscriptionPage() {
                       disabled={paymentMutation.isPending}
                     >
                       <option value="">Select provider</option>
-                      {paymentOptionsQuery.data?.providers.map((provider) => (
+                      {paymentProviders.map((provider) => (
                         <option
                           key={provider.providerKey}
                           value={provider.providerKey}
@@ -350,7 +519,7 @@ export function SubscriptionPage() {
                   </label>
                 </div>
 
-                {paymentOptionsQuery.data?.providers.length === 0 ? (
+                {paymentProviders.length === 0 ? (
                   <p className="subscription-error-text" role="alert">
                     No online payment provider is currently configured for your
                     business country and currency.
@@ -369,38 +538,104 @@ export function SubscriptionPage() {
                     const price = configuredPrices.get(plan);
 
                     return (
-                      <button
-                        key={plan}
-                        type="button"
-                        className={`subscription-plan-option ${
-                          plan === "YEARLY"
-                            ? "subscription-plan-option-featured"
-                            : ""
-                        }`}
-                        disabled={
-                          paymentMutation.isPending ||
-                          !price ||
-                          !selectedProvider ||
-                          !selectedMethod
-                        }
-                        onClick={() => paymentMutation.mutate(plan)}
-                      >
-                        <span className="subscription-plan-icon">{icon}</span>
-                        <span>
-                          <strong>{label}</strong>
-                          <small>{description}</small>
-                          <small>
-                            {price
-                              ? formatPrice(price.amount, price.currencyCode)
-                              : "Price not configured"}
-                          </small>
-                        </span>
-                      </button>
+                      <div className="subscription-plan-option-wrapper" key={plan}>
+                        <button
+                          type="button"
+                          aria-label={`${label} subscription plan`}
+                          className={`subscription-plan-option ${
+                            plan === "YEARLY"
+                              ? "subscription-plan-option-featured"
+                              : ""
+                          }`}
+                          disabled={
+                            paymentMutation.isPending ||
+                            offlinePaymentMutation.isPending ||
+                            !price ||
+                            !selectedProvider ||
+                            !selectedMethod ||
+                            !isOnline
+                          }
+                          onClick={() => paymentMutation.mutate(plan)}
+                        >
+                          <span className="subscription-plan-icon">{icon}</span>
+                          <span>
+                            <strong>{label}</strong>
+                            <small>{description}</small>
+                            <small>
+                              {price
+                                ? formatPrice(price.amount, price.currencyCode)
+                                : "Price not configured"}
+                            </small>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="subscription-plan-offline-button"
+                          aria-label={`Save ${label} payment offline`}
+                          disabled={
+                            paymentMutation.isPending ||
+                            offlinePaymentMutation.isPending ||
+                            !price ||
+                            !selectedProvider ||
+                            !selectedMethod
+                          }
+                          onClick={() => offlinePaymentMutation.mutate(plan)}
+                        >
+                          {isOnline ? "Save offline" : "Save payment"}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
               </>
             )}
+
+            {latestOfflinePayment ? (
+              <section className="subscription-offline-payment-panel">
+                <div>
+                  <p className="subscription-card-label">Offline payment queue</p>
+                  <strong>
+                    {formatPlan(latestOfflinePayment.plan)} ·{" "}
+                    {formatPrice(
+                      latestOfflinePayment.amount,
+                      latestOfflinePayment.currencyCode,
+                    )}
+                  </strong>
+                  <span>
+                    Status: {latestOfflinePayment.status}
+                    {latestOfflinePayment.lastError
+                      ? ` · ${latestOfflinePayment.lastError}`
+                      : ""}
+                  </span>
+                </div>
+
+                {latestOfflinePayment.status === "READY" &&
+                latestOfflinePayment.providerCheckoutUrl ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.location.assign(
+                        latestOfflinePayment.providerCheckoutUrl!,
+                      )
+                    }
+                  >
+                    Continue payment
+                  </button>
+                ) : latestOfflinePayment.status === "PENDING" ||
+                  latestOfflinePayment.status === "SYNCING" ? (
+                  <span className="subscription-action-message">
+                    {isOnline
+                      ? "Preparing secure checkout..."
+                      : "Waiting for internet connection to sync this payment."}
+                  </span>
+                ) : latestOfflinePayment.status === "COMPLETED" ? (
+                  <span className="subscription-success">
+                    Payment verified and subscription activated.
+                  </span>
+                ) : null}
+              </section>
+            ) : null}
 
             {!selectedProvider || !selectedMethod ? (
               <p className="subscription-action-message">
@@ -411,6 +646,28 @@ export function SubscriptionPage() {
             {paymentMutation.isPending && (
               <p className="subscription-action-message">
                 Creating secure payment checkout...
+              </p>
+            )}
+
+            {!isOnline ? (
+              <p className="subscription-action-message" role="status">
+                You are offline. Use “Save payment” to securely queue a subscription
+                payment on this device. Paid access will only activate after
+                authoritative verification when the payment reaches the provider.
+              </p>
+            ) : null}
+
+            {offlinePaymentMutation.isPending && (
+              <p className="subscription-action-message">
+                Saving subscription payment locally...
+              </p>
+            )}
+
+            {offlinePaymentMutation.isError && (
+              <p className="subscription-error-text" role="alert">
+                {offlinePaymentMutation.error instanceof Error
+                  ? offlinePaymentMutation.error.message
+                  : "Unable to save the subscription payment offline."}
               </p>
             )}
 

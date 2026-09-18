@@ -2810,3 +2810,54 @@ a {
   outline: 3px solid rgba(36, 165, 169, 0.28);
   outline-offset: 3px;
 }
+
+
+.subscription-plan-option-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.subscription-plan-offline-button {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px dashed currentColor;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.subscription-plan-offline-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.subscription-offline-payment-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 1rem;
+}
+
+.subscription-offline-payment-panel > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.subscription-offline-payment-panel > div > span {
+  opacity: 0.75;
+}
+
+@media (max-width: 620px) {
+  .subscription-offline-payment-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
