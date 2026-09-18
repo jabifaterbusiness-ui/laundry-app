@@ -216,10 +216,20 @@ export async function processPaystackWebhook(
   });
 
   if (!intent) {
-    throw new AppError(
-      "No LaundryAngel subscription payment intent matches the Paystack payment reference",
-      404,
-    );
+    const processed = await prisma.paymentWebhookEvent.update({
+      where: { id: event.id },
+      data: {
+        processed: true,
+        processedAt: new Date(),
+      },
+    });
+
+    return {
+      status: "ignored" as const,
+      eventId: processed.id,
+      eventType,
+      paymentReference,
+    };
   }
 
   if (intent.providerKey !== PAYSTACK_PROVIDER_KEY) {

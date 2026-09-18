@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
@@ -276,6 +277,70 @@ describe("verifySubscriptionPayment", () => {
       undefined,
       undefined,
     );
+  });
+
+  it("retries a serialization conflict and does not duplicate the payment", async () => {
+    const originalTransaction = prismaMock.$transaction.getMockImplementation();
+
+    let calls = 0;
+    prismaMock.$transaction.mockImplementation(async (callback) => {
+      calls += 1;
+
+      if (calls === 1) {
+        throw new Prisma.PrismaClientKnownRequestError(
+          "serialization conflict",
+          {
+            code: "P2034",
+            clientVersion: "5.22.0",
+          },
+        );
+      }
+
+      const tx = {
+        subscriptionPaymentIntent: {
+          findUnique: vi.fn().mockResolvedValue(intent),
+          update: vi.fn().mockResolvedValue({
+            ...intent,
+            status: "SUCCESSFUL",
+          }),
+        },
+        subscriptionPayment: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({
+            id: "payment-retry",
+            businessId: "business-1",
+            subscriptionId: "sub-1",
+            intentId: intent.id,
+            paymentReference: intent.paymentReference,
+            providerTransactionId: "transaction-123",
+            providerKey: "test-provider",
+            paymentMethodKey: "card",
+            amount: 15000,
+            currencyCode: "NGN",
+            status: "SUCCESSFUL",
+            idempotencyKey: intent.idempotencyKey,
+          }),
+        },
+        subscription: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          upsert: vi.fn().mockResolvedValue(subscription),
+        },
+      };
+
+      return callback(tx);
+    });
+
+    const result = await verifySubscriptionPayment(
+      "business-1",
+      intent.id,
+    );
+
+    expect(calls).toBe(2);
+    expect(result.payment?.id).toBe("payment-retry");
+
+    if (originalTransaction) {
+      prismaMock.$transaction.mockImplementation(originalTransaction);
+    }
   });
 
   it("does not fail successful payment verification when confirmation email delivery fails", async () => {

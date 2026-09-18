@@ -1,4 +1,4 @@
-import type { Prisma, SubscriptionPlan } from "@prisma/client";
+import { Prisma, type SubscriptionPlan } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -200,71 +200,121 @@ export async function verifySubscriptionPayment(
     throw new AppError("Unsupported payment verification status", 502);
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const currentIntent = await tx.subscriptionPaymentIntent.findUnique({
-      where: { id: intent.id },
-    });
+  const runActivationTransaction = () =>
+    prisma.$transaction(
+      async (tx) => {
+        const currentIntent = await tx.subscriptionPaymentIntent.findUnique({
+          where: { id: intent.id },
+        });
 
-    if (!currentIntent) {
-      throw new AppError("Subscription payment intent not found", 404);
-    }
+        if (!currentIntent) {
+          throw new AppError("Subscription payment intent not found", 404);
+        }
 
-    const alreadyRecorded = await tx.subscriptionPayment.findUnique({
-      where: { intentId: currentIntent.id },
-    });
+        const alreadyRecorded = await tx.subscriptionPayment.findUnique({
+          where: { intentId: currentIntent.id },
+        });
 
-    if (alreadyRecorded?.status === "SUCCESSFUL") {
-      const subscription = await tx.subscription.findUnique({
-        where: { businessId },
-      });
+        if (alreadyRecorded?.status === "SUCCESSFUL") {
+          const subscription = await tx.subscription.findUnique({
+            where: { businessId },
+          });
 
-      return {
-        intent: currentIntent,
-        payment: alreadyRecorded,
-        subscription,
-        alreadyProcessed: true,
-      };
-    }
+          return {
+            intent: currentIntent,
+            payment: alreadyRecorded,
+            subscription,
+            alreadyProcessed: true,
+          };
+        }
 
-    const subscription = await activateSubscriptionForVerifiedPayment(
-      tx,
-      businessId,
-      currentIntent.plan,
+        const subscription = await activateSubscriptionForVerifiedPayment(
+          tx,
+          businessId,
+          currentIntent.plan,
+        );
+
+        const payment = await tx.subscriptionPayment.create({
+          data: {
+            businessId,
+            subscriptionId: subscription.id,
+            intentId: currentIntent.id,
+            paymentReference: currentIntent.paymentReference,
+            providerTransactionId: verification.providerTransactionId,
+            providerKey: currentIntent.providerKey!,
+            paymentMethodKey:
+              verification.paymentMethodKey ?? currentIntent.paymentMethodKey!,
+            amount: currentIntent.amount,
+            currencyCode: currentIntent.currencyCode,
+            status: "SUCCESSFUL",
+            receivedAt: verification.receivedAt ?? new Date(),
+            verifiedAt: new Date(),
+            idempotencyKey: currentIntent.idempotencyKey,
+            ...(verification.raw
+              ? { metadata: { providerVerification: verification.raw } }
+              : {}),
+          },
+        });
+
+        const updatedIntent = await tx.subscriptionPaymentIntent.update({
+          where: { id: currentIntent.id },
+          data: { status: "SUCCESSFUL" },
+        });
+
+        return {
+          intent: updatedIntent,
+          payment,
+          subscription,
+          alreadyProcessed: false,
+        };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
     );
 
-    const payment = await tx.subscriptionPayment.create({
-      data: {
-        businessId,
-        subscriptionId: subscription.id,
-        intentId: currentIntent.id,
-        paymentReference: currentIntent.paymentReference,
-        providerTransactionId: verification.providerTransactionId,
-        providerKey: currentIntent.providerKey!,
-        paymentMethodKey: verification.paymentMethodKey ?? currentIntent.paymentMethodKey!,
-        amount: currentIntent.amount,
-        currencyCode: currentIntent.currencyCode,
-        status: "SUCCESSFUL",
-        receivedAt: verification.receivedAt ?? new Date(),
-        verifiedAt: new Date(),
-        idempotencyKey: currentIntent.idempotencyKey,
-        ...(verification.raw
-          ? { metadata: { providerVerification: verification.raw } }
-          : {}),
-      },
-    });
+  let result: Awaited<ReturnType<typeof runActivationTransaction>> | null =
+    null;
 
-    const updatedIntent = await tx.subscriptionPaymentIntent.update({
-      where: { id: currentIntent.id },
-      data: { status: "SUCCESSFUL" },
-    });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      result = await runActivationTransaction();
+      break;
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2034" || error.code === "P2002");
 
-    return {
-      intent: updatedIntent,
-      payment,
-      subscription,
-      alreadyProcessed: false,
-    };
-  });
+      if (!retryable || attempt === 2) {
+        throw error;
+      }
+
+      const existingPayment = await prisma.subscriptionPayment.findUnique({
+        where: { intentId: intent.id },
+      });
+
+      if (existingPayment?.status === "SUCCESSFUL") {
+        const subscription = await prisma.subscription.findUnique({
+          where: { businessId },
+        });
+
+        result = {
+          intent,
+          payment: existingPayment,
+          subscription,
+          alreadyProcessed: true,
+        };
+        break;
+      }
+    }
+  }
+
+  if (!result) {
+    throw new AppError(
+      "Payment verification could not be completed safely",
+      409,
+    );
+  }
 
   await recordAuditEvent({
     action: "subscription.payment.verified",

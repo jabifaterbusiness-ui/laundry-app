@@ -178,6 +178,48 @@ describe("processPaystackWebhook", () => {
     });
   });
 
+  it("acknowledges and ignores a valid successful event for an unrelated Paystack transaction", async () => {
+    prismaMock.subscriptionPaymentIntent.findUnique.mockResolvedValueOnce(null);
+
+    prismaMock.paymentWebhookEvent.update.mockResolvedValueOnce({
+      id: "webhook-unrelated",
+      providerKey: "paystack",
+      providerEventId: "123456",
+      eventType: "charge.success",
+      processed: true,
+    });
+
+    prismaMock.paymentWebhookEvent.create.mockResolvedValueOnce({
+      id: "webhook-unrelated",
+      businessId: null,
+      providerKey: "paystack",
+      providerEventId: "123456",
+      eventType: "charge.success",
+      processed: false,
+    });
+
+    const body = createPayload();
+
+    const result = await processPaystackWebhook(body, sign(body));
+
+    expect(result).toEqual({
+      status: "ignored",
+      eventId: "webhook-unrelated",
+      eventType: "charge.success",
+      paymentReference: "LA-PAY-TEST-123",
+    });
+
+    expect(verifyPaymentMock.verifySubscriptionPayment).not.toHaveBeenCalled();
+    expect(prismaMock.paymentWebhookEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "webhook-unrelated" },
+        data: expect.objectContaining({
+          processed: true,
+        }),
+      }),
+    );
+  });
+
   it("returns already_processed for a duplicate webhook event", async () => {
     prismaMock.paymentWebhookEvent.findUnique.mockResolvedValueOnce({
       id: "webhook-existing",
