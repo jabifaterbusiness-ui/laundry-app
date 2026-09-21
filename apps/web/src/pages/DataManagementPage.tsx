@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ApiError } from "../lib/api-client.js";
 import { analyzeMigration, exportBackup, importMigrationJob, restoreBackup, type MigrationAnalysisResponse } from "../lib/data-management-api.js";
+import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -14,7 +15,8 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export function DataManagementPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
-  const role = useAuthStore((s) => s.user?.role);
+  const user = useAuthStore((s) => s.user);
+  const role = user?.role;
   const [migrationFile, setMigrationFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<MigrationAnalysisResponse | null>(null);
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
@@ -25,8 +27,12 @@ export function DataManagementPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const canManage = role === "BUSINESS_OWNER" || role === "BRANCH_MANAGER";
-  const canRestore = role === "BUSINESS_OWNER";
+  const canManage =
+    hasPermission(user, "migrations.view") &&
+    (role === "BUSINESS_OWNER" || role === "BRANCH_MANAGER");
+  const canRestore =
+    hasPermission(user, "migrations.manage") &&
+    role === "BUSINESS_OWNER";
 
   async function handleAnalyze() {
     if (!migrationFile) return;

@@ -11,6 +11,7 @@ import {
   type ManagedUser,
   type UserRole,
 } from "../../lib/users-api.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 const ROLES: UserRole[] = [
@@ -45,9 +46,9 @@ export function UsersPage() {
   const queryClient = useQueryClient();
 
   const isOwner = currentUser?.role === "BUSINESS_OWNER";
-  const canView =
-    currentUser?.role === "BUSINESS_OWNER" ||
-    currentUser?.role === "BRANCH_MANAGER";
+  const canView = hasPermission(currentUser, "users.view");
+  const canCreate = hasPermission(currentUser, "users.create");
+  const canUpdate = hasPermission(currentUser, "users.update");
 
   const [search, setSearch] = useState("");
   const [status, setStatus] =
@@ -259,7 +260,7 @@ export function UsersPage() {
           ))}
         </select>
 
-        {isOwner ? (
+        {canCreate ? (
           <button type="button" onClick={openCreate}>
             New user
           </button>
@@ -293,7 +294,7 @@ export function UsersPage() {
               <th>Role</th>
               <th>Branches</th>
               <th>Status</th>
-              {isOwner ? <th aria-label="Actions" /> : null}
+              {canUpdate ? <th aria-label="Actions" /> : null}
             </tr>
           </thead>
 
@@ -301,7 +302,7 @@ export function UsersPage() {
             {users.map((user) => (
               <tr key={user.id}>
                 <td>
-                  {isOwner ? (
+                  {canUpdate ? (
                     <button
                       type="button"
                       onClick={() => openEdit(user)}
@@ -325,7 +326,7 @@ export function UsersPage() {
 
                 <td>{user.isActive ? "Active" : "Inactive"}</td>
 
-                {isOwner ? (
+                {canUpdate ? (
                   <td>
                     <button
                       type="button"
@@ -350,7 +351,7 @@ export function UsersPage() {
         </table>
       )}
 
-      {formOpen && isOwner ? (
+      {formOpen && (editingUser ? canUpdate : canCreate) ? (
         <section aria-label={editingUser ? "Edit user" : "New user"}>
           <h2>{editingUser ? "Edit User" : "New User"}</h2>
 

@@ -123,6 +123,7 @@ describe("AppShell", () => {
         role: "BRANCH_MANAGER",
         businessId: "business-1",
         branches: [{ id: "branch-1", name: "Main Branch" }],
+        permissions: ["migrations.view"],
       },
     });
 

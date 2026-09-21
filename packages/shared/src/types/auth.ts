@@ -21,6 +21,8 @@ export interface AuthenticatedUser {
   role: Role;
   businessId: string | null;
   branches: BranchMembership[];
+  /** Effective permissions resolved by the API: user override > role override > default role. */
+  permissions: string[];
 }
 
 export interface TokenPair {

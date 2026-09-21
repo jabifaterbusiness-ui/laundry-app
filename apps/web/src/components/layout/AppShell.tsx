@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 interface NavItem {
@@ -66,9 +67,7 @@ export function AppShell({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const canManageData =
-    user?.role === "BUSINESS_OWNER" ||
-    user?.role === "BRANCH_MANAGER";
+  const canViewMigrations = hasPermission(user, "migrations.view");
 
   const isActive = (href: string) =>
     href === "/"
@@ -190,11 +189,11 @@ export function AppShell({ children }: PropsWithChildren) {
                 const active = isActive(item.href);
                 const isBusinessUserManagement =
                   item.href === "/users";
-                const canViewBusinessUsers =
-                  user?.role === "BUSINESS_OWNER" ||
-                  user?.role === "BRANCH_MANAGER";
 
-                if (isBusinessUserManagement && !canViewBusinessUsers) {
+                if (
+                  isBusinessUserManagement &&
+                  !hasPermission(user, "users.view")
+                ) {
                   return null;
                 }
 
@@ -244,7 +243,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
-              {canManageData ? (
+              {canViewMigrations ? (
                 <Link
                   to="/data-management"
                   className={`nav-item ${

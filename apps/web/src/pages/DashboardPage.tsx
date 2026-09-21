@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../lib/api-client.js";
 import { getDashboardReport } from "../lib/reports-api.js";
+import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 
 function getToday() {
@@ -40,6 +41,8 @@ export function DashboardPage() {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const canViewReports = hasPermission(user, "reports.view");
+  const canCreateOrder = hasPermission(user, "orders.create");
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
@@ -56,7 +59,7 @@ export function DashboardPage() {
         { accessToken },
         activeBranchId,
       ),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && canViewReports),
   });
 
   function applyDateRange(event: React.FormEvent<HTMLFormElement>) {
@@ -103,9 +106,11 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <Link className="dashboard-primary-action" to="/orders">
-          + New order
-        </Link>
+        {canCreateOrder ? (
+          <Link className="dashboard-primary-action" to="/orders">
+            + New order
+          </Link>
+        ) : null}
       </header>
 
       <section className="dashboard-toolbar" aria-labelledby="dashboard-period-heading">

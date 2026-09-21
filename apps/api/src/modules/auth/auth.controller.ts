@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { getEffectivePermissionCodes } from "../permissions/permissions.service.js";
 import {
   createPasswordResetToken,
   invalidatePasswordResetToken,
@@ -38,6 +39,11 @@ export async function login(req: Request, res: Response) {
 
   const tokens = await issueTokenPair(user);
   const branches = await branchMemberships(user.id);
+  const permissions = await getEffectivePermissionCodes(
+    user.businessId,
+    user.id,
+    user.role,
+  );
 
   await recordAuditEvent({
     action: "user.login",
@@ -56,6 +62,7 @@ export async function login(req: Request, res: Response) {
       role: user.role,
       businessId: user.businessId,
       branches,
+      permissions,
     },
     ...tokens,
   });
@@ -105,6 +112,11 @@ export async function me(req: Request, res: Response) {
   }
 
   const branches = await branchMemberships(user.id);
+  const permissions = await getEffectivePermissionCodes(
+    user.businessId,
+    user.id,
+    user.role,
+  );
 
   res.status(200).json({
     id: user.id,
@@ -113,6 +125,7 @@ export async function me(req: Request, res: Response) {
     role: user.role,
     businessId: user.businessId,
     branches,
+    permissions,
   });
 }
 

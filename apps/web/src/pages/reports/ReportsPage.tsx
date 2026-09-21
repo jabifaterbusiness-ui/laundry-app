@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import { getDashboardReport } from "../../lib/reports-api.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 function formatMoney(value: number) {
@@ -27,8 +28,10 @@ function getFirstDayOfMonth() {
 }
 
 export function ReportsPage() {
+  const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const canViewReports = hasPermission(user, "reports.view");
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
@@ -51,7 +54,7 @@ export function ReportsPage() {
         { accessToken },
         activeBranchId,
       ),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && canViewReports),
   });
 
   function applyDateRange(event: React.FormEvent<HTMLFormElement>) {

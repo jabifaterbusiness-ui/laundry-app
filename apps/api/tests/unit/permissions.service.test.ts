@@ -49,6 +49,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 
 import {
+  getEffectivePermissionCodes,
   hasPermission,
   getPermissionDefinition,
   listPermissions,
@@ -60,6 +61,70 @@ import {
   upsertUserPermissionOverride,
   removeUserPermissionOverride,
 } from "../../src/modules/permissions/permissions.service.js";
+
+describe("getEffectivePermissionCodes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns every catalog permission for PLATFORM_ADMIN without a business", async () => {
+    await expect(
+      getEffectivePermissionCodes(
+        null,
+        "platform-user",
+        "PLATFORM_ADMIN" as Role,
+      ),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        "customers.view",
+        "users.manage_permissions",
+        "business.update",
+      ]),
+    );
+
+    expect(findUserOverrides).not.toHaveBeenCalled();
+    expect(findRoleOverrides).not.toHaveBeenCalled();
+  });
+
+  it("returns no permissions for a non-platform user without a business", async () => {
+    await expect(
+      getEffectivePermissionCodes(null, "user-1", "STAFF" as Role),
+    ).resolves.toEqual([]);
+
+    expect(findUserOverrides).not.toHaveBeenCalled();
+    expect(findRoleOverrides).not.toHaveBeenCalled();
+  });
+
+  it("applies user override before role override and default role", async () => {
+    findUserOverrides.mockResolvedValue([
+      {
+        permission: { code: "customers.view" },
+        allowed: false,
+      },
+    ]);
+
+    findRoleOverrides.mockResolvedValue([
+      {
+        permission: { code: "customers.view" },
+        allowed: true,
+      },
+      {
+        permission: { code: "reports.view" },
+        allowed: true,
+      },
+    ]);
+
+    const permissions = await getEffectivePermissionCodes(
+      "business-1",
+      "user-1",
+      "STAFF" as Role,
+    );
+
+    expect(permissions).not.toContain("customers.view");
+    expect(permissions).toContain("reports.view");
+    expect(permissions).toContain("customers.create");
+  });
+});
 
 describe("hasPermission", () => {
   beforeEach(() => {

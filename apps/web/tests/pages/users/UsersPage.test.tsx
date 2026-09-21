@@ -13,6 +13,7 @@ const mockAuthState = {
     role: "BUSINESS_OWNER" as const,
     businessId: "business-1",
     branches: [],
+    permissions: ["users.view", "users.create", "users.update"],
   },
 };
 
@@ -270,8 +271,13 @@ describe("UsersPage", () => {
     ).toBeDisabled();
   });
 
-  it("shows users to a branch manager without management actions", async () => {
+  it("allows a branch manager with effective user permissions to manage users", async () => {
     mockAuthState.user.role = "BRANCH_MANAGER";
+    mockAuthState.user.permissions = [
+      "users.view",
+      "users.create",
+      "users.update",
+    ];
 
     renderPage();
 
@@ -279,10 +285,10 @@ describe("UsersPage", () => {
 
     expect(screen.getByText("manager@example.com")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "New user" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "New user" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Deactivate" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Deactivate" }),
+    ).toBeInTheDocument();
   });
 });

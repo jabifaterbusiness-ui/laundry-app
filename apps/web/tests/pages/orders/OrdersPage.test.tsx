@@ -127,6 +127,7 @@ function seedAuth() {
       id: "user-a",
       businessId: "business-a",
       role: "STAFF",
+      permissions: ["orders.create", "orders.change_status"],
       branches: [
         {
           id: "branch-a",

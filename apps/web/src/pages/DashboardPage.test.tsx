@@ -16,7 +16,11 @@ vi.mock("../state/auth-store.js", () => ({
     activeBranchId: string;
   }) => unknown) =>
     selector({
-      user: { fullName: "Jane Manager", role: "BRANCH_MANAGER" },
+      user: {
+        fullName: "Jane Manager",
+        role: "BRANCH_MANAGER",
+        permissions: ["reports.view", "orders.create"],
+      },
       accessToken: "token",
       activeBranchId: "branch-1",
     }),

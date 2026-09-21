@@ -16,6 +16,13 @@ vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
   sendReceiptEmail: vi.fn().mockResolvedValue({ id: "email-1" }),
 }));
 
+vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
+  getEffectivePermissionCodes: vi.fn().mockResolvedValue([
+    "orders.view",
+    "orders.create",
+  ]),
+}));
+
 vi.mock("../../src/modules/auth/auth.service.js", () => ({
   createPasswordResetToken: vi.fn().mockResolvedValue("raw-reset-token"),
   invalidatePasswordResetToken: vi.fn().mockResolvedValue(undefined),
@@ -40,11 +47,15 @@ import {
   resetPasswordController,
 } from "../../src/modules/auth/auth.controller.js";
 
+import { getEffectivePermissionCodes } from "../../src/modules/permissions/permissions.service.js";
+
 const findUniqueUser = vi.mocked(prisma.user.findUnique);
 const findManyUserBranch = vi.mocked(prisma.userBranch.findMany);
 const createPasswordResetTokenMock = vi.mocked(createPasswordResetToken);
 const invalidatePasswordResetTokenMock = vi.mocked(invalidatePasswordResetToken);
 const resetPasswordMock = vi.mocked(resetPassword);
+
+const getEffectivePermissionCodesMock = vi.mocked(getEffectivePermissionCodes);
 
 const baseUser = {
   id: "user-1",
@@ -183,6 +194,15 @@ describe("auth controller - multi-branch membership", () => {
       { id: "branch-1", name: "Main St" },
       { id: "branch-2", name: "Downtown" },
     ]);
+    expect(payload.user.permissions).toEqual([
+      "orders.view",
+      "orders.create",
+    ]);
+    expect(getEffectivePermissionCodesMock).toHaveBeenCalledWith(
+      "biz-1",
+      "user-1",
+      "BUSINESS_OWNER",
+    );
   });
 
   it("login records a user.login audit event without leaking tokens", async () => {
@@ -212,5 +232,14 @@ describe("auth controller - multi-branch membership", () => {
 
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(payload.branches).toHaveLength(2);
+    expect(payload.permissions).toEqual([
+      "orders.view",
+      "orders.create",
+    ]);
+    expect(getEffectivePermissionCodesMock).toHaveBeenCalledWith(
+      "biz-1",
+      "user-1",
+      "BUSINESS_OWNER",
+    );
   });
 });

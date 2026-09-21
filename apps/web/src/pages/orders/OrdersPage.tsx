@@ -13,6 +13,7 @@ import {
 } from "../../lib/orders-api.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
@@ -104,9 +105,8 @@ export function OrdersPage() {
   ]);
 
 
-  const canUpdateStatus =
-    user?.role === "BUSINESS_OWNER" ||
-    user?.role === "BRANCH_MANAGER";
+  const canCreateOrder = hasPermission(user, "orders.create");
+  const canUpdateStatus = hasPermission(user, "orders.change_status");
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<OrderStatus | "">("");
@@ -461,9 +461,11 @@ export function OrdersPage() {
           ))}
         </select>
 
-        <button type="button" onClick={openCreate}>
-          New order
-        </button>
+        {canCreateOrder ? (
+          <button type="button" onClick={openCreate}>
+            New order
+          </button>
+        ) : null}
       </div>
 
       {ordersQuery.isLoading && <p>Loading orders...</p>}

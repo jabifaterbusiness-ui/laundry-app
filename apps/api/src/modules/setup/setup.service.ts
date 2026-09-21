@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { hashPassword, issueTokenPair } from "../auth/auth.service.js";
 import type { SetupInput } from "./setup.validation.js";
 import { createBusinessPaymentIdentity } from "../payments/business-payment-identity.service.js";
+import { getEffectivePermissionCodes } from "../permissions/permissions.service.js";
 
 function slugify(value: string) {
   const slug = value
@@ -123,6 +124,11 @@ export async function completeSetup(input: SetupInput) {
   });
 
   const tokens = await issueTokenPair(result.user);
+  const permissions = await getEffectivePermissionCodes(
+    result.user.businessId,
+    result.user.id,
+    result.user.role,
+  );
 
   return {
     user: {
@@ -137,6 +143,7 @@ export async function completeSetup(input: SetupInput) {
           name: result.branch.name,
         },
       ],
+      permissions,
     },
     ...tokens,
   };

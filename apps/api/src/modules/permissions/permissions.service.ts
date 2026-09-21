@@ -62,6 +62,77 @@ export async function hasPermission(
   return DEFAULT_ROLE_PERMISSIONS[role]?.includes(permissionCode) ?? false;
 }
 
+export async function getEffectivePermissionCodes(
+  businessId: string | null,
+  userId: string,
+  role: Role,
+): Promise<string[]> {
+  if (role === "PLATFORM_ADMIN") {
+    return PERMISSIONS.map((permission) => permission.code);
+  }
+
+  if (!businessId) {
+    return [];
+  }
+
+  const [userOverrides, roleOverrides] = await Promise.all([
+    prisma.userPermissionOverride.findMany({
+      where: {
+        businessId,
+        userId,
+      },
+      select: {
+        permission: {
+          select: {
+            code: true,
+          },
+        },
+        allowed: true,
+      },
+    }),
+    prisma.businessRolePermission.findMany({
+      where: {
+        businessId,
+        role,
+      },
+      select: {
+        permission: {
+          select: {
+            code: true,
+          },
+        },
+        allowed: true,
+      },
+    }),
+  ]);
+
+  const userOverrideMap = new Map(
+    userOverrides.map((override) => [
+      override.permission.code,
+      override.allowed,
+    ]),
+  );
+
+  const roleOverrideMap = new Map(
+    roleOverrides.map((override) => [
+      override.permission.code,
+      override.allowed,
+    ]),
+  );
+
+  return PERMISSIONS.filter((permission) => {
+    if (userOverrideMap.has(permission.code)) {
+      return userOverrideMap.get(permission.code) === true;
+    }
+
+    if (roleOverrideMap.has(permission.code)) {
+      return roleOverrideMap.get(permission.code) === true;
+    }
+
+    return DEFAULT_ROLE_PERMISSIONS[role]?.includes(permission.code) ?? false;
+  }).map((permission) => permission.code);
+}
+
 export function getPermissionDefinition(permissionCode: string) {
   const permission = PERMISSIONS.find(
     (candidate) => candidate.code === permissionCode,

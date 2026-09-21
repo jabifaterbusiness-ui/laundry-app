@@ -28,6 +28,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -45,6 +54,9 @@ const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
 const paymentCreate = vi.mocked(prisma.payment.create);
 const invoiceFindFirst = vi.mocked(prisma.invoice.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const findPermission = vi.mocked(prisma.permission.findUnique);
+const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -121,6 +133,13 @@ const paymentFixture = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
+
+  findPermission.mockImplementation(async ({ where }) => ({
+    id: `permission-${where.code}`,
+  }) as never);
+
+  findRoleOverride.mockResolvedValue(null);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Payments routes - authentication", () => {
@@ -285,6 +304,63 @@ describe("Payments routes - authorization", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe("Payments routes - permission enforcement", () => {
+  it("denies payment creation when payments.manage is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    findUserOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(403);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+    expect(paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("denies payment listing when payments.view is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    findUserOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/payments")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(paymentFindMany).not.toHaveBeenCalled();
+  });
+
+  it("denies payment void when payments.manage is explicitly denied", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    findUserOverride.mockResolvedValue({
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 

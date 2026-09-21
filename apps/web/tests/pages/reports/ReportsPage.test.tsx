@@ -64,6 +64,7 @@ describe("ReportsPage", () => {
             name: "Main Branch",
           },
         ],
+        permissions: ["reports.view"],
       },
       accessToken: "test-token",
       refreshToken: null,

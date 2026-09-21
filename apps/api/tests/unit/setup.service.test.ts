@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prismaMock, hashPasswordMock, issueTokenPairMock } = vi.hoisted(() => ({
+const {
+  prismaMock,
+  hashPasswordMock,
+  issueTokenPairMock,
+  getEffectivePermissionCodesMock,
+} = vi.hoisted(() => ({
   prismaMock: {
     business: {
       count: vi.fn(),
@@ -28,6 +33,7 @@ const { prismaMock, hashPasswordMock, issueTokenPairMock } = vi.hoisted(() => ({
   },
   hashPasswordMock: vi.fn(),
   issueTokenPairMock: vi.fn(),
+  getEffectivePermissionCodesMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -39,7 +45,13 @@ vi.mock("../../src/modules/auth/auth.service.js", () => ({
   issueTokenPair: issueTokenPairMock,
 }));
 
+vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
+  getEffectivePermissionCodes: getEffectivePermissionCodesMock,
+}));
+
 import { completeSetup, getSetupStatus } from "../../src/modules/setup/setup.service.js";
+
+import { getEffectivePermissionCodes } from "../../src/modules/permissions/permissions.service.js";
 
 const input = {
   businessName: "Fresh Press Laundry",
@@ -138,6 +150,11 @@ beforeEach(() => {
     accessToken: "access-token",
     refreshToken: "refresh-token",
   });
+
+  getEffectivePermissionCodesMock.mockResolvedValue([
+    "orders.view",
+    "orders.create",
+  ]);
 });
 
 describe("setup service", () => {
@@ -221,6 +238,15 @@ describe("setup service", () => {
     ]);
 
     expect(result.accessToken).toBe("access-token");
+    expect(result.user.permissions).toEqual([
+      "orders.view",
+      "orders.create",
+    ]);
+    expect(getEffectivePermissionCodesMock).toHaveBeenCalledWith(
+      "business-1",
+      "user-1",
+      "BUSINESS_OWNER",
+    );
   });
 
   it("stores omitted optional organisation details as null", async () => {
