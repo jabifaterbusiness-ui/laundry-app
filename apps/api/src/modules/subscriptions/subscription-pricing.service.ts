@@ -175,7 +175,7 @@ export async function deleteSubscriptionPrice(
       action: "platform.subscription_price.deleted",
       entityType: "SubscriptionPlanPrice",
       entityId: priceId,
-      correlationId,
+      correlationId: correlationId ?? null,
       metadata: {
         plan: price.plan,
         countryCode: price.countryCode,
