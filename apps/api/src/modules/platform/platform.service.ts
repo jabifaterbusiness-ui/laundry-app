@@ -127,7 +127,7 @@ export async function getPlatformOverview() {
 }
 
 export async function getPlatformRevenueAnalytics() {
-  const [payments, paymentMethods] = await Promise.all([
+  const [payments, paymentMethods, subscriptionRevenue] = await Promise.all([
     prisma.payment.groupBy({
       by: ["type"],
       where: {
@@ -152,12 +152,25 @@ export async function getPlatformRevenueAnalytics() {
         _all: true,
       },
     }),
+    prisma.subscriptionPayment.aggregate({
+      where: {
+        status: "SUCCESSFUL",
+      },
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
   ]);
 
   const grossPaymentRow = payments.find((row) => row.type === "PAYMENT");
   const refundRow = payments.find((row) => row.type === "REFUND");
 
-  const grossPayments = grossPaymentRow?._sum.amount ?? 0;
+  const operationalGrossPayments = grossPaymentRow?._sum.amount ?? 0;
+  const subscriptionPayments = subscriptionRevenue._sum.amount ?? 0;
+  const grossPayments = operationalGrossPayments + subscriptionPayments;
   const refunds = refundRow?._sum.amount ?? 0;
 
   const methodBreakdown = {
@@ -200,8 +213,13 @@ export async function getPlatformRevenueAnalytics() {
     grossPayments,
     refunds,
     netCollected: grossPayments - refunds,
-    paymentCount: grossPaymentRow?._count._all ?? 0,
+    paymentCount:
+      (grossPaymentRow?._count._all ?? 0) + subscriptionRevenue._count._all,
     refundCount: refundRow?._count._all ?? 0,
+    subscriptionPayments: {
+      amount: subscriptionPayments,
+      count: subscriptionRevenue._count._all,
+    },
     methodBreakdown,
   };
 }

@@ -694,6 +694,20 @@ export function PlatformOwnerPage() {
               <a
                 className="platform-kpi-card platform-kpi-link"
                 href="#platform-revenue-methods"
+                aria-label="View subscription payment details"
+              >
+                <span className="platform-kpi-label">Subscriptions</span>
+                <strong>
+                  {formatCurrency(revenueQuery.data.subscriptionPayments.amount)}
+                </strong>
+                <small>
+                  {formatNumber(revenueQuery.data.subscriptionPayments.count)} successful payments
+                </small>
+              </a>
+
+              <a
+                className="platform-kpi-card platform-kpi-link"
+                href="#platform-revenue-methods"
                 aria-label="View net collected payment details"
               >
                 <span className="platform-kpi-label">Net collected</span>

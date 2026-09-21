@@ -500,6 +500,11 @@ describe("Platform Owner routes - revenue analytics", () => {
         },
       ] as never);
 
+    vi.mocked(prisma.subscriptionPayment.aggregate).mockResolvedValue({
+      _sum: { amount: 100 },
+      _count: { _all: 1 },
+    } as never);
+
     const response = await request(app)
       .get("/api/v1/platform/revenue")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
@@ -507,11 +512,15 @@ describe("Platform Owner routes - revenue analytics", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(
       expect.objectContaining({
-        grossPayments: 250000,
+        grossPayments: 250100,
         refunds: 40000,
-        netCollected: 210000,
-        paymentCount: 30,
+        netCollected: 210100,
+        paymentCount: 31,
         refundCount: 5,
+        subscriptionPayments: {
+          amount: 100,
+          count: 1,
+        },
         methodBreakdown: {
           CASH: {
             payments: 100000,
@@ -548,6 +557,12 @@ describe("Platform Owner routes - revenue analytics", () => {
       _sum: { amount: true },
       _count: { _all: true },
     });
+
+    expect(prisma.subscriptionPayment.aggregate).toHaveBeenCalledWith({
+      where: { status: "SUCCESSFUL" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
   });
 
   it("rejects tenant users from platform revenue analytics", async () => {
@@ -557,6 +572,7 @@ describe("Platform Owner routes - revenue analytics", () => {
 
     expect(response.status).toBe(403);
     expect(prisma.payment.groupBy).not.toHaveBeenCalled();
+    expect(prisma.subscriptionPayment.aggregate).not.toHaveBeenCalled();
   });
 
   it("rejects unauthenticated revenue analytics access", async () => {
@@ -564,6 +580,7 @@ describe("Platform Owner routes - revenue analytics", () => {
 
     expect(response.status).toBe(401);
     expect(prisma.payment.groupBy).not.toHaveBeenCalled();
+    expect(prisma.subscriptionPayment.aggregate).not.toHaveBeenCalled();
   });
 });
 

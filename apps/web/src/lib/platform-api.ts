@@ -57,6 +57,10 @@ export interface PlatformRevenueAnalytics {
   netCollected: number;
   paymentCount: number;
   refundCount: number;
+  subscriptionPayments: {
+    amount: number;
+    count: number;
+  };
   methodBreakdown: {
     CASH: {
       payments: number;
