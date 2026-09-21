@@ -55,7 +55,10 @@ export async function getPlatformOverview() {
         endsAt: true,
       },
     }),
-    prisma.payment.aggregate({
+    prisma.subscriptionPayment.aggregate({
+      where: {
+        status: "SUCCESSFUL",
+      },
       _sum: { amount: true },
       _count: { _all: true },
     }),

@@ -35,6 +35,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       aggregate: vi.fn(),
       groupBy: vi.fn(),
     },
+    subscriptionPayment: {
+      aggregate: vi.fn(),
+    },
     auditLog: {
       findMany: vi.fn(),
       create: vi.fn(),
@@ -118,7 +121,7 @@ beforeEach(() => {
     },
   ] as never);
 
-  vi.mocked(prisma.payment.aggregate).mockResolvedValue({
+  vi.mocked(prisma.subscriptionPayment.aggregate).mockResolvedValue({
     _sum: { amount: 150000 },
     _count: { _all: 25 },
   } as never);
@@ -410,6 +413,18 @@ describe("Platform Owner routes - security boundary", () => {
     expect(response.body.totals.businesses).toBe(3);
     expect(response.body.totals.activeBusinesses).toBe(2);
     expect(response.body.subscriptions.expired).toBe(2);
+    expect(response.body.revenue).toEqual(
+      expect.objectContaining({
+        paymentCount: 25,
+        totalCollected: 150000,
+      }),
+    );
+
+    expect(prisma.subscriptionPayment.aggregate).toHaveBeenCalledWith({
+      where: { status: "SUCCESSFUL" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
   });
 
   it("rejects BUSINESS_OWNER from platform access", async () => {
