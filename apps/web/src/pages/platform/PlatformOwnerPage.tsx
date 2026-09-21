@@ -17,6 +17,7 @@ import {
   getPlatformSubscriptionPrices,
   upsertPlatformSubscriptionPrice,
   updatePlatformSubscriptionPriceStatus,
+  deletePlatformSubscriptionPrice,
   getPlatformPaymentProviders,
   upsertPlatformPaymentProvider,
   updatePlatformPaymentProviderStatus,
@@ -323,6 +324,25 @@ export function PlatformOwnerPage() {
       );
     },
   });
+
+const subscriptionPriceDeleteMutation = useMutation({
+  mutationFn: async (id: string) =>
+    deletePlatformSubscriptionPrice(id, accessToken),
+  onSuccess: async () => {
+    setBillingFeedback("Subscription price deleted successfully.");
+    await queryClient.invalidateQueries({
+      queryKey: ["platform-subscription-prices"],
+    });
+  },
+  onError: (error) => {
+    setBillingFeedback(
+      error instanceof Error
+        ? error.message
+        : "Subscription price could not be deleted.",
+    );
+  },
+});
+
 
   const paymentProviderMutation = useMutation({
     mutationFn: async (
@@ -1656,6 +1676,26 @@ export function PlatformOwnerPage() {
                   >
                     {price.isActive ? "Disable" : "Enable"}
                   </button>
+                  {!price.isActive && (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={subscriptionPriceDeleteMutation.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Delete this inactive subscription price permanently?",
+                          )
+                        ) {
+                          subscriptionPriceDeleteMutation.mutate(price.id);
+                        }
+                      }}
+                    >
+                      {subscriptionPriceDeleteMutation.isPending
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))

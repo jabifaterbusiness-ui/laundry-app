@@ -19,6 +19,7 @@ import {
   subscriptionPrices,
   upsertSubscriptionPriceController,
   updateSubscriptionPriceStatus,
+  deleteSubscriptionPriceController,
   paymentProviders,
   upsertPaymentProviderController,
   updatePaymentProviderStatus,
@@ -51,6 +52,11 @@ platformRouter.patch(
   "/subscription-prices/:id/status",
   asyncHandler(updateSubscriptionPriceStatus),
 );
+platformRouter.delete(
+  "/subscription-prices/:id",
+  asyncHandler(deleteSubscriptionPriceController),
+);
+
 platformRouter.get(
   "/payment-providers",
   asyncHandler(paymentProviders),

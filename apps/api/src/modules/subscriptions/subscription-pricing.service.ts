@@ -144,6 +144,54 @@ export async function upsertSubscriptionPrice(
   return price;
 }
 
+
+export async function deleteSubscriptionPrice(
+  priceId: string,
+  actorUserId: string,
+  correlationId?: string,
+) {
+  const price = await prisma.subscriptionPlanPrice.findUnique({
+    where: { id: priceId },
+  });
+
+  if (!price || price.platformConfigId !== PLATFORM_CONFIG_ID) {
+    throw new AppError("Subscription price not found", 404);
+  }
+
+  if (price.isActive) {
+    throw new AppError(
+      "Deactivate the subscription price before deleting it",
+      409,
+    );
+  }
+
+  await prisma.subscriptionPlanPrice.delete({
+    where: { id: priceId },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId,
+      action: "platform.subscription_price.deleted",
+      entityType: "SubscriptionPlanPrice",
+      entityId: priceId,
+      correlationId,
+      metadata: {
+        plan: price.plan,
+        countryCode: price.countryCode,
+        currencyCode: price.currencyCode,
+        amount: price.amount,
+      },
+    },
+  });
+
+  return {
+    id: priceId,
+    deleted: true,
+  };
+}
+
+
 export async function setSubscriptionPriceActive(
   id: string,
   isActive: boolean,

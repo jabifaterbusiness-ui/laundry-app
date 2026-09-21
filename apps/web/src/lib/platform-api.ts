@@ -506,6 +506,21 @@ export async function deactivatePlatformBusiness(
   );
 }
 
+
+export async function deletePlatformSubscriptionPrice(
+  id: string,
+  accessToken: string | null,
+) {
+  return apiFetch<{ id: string; deleted: boolean }>(
+    `/platform/subscription-prices/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      accessToken,
+    },
+  );
+}
+
+
 export async function renewPlatformBusinessSubscription(
   businessId: string,
   plan: SubscriptionPlan,

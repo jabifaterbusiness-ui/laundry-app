@@ -51,6 +51,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       upsert: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }));
@@ -327,6 +328,99 @@ describe("Platform Owner routes - subscription pricing", () => {
       where: { id: "price-yearly-ngn" },
       data: { isActive: false },
     });
+  });
+
+  it("deletes an inactive subscription price for PLATFORM_ADMIN", async () => {
+    const existing = {
+      id: "price-old-ngn",
+      platformConfigId: "00000000-0000-4000-8000-000000000001",
+      plan: "MONTHLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 5000,
+      isActive: false,
+    };
+
+    vi.mocked(prisma.subscriptionPlanPrice.findUnique).mockResolvedValue(
+      existing as never,
+    );
+    vi.mocked(prisma.subscriptionPlanPrice.delete).mockResolvedValue(
+      existing as never,
+    );
+
+    const response = await request(app)
+      .delete("/api/v1/platform/subscription-prices/price-old-ngn")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      id: "price-old-ngn",
+      deleted: true,
+    });
+
+    expect(prisma.subscriptionPlanPrice.delete).toHaveBeenCalledWith({
+      where: { id: "price-old-ngn" },
+    });
+  });
+
+  it("rejects deleting an active subscription price", async () => {
+    const existing = {
+      id: "price-active-ngn",
+      platformConfigId: "00000000-0000-4000-8000-000000000001",
+      plan: "MONTHLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 5000,
+      isActive: true,
+    };
+
+    vi.mocked(prisma.subscriptionPlanPrice.findUnique).mockResolvedValue(
+      existing as never,
+    );
+
+    const response = await request(app)
+      .delete("/api/v1/platform/subscription-prices/price-active-ngn")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "Deactivate the subscription price before deleting it",
+        }),
+      }),
+    );
+    expect(prisma.subscriptionPlanPrice.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects deleting a subscription price outside the platform configuration", async () => {
+    const existing = {
+      id: "price-other-platform",
+      platformConfigId: "another-platform-config",
+      plan: "MONTHLY",
+      countryCode: "NG",
+      currencyCode: "NGN",
+      amount: 5000,
+      isActive: false,
+    };
+
+    vi.mocked(prisma.subscriptionPlanPrice.findUnique).mockResolvedValue(
+      existing as never,
+    );
+
+    const response = await request(app)
+      .delete("/api/v1/platform/subscription-prices/price-other-platform")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "Subscription price not found",
+        }),
+      }),
+    );
+    expect(prisma.subscriptionPlanPrice.delete).not.toHaveBeenCalled();
   });
 
   it("rejects BUSINESS_OWNER from subscription pricing administration", async () => {

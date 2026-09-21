@@ -20,6 +20,7 @@ import {
 import {
   listSubscriptionPrices,
   setSubscriptionPriceActive,
+  deleteSubscriptionPrice,
   upsertSubscriptionPrice,
 } from "../subscriptions/subscription-pricing.service.js";
 import {
@@ -227,6 +228,33 @@ export async function updateSubscriptionPriceStatus(
     await setSubscriptionPriceActive(
       priceId,
       input.isActive,
+      req.user.id,
+      req.correlationId,
+    ),
+  );
+}
+
+
+
+export async function deleteSubscriptionPriceController(
+  req: Request,
+  res: Response,
+) {
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const priceId = req.params.id;
+
+  if (!priceId) {
+    res.status(400).json({ message: "Subscription price ID is required" });
+    return;
+  }
+
+  res.status(200).json(
+    await deleteSubscriptionPrice(
+      priceId,
       req.user.id,
       req.correlationId,
     ),

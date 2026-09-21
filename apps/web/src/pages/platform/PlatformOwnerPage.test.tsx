@@ -21,6 +21,7 @@ import {
   getPlatformSubscriptionPrices,
   upsertPlatformSubscriptionPrice,
   updatePlatformSubscriptionPriceStatus,
+  deletePlatformSubscriptionPrice,
   getPlatformPaymentProviders,
   upsertPlatformPaymentProvider,
   updatePlatformPaymentProviderStatus,
@@ -50,6 +51,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   getPlatformSubscriptionPrices: vi.fn(),
   upsertPlatformSubscriptionPrice: vi.fn(),
   updatePlatformSubscriptionPriceStatus: vi.fn(),
+  deletePlatformSubscriptionPrice: vi.fn(),
   getPlatformPaymentProviders: vi.fn(),
   upsertPlatformPaymentProvider: vi.fn(),
   updatePlatformPaymentProviderStatus: vi.fn(),
@@ -79,6 +81,9 @@ const mockedSubscriptionPrices = vi.mocked(getPlatformSubscriptionPrices);
 const mockedUpsertSubscriptionPrice = vi.mocked(upsertPlatformSubscriptionPrice);
 const mockedSubscriptionPriceStatus = vi.mocked(
   updatePlatformSubscriptionPriceStatus,
+);
+const mockedDeleteSubscriptionPrice = vi.mocked(
+  deletePlatformSubscriptionPrice,
 );
 const mockedPaymentProviders = vi.mocked(getPlatformPaymentProviders);
 const mockedUpsertPaymentProvider = vi.mocked(upsertPlatformPaymentProvider);
@@ -152,6 +157,10 @@ const revenue = {
   netCollected: 210000,
   paymentCount: 30,
   refundCount: 5,
+  subscriptionPayments: {
+    amount: 0,
+    count: 0,
+  },
   methodBreakdown: {
     CASH: {
       payments: 100000,
@@ -629,7 +638,7 @@ describe("PlatformOwnerPage", () => {
         document.querySelectorAll(
           '.platform-revenue-summary a.platform-kpi-link',
         ),
-      ).toHaveLength(3);
+      ).toHaveLength(4);
 
       expect(
         document.querySelectorAll(
