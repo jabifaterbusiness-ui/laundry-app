@@ -330,9 +330,7 @@ const subscriptionPriceDeleteMutation = useMutation({
     deletePlatformSubscriptionPrice(id, accessToken),
   onSuccess: async () => {
     setBillingFeedback("Subscription price deleted successfully.");
-    await queryClient.invalidateQueries({
-      queryKey: ["platform-subscription-prices"],
-    });
+    await subscriptionPricesQuery.refetch();
   },
   onError: (error) => {
     setBillingFeedback(
