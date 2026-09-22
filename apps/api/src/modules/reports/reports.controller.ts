@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { reportDateRangeSchema } from "./reports.validation.js";
 import { getDashboardReport } from "./reports.service.js";
+import { getFinancialStatement } from "./financial-statement.service.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -38,6 +39,33 @@ export async function dashboard(req: Request, res: Response) {
     {
       ...(range.from !== undefined ? { from: range.from } : {}),
       ...(range.to !== undefined ? { to: range.to } : {}),
+    },
+  );
+
+  res.status(200).json(report);
+}
+
+
+export async function financialStatement(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const range = reportDateRangeSchema.parse(req.query);
+
+  if (!range.from || !range.to) {
+    throw new AppError(
+      "Both from and to dates are required for a financial statement",
+      400,
+    );
+  }
+
+  const report = await getFinancialStatement(
+    {
+      businessId,
+      branchId,
+    },
+    {
+      from: range.from,
+      to: range.to,
     },
   );
 

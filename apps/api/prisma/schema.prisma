@@ -135,6 +135,10 @@ model Business {
   payrollDeductions          PayrollDeduction[]
   employeeCompensations      EmployeeCompensation[]
   financialRepayments        FinancialRepayment[]
+  expenses                   Expense[]
+  financialStatementConfig   FinancialStatementConfig?
+  financialStatementRecipients FinancialStatementRecipient[]
+  financialStatements        FinancialStatement[]
   inventoryItems             InventoryItem[]
   inventoryStocks            InventoryStock[]
   inventoryMovements         InventoryMovement[]
@@ -174,6 +178,7 @@ model Branch {
   loans                 Loan[]
   payrollDeductions     PayrollDeduction[]
   financialRepayments   FinancialRepayment[]
+  expenses              Expense[]
   inventoryStocks       InventoryStock[]
   inventoryMovements    InventoryMovement[]
   offlineSyncOperations OfflineSyncOperation[]
@@ -222,6 +227,10 @@ model User {
 
   financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
   financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
+  expensesCreated               Expense[]            @relation("ExpenseCreator")
+  expensesApproved              Expense[]            @relation("ExpenseApprover")
+  expensesRecognized            Expense[]            @relation("ExpenseRecognizer")
+  financialStatementRecipients FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
   inventoryMovementsCreated     InventoryMovement[]  @relation("InventoryMovementCreator")
 
   permissionOverrides UserPermissionOverride[]
@@ -529,6 +538,50 @@ model OrderItem {
   @@index([serviceId])
   @@map("order_items")
 }
+
+// ---------------------------------------------------------------------
+// ACCOUNTING / EXPENSES MODULE
+// ---------------------------------------------------------------------
+
+// Expense lifecycle.
+// Only APPROVED expenses with a non-null recognizedAt are included
+// in the profit/loss calculation.
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  VOID
+}
+
+// High-level classification used by the monthly financial statement.
+// Loan principal and IOU movements deliberately do not use this model
+// merely because cash moved.
+enum ExpenseCategory {
+  SALARY
+  RENT
+  UTILITIES
+  INVENTORY
+  TRANSPORT
+  MAINTENANCE
+  FINANCE_CHARGE
+  TAX
+  EMPLOYEE_REIMBURSEMENT
+  MISCELLANEOUS
+  OTHER
+}
+
+enum FinancialStatementChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum FinancialStatementDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 
 // ---------------------------------------------------------------------
 // INVOICES / RECEIPTS MODULE
@@ -1022,6 +1075,70 @@ enum PayrollPaymentMethod {
 enum PayrollPaymentStatus {
   POSTED
   VOID
+}
+
+// Explicit accounting expense record.
+//
+// This is intentionally separate from payments, loans, IOUs and payroll
+// disbursements. A cash movement is not automatically a P&L expense.
+//
+// P&L inclusion rule:
+//   status = APPROVED
+//   AND recognizedAt IS NOT NULL
+//   AND recognizedAt falls within the statement period.
+//
+// This prevents loan principal, IOU advances/recoveries and payroll
+// disbursements from being double-counted as ordinary expenses.
+model Expense {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  category ExpenseCategory
+  status   ExpenseStatus   @default(PENDING)
+
+  description String
+  amount      Int
+
+  // Date the underlying expense was incurred.
+  incurredAt DateTime
+
+  // Accounting recognition date.
+  // Only recognized expenses enter P&L calculations.
+  recognizedAt DateTime?
+
+  recognizedById String?
+  recognizedBy   User?   @relation("ExpenseRecognizer", fields: [recognizedById], references: [id], onDelete: SetNull)
+
+  createdById String
+  createdBy   User   @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  approvedById String?
+  approvedBy   User?   @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  approvedAt DateTime?
+
+  // Optional reference for receipts, supplier references, bank records,
+  // invoice numbers or other supporting documentation.
+  reference String?
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, branchId, incurredAt])
+  @@index([businessId, branchId, status])
+  @@index([businessId, recognizedAt])
+  @@index([businessId, category, recognizedAt])
+  @@index([createdById])
+  @@index([approvedById])
+  @@index([recognizedById])
+  @@map("expenses")
 }
 
 model EmployeeCompensation {
@@ -1718,4 +1835,123 @@ model PaymentWebhookEvent {
   @@index([businessId, createdAt])
   @@index([providerKey, processed, createdAt])
   @@map("payment_webhook_events")
+}
+
+
+// ---------------------------------------------------------------------
+// MONTHLY FINANCIAL STATEMENT DELIVERY
+// ---------------------------------------------------------------------
+//
+// A business has one monthly statement configuration. Recipients are
+// explicitly configured rather than inferred only from job title.
+//
+// The statement itself is business-wide and therefore aggregates all
+// branches belonging to the business.
+//
+// Delivery records are idempotent per statement/channel/recipient so
+// repeated scheduler execution cannot intentionally create duplicate
+// deliveries.
+//
+model FinancialStatementConfig {
+  id String @id @default(uuid())
+
+  businessId String @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(true)
+
+  // Default locked schedule: first day of every month.
+  dayOfMonth Int @default(1)
+  hour       Int @default(8)
+  minute     Int @default(0)
+
+  emailEnabled    Boolean @default(true)
+  whatsappEnabled Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("financial_statement_configs")
+}
+
+model FinancialStatementRecipient {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User @relation("FinancialStatementRecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Explicit WhatsApp destination. Email uses the User.email address.
+  whatsappNumber String?
+
+  enabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries FinancialStatementDelivery[]
+
+  @@unique([businessId, userId])
+  @@index([businessId, enabled])
+  @@index([userId])
+  @@map("financial_statement_recipients")
+}
+
+model FinancialStatement {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  currencyCode String
+
+  grossRevenue    Int
+  refundAmount    Int
+  netRevenue      Int
+  explicitExpenses Int
+  salaryExpense   Int
+  totalExpenses   Int
+  profitOrLoss    Int
+
+  generatedAt DateTime @default(now())
+
+  deliveries FinancialStatementDelivery[]
+
+  @@unique([businessId, periodStart, periodEnd])
+  @@index([businessId, periodStart, periodEnd])
+  @@map("financial_statements")
+}
+
+model FinancialStatementDelivery {
+  id String @id @default(uuid())
+
+  statementId String
+  statement   FinancialStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   FinancialStatementRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  channel FinancialStatementChannel
+  status  FinancialStatementDeliveryStatus @default(PENDING)
+
+  destination String
+  providerMessageId String?
+
+  attemptCount Int @default(0)
+  lastAttemptAt DateTime?
+  sentAt DateTime?
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([statementId, recipientId, channel])
+  @@index([statementId, status])
+  @@index([recipientId, status])
+  @@map("financial_statement_deliveries")
 }

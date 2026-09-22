@@ -52,11 +52,8 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     req.user = {
       id: auth.userId,
       email: auth.email,
-      fullName: "Test User",
       role: auth.role,
       businessId: auth.businessId,
-      branches: [],
-      permissions: [],
     };
 
     next();
@@ -85,7 +82,7 @@ vi.mock("../../src/middleware/permissions.js", () => ({
       req.user.role,
       permissionCode,
     )
-      .then((allowed) => {
+      .then((allowed: boolean) => {
         if (!allowed) {
           next(new AppError("Insufficient permissions for this action", 403));
           return;

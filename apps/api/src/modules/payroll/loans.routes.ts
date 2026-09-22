@@ -12,7 +12,7 @@ import {
 import { requireAuth } from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 
 const router = Router();
@@ -21,16 +21,11 @@ router.use(requireAuth);
 router.use(asyncHandler(requireBusinessContext));
 router.use(asyncHandler(requireBranchContext));
 
-const FINANCE_ROLES = [
-  "BUSINESS_OWNER",
-  "BRANCH_MANAGER",
-] as const;
-
-router.post("/", requireRole(...FINANCE_ROLES), asyncHandler(createLoanController));
-router.get("/", requireRole(...FINANCE_ROLES), asyncHandler(listLoansController));
-router.get("/:id", requireRole(...FINANCE_ROLES), asyncHandler(getLoanController));
-router.post("/:id/approve", requireRole("BUSINESS_OWNER"), asyncHandler(approveLoanController));
-router.post("/:id/reject", requireRole("BUSINESS_OWNER"), asyncHandler(rejectLoanController));
-router.post("/:id/cancel", requireRole("BUSINESS_OWNER"), asyncHandler(cancelLoanController));
+router.post("/", requirePermission("loans.manage"), asyncHandler(createLoanController));
+router.get("/", requirePermission("loans.view"), asyncHandler(listLoansController));
+router.get("/:id", requirePermission("loans.view"), asyncHandler(getLoanController));
+router.post("/:id/approve", requirePermission("loans.approve"), asyncHandler(approveLoanController));
+router.post("/:id/reject", requirePermission("loans.approve"), asyncHandler(rejectLoanController));
+router.post("/:id/cancel", requirePermission("loans.cancel"), asyncHandler(cancelLoanController));
 
 export default router;

@@ -3,6 +3,7 @@ import { config } from "./config/index.js";
 import { logger } from "./lib/logger.js";
 import { backfillBusinessPaymentIdentities } from "./modules/payments/business-payment-identity.service.js";
 import { registerConfiguredSubscriptionPaymentProviders } from "./modules/subscriptions/providers/payment-provider.bootstrap.js";
+import { startFinancialStatementScheduler } from "./modules/reports/financial-statement-scheduler.service.js";
 
 async function startServer() {
   const identityBackfill = await backfillBusinessPaymentIdentities();
@@ -12,6 +13,7 @@ async function startServer() {
   );
 
   registerConfiguredSubscriptionPaymentProviders();
+  startFinancialStatementScheduler();
 
   const app = createApp();
 

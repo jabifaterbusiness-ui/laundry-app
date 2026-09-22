@@ -4,6 +4,19 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    permission: {
+      findUnique: vi.fn().mockImplementation(
+        async ({ where }: { where: { code: string } }) => ({
+          id: `permission-${where.code}`,
+        }),
+      ),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    businessRolePermission: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
     subscription: {
       findUnique: vi.fn().mockResolvedValue({
         id: "sub-test",
@@ -130,7 +143,7 @@ const periodFixture = {
 };
 
 beforeEach(() => {
-  vi.resetAllMocks();
+  vi.clearAllMocks();
 
   subscriptionFindUnique.mockResolvedValue({
     id: "sub-test",

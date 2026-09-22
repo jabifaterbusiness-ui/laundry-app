@@ -134,9 +134,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
 
-  findPermission.mockImplementation(async ({ where }) => ({
-    id: `permission-${where.code}`,
-  }) as never);
+    (findPermission as any).mockImplementation(async ({ where }: any) => ({
+      id: `permission-${where.code}`,
+    }));
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);

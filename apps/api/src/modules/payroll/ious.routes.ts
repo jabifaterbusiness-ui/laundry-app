@@ -10,7 +10,7 @@ import {
 import { requireAuth } from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requirePermission } from "../../middleware/permissions.js";
 
 const router = Router();
 
@@ -18,44 +18,39 @@ router.use(requireAuth);
 router.use(requireBusinessContext);
 router.use(requireBranchContext);
 
-const FINANCE_ROLES = [
-  "BUSINESS_OWNER",
-  "BRANCH_MANAGER",
-] as const;
-
 router.post(
   "/",
-  requireRole(...FINANCE_ROLES),
+  requirePermission("ious.manage"),
   createIOUController,
 );
 
 router.get(
   "/",
-  requireRole(...FINANCE_ROLES),
+  requirePermission("ious.view"),
   listIOUsController,
 );
 
 router.get(
   "/:id",
-  requireRole(...FINANCE_ROLES),
+  requirePermission("ious.view"),
   getIOUController,
 );
 
 router.post(
   "/:id/approve",
-  requireRole("BUSINESS_OWNER"),
+  requirePermission("ious.approve"),
   approveIOUController,
 );
 
 router.post(
   "/:id/reject",
-  requireRole("BUSINESS_OWNER"),
+  requirePermission("ious.approve"),
   rejectIOUController,
 );
 
 router.post(
   "/:id/cancel",
-  requireRole("BUSINESS_OWNER"),
+  requirePermission("ious.cancel"),
   cancelIOUController,
 );
 

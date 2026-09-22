@@ -42,10 +42,34 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "inventory.view", module: "inventory", action: "view", description: "View inventory" },
   { code: "inventory.manage", module: "inventory", action: "manage", description: "Manage inventory" },
   { code: "reports.view", module: "reports", action: "view", description: "View reports" },
+  { code: "reports.manage", module: "reports", action: "manage", description: "Manage financial reporting and statement delivery" },
+
+  { code: "expenses.view", module: "expenses", action: "view", description: "View expenses" },
+  { code: "expenses.manage", module: "expenses", action: "manage", description: "Create and manage expenses" },
+  { code: "expenses.approve", module: "expenses", action: "approve", description: "Approve or reject expenses" },
+  { code: "expenses.recognize", module: "expenses", action: "recognize", description: "Recognize expenses for accounting" },
+  { code: "expenses.void", module: "expenses", action: "void", description: "Void expenses" },
 
   { code: "payroll.view", module: "payroll", action: "view", description: "View payroll" },
   { code: "payroll.manage", module: "payroll", action: "manage", description: "Manage payroll" },
   { code: "payroll.approve", module: "payroll", action: "approve", description: "Approve payroll transactions" },
+
+  { code: "compensation.view", module: "compensation", action: "view", description: "View employee compensation" },
+  { code: "compensation.manage", module: "compensation", action: "manage", description: "Manage employee compensation" },
+
+  { code: "ious.view", module: "ious", action: "view", description: "View IOUs" },
+  { code: "ious.manage", module: "ious", action: "manage", description: "Manage IOUs" },
+  { code: "ious.approve", module: "ious", action: "approve", description: "Approve or reject IOUs" },
+  { code: "ious.cancel", module: "ious", action: "cancel", description: "Cancel IOUs" },
+
+  { code: "loans.view", module: "loans", action: "view", description: "View loans" },
+  { code: "loans.manage", module: "loans", action: "manage", description: "Manage loans" },
+  { code: "loans.approve", module: "loans", action: "approve", description: "Approve or reject loans" },
+  { code: "loans.cancel", module: "loans", action: "cancel", description: "Cancel loans" },
+
+  { code: "repayments.view", module: "repayments", action: "view", description: "View financial repayments" },
+  { code: "repayments.manage", module: "repayments", action: "manage", description: "Manage financial repayments" },
+  { code: "repayments.void", module: "repayments", action: "void", description: "Void financial repayments" },
 
   { code: "migrations.view", module: "migrations", action: "view", description: "View migration jobs" },
   { code: "migrations.manage", module: "migrations", action: "manage", description: "Manage migration jobs" },
@@ -66,7 +90,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
     !permission.code.startsWith("business.") &&
     !permission.code.startsWith("users.manage_permissions") &&
     permission.code !== "branches.manage_users" &&
-    permission.code !== "payroll.approve"
+    permission.code !== "payroll.approve" &&
+    permission.code !== "ious.approve" &&
+    permission.code !== "ious.cancel" &&
+    permission.code !== "loans.approve" &&
+    permission.code !== "loans.cancel" &&
+    permission.code !== "repayments.void" &&
+    permission.code !== "expenses.approve" &&
+    permission.code !== "expenses.recognize" &&
+    permission.code !== "expenses.void"
   ).map((permission) => permission.code),
   STAFF: PERMISSIONS.filter((permission) =>
     [

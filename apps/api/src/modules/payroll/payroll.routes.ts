@@ -4,7 +4,7 @@ import { requireAuth } from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requirePermission } from "../../middleware/permissions.js";
 
 import {
   createPayrollPeriodController,
@@ -25,75 +25,73 @@ import {
 
 const router = Router();
 
-const FINANCE_ROLES = ["BUSINESS_OWNER", "BRANCH_MANAGER"] as const;
-
 router.use(asyncHandler(requireAuth));
 router.use(asyncHandler(requireBusinessContext));
 router.use(asyncHandler(requireBranchContext));
 
 router.post(
   "/periods",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(createPayrollPeriodController),
 );
 
 router.get(
   "/periods",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.view")),
   asyncHandler(listPayrollPeriodsController),
 );
 
 router.get(
   "/periods/:id",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.view")),
   asyncHandler(getPayrollPeriodController),
 );
 
 router.get(
   "/periods/:id/status",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.view")),
   asyncHandler(getPayrollStatusController),
 );
 
 router.post(
   "/periods/:id/generate",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(generatePayrollController),
 );
 
 router.post(
   "/periods/:id/finalize",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(finalizePayrollController),
 );
 
 router.post(
   "/periods/:id/deductions/process",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(processPayrollDeductionsController),
 );
 
 router.post(
   "/payments",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(createPayrollPaymentController),
 );
 
 router.get(
   "/payments",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.view")),
   asyncHandler(listPayrollPaymentsController),
 );
 
 router.get(
   "/payments/:id",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.view")),
   asyncHandler(getPayrollPaymentController),
 );
 
 router.post(
   "/payments/:id/void",
-  asyncHandler(requireRole(...FINANCE_ROLES)),
+  asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(voidPayrollPaymentController),
 );
 
