@@ -11,7 +11,7 @@ vi.mock("../lib/reports-api.js", () => ({
 
 vi.mock("../state/auth-store.js", () => ({
   useAuthStore: (selector: (state: {
-    user: { fullName: string; role: string };
+    user: { fullName: string; role: string; permissions: string[] };
     accessToken: string;
     activeBranchId: string;
   }) => unknown) =>
