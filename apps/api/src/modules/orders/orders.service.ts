@@ -1,6 +1,8 @@
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
+import { createInvoiceFromOrderWithTx } from "../invoices/invoices.service.js";
 
 export interface CreateOrderItemData {
   serviceId: string;
@@ -160,7 +162,7 @@ async function createOrderWithTx(
       0,
     );
 
-    return tx.order.create({
+    const order = await tx.order.create({
       data: {
         business: {
           connect: { id: data.businessId },
@@ -186,6 +188,50 @@ async function createOrderWithTx(
         items: true,
       },
     });
+
+    await createGarmentsForOrderWithTx(
+      tx,
+      order,
+      data.businessId,
+      data.branchId,
+    );
+
+    const business = await tx.business.findUnique({
+      where: {
+        id: data.businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        website: true,
+        address: true,
+        logoUrl: true,
+        receiptPrimaryColor: true,
+        receiptAccentColor: true,
+        receiptBackgroundColor: true,
+        receiptTextColor: true,
+        receiptHeaderStyle: true,
+        defaultCustomerAgreement: true,
+      },
+    });
+
+    if (!business?.defaultCustomerAgreement?.trim()) {
+      throw new AppError(
+        "A default customer agreement must be configured before an invoice can be generated",
+        422,
+      );
+    }
+
+    await createInvoiceFromOrderWithTx(
+      tx,
+      order,
+      business,
+      business.defaultCustomerAgreement,
+    );
+
+    return order;
 }
 
 async function createUniqueOrderNumber(

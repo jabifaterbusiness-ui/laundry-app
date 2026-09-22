@@ -12,86 +12,131 @@ export interface ListGarmentsParams {
   pageSize: number;
 }
 
+type GarmentDb = typeof prisma | Prisma.TransactionClient;
+
 export async function createGarmentsForOrder(
   orderId: string,
   businessId: string,
   branchId: string,
+  db: GarmentDb = prisma,
 ) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findFirst({
-      where: {
-        id: orderId,
-        businessId,
-        branchId,
-      },
-      include: {
-        items: true,
-      },
-    });
-
-    if (!order) {
-      throw new AppError("Order not found", 404);
-    }
-
-    const existing = await tx.garment.findMany({
-      where: {
-        orderId,
-        businessId,
-        branchId,
-      },
-      select: {
-        orderItemId: true,
-        garmentNumber: true,
-      },
-    });
-
-    const existingKeys = new Set(
-      existing.map(
-        (g) => `${g.orderItemId}:${g.garmentNumber}`,
-      ),
-    );
-
-    const creates: Prisma.GarmentCreateManyInput[] = [];
-
-    for (const item of order.items) {
-      for (let number = 1; number <= item.totalPieces; number += 1) {
-        const key = `${item.id}:${number}`;
-
-        if (existingKeys.has(key)) {
-          continue;
-        }
-
-        creates.push({
+  if (db === prisma) {
+    return prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: {
+          id: orderId,
           businessId,
           branchId,
-          orderId: order.id,
-          orderItemId: item.id,
-          garmentNumber: number,
-          status: "RECEIVED",
-        });
-      }
-    }
-
-    if (creates.length > 0) {
-      await tx.garment.createMany({
-        data: creates,
+        },
+        include: {
+          items: true,
+        },
       });
-    }
 
-    return tx.garment.findMany({
-      where: {
-        orderId,
+      if (!order) {
+        throw new AppError("Order not found", 404);
+      }
+
+      return createGarmentsForOrderWithTx(
+        tx,
+        order,
         businessId,
         branchId,
-      },
-      include: {
-        orderItem: true,
-      },
-      orderBy: [
-        { orderItemId: "asc" },
-        { garmentNumber: "asc" },
-      ],
+      );
     });
+  }
+
+  const order = await db.order.findFirst({
+    where: {
+      id: orderId,
+      businessId,
+      branchId,
+    },
+    include: {
+      items: true,
+    },
+  });
+
+  if (!order) {
+    throw new AppError("Order not found", 404);
+  }
+
+  return createGarmentsForOrderWithTx(
+    db,
+    order,
+    businessId,
+    branchId,
+  );
+}
+
+export async function createGarmentsForOrderWithTx(
+  tx: Prisma.TransactionClient,
+  order: Prisma.OrderGetPayload<{
+    include: {
+      items: true;
+    };
+  }>,
+  businessId: string,
+  branchId: string,
+) {
+  const existing = await tx.garment.findMany({
+    where: {
+      orderId: order.id,
+      businessId,
+      branchId,
+    },
+    select: {
+      orderItemId: true,
+      garmentNumber: true,
+    },
+  });
+
+  const existingKeys = new Set(
+    existing.map(
+      (g) => `${g.orderItemId}:${g.garmentNumber}`,
+    ),
+  );
+
+  const creates: Prisma.GarmentCreateManyInput[] = [];
+
+  for (const item of order.items) {
+    for (let number = 1; number <= item.totalPieces; number += 1) {
+      const key = `${item.id}:${number}`;
+
+      if (existingKeys.has(key)) {
+        continue;
+      }
+
+      creates.push({
+        businessId,
+        branchId,
+        orderId: order.id,
+        orderItemId: item.id,
+        garmentNumber: number,
+        status: "RECEIVED",
+      });
+    }
+  }
+
+  if (creates.length > 0) {
+    await tx.garment.createMany({
+      data: creates,
+    });
+  }
+
+  return tx.garment.findMany({
+    where: {
+      orderId: order.id,
+      businessId,
+      branchId,
+    },
+    include: {
+      orderItem: true,
+    },
+    orderBy: [
+      { orderItemId: "asc" },
+      { garmentNumber: "asc" },
+    ],
   });
 }
 

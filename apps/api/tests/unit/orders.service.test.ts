@@ -63,6 +63,31 @@ function createTransactionClient() {
       create: vi.fn(),
       update: vi.fn(),
     },
+    garment: {
+      findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn(),
+    },
+    invoice: {
+      create: vi.fn(),
+    },
+    business: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "biz-A",
+        name: "Test Laundry",
+        phone: null,
+        email: null,
+        website: null,
+        address: null,
+        logoUrl: null,
+        receiptPrimaryColor: null,
+        receiptAccentColor: null,
+        receiptBackgroundColor: null,
+        receiptTextColor: null,
+        receiptHeaderStyle: null,
+        defaultCustomerAgreement:
+          "Customer agrees to the laundry service terms and conditions.",
+      }),
+    },
   };
 }
 
@@ -351,8 +376,17 @@ describe("createOrder", () => {
       id: ORDER_A,
       orderNumber: "ORD-TEST-1000",
       orderTotal: 9000,
+      customer: {
+        id: CUSTOMER_A,
+        name: "Jane Doe",
+      },
+      branch: {
+        id: BRANCH_A,
+        name: "Main Branch",
+      },
       items: [
         {
+          id: "order-item-agbada",
           serviceId: SERVICE_AGBADA,
           serviceName: "Complete Agbada",
           piecesPerUnit: 3,
@@ -360,6 +394,7 @@ describe("createOrder", () => {
           totalPieces: 6,
           unitPrice: 4500,
           lineTotal: 9000,
+          colors: [],
         },
       ],
     } as never);
@@ -439,6 +474,38 @@ describe("createOrder", () => {
       id: ORDER_A,
       orderNumber: "ORD-TEST-1001",
       orderTotal: 12000,
+      customer: {
+        id: CUSTOMER_A,
+        name: "Jane Doe",
+      },
+      branch: {
+        id: BRANCH_A,
+        name: "Main Branch",
+      },
+      items: [
+        {
+          id: "order-item-agbada",
+          serviceId: SERVICE_AGBADA,
+          serviceName: "Complete Agbada",
+          piecesPerUnit: 3,
+          quantity: 2,
+          totalPieces: 6,
+          unitPrice: 4500,
+          lineTotal: 9000,
+          colors: [],
+        },
+        {
+          id: "order-item-shirt",
+          serviceId: SERVICE_SHIRT,
+          serviceName: "Shirt",
+          piecesPerUnit: 1,
+          quantity: 3,
+          totalPieces: 3,
+          unitPrice: 1000,
+          lineTotal: 3000,
+          colors: [],
+        },
+      ],
     } as never);
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
@@ -513,7 +580,32 @@ describe("createOrder", () => {
     });
 
     tx.order.findUnique.mockResolvedValue(null);
-    tx.order.create.mockResolvedValue({ id: ORDER_A } as never);
+    tx.order.create.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "ORD-TEST-1002",
+      orderTotal: 1000,
+      customer: {
+        id: CUSTOMER_A,
+        name: "Jane Doe",
+      },
+      branch: {
+        id: BRANCH_A,
+        name: "Main Branch",
+      },
+      items: [
+        {
+          id: "order-item-shirt",
+          serviceId: SERVICE_SHIRT,
+          serviceName: "Shirt",
+          piecesPerUnit: 1,
+          quantity: 1,
+          totalPieces: 1,
+          unitPrice: 1000,
+          lineTotal: 1000,
+          colors: [],
+        },
+      ],
+    } as never);
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 

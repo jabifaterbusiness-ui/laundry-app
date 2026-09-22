@@ -29,96 +29,209 @@ export interface ListInvoicesParams {
  * - Creation is atomic.
  */
 export async function createInvoice(data: CreateInvoiceData) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findFirst({
-      where: {
-        id: data.orderId,
-        businessId: data.businessId,
-        branchId: data.branchId,
+  return prisma.$transaction(async (tx) =>
+    createInvoiceWithTx(
+      tx,
+      data.orderId,
+      data.businessId,
+      data.branchId,
+      data.customerAgreement,
+    ),
+  );
+}
+
+export async function createInvoiceWithTx(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  businessId: string,
+  branchId: string,
+  customerAgreement: string,
+) {
+  const order = await tx.order.findFirst({
+    where: {
+      id: orderId,
+      businessId,
+      branchId,
+    },
+    include: {
+      customer: true,
+      branch: true,
+      items: true,
+      business: true,
+      invoice: true,
+    },
+  });
+
+  if (!order) {
+    throw new AppError("Order not found", 404);
+  }
+
+  if (order.invoice) {
+    throw new AppError(
+      "An invoice already exists for this order",
+      409,
+    );
+  }
+
+  if (order.items.length === 0) {
+    throw new AppError(
+      "An invoice cannot be created for an order with no items",
+      422,
+    );
+  }
+
+  const agreement = customerAgreement.trim();
+
+  if (!agreement) {
+    throw new AppError(
+      "A customer agreement is required to create an invoice",
+      422,
+    );
+  }
+
+  const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] =
+    order.items.map((item) => ({
+      itemName: item.serviceName,
+      colors: item.colors,
+      piecesPerUnit: item.piecesPerUnit,
+      quantity: item.quantity,
+      totalPieces: item.totalPieces,
+      unitPrice: item.unitPrice,
+      totalPrice: item.lineTotal,
+    }));
+
+  return tx.invoice.create({
+    data: {
+      business: {
+        connect: { id: businessId },
       },
-      include: {
-        customer: true,
-        branch: true,
-        items: true,
-        business: true,
-        invoice: true,
+      branch: {
+        connect: { id: branchId },
       },
-    });
-
-    if (!order) {
-      throw new AppError("Order not found", 404);
-    }
-
-    if (order.invoice) {
-      throw new AppError(
-        "An invoice already exists for this order",
-        409,
-      );
-    }
-
-    if (order.items.length === 0) {
-      throw new AppError(
-        "An invoice cannot be created for an order with no items",
-        422,
-      );
-    }
-
-    const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] =
-      order.items.map((item) => ({
-        itemName: item.serviceName,
-        colors: item.colors,
-        piecesPerUnit: item.piecesPerUnit,
-        quantity: item.quantity,
-        totalPieces: item.totalPieces,
-        unitPrice: item.unitPrice,
-        totalPrice: item.lineTotal,
-      }));
-
-    const invoice = await tx.invoice.create({
-      data: {
-        business: {
-          connect: { id: data.businessId },
-        },
-        branch: {
-          connect: { id: data.branchId },
-        },
-        order: {
-          connect: { id: order.id },
-        },
-        invoiceNumber: order.orderNumber,
-        status: "ISSUED",
-        customerName: order.customer.name,
-        companyName: order.business.name,
-        companyPhone: order.business.phone,
-        companyEmail: order.business.email,
-        companyWebsite: order.business.website,
-        companyAddress: order.business.address,
-        logoUrl: order.business.logoUrl,
-        receiptPrimaryColor: order.business.receiptPrimaryColor,
-        receiptAccentColor: order.business.receiptAccentColor,
-        receiptBackgroundColor: order.business.receiptBackgroundColor,
-        receiptTextColor: order.business.receiptTextColor,
-        receiptHeaderStyle: order.business.receiptHeaderStyle,
-        totalAmount: order.orderTotal,
-        garmentNote: order.garmentNote,
-        internalNote: order.internalNote,
-        customerAgreement: data.customerAgreement,
-        items: {
-          create: invoiceItems,
+      order: {
+        connect: { id: order.id },
+      },
+      invoiceNumber: order.orderNumber,
+      status: "ISSUED",
+      customerName: order.customer.name,
+      companyName: order.business.name,
+      companyPhone: order.business.phone,
+      companyEmail: order.business.email,
+      companyWebsite: order.business.website,
+      companyAddress: order.business.address,
+      logoUrl: order.business.logoUrl,
+      receiptPrimaryColor: order.business.receiptPrimaryColor,
+      receiptAccentColor: order.business.receiptAccentColor,
+      receiptBackgroundColor: order.business.receiptBackgroundColor,
+      receiptTextColor: order.business.receiptTextColor,
+      receiptHeaderStyle: order.business.receiptHeaderStyle,
+      totalAmount: order.orderTotal,
+      garmentNote: order.garmentNote,
+      internalNote: order.internalNote,
+      customerAgreement: agreement,
+      items: {
+        create: invoiceItems,
+      },
+    },
+    include: {
+      items: true,
+      order: {
+        include: {
+          customer: true,
+          branch: true,
         },
       },
-      include: {
-        items: true,
-        order: {
-          include: {
-            customer: true,
-            branch: true,
-          },
+    },
+  });
+}
+
+export async function createInvoiceFromOrderWithTx(
+  tx: Prisma.TransactionClient,
+  order: Prisma.OrderGetPayload<{
+    include: {
+      customer: true;
+      branch: true;
+      items: true;
+    };
+  }>,
+  business: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    website: string | null;
+    address: string | null;
+    logoUrl: string | null;
+    receiptPrimaryColor: string | null;
+    receiptAccentColor: string | null;
+    receiptBackgroundColor: string | null;
+    receiptTextColor: string | null;
+    receiptHeaderStyle: string | null;
+  },
+  customerAgreement: string,
+) {
+  const agreement = customerAgreement.trim();
+
+  if (!agreement) {
+    throw new AppError(
+      "A customer agreement is required to create an invoice",
+      422,
+    );
+  }
+
+  const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] =
+    order.items.map((item) => ({
+      itemName: item.serviceName,
+      colors: item.colors,
+      piecesPerUnit: item.piecesPerUnit,
+      quantity: item.quantity,
+      totalPieces: item.totalPieces,
+      unitPrice: item.unitPrice,
+      totalPrice: item.lineTotal,
+    }));
+
+  return tx.invoice.create({
+    data: {
+      business: {
+        connect: { id: business.id },
+      },
+      branch: {
+        connect: { id: order.branchId },
+      },
+      order: {
+        connect: { id: order.id },
+      },
+      invoiceNumber: order.orderNumber,
+      status: "ISSUED",
+      customerName: order.customer.name,
+      companyName: business.name,
+      companyPhone: business.phone,
+      companyEmail: business.email,
+      companyWebsite: business.website,
+      companyAddress: business.address,
+      logoUrl: business.logoUrl,
+      receiptPrimaryColor: business.receiptPrimaryColor,
+      receiptAccentColor: business.receiptAccentColor,
+      receiptBackgroundColor: business.receiptBackgroundColor,
+      receiptTextColor: business.receiptTextColor,
+      receiptHeaderStyle: business.receiptHeaderStyle,
+      totalAmount: order.orderTotal,
+      garmentNote: order.garmentNote,
+      internalNote: order.internalNote,
+      customerAgreement: agreement,
+      items: {
+        create: invoiceItems,
+      },
+    },
+    include: {
+      items: true,
+      order: {
+        include: {
+          customer: true,
+          branch: true,
         },
       },
-    });
-
-    return invoice;
+    },
   });
 }
 

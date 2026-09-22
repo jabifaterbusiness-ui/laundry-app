@@ -8,6 +8,7 @@ export interface UpdateBusinessBrandingData {
   receiptBackgroundColor?: string | null | undefined;
   receiptTextColor?: string | null | undefined;
   receiptHeaderStyle?: string | null | undefined;
+  defaultCustomerAgreement?: string | undefined;
 }
 
 const brandingSelect = {
@@ -23,6 +24,7 @@ const brandingSelect = {
   receiptBackgroundColor: true,
   receiptTextColor: true,
   receiptHeaderStyle: true,
+  defaultCustomerAgreement: true,
 } as const;
 
 export async function getBusinessBranding(businessId: string) {
@@ -103,6 +105,10 @@ export async function updateBusinessBranding(
 
   if (data.receiptHeaderStyle !== undefined) {
     patch.receiptHeaderStyle = data.receiptHeaderStyle;
+  }
+
+  if (data.defaultCustomerAgreement !== undefined) {
+    patch.defaultCustomerAgreement = data.defaultCustomerAgreement;
   }
 
   const result = await prisma.business.updateMany({

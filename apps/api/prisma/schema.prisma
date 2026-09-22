@@ -105,6 +105,11 @@ model Business {
   // without unnecessary enum migrations.
   receiptHeaderStyle String?
 
+  // Default customer agreement used when invoices are generated
+  // automatically from newly created orders. Each invoice stores its
+  // own historical snapshot, so later changes do not affect old invoices.
+  defaultCustomerAgreement String @default("Customer agrees to the laundry service terms and conditions.")
+
   // -------------------------------------------------------------------
   // SUBSCRIPTION
   // -------------------------------------------------------------------

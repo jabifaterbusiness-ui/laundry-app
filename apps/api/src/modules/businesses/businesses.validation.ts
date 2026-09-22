@@ -37,5 +37,12 @@ export const updateBusinessBrandingSchema = z
       .max(50)
       .nullable()
       .optional(),
+
+    defaultCustomerAgreement: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2000)
+      .optional(),
   })
   .strict();
