@@ -53,7 +53,9 @@ export function createApp() {
       },
       // Large JSON files used by the migration endpoint must remain raw so
       // the migration controller can enforce its own upload-size limit.
-      type: (req) => !req.url?.endsWith("/migrations/jobs/analyze"),
+      type: (req) =>
+        !req.url?.endsWith("/migrations/jobs/analyze") &&
+        !req.url?.endsWith("/businesses/logo"),
     }),
   );
   app.use(requestContext);
