@@ -86,6 +86,26 @@ describe("getEffectivePermissionCodes", () => {
     expect(findRoleOverrides).not.toHaveBeenCalled();
   });
 
+  it("returns every catalog permission for BUSINESS_OWNER despite stored overrides", async () => {
+    const permissions = await getEffectivePermissionCodes(
+      "business-1",
+      "owner-1",
+      "BUSINESS_OWNER" as Role,
+    );
+
+    expect(permissions).toEqual(
+      expect.arrayContaining([
+        "customers.view",
+        "reports.view",
+        "expenses.manage",
+        "users.manage_permissions",
+      ]),
+    );
+
+    expect(findUserOverrides).not.toHaveBeenCalled();
+    expect(findRoleOverrides).not.toHaveBeenCalled();
+  });
+
   it("returns no permissions for a non-platform user without a business", async () => {
     await expect(
       getEffectivePermissionCodes(null, "user-1", "STAFF" as Role),
@@ -142,6 +162,30 @@ describe("hasPermission", () => {
     ).resolves.toBe(true);
 
     expect(findPermission).not.toHaveBeenCalled();
+  });
+
+  it("allows BUSINESS_OWNER for catalog permissions despite overrides", async () => {
+    await expect(
+      hasPermission(
+        "owner-1",
+        "business-1",
+        "BUSINESS_OWNER" as Role,
+        "reports.view",
+      ),
+    ).resolves.toBe(true);
+
+    await expect(
+      hasPermission(
+        "owner-1",
+        "business-1",
+        "BUSINESS_OWNER" as Role,
+        "expenses.manage",
+      ),
+    ).resolves.toBe(true);
+
+    expect(findPermission).not.toHaveBeenCalled();
+    expect(findUserOverride).not.toHaveBeenCalled();
+    expect(findRoleOverride).not.toHaveBeenCalled();
   });
 
   it("denies non-platform users without a business context", async () => {
@@ -508,6 +552,29 @@ describe("permission administration helpers", () => {
     );
   });
 
+  it("rejects business configuration of BUSINESS_OWNER", async () => {
+    await expect(
+      upsertBusinessRolePermission(
+        "business-1",
+        "BUSINESS_OWNER" as Role,
+        "reports.view",
+        false,
+      ),
+    ).rejects.toThrow(
+      "BUSINESS_OWNER permissions cannot be restricted at business level",
+    );
+
+    await expect(
+      removeBusinessRolePermission(
+        "business-1",
+        "BUSINESS_OWNER" as Role,
+        "reports.view",
+      ),
+    ).rejects.toThrow(
+      "BUSINESS_OWNER permissions cannot be restricted at business level",
+    );
+  });
+
   it("rejects business configuration of PLATFORM_ADMIN", async () => {
     await expect(
       upsertBusinessRolePermission(
@@ -555,6 +622,39 @@ describe("permission administration helpers", () => {
         "customers.view",
       ),
     ).rejects.toThrow("Business role permission override not found");
+  });
+
+  it("rejects user permission restrictions for a BUSINESS_OWNER", async () => {
+    findUser.mockResolvedValue({
+      id: "owner-1",
+      businessId: "business-1",
+      role: "BUSINESS_OWNER",
+    });
+
+    await expect(
+      upsertUserPermissionOverride(
+        "business-1",
+        "owner-1",
+        "reports.view",
+        false,
+      ),
+    ).rejects.toThrow(
+      "BUSINESS_OWNER permissions cannot be restricted",
+    );
+
+    await expect(
+      removeUserPermissionOverride(
+        "business-1",
+        "owner-1",
+        "reports.view",
+      ),
+    ).rejects.toThrow(
+      "BUSINESS_OWNER permissions cannot be restricted",
+    );
+
+    expect(findPermission).not.toHaveBeenCalled();
+    expect(upsertUserOverride).not.toHaveBeenCalled();
+    expect(deleteUserOverride).not.toHaveBeenCalled();
   });
 
   it("upserts a user permission override in the correct business", async () => {

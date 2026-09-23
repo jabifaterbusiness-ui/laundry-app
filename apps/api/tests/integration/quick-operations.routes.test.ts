@@ -289,7 +289,7 @@ describe("Quick Operations routes - validation and authorization", () => {
   });
 
   it("rejects an explicitly denied user permission", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -303,7 +303,7 @@ describe("Quick Operations routes - validation and authorization", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "TI",
@@ -459,7 +459,7 @@ describe("Quick Operations routes - MU", () => {
   });
 
   it("enforces the orders.change_status permission for MU", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockImplementation((args) => {
       const code = args.where.code;
@@ -501,7 +501,7 @@ describe("Quick Operations routes - MU", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "MU",
@@ -770,7 +770,7 @@ describe("Quick Operations routes - RI", () => {
   });
 
   it("enforces the invoices.view permission for RI", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -784,7 +784,7 @@ describe("Quick Operations routes - RI", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "RI",
@@ -961,7 +961,7 @@ describe("Quick Operations routes - RF", () => {
   });
 
   it("enforces the payments.manage permission for RF", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -973,7 +973,7 @@ describe("Quick Operations routes - RF", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "RF",
@@ -1103,7 +1103,7 @@ describe("Quick Operations routes - inventory", () => {
 
 describe("Quick Operations routes - SOS", () => {
   beforeEach(() => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -1188,11 +1188,13 @@ describe("Quick Operations routes - SOS", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "SOS",
-        input: {},
+        input: {
+          pendingOfflineOperationCount: 0,
+        },
         confirmed: true,
       });
 
@@ -1316,11 +1318,11 @@ describe("Quick Operations routes - SO", () => {
       allowed: false,
     } as never);
 
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "SO",
@@ -1459,7 +1461,7 @@ describe("Quick Operations routes - SC", () => {
   });
 
   it("enforces the customers.view permission for SC", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-customers-view",
@@ -1473,7 +1475,7 @@ describe("Quick Operations routes - SC", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "SC",
@@ -1712,7 +1714,7 @@ describe("Quick Operations routes - TC", () => {
   });
 
   it("enforces the customers.update permission for TC", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -1726,7 +1728,7 @@ describe("Quick Operations routes - TC", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "TC",
@@ -1917,7 +1919,7 @@ describe("Quick Operations routes - MA", () => {
   });
 
   it("enforces the customers.update permission for MA", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
       id: "permission-1",
@@ -1931,7 +1933,7 @@ describe("Quick Operations routes - MA", () => {
 
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         code: "MA",

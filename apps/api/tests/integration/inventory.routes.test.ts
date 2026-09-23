@@ -173,30 +173,17 @@ describe("Inventory routes - permissions", () => {
     expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
   });
 
-  it("rejects BUSINESS_OWNER when inventory.view is denied", async () => {
-    findPermission.mockResolvedValueOnce({
-      id: "permission-inventory.view",
-      code: "inventory.view",
-      module: "inventory",
-      action: "view",
-      description: "View inventory",
-      createdAt: new Date(),
-    } as never);
-    findUserOverride.mockResolvedValueOnce({
-      id: "override-2",
-      businessId: "biz-A",
-      userId: "user-1",
-      permissionId: "permission-inventory.view",
-      allowed: false,
-    } as never);
+  it("allows BUSINESS_OWNER to view inventory despite stored permission restrictions", async () => {
+    inventoryItemFindMany.mockResolvedValue([] as never);
+    inventoryItemCount.mockResolvedValue(0);
 
     const res = await request(app)
       .get("/api/v1/inventory")
       .set("Authorization", `Bearer ${OWNER_A}`);
 
-    expect(res.status).toBe(403);
-    expect(inventoryItemFindMany).not.toHaveBeenCalled();
-    expect(inventoryItemCount).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(inventoryItemFindMany).toHaveBeenCalled();
+    expect(inventoryItemCount).toHaveBeenCalled();
   });
 
   it("rejects BRANCH_MANAGER when inventory.manage is denied", async () => {

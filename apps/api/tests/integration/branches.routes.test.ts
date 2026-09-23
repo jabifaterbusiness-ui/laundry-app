@@ -154,7 +154,7 @@ describe("Branches routes - permission enforcement", () => {
 
     const response = await request(app)
       .post("/api/v1/branches")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .send({ name: "Blocked Branch" });
 
     expect(response.status).toBe(403);

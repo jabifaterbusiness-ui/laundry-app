@@ -365,8 +365,8 @@ describe("Orders routes - permission enforcement", () => {
     expect(res.status).toBe(403);
   });
 
-  it("rejects BUSINESS_OWNER when orders.view is explicitly denied", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+  it("rejects STAFF when orders.view is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     findRoleOverride.mockResolvedValue({
       allowed: false,
@@ -374,7 +374,7 @@ describe("Orders routes - permission enforcement", () => {
 
     const res = await request(app)
       .get("/api/v1/orders")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);

@@ -16,6 +16,13 @@ export async function hasPermission(
     return true;
   }
 
+  if (role === "BUSINESS_OWNER") {
+    return (
+      Boolean(businessId) &&
+      PERMISSIONS.some((permission) => permission.code === permissionCode)
+    );
+  }
+
   if (!businessId) {
     return false;
   }
@@ -69,6 +76,12 @@ export async function getEffectivePermissionCodes(
 ): Promise<string[]> {
   if (role === "PLATFORM_ADMIN") {
     return PERMISSIONS.map((permission) => permission.code);
+  }
+
+  if (role === "BUSINESS_OWNER") {
+    return businessId
+      ? PERMISSIONS.map((permission) => permission.code)
+      : [];
   }
 
   if (!businessId) {
@@ -208,16 +221,26 @@ export async function getRolePermissions(
     ]),
   );
 
-  return PERMISSIONS.map((permission) => ({
-    ...permission,
-    source: overrideMap.has(permission.code)
-      ? "business_role_override"
-      : "default",
-    allowed:
-      overrideMap.get(permission.code) ??
-      DEFAULT_ROLE_PERMISSIONS[role]?.includes(permission.code) ??
-      false,
-  }));
+  return PERMISSIONS.map((permission) => {
+    if (role === "BUSINESS_OWNER") {
+      return {
+        ...permission,
+        source: "default" as const,
+        allowed: true,
+      };
+    }
+
+    return {
+      ...permission,
+      source: overrideMap.has(permission.code)
+        ? "business_role_override"
+        : "default",
+      allowed:
+        overrideMap.get(permission.code) ??
+        DEFAULT_ROLE_PERMISSIONS[role]?.includes(permission.code) ??
+        false,
+    };
+  });
 }
 
 export async function getUserPermissions(
@@ -289,6 +312,14 @@ export async function getUserPermissions(
       isActive: user.isActive,
     },
     permissions: PERMISSIONS.map((permission) => {
+      if (user.role === "BUSINESS_OWNER") {
+        return {
+          ...permission,
+          source: "default" as const,
+          allowed: true,
+        };
+      }
+
       let source: "user_override" | "business_role_override" | "default";
       let allowed: boolean;
 
@@ -343,6 +374,13 @@ export async function upsertBusinessRolePermission(
 ) {
   if (role === "PLATFORM_ADMIN") {
     throw new AppError("PLATFORM_ADMIN permissions cannot be configured at business level", 400);
+  }
+
+  if (role === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted at business level",
+      400,
+    );
   }
 
   const permission = getPermissionDefinition(permissionCode);
@@ -400,6 +438,13 @@ export async function removeBusinessRolePermission(
     throw new AppError("PLATFORM_ADMIN permissions cannot be configured at business level", 400);
   }
 
+  if (role === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted at business level",
+      400,
+    );
+  }
+
   const permission = getPermissionDefinition(permissionCode);
 
   const result = await prisma.businessRolePermission.deleteMany({
@@ -425,7 +470,14 @@ export async function upsertUserPermissionOverride(
   permissionCode: string,
   allowed: boolean,
 ) {
-  await requireBusinessUser(userId, businessId);
+  const user = await requireBusinessUser(userId, businessId);
+
+  if (user.role === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted",
+      400,
+    );
+  }
 
   const permission = getPermissionDefinition(permissionCode);
 
@@ -477,7 +529,14 @@ export async function removeUserPermissionOverride(
   userId: string,
   permissionCode: string,
 ) {
-  await requireBusinessUser(userId, businessId);
+  const user = await requireBusinessUser(userId, businessId);
+
+  if (user.role === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted",
+      400,
+    );
+  }
 
   const permission = getPermissionDefinition(permissionCode);
 

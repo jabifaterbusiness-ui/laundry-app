@@ -112,7 +112,7 @@ describe("Services routes - tenant isolation", () => {
 
     const res = await request(app)
       .get("/api/v1/services?status=all")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`);
 
     expect(res.status).toBe(200);
     expect(findMany).toHaveBeenCalledWith({
@@ -207,14 +207,14 @@ describe("Services routes - permission enforcement", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("rejects a BUSINESS_OWNER when services.view is explicitly denied", async () => {
+  it("rejects STAFF when services.view is explicitly denied", async () => {
     findRoleOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
     const res = await request(app)
       .get("/api/v1/services")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`);
 
     expect(res.status).toBe(403);
     expect(findMany).not.toHaveBeenCalled();

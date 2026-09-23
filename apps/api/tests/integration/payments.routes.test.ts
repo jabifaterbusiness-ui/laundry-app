@@ -347,7 +347,7 @@ describe("Payments routes - permission enforcement", () => {
   });
 
   it("denies payment void when payments.manage is explicitly denied", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     findUserOverride.mockResolvedValue({
       allowed: false,
@@ -355,7 +355,7 @@ describe("Payments routes - permission enforcement", () => {
 
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);

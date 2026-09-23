@@ -256,7 +256,7 @@ describe("permissions routes", () => {
 
       const response = await request(app)
         .put("/api/v1/permissions/roles/STAFF/payroll.approve")
-        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("Authorization", `Bearer ${STAFF_A}`)
         .send({ allowed: true });
 
       expect(response.status).toBe(403);

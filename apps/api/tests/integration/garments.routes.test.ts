@@ -396,14 +396,14 @@ describe("Garments routes - permission enforcement", () => {
     expect(garmentCreateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects BUSINESS_OWNER when garments.view is explicitly denied", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+  it("rejects STAFF when garments.view is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     findRoleOverride.mockResolvedValue({ allowed: false } as never);
 
     const res = await request(app)
       .get("/api/v1/garments")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);

@@ -343,14 +343,14 @@ describe("Invoices routes - permission enforcement", () => {
     expect(invoiceCreate).not.toHaveBeenCalled();
   });
 
-  it("rejects BUSINESS_OWNER when invoices.view is explicitly denied", async () => {
-    allowBranch("user-1", BRANCH_A, "biz-A");
+  it("rejects STAFF when invoices.view is explicitly denied", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     findRoleOverride.mockResolvedValue({ allowed: false } as never);
 
     const res = await request(app)
       .get("/api/v1/invoices")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);

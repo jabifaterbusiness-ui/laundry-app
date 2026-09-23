@@ -115,7 +115,7 @@ describe("Businesses routes - granular permission enforcement", () => {
 
     const response = await request(app)
       .get("/api/v1/businesses/branding")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`);
 
     expect(response.status).toBe(403);
     expect(getBranding).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe("Businesses routes - granular permission enforcement", () => {
 
     const response = await request(app)
       .patch("/api/v1/businesses/branding")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
       .send({
         name: "Blocked Update",
       });
