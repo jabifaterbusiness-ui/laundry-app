@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as financeApi from "../../../src/lib/finance-api.js";
+import * as usersApi from "../../../src/lib/users-api.js";
 import { FinancePage } from "../../../src/pages/finance/FinancePage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 
@@ -21,10 +22,87 @@ vi.mock("../../../src/lib/finance-api.js", async () => {
     rejectExpense: vi.fn(),
     recognizeExpense: vi.fn(),
     voidExpense: vi.fn(),
+    getFinancialStatementConfig: vi.fn(),
+    updateFinancialStatementConfig: vi.fn(),
+    listFinancialStatementRecipients: vi.fn(),
+    createFinancialStatementRecipient: vi.fn(),
+    updateFinancialStatementRecipient: vi.fn(),
+    removeFinancialStatementRecipient: vi.fn(),
+  };
+});
+
+vi.mock("../../../src/lib/users-api.js", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../../src/lib/users-api.js")
+  >("../../../src/lib/users-api.js");
+
+  return {
+    ...actual,
+    listUsers: vi.fn(),
   };
 });
 
 const mockedFinanceApi = vi.mocked(financeApi);
+const mockedUsersApi = vi.mocked(usersApi);
+
+const deliveryConfig = {
+  id: "config-1",
+  businessId: "business-1",
+  enabled: true,
+  dayOfMonth: 1,
+  hour: 8,
+  minute: 0,
+  emailEnabled: true,
+  whatsappEnabled: false,
+  createdAt: "2026-09-01T08:00:00.000Z",
+  updatedAt: "2026-09-01T08:00:00.000Z",
+};
+
+const ownerRecipient = {
+  id: "recipient-owner",
+  businessId: "business-1",
+  userId: "user-1",
+  whatsappNumber: null,
+  enabled: true,
+  createdAt: "2026-09-01T08:00:00.000Z",
+  updatedAt: "2026-09-01T08:00:00.000Z",
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    fullName: "Business Owner",
+    role: "BUSINESS_OWNER",
+    isActive: true,
+  },
+};
+
+const managerUser = {
+  id: "user-2",
+  email: "manager@example.com",
+  fullName: "Branch Manager",
+  role: "BRANCH_MANAGER",
+  isActive: true,
+  businessId: "business-1",
+  createdAt: "2026-09-01T08:00:00.000Z",
+  updatedAt: "2026-09-01T08:00:00.000Z",
+  branches: [],
+};
+
+const managerRecipient = {
+  id: "recipient-manager",
+  businessId: "business-1",
+  userId: "user-2",
+  whatsappNumber: "+2348012345678",
+  enabled: true,
+  createdAt: "2026-09-02T08:00:00.000Z",
+  updatedAt: "2026-09-02T08:00:00.000Z",
+  user: {
+    id: "user-2",
+    email: "manager@example.com",
+    fullName: "Branch Manager",
+    role: "BRANCH_MANAGER",
+    isActive: true,
+  },
+};
 
 const statement = {
   period: {
@@ -143,6 +221,27 @@ beforeEach(() => {
     ...expense,
     status: "VOID",
   });
+
+  mockedFinanceApi.getFinancialStatementConfig.mockResolvedValue(
+    deliveryConfig,
+  );
+  mockedFinanceApi.updateFinancialStatementConfig.mockResolvedValue(
+    deliveryConfig,
+  );
+  mockedFinanceApi.listFinancialStatementRecipients.mockResolvedValue([
+    ownerRecipient,
+  ]);
+  mockedFinanceApi.createFinancialStatementRecipient.mockResolvedValue(
+    managerRecipient,
+  );
+  mockedFinanceApi.updateFinancialStatementRecipient.mockResolvedValue(
+    managerRecipient,
+  );
+  mockedFinanceApi.removeFinancialStatementRecipient.mockResolvedValue(
+    managerRecipient,
+  );
+
+  mockedUsersApi.listUsers.mockResolvedValue([managerUser]);
 });
 
 describe("FinancePage", () => {
@@ -293,4 +392,327 @@ describe("FinancePage", () => {
 
     confirmSpy.mockRestore();
   });
+
+  it("renders financial statement delivery settings and recipients", async () => {
+    renderPage([
+      "reports.view",
+      "expenses.view",
+    ]);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Automatic financial statement delivery",
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("checkbox", {
+      name: "Automatically send the monthly financial statement",
+    }),
+    ).toBeChecked();
+
+    expect(
+      await screen.findByRole("checkbox", {
+      name: "Email",
+    }),
+    ).toBeChecked();
+
+    expect(
+      await screen.findByRole("checkbox", {
+      name: "WhatsApp",
+    }),
+    ).not.toBeChecked();
+
+    const ownerRow = screen.getByRole("row", {
+      name: /Business Owner.*owner@example\.com.*Business Owner.*Enabled/,
+    });
+
+    expect(ownerRow).toBeInTheDocument();
+    expect(within(ownerRow).getByText("owner@example.com")).toBeInTheDocument();
+  });
+
+  it("saves financial statement delivery settings with the selected schedule and channels", async () => {
+    const user = userEvent.setup();
+
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    await screen.findByRole("heading", {
+      name: "Automatic financial statement delivery",
+    });
+
+    const deliverySection = screen
+      .getByRole("heading", {
+        name: "Automatic financial statement delivery",
+      })
+      .closest("section");
+
+    expect(deliverySection).not.toBeNull();
+
+    const section = deliverySection as HTMLElement;
+
+    const dayInput = await within(section).findByLabelText("Day of month");
+    const hourInput = await within(section).findByLabelText("Hour");
+    const minuteInput = await within(section).findByLabelText("Minute");
+
+    await user.clear(dayInput);
+    await user.type(dayInput, "15");
+
+    await user.clear(hourInput);
+    await user.type(hourInput, "9");
+
+    await user.clear(minuteInput);
+    await user.type(minuteInput, "30");
+
+    await user.click(await within(section).findByRole("checkbox", {
+      name: "WhatsApp",
+    }));
+
+    await user.click(
+      within(section).getByRole("button", {
+        name: "Save delivery settings",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        mockedFinanceApi.updateFinancialStatementConfig,
+      ).toHaveBeenCalledWith(
+        {
+          enabled: true,
+          dayOfMonth: 15,
+          hour: 9,
+          minute: 30,
+          emailEnabled: true,
+          whatsappEnabled: true,
+        },
+        { accessToken: "token" },
+      );
+    });
+  });
+
+  it("blocks saving enabled delivery when no channel is selected", async () => {
+    const user = userEvent.setup();
+
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    await screen.findByRole("heading", {
+      name: "Automatic financial statement delivery",
+    });
+
+    const deliverySection = screen
+      .getByRole("heading", {
+        name: "Automatic financial statement delivery",
+      })
+      .closest("section");
+
+    expect(deliverySection).not.toBeNull();
+
+    const section = deliverySection as HTMLElement;
+
+    await user.click(await within(section).findByRole("checkbox", {
+      name: "Email",
+    }));
+
+    await user.click(
+      within(section).getByRole("button", {
+        name: "Save delivery settings",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "At least one delivery channel must be enabled when statements are enabled.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      mockedFinanceApi.updateFinancialStatementConfig,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("adds an authorized recipient with a WhatsApp number", async () => {
+    const user = userEvent.setup();
+
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    await screen.findByRole("heading", {
+      name: "Automatic financial statement delivery",
+    });
+
+    const recipientSection = screen
+      .getByRole("heading", {
+        name: "Authorized recipients",
+      })
+      .closest("section");
+
+    expect(recipientSection).not.toBeNull();
+
+    const section = recipientSection as HTMLElement;
+
+    await user.selectOptions(
+      await within(section).findByRole("combobox"),
+      "user-2",
+    );
+
+    await user.type(
+      within(section).getByLabelText("WhatsApp number"),
+      "+2348012345678",
+    );
+
+    await user.click(
+      within(section).getByRole("button", {
+        name: "Add recipient",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        mockedFinanceApi.createFinancialStatementRecipient,
+      ).toHaveBeenCalledWith(
+        {
+          userId: "user-2",
+          whatsappNumber: "+2348012345678",
+        },
+        { accessToken: "token" },
+      );
+    });
+  });
+
+  it("hides delivery management controls without reports.manage", async () => {
+    renderPage([
+      "reports.view",
+      "expenses.view",
+    ]);
+
+    await screen.findByRole("heading", {
+      name: "Automatic financial statement delivery",
+    });
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Save delivery settings",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Add recipient",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", {
+        name: /Disable|Enable|Remove/,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the active Business Owner recipient protected", async () => {
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    const row = await screen.findByRole("row", {
+      name: /Business Owner.*owner@example\.com.*Business Owner.*Enabled/,
+    });
+
+    const disableButton = within(row).queryByRole("button", {
+      name: /Disable|Enable/,
+    });
+    const removeButton = within(row).queryByRole("button", {
+      name: "Remove",
+    });
+
+    expect(disableButton).toBeDisabled();
+    expect(removeButton).toBeDisabled();
+
+    expect(
+      screen.getByText(
+        "Business Owner must remain a recipient",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      mockedFinanceApi.updateFinancialStatementRecipient,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      mockedFinanceApi.removeFinancialStatementRecipient,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("allows management to disable and remove a non-owner recipient", async () => {
+    const user = userEvent.setup();
+
+    mockedFinanceApi.listFinancialStatementRecipients.mockResolvedValue([
+      ownerRecipient,
+      managerRecipient,
+    ]);
+
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    const managerRow = await screen.findByRole("row", {
+      name: /Branch Manager.*manager@example\.com.*Branch Manager.*\+2348012345678.*Enabled/,
+    });
+
+    expect(managerRow).not.toBeNull();
+
+    const row = managerRow as HTMLElement;
+
+    await user.click(
+      within(row).getByRole("button", {
+        name: "Disable",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        mockedFinanceApi.updateFinancialStatementRecipient,
+      ).toHaveBeenCalledWith(
+        "recipient-manager",
+        { enabled: false },
+        { accessToken: "token" },
+      );
+    });
+
+    const confirmSpy = vi
+      .spyOn(window, "confirm")
+      .mockReturnValue(true);
+
+    await user.click(
+      within(row).getByRole("button", {
+        name: "Remove",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        mockedFinanceApi.removeFinancialStatementRecipient,
+      ).toHaveBeenCalledWith(
+        "recipient-manager",
+        { accessToken: "token" },
+      );
+    });
+
+    confirmSpy.mockRestore();
+  });
+
 });

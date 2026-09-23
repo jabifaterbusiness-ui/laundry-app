@@ -256,3 +256,120 @@ export async function voidExpense(
     branchId,
   });
 }
+
+export interface FinancialStatementConfig {
+  id: string | null;
+  businessId: string;
+  enabled: boolean;
+  dayOfMonth: number;
+  hour: number;
+  minute: number;
+  emailEnabled: boolean;
+  whatsappEnabled: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface FinancialStatementRecipient {
+  id: string;
+  businessId: string;
+  userId: string;
+  whatsappNumber: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+    isActive: boolean;
+  };
+}
+
+const DELIVERY_BASE = "/reports/financial-statement-delivery";
+
+export function getFinancialStatementConfig(
+  auth: AuthOptions,
+): Promise<FinancialStatementConfig> {
+  return apiFetch<FinancialStatementConfig>(`${DELIVERY_BASE}/config`, {
+    accessToken: auth.accessToken,
+  });
+}
+
+export function updateFinancialStatementConfig(
+  input: {
+    enabled: boolean;
+    dayOfMonth: number;
+    hour: number;
+    minute: number;
+    emailEnabled: boolean;
+    whatsappEnabled: boolean;
+  },
+  auth: AuthOptions,
+): Promise<FinancialStatementConfig> {
+  return apiFetch<FinancialStatementConfig>(`${DELIVERY_BASE}/config`, {
+    method: "PUT",
+    accessToken: auth.accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export function listFinancialStatementRecipients(
+  auth: AuthOptions,
+): Promise<FinancialStatementRecipient[]> {
+  return apiFetch<FinancialStatementRecipient[]>(
+    `${DELIVERY_BASE}/recipients`,
+    {
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
+export function createFinancialStatementRecipient(
+  input: {
+    userId: string;
+    whatsappNumber?: string;
+  },
+  auth: AuthOptions,
+): Promise<FinancialStatementRecipient> {
+  return apiFetch<FinancialStatementRecipient>(
+    `${DELIVERY_BASE}/recipients`,
+    {
+      method: "POST",
+      accessToken: auth.accessToken,
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function updateFinancialStatementRecipient(
+  recipientId: string,
+  input: {
+    whatsappNumber?: string | null;
+    enabled?: boolean;
+  },
+  auth: AuthOptions,
+): Promise<FinancialStatementRecipient> {
+  return apiFetch<FinancialStatementRecipient>(
+    `${DELIVERY_BASE}/recipients/${recipientId}`,
+    {
+      method: "PATCH",
+      accessToken: auth.accessToken,
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function removeFinancialStatementRecipient(
+  recipientId: string,
+  auth: AuthOptions,
+): Promise<FinancialStatementRecipient> {
+  return apiFetch<FinancialStatementRecipient>(
+    `${DELIVERY_BASE}/recipients/${recipientId}`,
+    {
+      method: "DELETE",
+      accessToken: auth.accessToken,
+    },
+  );
+}

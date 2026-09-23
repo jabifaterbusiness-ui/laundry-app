@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EXPENSE_CATEGORIES,
@@ -11,8 +11,16 @@ import {
   recognizeExpense,
   rejectExpense,
   voidExpense,
+  getFinancialStatementConfig,
+  updateFinancialStatementConfig,
+  listFinancialStatementRecipients,
+  createFinancialStatementRecipient,
+  updateFinancialStatementRecipient,
+  removeFinancialStatementRecipient,
+  type FinancialStatementConfig,
 } from "../../lib/finance-api.js";
 import { hasPermission } from "../../lib/permissions.js";
+import { listUsers } from "../../lib/users-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 function dateInputValue(date: Date): string {
@@ -81,12 +89,26 @@ export function FinancePage() {
   const [note, setNote] = useState("");
   const [actionError, setActionError] = useState("");
 
+  const [deliveryEnabled, setDeliveryEnabled] = useState(true);
+  const [deliveryDay, setDeliveryDay] = useState("1");
+  const [deliveryHour, setDeliveryHour] = useState("8");
+  const [deliveryMinute, setDeliveryMinute] = useState("0");
+  const [deliveryEmailEnabled, setDeliveryEmailEnabled] = useState(true);
+  const [deliveryWhatsappEnabled, setDeliveryWhatsappEnabled] = useState(false);
+  const [deliveryMessage, setDeliveryMessage] = useState("");
+
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [selectedRecipientUserId, setSelectedRecipientUserId] = useState("");
+  const [recipientWhatsapp, setRecipientWhatsapp] = useState("");
+  const [recipientMessage, setRecipientMessage] = useState("");
+
   const canViewReports = hasPermission(user, "reports.view");
   const canViewExpenses = hasPermission(user, "expenses.view");
   const canCreateExpense = hasPermission(user, "expenses.manage");
   const canApproveExpense = hasPermission(user, "expenses.approve");
   const canRecognizeExpense = hasPermission(user, "expenses.recognize");
   const canVoidExpense = hasPermission(user, "expenses.void");
+  const canManageReports = hasPermission(user, "reports.manage");
 
   const statementQuery = useQuery({
     queryKey: ["finance", "statement", activeBranchId, from, to],
@@ -113,12 +135,171 @@ export function FinancePage() {
       ),
   });
 
+  const deliveryConfigQuery = useQuery({
+    queryKey: ["finance", "delivery-config"],
+    enabled: Boolean(accessToken && canViewReports),
+    queryFn: () => getFinancialStatementConfig({ accessToken }),
+  });
+
+  const deliveryRecipientsQuery = useQuery({
+    queryKey: ["finance", "delivery-recipients"],
+    enabled: Boolean(accessToken && canViewReports),
+    queryFn: () => listFinancialStatementRecipients({ accessToken }),
+  });
+
+  const recipientUsersQuery = useQuery({
+    queryKey: ["finance", "delivery-users", recipientSearch],
+    enabled: Boolean(accessToken && canManageReports),
+    queryFn: () =>
+      listUsers({
+        accessToken: accessToken as string,
+        status: "active",
+        search: recipientSearch,
+      }),
+  });
+
   const invalidateFinance = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["finance", "statement"] }),
       queryClient.invalidateQueries({ queryKey: ["finance", "expenses"] }),
     ]);
   };
+
+  const deliveryConfigMutation = useMutation({
+    mutationFn: () => {
+      if (
+        deliveryEnabled &&
+        !deliveryEmailEnabled &&
+        !deliveryWhatsappEnabled
+      ) {
+        throw new Error(
+          "At least one delivery channel must be enabled when statements are enabled.",
+        );
+      }
+
+      return updateFinancialStatementConfig(
+        {
+          enabled: deliveryEnabled,
+          dayOfMonth: Number(deliveryDay),
+          hour: Number(deliveryHour),
+          minute: Number(deliveryMinute),
+          emailEnabled: deliveryEmailEnabled,
+          whatsappEnabled: deliveryWhatsappEnabled,
+        },
+        { accessToken },
+      );
+    },
+    onSuccess: async (config: FinancialStatementConfig) => {
+      setDeliveryEnabled(config.enabled);
+      setDeliveryDay(String(config.dayOfMonth));
+      setDeliveryHour(String(config.hour));
+      setDeliveryMinute(String(config.minute));
+      setDeliveryEmailEnabled(config.emailEnabled);
+      setDeliveryWhatsappEnabled(config.whatsappEnabled);
+      setDeliveryMessage("Delivery settings saved.");
+      await queryClient.invalidateQueries({
+        queryKey: ["finance", "delivery-config"],
+      });
+    },
+    onError: (error) => {
+      setDeliveryMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to save delivery settings.",
+      );
+    },
+  });
+
+  const createRecipientMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedRecipientUserId) {
+        throw new Error("Select a user to add as a recipient.");
+      }
+
+      if (
+        recipientWhatsapp &&
+        !/^\+[1-9]\d{7,14}$/.test(recipientWhatsapp)
+      ) {
+        throw new Error(
+          "WhatsApp number must use E.164 format, for example +2348012345678.",
+        );
+      }
+
+      return createFinancialStatementRecipient(
+        {
+          userId: selectedRecipientUserId,
+          ...(recipientWhatsapp
+            ? { whatsappNumber: recipientWhatsapp }
+            : {}),
+        },
+        { accessToken },
+      );
+    },
+    onSuccess: async () => {
+      setSelectedRecipientUserId("");
+      setRecipientWhatsapp("");
+      setRecipientMessage("Recipient added.");
+      await queryClient.invalidateQueries({
+        queryKey: ["finance", "delivery-recipients"],
+      });
+    },
+    onError: (error) => {
+      setRecipientMessage(
+        error instanceof Error ? error.message : "Failed to add recipient.",
+      );
+    },
+  });
+
+  const updateRecipientMutation = useMutation({
+    mutationFn: ({
+      recipientId,
+      whatsappNumber,
+      enabled,
+    }: {
+      recipientId: string;
+      whatsappNumber?: string | null;
+      enabled?: boolean;
+    }) =>
+      updateFinancialStatementRecipient(
+        recipientId,
+        {
+          ...(whatsappNumber !== undefined ? { whatsappNumber } : {}),
+          ...(enabled !== undefined ? { enabled } : {}),
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      setRecipientMessage("Recipient updated.");
+      await queryClient.invalidateQueries({
+        queryKey: ["finance", "delivery-recipients"],
+      });
+    },
+    onError: (error) => {
+      setRecipientMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update recipient.",
+      );
+    },
+  });
+
+  const removeRecipientMutation = useMutation({
+    mutationFn: (recipientId: string) =>
+      removeFinancialStatementRecipient(recipientId, { accessToken }),
+    onSuccess: async () => {
+      setRecipientMessage("Recipient removed.");
+      await queryClient.invalidateQueries({
+        queryKey: ["finance", "delivery-recipients"],
+      });
+    },
+    onError: (error) => {
+      setRecipientMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to remove recipient.",
+      );
+    },
+  });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -169,6 +350,22 @@ export function FinancePage() {
 
   const statement = statementQuery.data;
   const expenses = expensesQuery.data ?? [];
+  const deliveryConfig = deliveryConfigQuery.data;
+  const deliveryRecipients = deliveryRecipientsQuery.data ?? [];
+  const recipientUsers = recipientUsersQuery.data ?? [];
+
+  useEffect(() => {
+    if (!deliveryConfig || deliveryConfigMutation.isPending) {
+      return;
+    }
+
+    setDeliveryEnabled(deliveryConfig.enabled);
+    setDeliveryDay(String(deliveryConfig.dayOfMonth));
+    setDeliveryHour(String(deliveryConfig.hour));
+    setDeliveryMinute(String(deliveryConfig.minute));
+    setDeliveryEmailEnabled(deliveryConfig.emailEnabled);
+    setDeliveryWhatsappEnabled(deliveryConfig.whatsappEnabled);
+  }, [deliveryConfig, deliveryConfigMutation.isPending]);
 
   if (!canViewReports && !canViewExpenses) {
     return (
@@ -285,6 +482,358 @@ export function FinancePage() {
               )}
             </tbody>
           </table>
+        </section>
+      )}
+
+      {canViewReports && (
+        <section aria-labelledby="financial-statement-delivery-heading">
+          <h2 id="financial-statement-delivery-heading">
+            Automatic financial statement delivery
+          </h2>
+
+          {deliveryConfigQuery.isLoading && (
+            <p>Loading delivery settings…</p>
+          )}
+
+          {deliveryConfigQuery.error instanceof Error && (
+            <p role="alert">{deliveryConfigQuery.error.message}</p>
+          )}
+
+          {deliveryConfig && (
+            <>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  if (
+                    deliveryEnabled &&
+                    !deliveryEmailEnabled &&
+                    !deliveryWhatsappEnabled
+                  ) {
+                    setDeliveryMessage(
+                      "At least one delivery channel must be enabled when statements are enabled.",
+                    );
+                    return;
+                  }
+
+                  const day = Number(deliveryDay);
+                  const hour = Number(deliveryHour);
+                  const minute = Number(deliveryMinute);
+
+                  if (
+                    !Number.isInteger(day) ||
+                    day < 1 ||
+                    day > 28 ||
+                    !Number.isInteger(hour) ||
+                    hour < 0 ||
+                    hour > 23 ||
+                    !Number.isInteger(minute) ||
+                    minute < 0 ||
+                    minute > 59
+                  ) {
+                    setDeliveryMessage(
+                      "Enter a valid schedule: day 1–28, hour 0–23, and minute 0–59.",
+                    );
+                    return;
+                  }
+
+                  deliveryConfigMutation.mutate();
+                }}
+              >
+                <p>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={deliveryEnabled}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDeliveryEnabled(event.target.checked)
+                      }
+                    />{" "}
+                    Automatically send the monthly financial statement
+                  </label>
+                </p>
+
+                <p>
+                  The statement is generated for the previous month and
+                  delivered to enabled recipients on the scheduled day.
+                </p>
+
+                <p>
+                  <label>
+                    Day of month{" "}
+                    <input
+                      type="number"
+                      min="1"
+                      max="28"
+                      value={deliveryDay}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDeliveryDay(event.target.value)
+                      }
+                    />
+                  </label>
+                </p>
+
+                <p>
+                  <label>
+                    Hour{" "}
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={deliveryHour}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDeliveryHour(event.target.value)
+                      }
+                    />
+                  </label>{" "}
+                  <label>
+                    Minute{" "}
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={deliveryMinute}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDeliveryMinute(event.target.value)
+                      }
+                    />
+                  </label>
+                </p>
+
+                <fieldset disabled={!canManageReports}>
+                  <legend>Delivery channels</legend>
+
+                  <p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={deliveryEmailEnabled}
+                        onChange={(event) =>
+                          setDeliveryEmailEnabled(event.target.checked)
+                        }
+                      />{" "}
+                      Email
+                    </label>
+                  </p>
+
+                  <p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={deliveryWhatsappEnabled}
+                        onChange={(event) =>
+                          setDeliveryWhatsappEnabled(event.target.checked)
+                        }
+                      />{" "}
+                      WhatsApp
+                    </label>
+                  </p>
+                </fieldset>
+
+                {canManageReports && (
+                  <button
+                    type="submit"
+                    disabled={deliveryConfigMutation.isPending}
+                  >
+                    {deliveryConfigMutation.isPending
+                      ? "Saving…"
+                      : "Save delivery settings"}
+                  </button>
+                )}
+              </form>
+
+              {deliveryMessage && <p role="status">{deliveryMessage}</p>}
+            </>
+          )}
+
+          <section aria-labelledby="financial-statement-recipients-heading">
+            <h3 id="financial-statement-recipients-heading">
+              Authorized recipients
+            </h3>
+
+            <p>
+              Only enabled recipients receive scheduled financial statements.
+              The active Business Owner must remain a recipient.
+            </p>
+
+            {canManageReports && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  createRecipientMutation.mutate();
+                }}
+              >
+                <p>
+                  <label>
+                    Search active users{" "}
+                    <input
+                      value={recipientSearch}
+                      onChange={(event) =>
+                        setRecipientSearch(event.target.value)
+                      }
+                      placeholder="Name or email"
+                    />
+                  </label>
+                </p>
+
+                <p>
+                  <label>
+                    Recipient{" "}
+                    <select
+                      value={selectedRecipientUserId}
+                      onChange={(event) =>
+                        setSelectedRecipientUserId(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select a user</option>
+                      {recipientUsers
+                        .filter(
+                          (candidate) =>
+                            !deliveryRecipients.some(
+                              (recipient) =>
+                                recipient.userId === candidate.id,
+                            ),
+                        )
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.fullName} — {candidate.email}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </p>
+
+                <p>
+                  <label>
+                    WhatsApp number{" "}
+                    <input
+                      value={recipientWhatsapp}
+                      onChange={(event) =>
+                        setRecipientWhatsapp(event.target.value)
+                      }
+                      placeholder="+2348012345678"
+                      inputMode="tel"
+                    />
+                  </label>
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={
+                    createRecipientMutation.isPending ||
+                    !selectedRecipientUserId
+                  }
+                >
+                  {createRecipientMutation.isPending
+                    ? "Adding…"
+                    : "Add recipient"}
+                </button>
+              </form>
+            )}
+
+            {recipientUsersQuery.isLoading && canManageReports && (
+              <p>Loading active users…</p>
+            )}
+
+            {deliveryRecipientsQuery.isLoading && (
+              <p>Loading recipients…</p>
+            )}
+
+            {deliveryRecipientsQuery.error instanceof Error && (
+              <p role="alert">{deliveryRecipientsQuery.error.message}</p>
+            )}
+
+            {deliveryRecipients.length === 0 ? (
+              <p>No financial statement recipients configured.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>WhatsApp</th>
+                    <th>Status</th>
+                    {canManageReports && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveryRecipients.map((recipient) => {
+                    const isActiveBusinessOwner =
+                      recipient.user.role === "BUSINESS_OWNER" &&
+                      recipient.user.isActive;
+
+                    return (
+                      <tr key={recipient.id}>
+                        <td>{recipient.user.fullName}</td>
+                        <td>{recipient.user.email}</td>
+                        <td>{label(recipient.user.role)}</td>
+                        <td>{recipient.whatsappNumber || "—"}</td>
+                        <td>
+                          {recipient.enabled ? "Enabled" : "Disabled"}
+                        </td>
+
+                        {canManageReports && (
+                          <td>
+                            <button
+                              type="button"
+                              disabled={
+                                updateRecipientMutation.isPending ||
+                                isActiveBusinessOwner
+                              }
+                              onClick={() =>
+                                updateRecipientMutation.mutate({
+                                  recipientId: recipient.id,
+                                  enabled: !recipient.enabled,
+                                })
+                              }
+                            >
+                              {recipient.enabled ? "Disable" : "Enable"}
+                            </button>{" "}
+
+                            <button
+                              type="button"
+                              disabled={
+                                removeRecipientMutation.isPending ||
+                                isActiveBusinessOwner
+                              }
+                              onClick={() => {
+                                const confirmed = window.confirm(
+                                  `Remove ${recipient.user.fullName} as a financial statement recipient?`,
+                                );
+
+                                if (!confirmed) {
+                                  return;
+                                }
+
+                                removeRecipientMutation.mutate(recipient.id);
+                              }}
+                            >
+                              Remove
+                            </button>
+
+                            {isActiveBusinessOwner && (
+                              <span>
+                                {" "}
+                                Business Owner must remain a recipient
+                              </span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {recipientMessage && <p role="status">{recipientMessage}</p>}
+          </section>
         </section>
       )}
 
