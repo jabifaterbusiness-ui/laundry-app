@@ -231,6 +231,21 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
+              {hasPermission(user, "reports.view") ? (
+                <Link
+                  to="/reports"
+                  className={`nav-item ${
+                    isActive("/reports") ? "active" : ""
+                  }`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">
+                    ▥
+                  </span>
+                  <span>Reports</span>
+                </Link>
+              ) : null}
+
               {user?.role === "BUSINESS_OWNER" ? (
                 <Link
                   to="/subscription"

@@ -397,6 +397,17 @@ export function DashboardPage() {
                   <b>Open workspace →</b>
                 </Link>
               ) : null}
+
+              {canViewReports ? (
+                <Link className="dashboard-workspace-card" to="/reports">
+                  <span className="dashboard-workspace-icon">▥</span>
+                  <div>
+                    <strong>Reports</strong>
+                    <span>View financial, collection, outstanding and annual reports.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
             </div>
           </section>
         </>
