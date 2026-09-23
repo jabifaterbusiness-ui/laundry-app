@@ -18,18 +18,108 @@ const report = {
   invoices: {
     total: 10,
     totalAmount: 125000,
+    collectedAmount: 90000,
     outstandingAmount: 35000,
+    collectionRate: 72,
+    collectionStatement: [
+      {
+        invoiceId: "invoice-1",
+        invoiceNumber: "INV-000001",
+        amount: 125000,
+        collected: 90000,
+        outstanding: 35000,
+        date: "2026-09-02T00:00:00.000Z",
+        status: "ISSUED",
+      },
+    ],
+    outstandingByYearMonth: {
+      "2026": {
+        September: {
+          invoiceCount: 1,
+          outstandingAmount: 35000,
+          invoices: [
+            {
+              invoiceId: "invoice-1",
+              invoiceNumber: "INV-000001",
+              amount: 125000,
+              outstanding: 35000,
+              date: "2026-09-02T00:00:00.000Z",
+            },
+          ],
+        },
+      },
+    },
   },
   payments: {
     received: 90000,
     refunded: 5000,
     netReceived: 85000,
   },
+  pickup: {
+    pickedUpCount: 8,
+    unpickedCount: 4,
+    totalGarments: 12,
+  },
   customers: { active: 24 },
+  managementInsights: [
+    "Outstanding customer balances total ₦35,000.",
+    "4 garments remain unpicked.",
+    "Collection performance is 72.0%.",
+  ],
   inventory: {
     stockItems: 8,
     movements: 17,
   },
+};
+
+const annualReport = {
+  period: {
+    year: 2026,
+    from: "2026-01-01T00:00:00.000Z",
+    to: "2026-12-31T23:59:59.999Z",
+  },
+  currencyCode: "NGN",
+  revenue: {
+    grossInvoiced: 1000000,
+    refunds: 50000,
+    netRevenue: 950000,
+  },
+  expenses: {
+    explicit: 200000,
+    salary: 300000,
+    total: 500000,
+    byCategory: {
+      RENT: 200000,
+      SALARY: 300000,
+    },
+  },
+  profitOrLoss: {
+    amount: 450000,
+    type: "PROFIT" as const,
+  },
+  collection: {
+    annualInvoiceCount: 10,
+    annualInvoiceAmount: 1000000,
+    annualCollectedAmount: 800000,
+    annualOutstandingAmount: 200000,
+    collectionRate: 80,
+    yearEndOutstandingAmount: 200000,
+  },
+  outstandingByYearMonth: {},
+  monthlyTrend: [
+    {
+      month: "January",
+      grossRevenue: 100000,
+      refunds: 5000,
+      netRevenue: 95000,
+      explicitExpenses: 20000,
+      salaryExpense: 30000,
+      totalExpenses: 50000,
+      profitOrLoss: 45000,
+    },
+  ],
+  branchSummary: {},
+  managementInsights: ["Collection performance was 80.0%."],
 };
 
 function renderPage() {
@@ -72,6 +162,7 @@ describe("ReportsPage", () => {
     });
 
     vi.mocked(reportsApi.getDashboardReport).mockResolvedValue(report);
+    vi.mocked(reportsApi.getAnnualReport).mockResolvedValue(annualReport);
   });
 
   it("loads and displays the dashboard report", async () => {
@@ -80,13 +171,46 @@ describe("ReportsPage", () => {
     expect(await screen.findByText("Total orders: 12")).toBeInTheDocument();
     expect(screen.getByText("Total invoices: 10")).toBeInTheDocument();
     expect(screen.getByText("Invoiced: ₦125,000")).toBeInTheDocument();
-    expect(screen.getByText("Outstanding: ₦35,000")).toBeInTheDocument();
+    expect(screen.getAllByText("Outstanding: ₦35,000")).toHaveLength(2);
     expect(screen.getByText("Received: ₦90,000")).toBeInTheDocument();
     expect(screen.getByText("Refunded: ₦5,000")).toBeInTheDocument();
     expect(screen.getByText("Net received: ₦85,000")).toBeInTheDocument();
     expect(screen.getByText("Active customers: 24")).toBeInTheDocument();
     expect(screen.getByText("Stock items: 8")).toBeInTheDocument();
     expect(screen.getByText("Movements: 17")).toBeInTheDocument();
+  });
+
+  it("loads and displays the annual financial report", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByText("Annual Financial Report"),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText("Gross revenue: ₦1,000,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Collected: ₦800,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Collection rate: 80.0%"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Year-end outstanding: ₦200,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Collection performance was 80.0%."),
+    ).toBeInTheDocument();
+
+    expect(reportsApi.getAnnualReport).toHaveBeenCalledWith(
+      new Date().getFullYear(),
+      { accessToken: "test-token" },
+    );
   });
 
   it("applies a selected date range", async () => {

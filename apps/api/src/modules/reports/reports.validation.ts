@@ -12,3 +12,8 @@ export const reportDateRangeSchema = z.object({
 );
 
 export type ReportDateRange = z.infer<typeof reportDateRangeSchema>;
+
+
+export const annualReportYearSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+});

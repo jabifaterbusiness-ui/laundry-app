@@ -41,7 +41,37 @@ const report = {
   invoices: {
     total: 100,
     totalAmount: 1000000,
+    collectedAmount: 700000,
     outstandingAmount: 300000,
+    collectionRate: 70,
+    collectionStatement: [
+      {
+        invoiceId: "invoice-1",
+        invoiceNumber: "INV-000001",
+        amount: 1000000,
+        collected: 700000,
+        outstanding: 300000,
+        date: "2026-09-02T00:00:00.000Z",
+        status: "ISSUED",
+      },
+    ],
+    outstandingByYearMonth: {
+      "2026": {
+        September: {
+          invoiceCount: 1,
+          outstandingAmount: 300000,
+          invoices: [
+            {
+              invoiceId: "invoice-1",
+              invoiceNumber: "INV-000001",
+              amount: 1000000,
+              outstanding: 300000,
+              date: "2026-09-02T00:00:00.000Z",
+            },
+          ],
+        },
+      },
+    },
   },
   payments: {
     received: 700000,
@@ -53,6 +83,12 @@ const report = {
     stockItems: 31,
     movements: 76,
   },
+  pickup: {
+    pickedUpCount: 70,
+    unpickedCount: 30,
+    totalGarments: 100,
+  },
+  managementInsights: [],
 };
 
 function renderDashboard() {

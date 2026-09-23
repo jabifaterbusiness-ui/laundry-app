@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
-import { getDashboardReport } from "../../lib/reports-api.js";
+import { getAnnualReport, getDashboardReport } from "../../lib/reports-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -33,6 +33,7 @@ export function ReportsPage() {
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const canViewReports = hasPermission(user, "reports.view");
 
+  const [annualYear, setAnnualYear] = useState(String(new Date().getFullYear()));
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
   const [appliedRange, setAppliedRange] = useState<{
@@ -41,6 +42,16 @@ export function ReportsPage() {
   }>({
     from: getFirstDayOfMonth(),
     to: getToday(),
+  });
+
+  const annualReportQuery = useQuery({
+    queryKey: ["reports", "annual", annualYear],
+    queryFn: () => getAnnualReport(Number(annualYear), { accessToken }),
+    enabled: Boolean(
+      accessToken &&
+        canViewReports &&
+        /^\d{4}$/.test(annualYear),
+    ),
   });
 
   const reportQuery = useQuery({
@@ -134,6 +145,141 @@ export function ReportsPage() {
         </section>
       )}
 
+      <section aria-labelledby="annual-report-heading">
+        <h2 id="annual-report-heading">Annual Financial Report</h2>
+
+        <label>
+          Year
+          <input
+            type="number"
+            min="2000"
+            max="2100"
+            value={annualYear}
+            onChange={(event) => setAnnualYear(event.target.value)}
+          />
+        </label>
+
+        {annualReportQuery.isLoading && <p>Loading annual report...</p>}
+
+        {annualReportQuery.isError && (
+          <p role="alert">
+            {annualReportQuery.error instanceof ApiError
+              ? annualReportQuery.error.message
+              : "Unable to load the annual report."}
+          </p>
+        )}
+
+        {annualReportQuery.data && (
+          <>
+            <p>
+              {annualReportQuery.data.period.year} business-wide financial
+              report across all branches.
+            </p>
+
+            <h3>Annual financial summary</h3>
+            <p>
+              Gross revenue:{" "}
+              {formatMoney(annualReportQuery.data.revenue.grossInvoiced)}
+            </p>
+            <p>
+              Refunds: {formatMoney(annualReportQuery.data.revenue.refunds)}
+            </p>
+            <p>
+              Net revenue:{" "}
+              {formatMoney(annualReportQuery.data.revenue.netRevenue)}
+            </p>
+            <p>
+              Total expenses:{" "}
+              {formatMoney(annualReportQuery.data.expenses.total)}
+            </p>
+            <p>
+              Profit/Loss:{" "}
+              {formatMoney(annualReportQuery.data.profitOrLoss.amount)}
+            </p>
+
+            <h3>Annual collection</h3>
+            <p>
+              Invoices:{" "}
+              {annualReportQuery.data.collection.annualInvoiceCount.toLocaleString()}
+            </p>
+            <p>
+              Invoiced:{" "}
+              {formatMoney(
+                annualReportQuery.data.collection.annualInvoiceAmount,
+              )}
+            </p>
+            <p>
+              Collected:{" "}
+              {formatMoney(
+                annualReportQuery.data.collection.annualCollectedAmount,
+              )}
+            </p>
+            <p>
+              Collection rate:{" "}
+              {annualReportQuery.data.collection.collectionRate.toFixed(1)}%
+            </p>
+            <p>
+              Year-end outstanding:{" "}
+              {formatMoney(
+                annualReportQuery.data.collection.yearEndOutstandingAmount,
+              )}
+            </p>
+
+            <h3>Monthly financial trend</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Revenue</th>
+                  <th>Expenses</th>
+                  <th>Profit/Loss</th>
+                </tr>
+              </thead>
+              <tbody>
+                {annualReportQuery.data.monthlyTrend.map((month) => (
+                  <tr key={month.month}>
+                    <td>{month.month}</td>
+                    <td>{formatMoney(month.netRevenue)}</td>
+                    <td>{formatMoney(month.totalExpenses)}</td>
+                    <td>{formatMoney(month.profitOrLoss)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3>Outstanding invoices by Year → Month</h3>
+            {Object.entries(
+              annualReportQuery.data.outstandingByYearMonth,
+            ).map(([year, months]) => (
+              <div key={year}>
+                <h4>{year}</h4>
+                {Object.entries(months).map(([month, bucket]) => (
+                  <div key={month}>
+                    <strong>{month}</strong>: {bucket.invoiceCount} invoices —{" "}
+                    {formatMoney(bucket.outstandingAmount)}
+                    <ul>
+                      {bucket.invoices.map((invoice) => (
+                        <li key={invoice.invoiceId}>
+                          {invoice.invoiceNumber}:{" "}
+                          {formatMoney(invoice.outstanding)} outstanding
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            <h3>Management insights</h3>
+            <ul>
+              {annualReportQuery.data.managementInsights.map((insight) => (
+                <li key={insight}>{insight}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
       {report && (
         <>
           <p>
@@ -156,6 +302,32 @@ export function ReportsPage() {
               Outstanding:{" "}
               {formatMoney(report.invoices.outstandingAmount)}
             </p>
+          </section>
+
+          <section aria-labelledby="collection-report-heading">
+            <h2 id="collection-report-heading">Collection Statement</h2>
+            <p>Collected: {formatMoney(report.invoices.collectedAmount)}</p>
+            <p>Outstanding: {formatMoney(report.invoices.outstandingAmount)}</p>
+            <p>Collection rate: {report.invoices.collectionRate.toFixed(1)}%</p>
+            <p>Picked up garments: {report.pickup.pickedUpCount.toLocaleString()}</p>
+            <p>Unpicked garments: {report.pickup.unpickedCount.toLocaleString()}</p>
+
+            <h3>Outstanding by Year → Month</h3>
+            {Object.entries(report.invoices.outstandingByYearMonth).map(([year, months]) => (
+              <div key={year}>
+                <h4>{year}</h4>
+                {Object.entries(months).map(([month, bucket]) => (
+                  <div key={month}>
+                    <strong>{month}</strong>: {bucket.invoiceCount} invoices — {formatMoney(bucket.outstandingAmount)}
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            <h3>Management Advice / Attention Areas</h3>
+            <ul>
+              {report.managementInsights.map((insight) => <li key={insight}>{insight}</li>)}
+            </ul>
           </section>
 
           <section aria-labelledby="payments-report-heading">

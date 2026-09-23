@@ -6,7 +6,7 @@ import {
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
-import { dashboard, financialStatement } from "./reports.controller.js";
+import { dashboard, financialStatement, collectionStatement, annualReport } from "./reports.controller.js";
 
 export const reportsRouter = Router();
 
@@ -28,4 +28,18 @@ reportsRouter.get(
   requirePermission("reports.view"),
   asyncHandler(requireBranchContext),
   asyncHandler(financialStatement),
+);
+
+reportsRouter.get(
+  "/collection-statement",
+  requirePermission("reports.view"),
+  asyncHandler(requireBranchContext),
+  asyncHandler(collectionStatement),
+);
+
+
+reportsRouter.get(
+  "/annual",
+  requirePermission("reports.view"),
+  asyncHandler(annualReport),
 );

@@ -2,6 +2,47 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 
+vi.mock("../../src/modules/reports/annual-report.service.js", () => ({
+  getAnnualReport: vi.fn().mockResolvedValue({
+    period: {
+      year: 2026,
+      from: new Date("2026-01-01T00:00:00.000Z"),
+      to: new Date("2026-12-31T23:59:59.999Z"),
+    },
+    currencyCode: "NGN",
+    revenue: {
+      grossInvoiced: 1000000,
+      refunds: 50000,
+      netRevenue: 950000,
+    },
+    expenses: {
+      explicit: 200000,
+      salary: 300000,
+      total: 500000,
+      byCategory: {
+        RENT: 200000,
+        SALARY: 300000,
+      },
+    },
+    profitOrLoss: {
+      amount: 450000,
+      type: "PROFIT",
+    },
+    collection: {
+      annualInvoiceCount: 10,
+      annualInvoiceAmount: 1000000,
+      annualCollectedAmount: 800000,
+      annualOutstandingAmount: 200000,
+      collectionRate: 80,
+      yearEndOutstandingAmount: 200000,
+    },
+    outstandingByYearMonth: {},
+    monthlyTrend: [],
+    branchSummary: {},
+    managementInsights: ["Collection performance was 80.0%."],
+  }),
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     subscription: {
@@ -18,10 +59,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
     },
     invoice: {
-      count: vi.fn(),
-      aggregate: vi.fn(),
+      findMany: vi.fn(),
     },
     payment: {
+      findMany: vi.fn(),
       aggregate: vi.fn(),
     },
     customer: {
@@ -32,6 +73,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     inventoryMovement: {
       count: vi.fn(),
+    },
+    garment: {
+      findMany: vi.fn(),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -52,12 +96,13 @@ import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
 const orderCount = vi.mocked(prisma.order.count);
-const invoiceCount = vi.mocked(prisma.invoice.count);
-const invoiceAggregate = vi.mocked(prisma.invoice.aggregate);
+const invoiceFindMany = vi.mocked(prisma.invoice.findMany);
+const paymentFindMany = vi.mocked(prisma.payment.findMany);
 const paymentAggregate = vi.mocked(prisma.payment.aggregate);
 const customerCount = vi.mocked(prisma.customer.count);
 const inventoryStockCount = vi.mocked(prisma.inventoryStock.count);
 const inventoryMovementCount = vi.mocked(prisma.inventoryMovement.count);
+const garmentFindMany = vi.mocked(prisma.garment.findMany);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
@@ -83,7 +128,6 @@ function tokenFor(
 const OWNER_A = tokenFor("BUSINESS_OWNER", "biz-A");
 const STAFF_A = tokenFor("STAFF", "biz-A", "user-staff-a");
 const MANAGER_A = tokenFor("BRANCH_MANAGER", "biz-A", "user-mgr-a");
-const OWNER_B = tokenFor("BUSINESS_OWNER", "biz-B", "user-owner-b");
 const PLATFORM_ADMIN = tokenFor("PLATFORM_ADMIN", null, "user-admin");
 
 const BRANCH_A = "33333333-3333-3333-3333-333333333333";
@@ -109,28 +153,45 @@ function allowBranch(
 
 function mockReportData() {
   orderCount.mockResolvedValue(12);
-  invoiceCount.mockResolvedValue(10);
-  invoiceAggregate.mockResolvedValue({
-    _sum: {
+
+  invoiceFindMany.mockResolvedValue([
+    {
+      id: "invoice-1",
+      invoiceNumber: "000001",
       totalAmount: 500000,
+      createdAt: new Date("2026-09-05T10:00:00.000Z"),
+      status: "ISSUED",
+      orderId: "order-1",
+    },
+  ] as never);
+
+  paymentFindMany.mockResolvedValue([
+    {
+      invoiceId: "invoice-1",
+      amount: 350000,
+      type: "PAYMENT",
+    },
+  ] as never);
+
+  paymentAggregate.mockResolvedValue({
+    _sum: {
+      amount: 25000,
     },
   } as never);
-
-  paymentAggregate
-    .mockResolvedValueOnce({
-      _sum: {
-        amount: 350000,
-      },
-    } as never)
-    .mockResolvedValueOnce({
-      _sum: {
-        amount: 25000,
-      },
-    } as never);
 
   customerCount.mockResolvedValue(40);
   inventoryStockCount.mockResolvedValue(8);
   inventoryMovementCount.mockResolvedValue(20);
+
+  garmentFindMany.mockResolvedValue([
+    {
+      id: "garment-1",
+      status: "PICKED_UP",
+      orderId: "order-1",
+      pickedUpAt: new Date("2026-09-06T10:00:00.000Z"),
+      createdAt: new Date("2026-09-05T10:00:00.000Z"),
+    },
+  ] as never);
 }
 
 beforeEach(() => {
@@ -211,6 +272,35 @@ describe("Reports routes - branch context", () => {
   });
 });
 
+describe("Reports routes - annual report", () => {
+  it("BUSINESS_OWNER can access the business-wide annual report without branch context", async () => {
+    const res = await request(app)
+      .get("/api/v1/reports/annual?year=2026")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.period.year).toBe(2026);
+    expect(res.body.revenue.netRevenue).toBe(950000);
+    expect(res.body.collection.collectionRate).toBe(80);
+  });
+
+  it("STAFF cannot access the annual report without reports.view permission", async () => {
+    const res = await request(app)
+      .get("/api/v1/reports/annual?year=2026")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects an invalid annual report year", async () => {
+    const res = await request(app)
+      .get("/api/v1/reports/annual?year=abc")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(422);
+  });
+});
+
 describe("Reports routes - authorization", () => {
   it("STAFF cannot view reports without reports.view permission", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
@@ -268,15 +358,18 @@ describe("Reports routes - authorization", () => {
 });
 
 describe("Reports routes - filtering and isolation", () => {
-  it("passes the requested date range to the report service", async () => {
+  it("passes the requested date range to the current report queries", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
     mockReportData();
+
+    const from = new Date("2026-09-01T00:00:00.000Z");
+    const to = new Date("2026-09-07T23:59:59.999Z");
 
     const res = await request(app)
       .get("/api/v1/reports/dashboard")
       .query({
-        from: "2026-09-01T00:00:00.000Z",
-        to: "2026-09-07T23:59:59.999Z",
+        from: from.toISOString(),
+        to: to.toISOString(),
       })
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A);
@@ -288,14 +381,28 @@ describe("Reports routes - filtering and isolation", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         createdAt: {
-          gte: new Date("2026-09-01T00:00:00.000Z"),
-          lte: new Date("2026-09-07T23:59:59.999Z"),
+          gte: from,
+          lte: to,
         },
       },
     });
+
+    expect(invoiceFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          status: "ISSUED",
+          createdAt: {
+            gte: from,
+            lte: to,
+          },
+        },
+      }),
+    );
   });
 
-  it("keeps every report query scoped to the authenticated business and branch", async () => {
+  it("keeps report queries scoped to the authenticated business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
     mockReportData();
 
@@ -306,24 +413,37 @@ describe("Reports routes - filtering and isolation", () => {
 
     expect(res.status).toBe(200);
 
-    expect(invoiceCount).toHaveBeenCalledWith({
-      where: {
-        businessId: "biz-A",
-        branchId: BRANCH_A,
-      },
-    });
+    expect(invoiceFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          status: "ISSUED",
+        }),
+      }),
+    );
 
-    expect(paymentAggregate).toHaveBeenNthCalledWith(1, {
-      where: {
-        businessId: "biz-A",
-        branchId: BRANCH_A,
-        status: "POSTED",
-        type: "PAYMENT",
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+    expect(paymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          status: "POSTED",
+          invoiceId: { in: ["invoice-1"] },
+        }),
+      }),
+    );
+
+    expect(paymentAggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          status: "POSTED",
+          type: "REFUND",
+        }),
+      }),
+    );
 
     expect(inventoryMovementCount).toHaveBeenCalledWith({
       where: {
@@ -346,5 +466,37 @@ describe("Reports routes - filtering and isolation", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
+  });
+});
+
+describe("Reports routes - collection statement", () => {
+  it("allows an authorized user to access the collection statement", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    mockReportData();
+
+    const res = await request(app)
+      .get("/api/v1/reports/collection-statement")
+      .query({
+        from: "2026-09-01T00:00:00.000Z",
+        to: "2026-09-30T23:59:59.999Z",
+      })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.invoices).toBeDefined();
+    expect(res.body.pickup).toBeDefined();
+    expect(res.body.managementInsights).toBeDefined();
+  });
+
+  it("protects the collection statement with reports.view", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .get("/api/v1/reports/collection-statement")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
   });
 });

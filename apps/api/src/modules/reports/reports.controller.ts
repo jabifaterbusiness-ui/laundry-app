@@ -3,6 +3,8 @@ import { AppError } from "../../middleware/error-handler.js";
 import { reportDateRangeSchema } from "./reports.validation.js";
 import { getDashboardReport } from "./reports.service.js";
 import { getFinancialStatement } from "./financial-statement.service.js";
+import { getAnnualReport } from "./annual-report.service.js";
+import { annualReportYearSchema } from "./reports.validation.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -46,6 +48,27 @@ export async function dashboard(req: Request, res: Response) {
 }
 
 
+export async function collectionStatement(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const range = reportDateRangeSchema.parse(req.query);
+
+  const report = await getDashboardReport(
+    { businessId, branchId },
+    {
+      ...(range.from !== undefined ? { from: range.from } : {}),
+      ...(range.to !== undefined ? { to: range.to } : {}),
+    },
+  );
+
+  res.status(200).json({
+    period: report.period,
+    invoices: report.invoices,
+    pickup: report.pickup,
+    managementInsights: report.managementInsights,
+  });
+}
+
 export async function financialStatement(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
@@ -68,6 +91,19 @@ export async function financialStatement(req: Request, res: Response) {
       to: range.to,
     },
   );
+
+  res.status(200).json(report);
+}
+
+
+export async function annualReport(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const { year } = annualReportYearSchema.parse(req.query);
+
+  const report = await getAnnualReport({
+    businessId,
+    year,
+  });
 
   res.status(200).json(report);
 }
