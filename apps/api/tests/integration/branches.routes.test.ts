@@ -188,13 +188,55 @@ describe("Branches routes - authorization", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("rejects BRANCH_MANAGER from creating a branch", async () => {
+  it("allows BRANCH_MANAGER to create a branch with default permission", async () => {
+    create.mockResolvedValue({
+      id: "33333333-3333-4333-8333-333333333333",
+      businessId: "biz-A",
+      name: "Manager Branch",
+      address: "Abuja",
+      isActive: true,
+    } as never);
+
     const res = await request(app)
       .post("/api/v1/branches")
       .set("Authorization", `Bearer ${MANAGER_A}`)
-      .send({ name: "New Branch" });
-    expect(res.status).toBe(403);
-    expect(create).not.toHaveBeenCalled();
+      .send({ name: "Manager Branch", address: "Abuja" });
+
+    expect(res.status).toBe(201);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz-A",
+        name: "Manager Branch",
+        address: "Abuja",
+      }),
+    }));
+  });
+
+  it("allows STAFF to create a branch when branches.create is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    create.mockResolvedValue({
+      id: "77777777-7777-4777-8777-777777777777",
+      businessId: "biz-A",
+      name: "Granted Branch",
+      address: "Abuja",
+      isActive: true,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/branches")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ name: "Granted Branch", address: "Abuja" });
+
+    expect(res.status).toBe(201);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz-A",
+        name: "Granted Branch",
+      }),
+    }));
   });
 
   it("allows BUSINESS_OWNER to create a branch", async () => {
@@ -223,6 +265,29 @@ describe("Branches routes - authorization", () => {
 });
 
 describe("Branches routes - update and status", () => {
+  it("allows STAFF to update a branch when branches.update is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    updateMany.mockResolvedValue({ count: 1 } as never);
+    findFirst.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      name: "Granted Update",
+      address: "Abuja",
+      isActive: true,
+    } as never);
+
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ name: "Granted Update" });
+
+    expect(res.status).toBe(200);
+    expect(updateMany).toHaveBeenCalled();
+  });
+
   it("allows BUSINESS_OWNER to update a branch", async () => {
     updateMany.mockResolvedValue({ count: 1 } as never);
     findFirst.mockResolvedValue({
@@ -256,6 +321,30 @@ describe("Branches routes - update and status", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
+  it("allows STAFF to deactivate a branch when branches.deactivate is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    updateMany.mockResolvedValue({ count: 1 } as never);
+    findFirst.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      isActive: false,
+    } as never);
+
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222/deactivate")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { isActive: false },
+    }));
+  });
+
   it("allows BUSINESS_OWNER to deactivate a branch", async () => {
     updateMany.mockResolvedValue({ count: 1 } as never);
     findFirst.mockResolvedValue({
@@ -273,6 +362,30 @@ describe("Branches routes - update and status", () => {
     expect(res.status).toBe(200);
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: { isActive: false },
+    }));
+  });
+
+  it("allows STAFF to activate a branch when branches.activate is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    updateMany.mockResolvedValue({ count: 1 } as never);
+    findFirst.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      isActive: true,
+    } as never);
+
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222/activate")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { isActive: true },
     }));
   });
 
@@ -399,6 +512,41 @@ describe("Branches routes - user membership", () => {
     expect(userBranchFindMany).not.toHaveBeenCalled();
   });
 
+  it("allows STAFF to assign a user when branches.manage_users is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    findFirst.mockResolvedValue({
+      id: BRANCH_A,
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      isActive: true,
+    } as never);
+    userFindFirst.mockResolvedValue({
+      id: USER_A,
+      email: "staff@example.com",
+      fullName: "Staff User",
+      role: "STAFF",
+      isActive: true,
+      businessId: "biz-A",
+    } as never);
+    userBranchFindUnique.mockResolvedValue(null);
+    userBranchCreate.mockResolvedValue({
+      id: "88888888-8888-4888-8888-888888888888",
+      userId: USER_A,
+      branchId: BRANCH_A,
+    } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/branches/${BRANCH_A}/users/${USER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(201);
+    expect(userBranchCreate).toHaveBeenCalled();
+  });
+
   it("allows BUSINESS_OWNER to assign an active business user to a branch", async () => {
     findFirst.mockResolvedValue({
       id: BRANCH_A,
@@ -514,6 +662,28 @@ describe("Branches routes - membership edge cases", () => {
 describe("Branches routes - user removal", () => {
   const BRANCH_A = "33333333-3333-3333-3333-333333333333";
   const USER_A = "44444444-4444-4444-4444-444444444444";
+
+  it("allows STAFF to remove a user when branches.manage_users is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    findFirst.mockResolvedValue({
+      id: BRANCH_A,
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      isActive: true,
+    } as never);
+    userBranchDeleteMany.mockResolvedValue({ count: 1 } as never);
+
+    const res = await request(app)
+      .delete(`/api/v1/branches/${BRANCH_A}/users/${USER_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(204);
+    expect(userBranchDeleteMany).toHaveBeenCalled();
+  });
 
   it("allows BUSINESS_OWNER to remove a user from a branch", async () => {
     findFirst.mockResolvedValue({

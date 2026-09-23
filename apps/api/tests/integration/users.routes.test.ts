@@ -208,20 +208,89 @@ describe("Users routes - permissions", () => {
     expect(userCreate).not.toHaveBeenCalled();
   });
 
-  it("rejects BRANCH_MANAGER from creating users", async () => {
+  it("allows BRANCH_MANAGER to create users with default permission", async () => {
+    const user = {
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "manager-created@example.com",
+      fullName: "Manager Created Staff",
+      role: "STAFF",
+      isActive: true,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    userCreate.mockResolvedValue(user as never);
+    userFindFirst.mockResolvedValueOnce({
+      ...user,
+      branches: [],
+    } as never);
+
     const response = await request(app)
       .post("/api/v1/users")
       .set("Authorization", `Bearer ${MANAGER_A}`)
       .send({
-        fullName: "New Staff",
-        email: "new@example.com",
+        fullName: "Manager Created Staff",
+        email: "manager-created@example.com",
         password: "password123",
         role: "STAFF",
         branchIds: [],
       });
 
-    expect(response.status).toBe(403);
-    expect(userCreate).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(userCreate).toHaveBeenCalled();
+  });
+
+  it("allows STAFF to view users when users.view is explicitly granted", async () => {
+    vi.mocked(prisma.userPermissionOverride.findUnique).mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    userFindMany.mockResolvedValue([] as never);
+
+    const response = await request(app)
+      .get("/api/v1/users")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(response.status).toBe(200);
+    expect(userFindMany).toHaveBeenCalled();
+  });
+
+  it("allows STAFF to create users when users.create is explicitly granted", async () => {
+    vi.mocked(prisma.userPermissionOverride.findUnique).mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    const user = {
+      id: "77777777-7777-4777-8777-777777777777",
+      email: "granted@example.com",
+      fullName: "Granted Staff",
+      role: "STAFF",
+      isActive: true,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    userCreate.mockResolvedValue(user as never);
+    userFindFirst.mockResolvedValueOnce({
+      ...user,
+      branches: [],
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/users")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({
+        fullName: "Granted Staff",
+        email: "granted@example.com",
+        password: "password123",
+        role: "STAFF",
+        branchIds: [],
+      });
+
+    expect(response.status).toBe(201);
+    expect(userCreate).toHaveBeenCalled();
   });
 
   it("allows BUSINESS_OWNER to create users", async () => {
