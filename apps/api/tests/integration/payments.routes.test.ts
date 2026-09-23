@@ -295,7 +295,7 @@ describe("Payments routes - authorization", () => {
     expect(res.status).toBe(201);
   });
 
-  it("does not allow an unauthorized role to access payments", async () => {
+  it("allows PLATFORM_ADMIN to access payments through permissions", async () => {
     const token = tokenFor("PLATFORM_ADMIN", "biz-A", "user-platform");
 
     const res = await request(app)
@@ -303,7 +303,7 @@ describe("Payments routes - authorization", () => {
       .set("Authorization", `Bearer ${token}`)
       .set("X-Branch-Id", BRANCH_A);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -695,17 +695,29 @@ describe("Payment void route", () => {
     expect(res.body.status).toBe("VOID");
   });
 
-  it("STAFF cannot void a payment", async () => {
+  it("STAFF can void a payment when payments.manage is allowed", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    paymentFindFirst.mockResolvedValue(paymentFixture as never);
+
+    const voidedPayment = {
+      ...paymentFixture,
+      status: "VOID",
+    };
+
+    vi.mocked(prisma.payment.update).mockResolvedValue(
+      voidedPayment as never,
+    );
 
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
-    expect(res.status).toBe(403);
-    expect(paymentFindFirst).not.toHaveBeenCalled();
-    expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(PAYMENT_A);
+    expect(res.body.status).toBe("VOID");
+    expect(recordAuditEvent).toHaveBeenCalled();
   });
 
   it("cannot void a payment outside the authenticated business and branch", async () => {

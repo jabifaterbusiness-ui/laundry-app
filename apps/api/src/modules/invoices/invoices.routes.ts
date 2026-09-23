@@ -3,7 +3,6 @@ import {
   requireAuth,
   requireBusinessContext,
 } from "../auth/auth.middleware.js";
-import { requireRole } from "../../middleware/rbac.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
@@ -18,12 +17,6 @@ import {
   companyReceipt,
 } from "./receipts.controller.js";
 
-const INVOICE_ROLES = [
-  "BUSINESS_OWNER",
-  "BRANCH_MANAGER",
-  "STAFF",
-] as const;
-
 export const invoicesRouter = Router();
 
 invoicesRouter.use(
@@ -34,42 +27,36 @@ invoicesRouter.use(
 
 invoicesRouter.post(
   "/",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.manage"),
   asyncHandler(create),
 );
 
 invoicesRouter.get(
   "/",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.view"),
   asyncHandler(list),
 );
 
 invoicesRouter.get(
   "/order/:orderId",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.view"),
   asyncHandler(getByOrder),
 );
 
 invoicesRouter.get(
   "/:id/receipt/customer",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.view"),
   asyncHandler(customerReceipt),
 );
 
 invoicesRouter.get(
   "/:id/receipt/company",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.view"),
   asyncHandler(companyReceipt),
 );
 
 invoicesRouter.get(
   "/:id",
-  requireRole(...INVOICE_ROLES),
   requirePermission("invoices.view"),
   asyncHandler(getOne),
 );

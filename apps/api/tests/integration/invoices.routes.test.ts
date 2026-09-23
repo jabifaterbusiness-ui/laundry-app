@@ -311,7 +311,7 @@ describe("Invoices routes - authorization", () => {
     expect(res.body.id).toBe(INVOICE_A);
   });
 
-  it("does not allow an unauthorized role to access invoices", async () => {
+  it("allows PLATFORM_ADMIN to access invoices through permissions", async () => {
     const token = tokenFor("PLATFORM_ADMIN", "biz-A", "user-platform");
 
     const res = await request(app)
@@ -319,7 +319,7 @@ describe("Invoices routes - authorization", () => {
       .set("Authorization", `Bearer ${token}`)
       .set("X-Branch-Id", BRANCH_A);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 });
 
