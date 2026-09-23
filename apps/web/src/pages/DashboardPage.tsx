@@ -42,6 +42,9 @@ export function DashboardPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const canViewReports = hasPermission(user, "reports.view");
+  const canViewFinance =
+    hasPermission(user, "reports.view") ||
+    hasPermission(user, "expenses.view");
   const canCreateOrder = hasPermission(user, "orders.create");
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
@@ -339,6 +342,12 @@ export function DashboardPage() {
                 <strong>Payments</strong>
                 <span>Record and review payments</span>
               </Link>
+              {canViewFinance ? (
+                <Link to="/finance">
+                  <strong>Finance</strong>
+                  <span>Manage expenses and financial statements</span>
+                </Link>
+              ) : null}
             </div>
           </section>
         </>

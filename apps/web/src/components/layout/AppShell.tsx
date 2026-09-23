@@ -68,6 +68,9 @@ export function AppShell({ children }: PropsWithChildren) {
   }, []);
 
   const canViewMigrations = hasPermission(user, "migrations.view");
+  const canViewFinance =
+    hasPermission(user, "reports.view") ||
+    hasPermission(user, "expenses.view");
 
   const isActive = (href: string) =>
     href === "/"
@@ -212,6 +215,21 @@ export function AppShell({ children }: PropsWithChildren) {
                   </Link>
                 );
               })}
+
+              {canViewFinance ? (
+                <Link
+                  to="/finance"
+                  className={`nav-item ${
+                    isActive("/finance") ? "active" : ""
+                  }`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">
+                    ₦
+                  </span>
+                  <span>Finance</span>
+                </Link>
+              ) : null}
 
               {user?.role === "BUSINESS_OWNER" ? (
                 <Link

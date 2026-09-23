@@ -171,6 +171,7 @@ describe("DashboardPage", () => {
     expect(quickActions).toHaveTextContent("Customers");
     expect(quickActions).toHaveTextContent("Invoices");
     expect(quickActions).toHaveTextContent("Payments");
+    expect(quickActions).toHaveTextContent("Finance");
 
     expect(
       quickActions?.querySelector('a[href="/orders"]'),
@@ -183,6 +184,9 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
     expect(
       quickActions?.querySelector('a[href="/payments"]'),
+    ).toBeInTheDocument();
+    expect(
+      quickActions?.querySelector('a[href="/finance"]'),
     ).toBeInTheDocument();
   });
 });

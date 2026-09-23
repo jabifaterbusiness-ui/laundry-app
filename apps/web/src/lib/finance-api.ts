@@ -1,0 +1,258 @@
+import { apiFetch } from "./api-client.js";
+
+export type ExpenseStatus =
+  | "DRAFT"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "VOID";
+
+export type ExpenseCategory =
+  | "SALARY"
+  | "RENT"
+  | "UTILITIES"
+  | "INVENTORY"
+  | "TRANSPORT"
+  | "MAINTENANCE"
+  | "FINANCE_CHARGE"
+  | "TAX"
+  | "EMPLOYEE_REIMBURSEMENT"
+  | "MISCELLANEOUS"
+  | "OTHER";
+
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "SALARY",
+  "RENT",
+  "UTILITIES",
+  "INVENTORY",
+  "TRANSPORT",
+  "MAINTENANCE",
+  "FINANCE_CHARGE",
+  "TAX",
+  "EMPLOYEE_REIMBURSEMENT",
+  "MISCELLANEOUS",
+  "OTHER",
+];
+
+export interface FinancialStatement {
+  period: {
+    from: string;
+    to: string;
+  };
+  revenue: {
+    grossInvoiced: number;
+    refunds: number;
+    netRevenue: number;
+  };
+  expenses: {
+    explicit: number;
+    salary: number;
+    total: number;
+    byCategory: Record<string, number>;
+  };
+  profitOrLoss: {
+    amount: number;
+    type: "PROFIT" | "LOSS";
+  };
+  detail: {
+    invoices: Array<{
+      id: string;
+      invoiceNumber: string;
+      amount: number;
+      createdAt: string;
+    }>;
+    refunds: Array<{
+      id: string;
+      invoiceId: string;
+      amount: number;
+      createdAt: string;
+    }>;
+    recognizedExpenses: Array<{
+      id: string;
+      category: ExpenseCategory;
+      description: string;
+      amount: number;
+      incurredAt: string;
+      recognizedAt: string | null;
+    }>;
+    finalizedPayroll: Array<{
+      id: string;
+      employeeId: string;
+      grossPay: number;
+      periodStart: string;
+      periodEnd: string;
+    }>;
+  };
+  counts: {
+    invoices: number;
+    refunds: number;
+    recognizedExpenses: number;
+    finalizedPayrollRecords: number;
+  };
+}
+
+export interface Expense {
+  id: string;
+  businessId: string;
+  branchId: string;
+  category: ExpenseCategory;
+  status: ExpenseStatus;
+  description: string;
+  amount: number;
+  incurredAt: string;
+  reference: string | null;
+  note: string | null;
+  createdAt: string;
+  approvedAt: string | null;
+  approvedById: string | null;
+  recognizedAt: string | null;
+  recognizedById: string | null;
+  createdBy?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+  approvedBy?: {
+    id: string;
+    fullName: string;
+    email: string;
+  } | null;
+  recognizedBy?: {
+    id: string;
+    fullName: string;
+    email: string;
+  } | null;
+}
+
+interface AuthOptions {
+  accessToken: string | null;
+}
+
+function buildQuery(params: {
+  from?: string;
+  to?: string;
+  category?: ExpenseCategory;
+  status?: ExpenseStatus;
+}): string {
+  const query = new URLSearchParams();
+
+  if (params.from) {
+    query.set("from", params.from);
+  }
+
+  if (params.to) {
+    query.set("to", params.to);
+  }
+
+  if (params.category) {
+    query.set("category", params.category);
+  }
+
+  if (params.status) {
+    query.set("status", params.status);
+  }
+
+  const qs = query.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function getFinancialStatement(
+  range: { from: string; to: string },
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<FinancialStatement> {
+  return apiFetch<FinancialStatement>(
+    `/reports/financial-statement${buildQuery(range)}`,
+    {
+      accessToken: auth.accessToken,
+      branchId,
+    },
+  );
+}
+
+export async function listExpenses(
+  filters: {
+    category?: ExpenseCategory;
+    status?: ExpenseStatus;
+  },
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense[]> {
+  return apiFetch<Expense[]>(
+    `/expenses${buildQuery(filters)}`,
+    {
+      accessToken: auth.accessToken,
+      branchId,
+    },
+  );
+}
+
+export async function createExpense(
+  input: {
+    category: ExpenseCategory;
+    description: string;
+    amount: number;
+    incurredAt: string;
+    reference?: string;
+    note?: string;
+  },
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense> {
+  return apiFetch<Expense>("/expenses", {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function approveExpense(
+  expenseId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense> {
+  return apiFetch<Expense>(`/expenses/${expenseId}/approve`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+  });
+}
+
+export async function rejectExpense(
+  expenseId: string,
+  reason: string | undefined,
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense> {
+  return apiFetch<Expense>(`/expenses/${expenseId}/reject`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+}
+
+export async function recognizeExpense(
+  expenseId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense> {
+  return apiFetch<Expense>(`/expenses/${expenseId}/recognize`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+  });
+}
+
+export async function voidExpense(
+  expenseId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<Expense> {
+  return apiFetch<Expense>(`/expenses/${expenseId}/void`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+  });
+}
