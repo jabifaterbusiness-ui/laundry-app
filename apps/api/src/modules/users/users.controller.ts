@@ -60,10 +60,16 @@ export async function create(req: Request, res: Response) {
   const input = createUserSchema.parse(req.body);
 
   res.status(201).json(
-    await createUser(input, {
-      businessId,
-      ...actor(req),
-    }),
+    await createUser(
+      {
+        ...input,
+        position: input.position ?? null,
+      },
+      {
+        businessId,
+        ...actor(req),
+      },
+    ),
   );
 }
 
