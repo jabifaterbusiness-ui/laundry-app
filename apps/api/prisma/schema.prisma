@@ -1873,6 +1873,13 @@ model FinancialStatementConfig {
   emailEnabled    Boolean @default(true)
   whatsappEnabled Boolean @default(false)
 
+  // Independent daily report schedule. Monthly settings above remain unchanged.
+  dailyEnabled        Boolean @default(false)
+  dailyHour           Int     @default(8)
+  dailyMinute         Int     @default(0)
+  dailyEmailEnabled   Boolean @default(true)
+  dailyWhatsappEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

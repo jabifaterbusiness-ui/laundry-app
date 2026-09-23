@@ -266,6 +266,11 @@ export interface FinancialStatementConfig {
   minute: number;
   emailEnabled: boolean;
   whatsappEnabled: boolean;
+  dailyEnabled: boolean;
+  dailyHour: number;
+  dailyMinute: number;
+  dailyEmailEnabled: boolean;
+  dailyWhatsappEnabled: boolean;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -305,6 +310,11 @@ export function updateFinancialStatementConfig(
     minute: number;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
+    dailyEnabled: boolean;
+    dailyHour: number;
+    dailyMinute: number;
+    dailyEmailEnabled: boolean;
+    dailyWhatsappEnabled: boolean;
   },
   auth: AuthOptions,
 ): Promise<FinancialStatementConfig> {

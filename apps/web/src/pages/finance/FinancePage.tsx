@@ -102,6 +102,12 @@ export function FinancePage() {
   const [deliveryWhatsappEnabled, setDeliveryWhatsappEnabled] = useState(false);
   const [deliveryMessage, setDeliveryMessage] = useState("");
 
+  const [dailyDeliveryEnabled, setDailyDeliveryEnabled] = useState(false);
+  const [dailyDeliveryHour, setDailyDeliveryHour] = useState("8");
+  const [dailyDeliveryMinute, setDailyDeliveryMinute] = useState("0");
+  const [dailyDeliveryEmailEnabled, setDailyDeliveryEmailEnabled] = useState(true);
+  const [dailyDeliveryWhatsappEnabled, setDailyDeliveryWhatsappEnabled] = useState(false);
+
   const [recipientSearch, setRecipientSearch] = useState("");
   const [selectedRecipientUserId, setSelectedRecipientUserId] = useState("");
   const [recipientWhatsapp, setRecipientWhatsapp] = useState("");
@@ -212,6 +218,16 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
         );
       }
 
+      if (
+        dailyDeliveryEnabled &&
+        !dailyDeliveryEmailEnabled &&
+        !dailyDeliveryWhatsappEnabled
+      ) {
+        throw new Error(
+          "At least one daily delivery channel must be enabled when daily statements are enabled.",
+        );
+      }
+
       return updateFinancialStatementConfig(
         {
           enabled: deliveryEnabled,
@@ -220,6 +236,11 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
           minute: Number(deliveryMinute),
           emailEnabled: deliveryEmailEnabled,
           whatsappEnabled: deliveryWhatsappEnabled,
+          dailyEnabled: dailyDeliveryEnabled,
+          dailyHour: Number(dailyDeliveryHour),
+          dailyMinute: Number(dailyDeliveryMinute),
+          dailyEmailEnabled: dailyDeliveryEmailEnabled,
+          dailyWhatsappEnabled: dailyDeliveryWhatsappEnabled,
         },
         { accessToken },
       );
@@ -231,6 +252,11 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
       setDeliveryMinute(String(config.minute));
       setDeliveryEmailEnabled(config.emailEnabled);
       setDeliveryWhatsappEnabled(config.whatsappEnabled);
+      setDailyDeliveryEnabled(config.dailyEnabled);
+      setDailyDeliveryHour(String(config.dailyHour));
+      setDailyDeliveryMinute(String(config.dailyMinute));
+      setDailyDeliveryEmailEnabled(config.dailyEmailEnabled);
+      setDailyDeliveryWhatsappEnabled(config.dailyWhatsappEnabled);
       setDeliveryMessage("Delivery settings saved.");
       await queryClient.invalidateQueries({
         queryKey: ["finance", "delivery-config"],
@@ -400,6 +426,11 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
     setDeliveryMinute(String(deliveryConfig.minute));
     setDeliveryEmailEnabled(deliveryConfig.emailEnabled);
     setDeliveryWhatsappEnabled(deliveryConfig.whatsappEnabled);
+    setDailyDeliveryEnabled(deliveryConfig.dailyEnabled);
+    setDailyDeliveryHour(String(deliveryConfig.dailyHour));
+    setDailyDeliveryMinute(String(deliveryConfig.dailyMinute));
+    setDailyDeliveryEmailEnabled(deliveryConfig.dailyEmailEnabled);
+    setDailyDeliveryWhatsappEnabled(deliveryConfig.dailyWhatsappEnabled);
   }, [deliveryConfig, deliveryConfigMutation.isPending]);
 
   if (!canViewReports && !canViewExpenses) {
@@ -664,6 +695,92 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                         checked={deliveryWhatsappEnabled}
                         onChange={(event) =>
                           setDeliveryWhatsappEnabled(event.target.checked)
+                        }
+                      />{" "}
+                      WhatsApp
+                    </label>
+                  </p>
+                </fieldset>
+
+                <hr />
+
+                <h3>Daily financial statement delivery</h3>
+
+                <p>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={dailyDeliveryEnabled}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDailyDeliveryEnabled(event.target.checked)
+                      }
+                    />{" "}
+                    Automatically send the daily financial statement
+                  </label>
+                </p>
+
+                <p>
+                  The statement is generated for the previous local calendar
+                  day and delivered at the scheduled time.
+                </p>
+
+                <p>
+                  <label>
+                    <span>Daily hour</span>{" "}
+                    <input
+                      aria-label="Daily hour"
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={dailyDeliveryHour}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDailyDeliveryHour(event.target.value)
+                      }
+                    />
+                  </label>{" "}
+                  <label>
+                    <span>Daily minute</span>{" "}
+                    <input
+                      aria-label="Daily minute"
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={dailyDeliveryMinute}
+                      disabled={!canManageReports}
+                      onChange={(event) =>
+                        setDailyDeliveryMinute(event.target.value)
+                      }
+                    />
+                  </label>
+                </p>
+
+                <fieldset disabled={!canManageReports}>
+                  <legend>Daily delivery channels</legend>
+
+                  <p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={dailyDeliveryEmailEnabled}
+                        aria-label="Daily Email"
+                        onChange={(event) =>
+                          setDailyDeliveryEmailEnabled(event.target.checked)
+                        }
+                      />{" "}
+                      Email
+                    </label>
+                  </p>
+
+                  <p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={dailyDeliveryWhatsappEnabled}
+                        aria-label="Daily WhatsApp"
+                        onChange={(event) =>
+                          setDailyDeliveryWhatsappEnabled(event.target.checked)
                         }
                       />{" "}
                       WhatsApp

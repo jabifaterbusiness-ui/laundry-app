@@ -1,3 +1,4 @@
+
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -16,6 +17,11 @@ const CONFIG_SELECT = {
   minute: true,
   emailEnabled: true,
   whatsappEnabled: true,
+  dailyEnabled: true,
+  dailyHour: true,
+  dailyMinute: true,
+  dailyEmailEnabled: true,
+  dailyWhatsappEnabled: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -72,6 +78,11 @@ export async function getFinancialStatementConfig(businessId: string) {
     minute: 0,
     emailEnabled: true,
     whatsappEnabled: false,
+    dailyEnabled: false,
+    dailyHour: 8,
+    dailyMinute: 0,
+    dailyEmailEnabled: true,
+    dailyWhatsappEnabled: false,
     createdAt: null,
     updatedAt: null,
   };
@@ -107,6 +118,11 @@ export async function updateFinancialStatementConfig(
       minute: config.minute,
       emailEnabled: config.emailEnabled,
       whatsappEnabled: config.whatsappEnabled,
+      dailyEnabled: config.dailyEnabled,
+      dailyHour: config.dailyHour,
+      dailyMinute: config.dailyMinute,
+      dailyEmailEnabled: config.dailyEmailEnabled,
+      dailyWhatsappEnabled: config.dailyWhatsappEnabled,
     },
   });
 

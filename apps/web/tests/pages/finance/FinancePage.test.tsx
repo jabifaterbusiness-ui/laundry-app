@@ -54,6 +54,11 @@ const deliveryConfig = {
   minute: 0,
   emailEnabled: true,
   whatsappEnabled: false,
+  dailyEnabled: false,
+  dailyHour: 8,
+  dailyMinute: 0,
+  dailyEmailEnabled: true,
+  dailyWhatsappEnabled: false,
   createdAt: "2026-09-01T08:00:00.000Z",
   updatedAt: "2026-09-01T08:00:00.000Z",
 };
@@ -488,6 +493,11 @@ describe("FinancePage", () => {
           minute: 30,
           emailEnabled: true,
           whatsappEnabled: true,
+          dailyEnabled: false,
+          dailyHour: 8,
+          dailyMinute: 0,
+          dailyEmailEnabled: true,
+          dailyWhatsappEnabled: false,
         },
         { accessToken: "token" },
       );

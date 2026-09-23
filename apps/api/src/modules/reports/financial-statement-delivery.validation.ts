@@ -7,6 +7,11 @@ export const financialStatementConfigSchema = z.object({
   minute: z.number().int().min(0).max(59),
   emailEnabled: z.boolean(),
   whatsappEnabled: z.boolean(),
+  dailyEnabled: z.boolean(),
+  dailyHour: z.number().int().min(0).max(23),
+  dailyMinute: z.number().int().min(0).max(59),
+  dailyEmailEnabled: z.boolean(),
+  dailyWhatsappEnabled: z.boolean(),
 }).superRefine((value, ctx) => {
   if (
     value.enabled &&
@@ -16,7 +21,19 @@ export const financialStatementConfigSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["emailEnabled"],
-      message: "At least one delivery channel must be enabled when statements are enabled",
+      message: "At least one delivery channel must be enabled when monthly statements are enabled",
+    });
+  }
+
+  if (
+    value.dailyEnabled &&
+    !value.dailyEmailEnabled &&
+    !value.dailyWhatsappEnabled
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["dailyEmailEnabled"],
+      message: "At least one delivery channel must be enabled when daily statements are enabled",
     });
   }
 });

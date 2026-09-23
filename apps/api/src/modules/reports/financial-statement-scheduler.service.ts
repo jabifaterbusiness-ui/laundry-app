@@ -21,6 +21,11 @@ type BusinessForScheduler = {
     minute: number;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
+    dailyEnabled: boolean;
+    dailyHour: number;
+    dailyMinute: number;
+    dailyEmailEnabled: boolean;
+    dailyWhatsappEnabled: boolean;
   } | null;
 };
 
@@ -140,6 +145,11 @@ function isDue(
     minute: 0,
     emailEnabled: true,
     whatsappEnabled: false,
+    dailyEnabled: false,
+    dailyHour: 8,
+    dailyMinute: 0,
+    dailyEmailEnabled: true,
+    dailyWhatsappEnabled: false,
   };
 
   if (!config.enabled) return false;
@@ -427,6 +437,11 @@ export async function processMonthlyFinancialStatements(
           minute: true,
           emailEnabled: true,
           whatsappEnabled: true,
+          dailyEnabled: true,
+          dailyHour: true,
+          dailyMinute: true,
+          dailyEmailEnabled: true,
+          dailyWhatsappEnabled: true,
         },
       },
     },
