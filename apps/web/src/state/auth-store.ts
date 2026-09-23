@@ -12,6 +12,7 @@ interface AuthState {
   // the database on every request rather than trusting this value.
   activeBranchId: string | null;
   setSession: (session: { user: AuthenticatedUser; accessToken: string; refreshToken: string }) => void;
+  setUser: (user: AuthenticatedUser) => void;
   setActiveBranch: (branchId: string | null) => void;
   clearSession: () => void;
 }
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   refreshToken: null,
   activeBranchId: null,
+  setUser: (user) => set({ user }),
   setSession: ({ user, accessToken, refreshToken }) =>
     set({
       user,

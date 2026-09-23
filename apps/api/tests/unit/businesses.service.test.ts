@@ -41,6 +41,7 @@ describe("getBusinessBranding", () => {
       receiptBackgroundColor: "#FFFFFF",
       receiptTextColor: "#111111",
       receiptHeaderStyle: "modern",
+      defaultCustomerAgreement: "Thank you for choosing Clean Laundry.",
     });
 
     const result = await getBusinessBranding("biz-1");
@@ -58,6 +59,7 @@ describe("getBusinessBranding", () => {
       receiptBackgroundColor: "#FFFFFF",
       receiptTextColor: "#111111",
       receiptHeaderStyle: "modern",
+      defaultCustomerAgreement: "Thank you for choosing Clean Laundry.",
     });
 
     expect(prismaMock.business.findUnique).toHaveBeenCalledWith({
@@ -77,6 +79,7 @@ describe("getBusinessBranding", () => {
         receiptBackgroundColor: true,
         receiptTextColor: true,
         receiptHeaderStyle: true,
+        defaultCustomerAgreement: true,
       },
     });
   });

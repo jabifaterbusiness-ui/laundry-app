@@ -3025,3 +3025,344 @@ a {
     min-height: 190px;
   }
 }
+
+
+/* ============================================================
+   FINANCE WORKSPACE
+   ============================================================ */
+
+.finance-page {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding-bottom: 48px;
+}
+
+.finance-page > header {
+  margin-bottom: 24px;
+}
+
+.finance-page > header h1 {
+  margin-bottom: 6px;
+}
+
+.finance-page > header p {
+  color: var(--la-muted);
+  margin: 0;
+}
+
+.finance-section,
+.finance-subsection {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--la-border);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(23, 32, 51, 0.06);
+}
+
+.finance-section > h2,
+.finance-subsection > h3 {
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+
+.finance-period-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.finance-period-section > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.finance-period-section label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.finance-page input,
+.finance-page select,
+.finance-page textarea {
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--la-text);
+}
+
+.finance-page input:focus,
+.finance-page select:focus,
+.finance-page textarea:focus {
+  outline: 2px solid var(--la-primary-soft);
+  border-color: var(--la-primary-dark);
+}
+
+.finance-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 22px;
+  align-items: stretch;
+}
+
+.finance-kpi {
+  min-height: 205px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 26px;
+  border: 8px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 14px 32px rgba(23, 32, 51, 0.12);
+}
+
+.finance-kpi h3 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.finance-kpi strong {
+  display: block;
+  font-size: clamp(1.05rem, 1.8vw, 1.55rem);
+  line-height: 1.15;
+}
+
+.finance-kpi-revenue {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.finance-kpi-refunds {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.finance-kpi-net {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.finance-kpi-expenses {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.finance-kpi-profit {
+  background: #ccfbf1;
+  color: #115e59;
+}
+
+.finance-overview-section > p {
+  margin-bottom: 0;
+  margin-top: 20px;
+  color: var(--la-muted);
+  text-align: center;
+}
+
+.finance-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--la-border);
+  border-radius: 14px;
+}
+
+.finance-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+
+.finance-table th,
+.finance-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--la-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.finance-table th {
+  background: var(--la-primary-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.finance-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.finance-table tbody tr:hover {
+  background: #fafbff;
+}
+
+.finance-breakdown-section .finance-table {
+  min-width: 420px;
+}
+
+.finance-delivery-section form,
+.finance-record-section form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.finance-delivery-section form > p,
+.finance-record-section form > p {
+  margin: 0;
+}
+
+.finance-delivery-section form > p:nth-child(2),
+.finance-record-section form > p:nth-child(2),
+.finance-record-section form > p:nth-last-child(2) {
+  grid-column: 1 / -1;
+}
+
+.finance-delivery-section label,
+.finance-record-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-weight: 600;
+}
+
+.finance-delivery-section fieldset {
+  grid-column: 1 / -1;
+  border: 1px solid var(--la-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.finance-delivery-section fieldset p {
+  display: inline-block;
+  margin-right: 24px;
+}
+
+.finance-delivery-section fieldset label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+}
+
+.finance-delivery-section button,
+.finance-record-section button,
+.finance-expenses-section button,
+.finance-recipients-section button {
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 13px;
+  background: var(--la-primary-dark);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finance-delivery-section button:disabled,
+.finance-record-section button:disabled,
+.finance-expenses-section button:disabled,
+.finance-recipients-section button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.finance-recipients-section {
+  margin-top: 26px;
+  background: #fafbff;
+}
+
+.finance-recipients-section form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+
+.finance-recipients-section form p {
+  margin: 0;
+}
+
+.finance-recipients-section form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-weight: 600;
+}
+
+.finance-expenses-section > div:first-of-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.finance-expenses-section > div:first-of-type label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.finance-expense-table td:last-child {
+  white-space: nowrap;
+}
+
+.finance-expense-table td:last-child button {
+  margin: 2px;
+}
+
+@media (max-width: 1100px) {
+  .finance-kpi-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .finance-section,
+  .finance-subsection {
+    padding: 17px;
+    border-radius: 15px;
+  }
+
+  .finance-kpi-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    gap: 14px;
+  }
+
+  .finance-kpi {
+    min-height: 165px;
+    padding: 18px;
+    border-width: 6px;
+  }
+
+  .finance-delivery-section form,
+  .finance-record-section form,
+  .finance-recipients-section form {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-delivery-section form > p,
+  .finance-record-section form > p,
+  .finance-record-section form > p:nth-last-child(2) {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .finance-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-kpi {
+    width: min(230px, 80vw);
+    margin: 0 auto;
+  }
+}

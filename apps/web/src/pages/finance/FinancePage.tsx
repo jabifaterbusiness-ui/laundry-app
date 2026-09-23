@@ -20,6 +20,8 @@ import {
   type FinancialStatementConfig,
 } from "../../lib/finance-api.js";
 import { hasPermission } from "../../lib/permissions.js";
+import { getCurrentUser } from "../../lib/auth-api.js";
+import { ApiError } from "../../lib/api-client.js";
 import { listUsers } from "../../lib/users-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -71,7 +73,7 @@ function label(value: string): string {
 
 export function FinancePage() {
   const queryClient = useQueryClient();
-  const { accessToken, activeBranchId, user } = useAuthStore();
+  const { accessToken, activeBranchId, user, setUser } = useAuthStore();
 
   const [from, setFrom] = useState(startOfCurrentMonth);
   const [to, setTo] = useState(() => dateInputValue(new Date()));
@@ -88,6 +90,9 @@ export function FinancePage() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [actionError, setActionError] = useState("");
+  const [permissionsRefreshing, setPermissionsRefreshing] = useState(
+    Boolean(accessToken),
+  );
 
   const [deliveryEnabled, setDeliveryEnabled] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState("1");
@@ -110,9 +115,39 @@ export function FinancePage() {
   const canVoidExpense = hasPermission(user, "expenses.void");
   const canManageReports = hasPermission(user, "reports.manage");
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!accessToken) {
+      return;
+    }
+
+    setPermissionsRefreshing(true);
+
+    getCurrentUser(accessToken)
+      .then((currentUser) => {
+        if (!cancelled) {
+          setUser(currentUser);
+        }
+      })
+      .catch(() => {
+        // Keep the existing session if the refresh cannot be completed.
+        // Server-side authorization remains authoritative.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPermissionsRefreshing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, setUser]);
+
   const statementQuery = useQuery({
     queryKey: ["finance", "statement", activeBranchId, from, to],
-    enabled: Boolean(accessToken && activeBranchId && canViewReports),
+enabled: Boolean(accessToken && activeBranchId && canViewReports && !permissionsRefreshing),
     queryFn: () =>
       getFinancialStatement(
         { from, to },
@@ -123,7 +158,7 @@ export function FinancePage() {
 
   const expensesQuery = useQuery({
     queryKey: ["finance", "expenses", activeBranchId, expenseFilterCategory, status],
-    enabled: Boolean(accessToken && activeBranchId && canViewExpenses),
+enabled: Boolean(accessToken && activeBranchId && canViewExpenses && !permissionsRefreshing),
     queryFn: () =>
       listExpenses(
         {
@@ -137,19 +172,19 @@ export function FinancePage() {
 
   const deliveryConfigQuery = useQuery({
     queryKey: ["finance", "delivery-config"],
-    enabled: Boolean(accessToken && canViewReports),
+enabled: Boolean(accessToken && canViewReports && !permissionsRefreshing),
     queryFn: () => getFinancialStatementConfig({ accessToken }),
   });
 
   const deliveryRecipientsQuery = useQuery({
     queryKey: ["finance", "delivery-recipients"],
-    enabled: Boolean(accessToken && canViewReports),
+enabled: Boolean(accessToken && canViewReports && !permissionsRefreshing),
     queryFn: () => listFinancialStatementRecipients({ accessToken }),
   });
 
   const recipientUsersQuery = useQuery({
     queryKey: ["finance", "delivery-users", recipientSearch],
-    enabled: Boolean(accessToken && canManageReports),
+enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
     queryFn: () =>
       listUsers({
         accessToken: accessToken as string,
@@ -369,7 +404,7 @@ export function FinancePage() {
 
   if (!canViewReports && !canViewExpenses) {
     return (
-      <main className="page-container">
+      <main className="page-container finance-page">
         <h1>Finance</h1>
         <p>You do not have permission to view financial information.</p>
       </main>
@@ -377,7 +412,7 @@ export function FinancePage() {
   }
 
   return (
-    <main className="page-container">
+    <main className="page-container finance-page">
       <header>
         <h1>Finance</h1>
         <p>
@@ -386,7 +421,7 @@ export function FinancePage() {
         </p>
       </header>
 
-      <section aria-labelledby="finance-period-heading">
+      <section className="finance-section finance-period-section" aria-labelledby="finance-period-heading">
         <h2 id="finance-period-heading">Statement period</h2>
         <div>
           <label>
@@ -414,31 +449,31 @@ export function FinancePage() {
       )}
 
       {statement && canViewReports && (
-        <section aria-labelledby="finance-overview-heading">
+        <section className="finance-section finance-overview-section" aria-labelledby="finance-overview-heading">
           <h2 id="finance-overview-heading">Financial overview</h2>
 
-          <div>
-            <article>
+          <div className="finance-kpi-grid">
+            <article className="finance-kpi finance-kpi-revenue">
               <h3>Gross invoiced</h3>
               <strong>{formatMoney(statement.revenue.grossInvoiced)}</strong>
             </article>
 
-            <article>
+            <article className="finance-kpi finance-kpi-refunds">
               <h3>Refunds</h3>
               <strong>{formatMoney(statement.revenue.refunds)}</strong>
             </article>
 
-            <article>
+            <article className="finance-kpi finance-kpi-net">
               <h3>Net revenue</h3>
               <strong>{formatMoney(statement.revenue.netRevenue)}</strong>
             </article>
 
-            <article>
+            <article className="finance-kpi finance-kpi-expenses">
               <h3>Total expenses</h3>
               <strong>{formatMoney(statement.expenses.total)}</strong>
             </article>
 
-            <article>
+            <article className="finance-kpi finance-kpi-profit">
               <h3>Profit / Loss</h3>
               <strong>
                 {formatMoney(statement.profitOrLoss.amount)}{" "}
@@ -455,10 +490,11 @@ export function FinancePage() {
       )}
 
       {statement && canViewReports && (
-        <section aria-labelledby="finance-breakdown-heading">
+        <section className="finance-section finance-breakdown-section" aria-labelledby="finance-breakdown-heading">
           <h2 id="finance-breakdown-heading">Expense breakdown</h2>
 
-          <table>
+          <div className="finance-table-wrap">
+            <table className="finance-table">
             <thead>
               <tr>
                 <th>Category</th>
@@ -481,12 +517,13 @@ export function FinancePage() {
                 )
               )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </section>
       )}
 
       {canViewReports && (
-        <section aria-labelledby="financial-statement-delivery-heading">
+        <section className="finance-section finance-delivery-section" aria-labelledby="financial-statement-delivery-heading">
           <h2 id="financial-statement-delivery-heading">
             Automatic financial statement delivery
           </h2>
@@ -650,7 +687,7 @@ export function FinancePage() {
             </>
           )}
 
-          <section aria-labelledby="financial-statement-recipients-heading">
+          <section className="finance-subsection finance-recipients-section" aria-labelledby="financial-statement-recipients-heading">
             <h3 id="financial-statement-recipients-heading">
               Authorized recipients
             </h3>
@@ -838,7 +875,7 @@ export function FinancePage() {
       )}
 
       {canCreateExpense && (
-        <section aria-labelledby="create-expense-heading">
+        <section className="finance-section finance-record-section" aria-labelledby="create-expense-heading">
           <h2 id="create-expense-heading">Record expense</h2>
 
           <form
@@ -944,7 +981,7 @@ export function FinancePage() {
       )}
 
       {canViewExpenses && (
-        <section aria-labelledby="expense-management-heading">
+        <section className="finance-section finance-expenses-section" aria-labelledby="expense-management-heading">
           <h2 id="expense-management-heading">Expense management</h2>
 
           <div>
@@ -989,7 +1026,8 @@ export function FinancePage() {
             <p role="alert">{expensesQuery.error.message}</p>
           )}
 
-          <table>
+          <div className="finance-table-wrap">
+            <table className="finance-table finance-expense-table">
             <thead>
               <tr>
                 <th>Date</th>
@@ -1108,6 +1146,7 @@ export function FinancePage() {
               )}
             </tbody>
           </table>
+          </div>
         </section>
       )}
 
