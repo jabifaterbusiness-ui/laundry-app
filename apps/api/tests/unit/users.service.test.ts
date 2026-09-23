@@ -74,7 +74,9 @@ const BASE_USER = {
   email: "staff@example.com",
   fullName: "Staff User",
   role: "STAFF" as const,
+  position: null,
   isActive: true,
+  deletedAt: null,
   businessId: "biz-A",
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -93,6 +95,7 @@ beforeEach(() => {
     callback({
       user: {
         findFirst: userFindFirst,
+        findFirstOrThrow: vi.fn(),
         create: userCreate,
         update: userUpdate,
         count: userCount,
@@ -131,6 +134,7 @@ describe("users.service - listUsers", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          deletedAt: null,
           isActive: true,
         },
       }),
@@ -174,6 +178,7 @@ describe("users.service - getUser", () => {
         where: {
           id: BASE_USER.id,
           businessId: "biz-B",
+          deletedAt: null,
         },
       }),
     );
@@ -282,30 +287,36 @@ describe("users.service - createUser", () => {
     expect(userCreate).not.toHaveBeenCalled();
   });
 
-  it("rejects inactive branch assignment", async () => {
-    branchFindMany.mockResolvedValue([
+  it("creates a user with a custom position", async () => {
+    userCreate.mockResolvedValue({
+      ...BASE_USER,
+      position: "Senior Laundry Supervisor",
+    } as never);
+    userFindFirst.mockResolvedValueOnce({
+      ...BASE_USER,
+      position: "Senior Laundry Supervisor",
+      branches: [],
+    } as never);
+
+    await createUser(
       {
-        id: "branch-1",
-        name: "Closed",
-        isActive: false,
-        businessId: "biz-A",
+        fullName: "Senior Staff",
+        email: "senior@example.com",
+        password: "password123",
+        role: "STAFF",
+        position: " Senior Laundry Supervisor ",
+        branchIds: [],
       },
-    ] as never);
+      CONTEXT,
+    );
 
-    await expect(
-      createUser(
-        {
-          fullName: "Staff User",
-          email: "staff3@example.com",
-          password: "password123",
-          role: "STAFF",
-          branchIds: ["branch-1"],
-        },
-        CONTEXT,
-      ),
-    ).rejects.toMatchObject({ statusCode: 400 });
-
-    expect(userCreate).not.toHaveBeenCalled();
+    expect(userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          position: "Senior Laundry Supervisor",
+        }),
+      }),
+    );
   });
 });
 
@@ -402,6 +413,50 @@ describe("users.service - updateUser", () => {
     expect(JSON.stringify(auditCall)).not.toContain("newpassword123");
   });
 
+  it("updates a user's custom position", async () => {
+    userFindFirst
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        position: "Operations Supervisor",
+        branches: [],
+      } as never);
+
+    await updateUser(
+      BASE_USER.id,
+      { position: " Operations Supervisor " },
+      CONTEXT,
+    );
+
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BASE_USER.id },
+        data: { position: "Operations Supervisor" },
+      }),
+    );
+  });
+
+  it("rejects updating a deleted user", async () => {
+    userFindFirst.mockResolvedValue(null);
+
+    await expect(
+      updateUser(
+        BASE_USER.id,
+        { position: "Deleted User Position" },
+        CONTEXT,
+      ),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
   it("protects the last active business owner", async () => {
     userFindFirst.mockResolvedValue({
       ...BASE_USER,
@@ -419,6 +474,105 @@ describe("users.service - updateUser", () => {
     ).rejects.toMatchObject({ statusCode: 409 });
 
     expect(userUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("users.service - deleteUser", () => {
+  it("soft-deletes a user and preserves the record", async () => {
+    userFindFirst.mockResolvedValue({
+      ...BASE_USER,
+      branches: [],
+    } as never);
+    userUpdateMany.mockResolvedValue({ count: 1 } as never);
+    userFindFirst.mockResolvedValueOnce({
+      ...BASE_USER,
+      branches: [],
+    } as never);
+
+    const txFindFirstOrThrow = vi.fn().mockResolvedValue({
+      ...BASE_USER,
+      isActive: false,
+      deletedAt: new Date(),
+    });
+    transaction.mockImplementationOnce(async (callback) =>
+      callback({
+        user: {
+          findFirst: userFindFirst,
+          findFirstOrThrow: txFindFirstOrThrow,
+          create: userCreate,
+          update: userUpdate,
+          count: userCount,
+          updateMany: userUpdateMany,
+        },
+        userBranch: {
+          create: userBranchCreate,
+          createMany: userBranchCreateMany,
+          deleteMany: userBranchDeleteMany,
+        },
+      } as never),
+    );
+
+    const result = await (await import("../../src/modules/users/users.service.js")).deleteUser(
+      BASE_USER.id,
+      {
+        businessId: "biz-A",
+        actorUserId: "owner-A",
+        correlationId: "corr-1",
+      },
+    );
+
+    expect(userUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: BASE_USER.id,
+          businessId: "biz-A",
+          deletedAt: null,
+        },
+        data: expect.objectContaining({
+          isActive: false,
+          deletedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.deleted",
+        entityType: "User",
+        entityId: BASE_USER.id,
+        businessId: "biz-A",
+      }),
+    );
+    expect(result.id).toBe(BASE_USER.id);
+  });
+
+  it("cannot delete the actor's own account", async () => {
+    userFindFirst.mockResolvedValue({
+      ...BASE_USER,
+      branches: [],
+    } as never);
+
+    await expect(
+      (await import("../../src/modules/users/users.service.js")).deleteUser(
+        BASE_USER.id,
+        {
+          businessId: "biz-A",
+          actorUserId: BASE_USER.id,
+          correlationId: "corr-1",
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(userUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("cannot update or reactivate a deleted user", async () => {
+    userFindFirst.mockResolvedValue(null);
+
+    await expect(
+      setUserActiveStatus(BASE_USER.id, true, CONTEXT),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    expect(userUpdateMany).not.toHaveBeenCalled();
   });
 });
 

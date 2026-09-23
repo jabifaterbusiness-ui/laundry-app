@@ -24,6 +24,7 @@ const MANAGEMENT: NavItem[] = [
   { label: "Services & Price List", href: "/services", icon: "◈" },
   { label: "Inventory", href: "/inventory", icon: "□" },
   { label: "Users", href: "/users", icon: "♟" },
+  { label: "Permissions", href: "/permissions", icon: "⚙" },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -192,10 +193,18 @@ export function AppShell({ children }: PropsWithChildren) {
                 const active = isActive(item.href);
                 const isBusinessUserManagement =
                   item.href === "/users";
+                  const isPermissionsRoute = item.href === "/permissions";
 
                 if (
                   isBusinessUserManagement &&
                   !hasPermission(user, "users.view")
+                ) {
+                  return null;
+                }
+
+                if (
+                  isPermissionsRoute &&
+                  !hasPermission(user, "users.manage_permissions")
                 ) {
                   return null;
                 }

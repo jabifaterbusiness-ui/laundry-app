@@ -9,7 +9,9 @@ const USER_SELECT = {
   email: true,
   fullName: true,
   role: true,
+  position: true,
   isActive: true,
+  deletedAt: true,
   businessId: true,
   createdAt: true,
   updatedAt: true,
@@ -29,14 +31,14 @@ function assertBusinessRole(role: Role) {
 
 async function getUserRecord(userId: string, businessId: string) {
   return prisma.user.findFirst({
-    where: { id: userId, businessId },
+    where: { id: userId, businessId, deletedAt: null },
     select: USER_SELECT,
   });
 }
 
 async function getUserWithBranches(userId: string, businessId: string) {
   const user = await prisma.user.findFirst({
-    where: { id: userId, businessId },
+    where: { id: userId, businessId, deletedAt: null },
     select: {
       ...USER_SELECT,
       branches: {
@@ -142,10 +144,11 @@ export async function listUsers(
 ) {
   const where: {
     businessId: string;
+    deletedAt: null;
     isActive?: boolean;
     role?: Role;
     OR?: Array<Record<string, unknown>>;
-  } = { businessId };
+  } = { businessId, deletedAt: null };
 
   if (params.status === "active") where.isActive = true;
   if (params.status === "inactive") where.isActive = false;
@@ -196,6 +199,7 @@ export async function createUser(
     email: string;
     password: string;
     role: Role;
+    position?: string | null;
     branchIds: string[];
   },
   context: {
@@ -229,6 +233,9 @@ export async function createUser(
         email,
         passwordHash,
         role: input.role,
+        ...(input.position !== undefined
+          ? { position: input.position?.trim() || null }
+          : {}),
         isActive: true,
       },
       select: USER_SELECT,
@@ -270,6 +277,7 @@ export async function updateUser(
     email?: string;
     password?: string;
     role?: Role;
+    position?: string | null;
     branchIds?: string[];
   },
   context: {
@@ -279,7 +287,7 @@ export async function updateUser(
   },
 ) {
   const current = await prisma.user.findFirst({
-    where: { id: userId, businessId: context.businessId },
+    where: { id: userId, businessId: context.businessId, deletedAt: null },
     select: {
       ...USER_SELECT,
       branches: {
@@ -328,7 +336,7 @@ export async function updateUser(
   await prisma.$transaction(
     async (tx) => {
       const currentInTransaction = await tx.user.findFirst({
-        where: { id: userId, businessId: context.businessId },
+        where: { id: userId, businessId: context.businessId, deletedAt: null },
         select: {
           ...USER_SELECT,
           branches: {
@@ -363,6 +371,9 @@ export async function updateUser(
             : {}),
           ...(passwordHash !== undefined ? { passwordHash } : {}),
           ...(input.role !== undefined ? { role: input.role } : {}),
+          ...(input.position !== undefined
+            ? { position: input.position?.trim() || null }
+            : {}),
         },
       });
 
@@ -409,6 +420,78 @@ export async function updateUser(
   return getUserWithBranches(userId, context.businessId);
 }
 
+
+export async function deleteUser(
+  userId: string,
+  input: {
+    businessId: string;
+    actorUserId: string;
+    correlationId?: string | null;
+  },
+) {
+  const current = await getUserRecord(userId, input.businessId);
+
+  if (!current) {
+    throw new AppError("User not found", 404);
+  }
+
+  if (current.id === input.actorUserId) {
+    throw new AppError("You cannot delete your own account", 400);
+  }
+
+  await assertNotLastActiveOwner(
+    prisma,
+    current,
+    input.businessId,
+    current.role,
+    false,
+  );
+
+  const deletedAt = new Date();
+
+  const deleted = await prisma.$transaction(async (tx) => {
+    const result = await tx.user.updateMany({
+      where: {
+        id: userId,
+        businessId: input.businessId,
+        deletedAt: null,
+      },
+      data: {
+        isActive: false,
+        deletedAt,
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new AppError("User is already deleted", 409);
+    }
+
+    return tx.user.findFirstOrThrow({
+      where: {
+        id: userId,
+        businessId: input.businessId,
+      },
+      select: USER_SELECT,
+    });
+  });
+
+  await recordAuditEvent({
+    action: "user.deleted",
+    entityType: "User",
+    entityId: userId,
+    businessId: input.businessId,
+    actorUserId: input.actorUserId,
+    correlationId: input.correlationId ?? null,
+    metadata: {
+      previousRole: current.role,
+      previousIsActive: current.isActive,
+      deletedAt: deletedAt.toISOString(),
+    },
+  });
+
+  return deleted;
+}
+
 export async function setUserActiveStatus(
   userId: string,
   isActive: boolean,
@@ -438,7 +521,11 @@ export async function setUserActiveStatus(
   await prisma.$transaction(
     async (tx) => {
       const currentInTransaction = await tx.user.findFirst({
-        where: { id: userId, businessId: context.businessId },
+        where: {
+          id: userId,
+          businessId: context.businessId,
+          deletedAt: null,
+        },
         select: USER_SELECT,
       });
 

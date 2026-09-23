@@ -8,6 +8,7 @@ import {
   listBranches,
   listUsers,
   updateUser,
+  deleteUser,
   type ManagedUser,
   type UserRole,
 } from "../../lib/users-api.js";
@@ -26,6 +27,7 @@ const EMPTY_FORM = {
   email: "",
   password: "",
   role: "STAFF" as UserRole,
+  position: "",
   branchIds: [] as string[],
 };
 
@@ -49,6 +51,7 @@ export function UsersPage() {
   const canView = hasPermission(currentUser, "users.view");
   const canCreate = hasPermission(currentUser, "users.create");
   const canUpdate = hasPermission(currentUser, "users.update");
+  const canDelete = hasPermission(currentUser, "users.delete");
 
   const [search, setSearch] = useState("");
   const [status, setStatus] =
@@ -85,6 +88,7 @@ export function UsersPage() {
           email: form.email.trim(),
           password: form.password,
           role: form.role,
+          position: form.position.trim() || null,
           branchIds: form.branchIds,
         },
         accessToken ?? "",
@@ -111,6 +115,7 @@ export function UsersPage() {
           email: form.email.trim(),
           password: form.password || undefined,
           role: form.role,
+          position: form.position.trim() || null,
           branchIds: form.branchIds,
         },
         accessToken ?? "",
@@ -124,6 +129,21 @@ export function UsersPage() {
         error instanceof ApiError
           ? error.message
           : "Unable to update user. Please try again.",
+      );
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) =>
+      deleteUser(userId, accessToken ?? ""),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to delete user. Please try again.",
       );
     },
   });
@@ -152,6 +172,7 @@ export function UsersPage() {
       email: user.email,
       password: "",
       role: user.role,
+      position: user.position ?? "",
       branchIds: user.branches.map((branch) => branch.id),
     });
     setFormError(null);
@@ -292,9 +313,10 @@ export function UsersPage() {
               <th>Name</th>
               <th>Email</th>
               <th>Role</th>
+              <th>Position</th>
               <th>Branches</th>
               <th>Status</th>
-              {canUpdate ? <th aria-label="Actions" /> : null}
+              {canUpdate || canDelete ? <th aria-label="Actions" /> : null}
             </tr>
           </thead>
 
@@ -318,6 +340,8 @@ export function UsersPage() {
 
                 <td>{formatRole(user.role)}</td>
 
+                <td>{user.position || "—"}</td>
+
                 <td>
                   {user.branches.length > 0
                     ? user.branches.map((branch) => branch.name).join(", ")
@@ -326,23 +350,43 @@ export function UsersPage() {
 
                 <td>{user.isActive ? "Active" : "Inactive"}</td>
 
-                {canUpdate ? (
+                {canUpdate || canDelete ? (
                   <td>
-                    <button
-                      type="button"
-                      disabled={
-                        user.id === currentUser?.id ||
-                        statusMutation.isPending
-                      }
-                      onClick={() =>
-                        statusMutation.mutate({
-                          id: user.id,
-                          isActive: !user.isActive,
-                        })
-                      }
-                    >
-                      {user.isActive ? "Deactivate" : "Activate"}
-                    </button>
+                    {canUpdate ? (
+                      <button
+                        type="button"
+                        disabled={
+                          user.id === currentUser?.id ||
+                          statusMutation.isPending
+                        }
+                        onClick={() =>
+                          statusMutation.mutate({
+                            id: user.id,
+                            isActive: !user.isActive,
+                          })
+                        }
+                      >
+                        {user.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                    ) : null}
+
+                    {canDelete && user.id !== currentUser?.id ? (
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            `Delete ${user.fullName}? This will deactivate the account and preserve its history.`,
+                          );
+                          if (confirmed) {
+                            setFormError(null);
+                            deleteMutation.mutate(user.id);
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
                   </td>
                 ) : null}
               </tr>
@@ -380,6 +424,22 @@ export function UsersPage() {
                   setForm((current) => ({
                     ...current,
                     email: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <label htmlFor="user-position">Position</label>
+              <input
+                id="user-position"
+                value={form.position}
+                maxLength={120}
+                placeholder="e.g. Front Desk Officer"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    position: event.target.value,
                   }))
                 }
               />

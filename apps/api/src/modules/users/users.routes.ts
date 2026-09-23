@@ -7,6 +7,7 @@ import {
   create,
   deactivate,
   get,
+  remove,
   list,
   update,
 } from "./users.controller.js";
@@ -49,4 +50,11 @@ usersRouter.patch(
   "/:userId/deactivate",
   requirePermission("users.update"),
   asyncHandler(deactivate),
+);
+
+
+usersRouter.delete(
+  "/:userId",
+  requirePermission("users.delete"),
+  asyncHandler(remove),
 );

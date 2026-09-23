@@ -158,6 +158,7 @@ describe("Users routes - tenant isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          deletedAt: null,
           isActive: true,
         },
       }),
@@ -177,6 +178,7 @@ describe("Users routes - tenant isolation", () => {
         where: {
           id: "11111111-1111-4111-8111-111111111111",
           businessId: "biz-B",
+          deletedAt: null,
         },
       }),
     );
@@ -214,6 +216,7 @@ describe("Users routes - permissions", () => {
       email: "manager-created@example.com",
       fullName: "Manager Created Staff",
       role: "STAFF",
+      position: "Laundry Supervisor",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -234,6 +237,7 @@ describe("Users routes - permissions", () => {
         email: "manager-created@example.com",
         password: "password123",
         role: "STAFF",
+        position: "Laundry Supervisor",
         branchIds: [],
       });
 
@@ -266,6 +270,7 @@ describe("Users routes - permissions", () => {
       email: "granted@example.com",
       fullName: "Granted Staff",
       role: "STAFF",
+      position: "Laundry Supervisor",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -299,6 +304,7 @@ describe("Users routes - permissions", () => {
       email: "new@example.com",
       fullName: "New Staff",
       role: "STAFF",
+      position: "Laundry Supervisor",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -332,6 +338,167 @@ describe("Users routes - permissions", () => {
         }),
       }),
     );
+  });
+});
+
+describe("Users routes - custom positions", () => {
+  it("allows management to create a user with a custom position", async () => {
+    const user = {
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "positioned@example.com",
+      fullName: "Positioned Staff",
+      role: "STAFF",
+      position: "Laundry Supervisor",
+      isActive: true,
+      deletedAt: null,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      branches: [],
+    };
+
+    userCreate.mockResolvedValue(user as never);
+    userFindFirst.mockResolvedValueOnce(user as never);
+
+    const response = await request(app)
+      .post("/api/v1/users")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({
+        fullName: "Positioned Staff",
+        email: "positioned@example.com",
+        password: "password123",
+        role: "STAFF",
+        position: "Laundry Supervisor",
+        branchIds: [],
+      });
+
+    expect(response.status).toBe(201);
+    expect(userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          position: "Laundry Supervisor",
+        }),
+      }),
+    );
+  });
+
+  it("allows management to update only the custom position", async () => {
+    const user = {
+      id: "99999999-9999-4999-8999-999999999999",
+      email: "position-update@example.com",
+      fullName: "Position Update",
+      role: "STAFF",
+      position: "Laundry Supervisor",
+      isActive: true,
+      deletedAt: null,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      branches: [],
+    };
+
+    userFindFirst
+      .mockResolvedValueOnce(user as never)
+      .mockResolvedValueOnce(user as never)
+      .mockResolvedValueOnce({
+        ...user,
+        position: "Operations Supervisor",
+      } as never);
+
+    userUpdate.mockResolvedValue({
+      ...user,
+      position: "Operations Supervisor",
+    } as never);
+
+    const response = await request(app)
+      .patch(`/api/v1/users/${user.id}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({
+        position: "Operations Supervisor",
+      });
+
+    expect(response.status).toBe(200);
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          position: "Operations Supervisor",
+        }),
+      }),
+    );
+  });
+});
+
+describe("Users routes - deletion", () => {
+  it("rejects STAFF from deleting users by default", async () => {
+    const response = await request(app)
+      .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(response.status).toBe(403);
+    expect(userUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("allows STAFF to delete users when users.delete is explicitly granted", async () => {
+    vi.mocked(prisma.userPermissionOverride.findUnique).mockResolvedValue({
+      allowed: true,
+    } as never);
+
+    userFindFirst.mockResolvedValue({
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "deletable@example.com",
+      fullName: "Deletable User",
+      role: "STAFF",
+      position: null,
+      isActive: true,
+      deletedAt: null,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+
+    userUpdateMany.mockResolvedValue({ count: 1 } as never);
+
+    const response = await request(app)
+      .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(response.status).not.toBe(403);
+    expect(userUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          deletedAt: null,
+        }),
+        data: expect.objectContaining({
+          isActive: false,
+          deletedAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it("allows BUSINESS_OWNER to delete a user", async () => {
+    userFindFirst.mockResolvedValue({
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "deletable@example.com",
+      fullName: "Deletable User",
+      role: "STAFF",
+      position: null,
+      isActive: true,
+      deletedAt: null,
+      businessId: "biz-A",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+
+    userUpdateMany.mockResolvedValue({ count: 1 } as never);
+
+    const response = await request(app)
+      .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(response.status).not.toBe(403);
+    expect(userUpdateMany).toHaveBeenCalled();
   });
 });
 

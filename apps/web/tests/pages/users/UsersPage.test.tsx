@@ -199,6 +199,7 @@ describe("UsersPage", () => {
           email: "newstaff@example.com",
           password: "password123",
           role: "STAFF",
+          position: null,
           branchIds: ["branch-1", "branch-2"],
         },
         "test-token",

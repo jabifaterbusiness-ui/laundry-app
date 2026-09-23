@@ -13,6 +13,7 @@ import { InvoicesPage } from "./pages/invoices/InvoicesPage.js";
 import { PaymentsPage } from "./pages/payments/PaymentsPage.js";
 import { InventoryPage } from "./pages/inventory/InventoryPage.js";
 import { UsersPage } from "./pages/users/UsersPage.js";
+import { PermissionsPage } from "./pages/users/PermissionsPage.js";
 import { ReportsPage } from "./pages/reports/ReportsPage.js";
 import { FinancePage } from "./pages/finance/FinancePage.js";
 import { SubscriptionPage } from "./pages/subscriptions/SubscriptionPage.js";
@@ -37,6 +38,7 @@ function AuthenticatedLayout() {
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/permissions" element={<PermissionsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/finance" element={<FinancePage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />

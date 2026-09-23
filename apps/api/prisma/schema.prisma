@@ -198,7 +198,9 @@ model User {
   passwordHash String
   fullName     String
   role         Role    @default(STAFF)
+  position     String?
   isActive     Boolean @default(true)
+  deletedAt    DateTime?
 
   // Nullable because PLATFORM_ADMIN is not tied to a single business.
   // Every BUSINESS_OWNER / BRANCH_MANAGER / STAFF user MUST have a
@@ -245,6 +247,7 @@ model User {
   OfflineSyncOperation OfflineSyncOperation[]
 
   @@index([businessId])
+  @@index([businessId, deletedAt])
   @@map("users")
 }
 

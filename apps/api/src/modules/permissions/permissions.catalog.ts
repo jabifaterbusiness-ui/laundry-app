@@ -77,6 +77,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "users.view", module: "users", action: "view", description: "View users" },
   { code: "users.create", module: "users", action: "create", description: "Create users" },
   { code: "users.update", module: "users", action: "update", description: "Update users" },
+  { code: "users.delete", module: "users", action: "delete", description: "Delete users while preserving history" },
   { code: "users.manage_permissions", module: "users", action: "manage_permissions", description: "Manage user and role permissions" },
 
   { code: "business.view", module: "business", action: "view", description: "View business settings" },

@@ -27,12 +27,14 @@ export const userBranchParamsSchema = z.object({
 const fullNameSchema = z.string().trim().min(1, "Full name is required").max(120);
 const emailSchema = z.string().trim().email("Invalid email address").max(254);
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(128);
+const positionSchema = z.string().trim().max(120, "Position must be 120 characters or less").nullable().optional();
 
 export const createUserSchema = z.object({
   fullName: fullNameSchema,
   email: emailSchema,
   password: passwordSchema,
   role: userRoleSchema,
+  position: positionSchema,
   branchIds: z.array(branchIdSchema).max(100).default([]),
 });
 
@@ -41,6 +43,7 @@ export const updateUserSchema = z.object({
   email: emailSchema.optional(),
   password: passwordSchema.optional(),
   role: userRoleSchema.optional(),
+  position: positionSchema,
   branchIds: z.array(branchIdSchema).max(100).optional(),
 }).refine(
   (data) =>
@@ -48,6 +51,7 @@ export const updateUserSchema = z.object({
     data.email !== undefined ||
     data.password !== undefined ||
     data.role !== undefined ||
+    data.position !== undefined ||
     data.branchIds !== undefined,
   { message: "At least one field must be provided" },
 );

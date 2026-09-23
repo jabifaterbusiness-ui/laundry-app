@@ -9,6 +9,7 @@ import {
 } from "./users.validation.js";
 import {
   createUser,
+  deleteUser,
   getUser,
   listUsers,
   setUserActiveStatus,
@@ -76,6 +77,7 @@ export async function update(req: Request, res: Response) {
     ...(input.email !== undefined && { email: input.email }),
     ...(input.password !== undefined && { password: input.password }),
     ...(input.role !== undefined && { role: input.role as Role }),
+    ...(input.position !== undefined && { position: input.position }),
     ...(input.branchIds !== undefined && { branchIds: input.branchIds }),
   };
 
@@ -105,6 +107,19 @@ export async function deactivate(req: Request, res: Response) {
 
   res.status(200).json(
     await setUserActiveStatus(userId, false, {
+      businessId,
+      ...actor(req),
+    }),
+  );
+}
+
+
+export async function remove(req: Request, res: Response) {
+  const businessId = businessContext(req);
+  const { userId } = userIdParamSchema.parse(req.params);
+
+  res.status(200).json(
+    await deleteUser(userId, {
       businessId,
       ...actor(req),
     }),
