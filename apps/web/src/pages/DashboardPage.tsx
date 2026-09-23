@@ -46,6 +46,11 @@ export function DashboardPage() {
     hasPermission(user, "reports.view") ||
     hasPermission(user, "expenses.view");
   const canCreateOrder = hasPermission(user, "orders.create");
+  const canViewOrders = hasPermission(user, "orders.view");
+  const canViewCustomers = hasPermission(user, "customers.view");
+  const canViewInvoices = hasPermission(user, "invoices.view");
+  const canViewPayments = hasPermission(user, "payments.view");
+  const canViewInventory = hasPermission(user, "inventory.view");
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
@@ -261,13 +266,11 @@ export function DashboardPage() {
           )}
 
           {hasActivity && (
-            <section className="dashboard-secondary-grid">
-              <article className="dashboard-panel">
-                <div className="dashboard-panel-heading">
-                  <div>
-                    <p className="dashboard-panel-eyebrow">Collections</p>
-                    <h2>Payment collection</h2>
-                  </div>
+            <section className="dashboard-overview-grid" aria-label="Business overview">
+              <article className="dashboard-overview-card dashboard-overview-card-primary">
+                <div>
+                  <p className="dashboard-panel-eyebrow">Collections</p>
+                  <h2>Payment collection</h2>
                   <strong>{paymentPercentage.toFixed(0)}%</strong>
                 </div>
 
@@ -293,7 +296,7 @@ export function DashboardPage() {
                 </div>
               </article>
 
-              <article className="dashboard-panel">
+              <article className="dashboard-overview-card">
                 <div className="dashboard-panel-heading">
                   <div>
                     <p className="dashboard-panel-eyebrow">Payments</p>
@@ -319,33 +322,79 @@ export function DashboardPage() {
             </section>
           )}
 
-          <section className="dashboard-quick-actions" aria-labelledby="quick-actions-heading">
-            <div>
-              <p className="dashboard-panel-eyebrow">Shortcuts</p>
-              <h2 id="quick-actions-heading">Quick actions</h2>
+          <section className="dashboard-workspaces" aria-labelledby="dashboard-workspaces-heading">
+            <div className="dashboard-section-heading">
+              <div>
+                <p className="dashboard-panel-eyebrow">Workspaces</p>
+                <h2 id="dashboard-workspaces-heading">Business areas</h2>
+                <p>Open a dedicated workspace to manage each part of your business.</p>
+              </div>
             </div>
 
-            <div className="dashboard-action-grid">
-              <Link to="/orders">
-                <strong>Orders</strong>
-                <span>Manage laundry orders</span>
-              </Link>
-              <Link to="/customers">
-                <strong>Customers</strong>
-                <span>View customer accounts</span>
-              </Link>
-              <Link to="/invoices">
-                <strong>Invoices</strong>
-                <span>Review billing</span>
-              </Link>
-              <Link to="/payments">
-                <strong>Payments</strong>
-                <span>Record and review payments</span>
-              </Link>
+            <div className="dashboard-workspace-grid">
+              {canViewOrders ? (
+                <Link className="dashboard-workspace-card" to="/orders">
+                  <span className="dashboard-workspace-icon">▣</span>
+                  <div>
+                    <strong>Orders</strong>
+                    <span>Create, update and track laundry orders.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
+
+              {canViewCustomers ? (
+                <Link className="dashboard-workspace-card" to="/customers">
+                  <span className="dashboard-workspace-icon">♙</span>
+                  <div>
+                    <strong>Customers</strong>
+                    <span>Manage customer accounts and information.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
+
+              {canViewInvoices ? (
+                <Link className="dashboard-workspace-card" to="/invoices">
+                  <span className="dashboard-workspace-icon">▤</span>
+                  <div>
+                    <strong>Invoices & Receipts</strong>
+                    <span>Review invoices, billing and receipts.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
+
+              {canViewPayments ? (
+                <Link className="dashboard-workspace-card" to="/payments">
+                  <span className="dashboard-workspace-icon">₦</span>
+                  <div>
+                    <strong>Payments</strong>
+                    <span>Record and review customer payments.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
+
+              {canViewInventory ? (
+                <Link className="dashboard-workspace-card" to="/inventory">
+                  <span className="dashboard-workspace-icon">□</span>
+                  <div>
+                    <strong>Inventory</strong>
+                    <span>Manage stock, movements and adjustments.</span>
+                  </div>
+                  <b>Open workspace →</b>
+                </Link>
+              ) : null}
+
               {canViewFinance ? (
-                <Link to="/finance">
-                  <strong>Finance</strong>
-                  <span>Manage expenses and financial statements</span>
+                <Link className="dashboard-workspace-card dashboard-workspace-card-finance" to="/finance">
+                  <span className="dashboard-workspace-icon">₦</span>
+                  <div>
+                    <strong>Finance</strong>
+                    <span>Manage expenses, financial statements and business finances.</span>
+                  </div>
+                  <b>Open workspace →</b>
                 </Link>
               ) : null}
             </div>

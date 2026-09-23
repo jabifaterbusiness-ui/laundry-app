@@ -19,7 +19,11 @@ vi.mock("../state/auth-store.js", () => ({
       user: {
         fullName: "Jane Manager",
         role: "BRANCH_MANAGER",
-        permissions: ["reports.view", "orders.create"],
+        permissions: [
+          "reports.view",
+          "orders.view",
+          "orders.create",
+        ],
       },
       accessToken: "token",
       activeBranchId: "branch-1",
@@ -155,38 +159,22 @@ describe("DashboardPage", () => {
     ).toHaveAttribute("href", "/inventory");
   });
 
-  it("renders quick actions for core business workflows", async () => {
+  it("renders permission-aware workspace cards", async () => {
     mockedGetDashboardReport.mockResolvedValue(report);
 
     renderDashboard();
 
     await screen.findByText("120");
 
-    const quickActions = screen.getByRole("heading", {
-      name: "Quick actions",
-    }).closest("section");
-
-    expect(quickActions).not.toBeNull();
-    expect(quickActions).toHaveTextContent("Orders");
-    expect(quickActions).toHaveTextContent("Customers");
-    expect(quickActions).toHaveTextContent("Invoices");
-    expect(quickActions).toHaveTextContent("Payments");
-    expect(quickActions).toHaveTextContent("Finance");
-
-    expect(
-      quickActions?.querySelector('a[href="/orders"]'),
-    ).toBeInTheDocument();
-    expect(
-      quickActions?.querySelector('a[href="/customers"]'),
-    ).toBeInTheDocument();
-    expect(
-      quickActions?.querySelector('a[href="/invoices"]'),
-    ).toBeInTheDocument();
-    expect(
-      quickActions?.querySelector('a[href="/payments"]'),
-    ).toBeInTheDocument();
-    expect(
-      quickActions?.querySelector('a[href="/finance"]'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Business areas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Orders.*Open workspace/i })).toHaveAttribute(
+      "href",
+      "/orders",
+    );
+    expect(screen.queryByRole("link", { name: /Finance.*Open workspace/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Customers.*Open workspace/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Invoices.*Open workspace/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Payments.*Open workspace/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Inventory.*Open workspace/i })).not.toBeInTheDocument();
   });
 });
