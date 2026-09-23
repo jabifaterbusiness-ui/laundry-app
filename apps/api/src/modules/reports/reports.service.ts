@@ -32,7 +32,10 @@ function buildPaymentEndWhere(range: ReportsDateRange) {
     : {};
 }
 
-const MONTHS = [
+const MONTHS: [
+  string, string, string, string, string, string,
+  string, string, string, string, string, string,
+] = [
   "January",
   "February",
   "March",
@@ -260,7 +263,7 @@ export async function getDashboardReport(
   for (const row of invoiceRows.filter((item) => item.outstanding > 0)) {
     const date = new Date(row.date);
     const year = String(date.getFullYear());
-    const month = MONTHS[date.getMonth()];
+    const month = MONTHS[date.getMonth()]!;
 
     outstandingByYearMonth[year] ??= {};
     outstandingByYearMonth[year][month] ??= {
