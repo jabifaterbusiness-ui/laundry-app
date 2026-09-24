@@ -665,6 +665,11 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                       max="59"
                       value={deliveryMinute}
                       disabled={!canManageReports}
+                      onFocus={(event) => {
+                        if (event.currentTarget.value === "0") {
+                          event.currentTarget.select();
+                        }
+                      }}
                       onChange={(event) =>
                         setDeliveryMinute(event.target.value)
                       }
@@ -749,6 +754,11 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                       max="59"
                       value={dailyDeliveryMinute}
                       disabled={!canManageReports}
+                      onFocus={(event) => {
+                        if (event.currentTarget.value === "0") {
+                          event.currentTarget.select();
+                        }
+                      }}
                       onChange={(event) =>
                         setDailyDeliveryMinute(event.target.value)
                       }

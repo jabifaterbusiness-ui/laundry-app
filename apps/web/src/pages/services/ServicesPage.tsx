@@ -258,6 +258,11 @@ export function ServicesPage() {
                   type="number"
                   min="0"
                   value={form.unitPrice}
+                  onFocus={(event) => {
+                    if (event.currentTarget.value === "0") {
+                      event.currentTarget.select();
+                    }
+                  }}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,

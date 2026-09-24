@@ -13,6 +13,10 @@ import {
 } from "../../lib/orders-api.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
+import {
+  createColor,
+  listColors,
+} from "../../lib/colors-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
@@ -107,6 +111,7 @@ export function OrdersPage() {
 
   const canCreateOrder = hasPermission(user, "orders.create");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
+  const canManageColors = hasPermission(user, "colors.manage");
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<OrderStatus | "">("");
@@ -114,6 +119,12 @@ export function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [openColorSelector, setOpenColorSelector] = useState<number | null>(
+    null,
+  );
+  const [colorSelectorSearch, setColorSelectorSearch] = useState("");
+  const [colorSelectorLineIndex, setColorSelectorLineIndex] = useState(0);
+  const [newColorName, setNewColorName] = useState("");
 
   const ordersQuery = useQuery({
     queryKey: [
@@ -163,6 +174,53 @@ export function OrdersPage() {
         { accessToken },
       ),
     enabled: Boolean(accessToken),
+  });
+
+  const colorsQuery = useQuery({
+    queryKey: ["colors", "order-selector"],
+    queryFn: () =>
+      listColors(
+        {
+          status: "active",
+        },
+        { accessToken },
+      ),
+    enabled: Boolean(accessToken),
+  });
+
+  const addColorMutation = useMutation({
+    mutationFn: (name: string) =>
+      createColor(name ? { name } : { name: "" }, { accessToken }),
+    onSuccess: (color) => {
+      queryClient.invalidateQueries({
+        queryKey: ["colors", "order-selector"],
+      });
+
+      if (activeWorkspaceId && color) {
+        setColorSelectorSearch("");
+        setOpenColorSelector(null);
+
+        const currentLine = lines[colorSelectorLineIndex];
+
+        if (currentLine) {
+          const selected = currentLine.colors ?? [];
+
+          if (!selected.includes(color.name)) {
+            updateLine(colorSelectorLineIndex, "colors", [
+              ...selected,
+              color.name,
+            ]);
+          }
+        }
+      }
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to add colour. Please try again.",
+      );
+    },
   });
 
   const createMutation = useMutation({
@@ -254,6 +312,7 @@ export function OrdersPage() {
 
   const customers = customersQuery.data?.data ?? [];
   const services = servicesQuery.data?.data ?? [];
+  const colors = colorsQuery.data?.data ?? [];
   const orders = ordersQuery.data?.data ?? [];
   const pagination = ordersQuery.data?.pagination;
 
@@ -350,6 +409,47 @@ export function OrdersPage() {
         ),
       },
     });
+  }
+
+  function toggleColorSelector(index: number) {
+    if (openColorSelector === index) {
+      setOpenColorSelector(null);
+      setColorSelectorSearch("");
+      return;
+    }
+
+    setColorSelectorLineIndex(index);
+    setOpenColorSelector(index);
+    setColorSelectorSearch("");
+  }
+
+  function toggleColor(index: number, colorName: string) {
+    const selected = lines[index]?.colors ?? [];
+
+    updateLine(
+      index,
+      "colors",
+      selected.includes(colorName)
+        ? selected.filter((color) => color !== colorName)
+        : [...selected, colorName],
+    );
+  }
+
+  function openAddColor(index: number) {
+    setColorSelectorLineIndex(index);
+    setNewColorName("");
+  }
+
+  function submitNewColor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const name = newColorName.trim();
+
+    if (!name) {
+      return;
+    }
+
+    addColorMutation.mutate(name);
   }
 
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
@@ -669,22 +769,126 @@ export function OrdersPage() {
                       </td>
 
                       <td>
-                        <input
-                          type="text"
-                          value={(line.colors ?? []).join(", ")}
-                          onChange={(event) =>
-                            updateLine(
-                              index,
-                              "colors",
-                              event.target.value
-                                .split(",")
-                                .map((color) => color.trim())
-                                .filter(Boolean),
-                            )
-                          }
-                          placeholder="White, Blue, Black"
-                          aria-label={`Colors for item ${index + 1}`}
-                        />
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => toggleColorSelector(index)}
+                            aria-label={`Select colors for item ${index + 1}`}
+                          >
+                            {(line.colors ?? []).length > 0
+                              ? line.colors.join(", ")
+                              : "Select colours"}
+                          </button>
+
+                          {openColorSelector === index ? (
+                            <div>
+                              <input
+                                type="search"
+                                placeholder="Search colours"
+                                value={colorSelectorSearch}
+                                onChange={(event) =>
+                                  setColorSelectorSearch(
+                                    event.target.value,
+                                  )
+                                }
+                                aria-label={`Search colours for item ${index + 1}`}
+                                autoFocus
+                              />
+
+                              <div>
+                                {colors
+                                  .filter((color) =>
+                                    color.name
+                                      .toLowerCase()
+                                      .includes(
+                                        colorSelectorSearch
+                                          .trim()
+                                          .toLowerCase(),
+                                      ),
+                                  )
+                                  .map((color) => {
+                                    const checked = (
+                                      line.colors ?? []
+                                    ).includes(color.name);
+
+                                    return (
+                                      <label key={color.id}>
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() =>
+                                            toggleColor(
+                                              index,
+                                              color.name,
+                                            )
+                                          }
+                                        />
+                                        {color.name}
+                                      </label>
+                                    );
+                                  })}
+
+                                {colors.filter((color) =>
+                                  color.name
+                                    .toLowerCase()
+                                    .includes(
+                                      colorSelectorSearch
+                                        .trim()
+                                        .toLowerCase(),
+                                    ),
+                                ).length === 0 ? (
+                                  <p>No matching colours.</p>
+                                ) : null}
+                              </div>
+
+                              {canManageColors ? (
+                                <div>
+                                  <input
+                                    value={newColorName}
+                                    onChange={(event) =>
+                                      setNewColorName(
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="New colour name"
+                                    aria-label="New colour name"
+                                  />
+
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      addColorMutation.isPending ||
+                                      !newColorName.trim()
+                                    }
+                                    onClick={() => {
+                                      const name =
+                                        newColorName.trim();
+
+                                      if (!name) {
+                                        return;
+                                      }
+
+                                      addColorMutation.mutate(name);
+                                    }}
+                                  >
+                                    {addColorMutation.isPending
+                                      ? "Adding..."
+                                      : "+ Add New Colour"}
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleColorSelector(index)
+                                }
+                              >
+                                Done
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
 
                       <td>{totalPieces}</td>

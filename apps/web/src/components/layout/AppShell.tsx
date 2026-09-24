@@ -22,6 +22,7 @@ const OPERATIONS: NavItem[] = [
 
 const MANAGEMENT: NavItem[] = [
   { label: "Services & Price List", href: "/services", icon: "◈" },
+  { label: "Colour Catalogue", href: "/colors", icon: "●" },
   { label: "Inventory", href: "/inventory", icon: "□" },
   { label: "Users", href: "/users", icon: "♟" },
   { label: "Permissions", href: "/permissions", icon: "⚙" },
@@ -205,6 +206,13 @@ export function AppShell({ children }: PropsWithChildren) {
                 if (
                   isPermissionsRoute &&
                   !hasPermission(user, "users.manage_permissions")
+                ) {
+                  return null;
+                }
+
+                if (
+                  item.href === "/colors" &&
+                  !hasPermission(user, "colors.view")
                 ) {
                   return null;
                 }

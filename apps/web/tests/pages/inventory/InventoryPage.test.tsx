@@ -220,6 +220,28 @@ describe("InventoryPage", () => {
     });
   });
 
+  it("replaces the default zero when entering a low stock threshold", async () => {
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "New inventory item",
+      }),
+    );
+
+    const input = screen.getByLabelText("Low Stock Threshold");
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "5" } });
+
+    expect(input).toHaveValue(5);
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "25" } });
+
+    expect(input).toHaveValue(25);
+  });
+
   it("validates the inventory item form before creating", async () => {
     renderPage();
 

@@ -1820,6 +1820,11 @@ const subscriptionPriceDeleteMutation = useMutation({
                 min="0"
                 step="1"
                 value={providerForm.displayOrder}
+                onFocus={(event) => {
+                  if (event.currentTarget.value === "0") {
+                    event.currentTarget.select();
+                  }
+                }}
                 onChange={(event) =>
                   setProviderForm((current) => ({
                     ...current,
@@ -2037,6 +2042,11 @@ const subscriptionPriceDeleteMutation = useMutation({
                 min="0"
                 step="1"
                 value={methodForm.displayOrder}
+                onFocus={(event) => {
+                  if (event.currentTarget.value === "0") {
+                    event.currentTarget.select();
+                  }
+                }}
                 onChange={(event) =>
                   setMethodForm((current) => ({
                     ...current,

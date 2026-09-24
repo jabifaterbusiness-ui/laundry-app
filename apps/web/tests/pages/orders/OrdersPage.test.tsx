@@ -63,6 +63,33 @@ const serviceB = {
   updatedAt: "",
 };
 
+const colorBlack = {
+  id: "color-black",
+  businessId: "business-a",
+  name: "Black",
+  isActive: true,
+  createdAt: "",
+  updatedAt: "",
+};
+
+const colorWhite = {
+  id: "color-white",
+  businessId: "business-a",
+  name: "White",
+  isActive: true,
+  createdAt: "",
+  updatedAt: "",
+};
+
+const colorRoyalBlue = {
+  id: "color-royal-blue",
+  businessId: "business-a",
+  name: "Royal Blue",
+  isActive: true,
+  createdAt: "",
+  updatedAt: "",
+};
+
 const orderA: Order = {
   id: "order-a",
   businessId: "business-a",
@@ -96,12 +123,21 @@ vi.mock("../../../src/lib/services-api.js", () => ({
   listServices: vi.fn(),
 }));
 
+vi.mock("../../../src/lib/colors-api.js", () => ({
+  listColors: vi.fn(),
+  createColor: vi.fn(),
+}));
+
 import {
   createOrderWithOfflineQueue,
   listOrders,
 } from "../../../src/lib/orders-api.js";
 import { listCustomers } from "../../../src/lib/customers-api.js";
 import { listServices } from "../../../src/lib/services-api.js";
+import {
+  createColor,
+  listColors,
+} from "../../../src/lib/colors-api.js";
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -127,7 +163,12 @@ function seedAuth() {
       id: "user-a",
       businessId: "business-a",
       role: "STAFF",
-      permissions: ["orders.create", "orders.change_status"],
+      permissions: [
+      "orders.create",
+      "orders.change_status",
+      "colors.view",
+      "colors.manage",
+    ],
       branches: [
         {
           id: "branch-a",
@@ -167,6 +208,16 @@ beforeEach(() => {
     },
   });
 
+  vi.mocked(listColors).mockResolvedValue({
+    data: [colorBlack, colorWhite, colorRoyalBlue],
+  });
+
+  vi.mocked(createColor).mockResolvedValue({
+    ...colorBlack,
+    id: "color-new",
+    name: "Emerald",
+  });
+
   vi.mocked(listOrders).mockResolvedValue({
     data: [],
     pagination: {
@@ -175,6 +226,152 @@ beforeEach(() => {
       total: 0,
       totalPages: 1,
     },
+  });
+});
+
+describe("OrdersPage colour selector", () => {
+  async function openOrderColourSelector() {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^New order$/i,
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Customer"), {
+      target: { value: customerA.id },
+    });
+
+    const serviceSelect = screen.getAllByRole("combobox").find(
+      (element) =>
+        element instanceof HTMLSelectElement &&
+        Array.from(element.options).some(
+          (option) => option.value === serviceA.id,
+        ),
+    );
+
+    if (!serviceSelect) {
+      throw new Error("Service selector not found");
+    }
+
+    fireEvent.change(serviceSelect, {
+      target: { value: serviceA.id },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Select colors for item 1",
+      }),
+    );
+  }
+
+  it("loads active catalogue colours into the order selector", async () => {
+    await openOrderColourSelector();
+
+    expect(
+      await screen.findByLabelText("Search colours for item 1"),
+    ).toBeInTheDocument();
+
+    expect(screen.getByLabelText("Black")).toBeInTheDocument();
+    expect(screen.getByLabelText("White")).toBeInTheDocument();
+    expect(screen.getByLabelText("Royal Blue")).toBeInTheDocument();
+
+    expect(vi.mocked(listColors)).toHaveBeenCalledWith(
+      { status: "active" },
+      { accessToken: "test-token" },
+    );
+  });
+
+  it("searches the colour catalogue and supports multiple selections", async () => {
+    await openOrderColourSelector();
+
+    const search = await screen.findByLabelText(
+      "Search colours for item 1",
+    );
+
+    fireEvent.change(search, {
+      target: { value: "royal" },
+    });
+
+    expect(screen.getByLabelText("Royal Blue")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Black")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("White")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Royal Blue"));
+
+    fireEvent.change(search, {
+      target: { value: "" },
+    });
+
+    fireEvent.click(screen.getByLabelText("Black"));
+
+    expect(
+      screen.getByRole("button", {
+        name: "Select colors for item 1",
+      }),
+    ).toHaveTextContent("Royal Blue, Black");
+  });
+
+  it("does not offer Add New Colour without colors.manage permission", async () => {
+    useAuthStore.setState({
+      user: {
+        id: "user-a",
+        businessId: "business-a",
+        role: "STAFF",
+        permissions: ["orders.create", "orders.change_status", "colors.view"],
+        branches: [
+          {
+            id: "branch-a",
+            name: "Main Branch",
+          },
+        ],
+      } as never,
+      accessToken: "test-token",
+      refreshToken: "refresh-token",
+      activeBranchId: "branch-a",
+    });
+
+    await openOrderColourSelector();
+
+    expect(
+      screen.queryByRole("button", {
+        name: "+ Add New Colour",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows an authorized user to add a colour and selects it on the current item", async () => {
+    await openOrderColourSelector();
+
+    const input = await screen.findByLabelText("New colour name");
+
+    fireEvent.change(input, {
+      target: { value: "Emerald" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "+ Add New Colour",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(vi.mocked(createColor)).toHaveBeenCalledWith(
+        { name: "Emerald" },
+        { accessToken: "test-token" },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: "Select colors for item 1",
+        }),
+      ).toHaveTextContent("Emerald");
+    });
   });
 });
 

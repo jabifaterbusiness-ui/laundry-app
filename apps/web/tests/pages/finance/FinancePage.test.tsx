@@ -436,6 +436,39 @@ describe("FinancePage", () => {
     expect(within(ownerRow).getByText("owner@example.com")).toBeInTheDocument();
   });
 
+  it("replaces zero when entering monthly and daily delivery minutes", async () => {
+    const user = userEvent.setup();
+
+    renderPage([
+      "reports.view",
+      "expenses.view",
+      "reports.manage",
+    ]);
+
+    const deliverySection = await screen.findByRole("heading", {
+      name: "Automatic financial statement delivery",
+    });
+
+    const section = deliverySection.closest("section");
+    expect(section).not.toBeNull();
+
+    const monthlyMinute = within(
+      section as HTMLElement,
+    ).getByLabelText("Minute");
+
+    const dailyMinute = within(
+      section as HTMLElement,
+    ).getByLabelText("Daily minute");
+
+    await user.click(monthlyMinute);
+    await user.keyboard("5");
+    expect(monthlyMinute).toHaveValue(5);
+
+    await user.click(dailyMinute);
+    await user.keyboard("25");
+    expect(dailyMinute).toHaveValue(25);
+  });
+
   it("saves financial statement delivery settings with the selected schedule and channels", async () => {
     const user = userEvent.setup();
 

@@ -17,6 +17,7 @@ import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
 import { branchesRouter } from "./modules/branches/branches.routes.js";
 import { paymentsRouter } from "./modules/payments/payments.routes.js";
 import { servicesRouter } from "./modules/services/services.routes.js";
+import { colorsRouter } from "./modules/colors/colors.routes.js";
 import iousRouter from "./modules/payroll/ious.routes.js";
 import loansRouter from "./modules/payroll/loans.routes.js";
 import repaymentsRouter from "./modules/payroll/repayments.routes.js";
@@ -100,6 +101,7 @@ export function createApp() {
   mountProtectedTenantRoute("/branches", branchesRouter);
   mountProtectedTenantRoute("/customers", customersRouter);
   mountProtectedTenantRoute("/services", servicesRouter);
+  mountProtectedTenantRoute("/colors", colorsRouter);
   mountProtectedTenantRoute("/orders", ordersRouter);
   mountProtectedTenantRoute("/garments", garmentsRouter);
   mountProtectedTenantRoute("/invoices", invoicesRouter);

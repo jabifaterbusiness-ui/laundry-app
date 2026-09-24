@@ -110,6 +110,8 @@ model Business {
   // own historical snapshot, so later changes do not affect old invoices.
   defaultCustomerAgreement String @default("Customer agrees to the laundry service terms and conditions.")
 
+  colors Color[]
+
   // -------------------------------------------------------------------
   // SUBSCRIPTION
   // -------------------------------------------------------------------
@@ -465,6 +467,21 @@ enum OrderStatus {
   READY_FOR_PICKUP
   COMPLETED
   CANCELLED
+}
+
+model Color {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+  @@map("colors")
 }
 
 model OrderNumberSequence {

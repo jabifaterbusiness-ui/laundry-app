@@ -553,6 +553,11 @@ export function InventoryPage() {
                   min="0"
                   step="1"
                   value={itemForm.lowStockThreshold}
+                  onFocus={(event) => {
+                    if (event.currentTarget.value === "0") {
+                      event.currentTarget.select();
+                    }
+                  }}
                   onChange={(event) =>
                     setItemForm((current) => ({
                       ...current,

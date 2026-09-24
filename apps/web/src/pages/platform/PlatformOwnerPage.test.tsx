@@ -1024,6 +1024,25 @@ describe("PlatformOwnerPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("replaces zero when entering provider and payment method display orders", async () => {
+    renderPage();
+
+    const providerInput = await screen.findByLabelText(
+      "Provider display order",
+    );
+    const methodInput = await screen.findByLabelText(
+      "Payment method display order",
+    );
+
+    await userEvent.click(providerInput);
+    await userEvent.keyboard("5");
+    expect(providerInput).toHaveValue(5);
+
+    await userEvent.click(methodInput);
+    await userEvent.keyboard("25");
+    expect(methodInput).toHaveValue(25);
+  });
+
   it("does not expose the control center to tenant roles", () => {
     useAuthStore.setState({
       user: {

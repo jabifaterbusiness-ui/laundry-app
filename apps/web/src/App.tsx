@@ -8,6 +8,7 @@ import { CustomersPage } from "./pages/customers/CustomersPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
 import { DataManagementPage } from "./pages/DataManagementPage.js";
 import { ServicesPage } from "./pages/services/ServicesPage.js";
+import { ColorsPage } from "./pages/colors/ColorsPage.js";
 import { OrdersPage } from "./pages/orders/OrdersPage.js";
 import { InvoicesPage } from "./pages/invoices/InvoicesPage.js";
 import { PaymentsPage } from "./pages/payments/PaymentsPage.js";
@@ -33,6 +34,7 @@ function AuthenticatedLayout() {
           <Route path="/data-management" element={<DataManagementPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/services" element={<ServicesPage />} />
+          <Route path="/colors" element={<ColorsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />

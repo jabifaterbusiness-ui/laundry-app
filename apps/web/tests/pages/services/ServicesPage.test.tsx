@@ -125,6 +125,24 @@ describe("ServicesPage", () => {
     });
   });
 
+  it("replaces the default zero when entering a unit price", async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "New service" }));
+
+    const input = screen.getByLabelText("Unit Price (₦)");
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "5" } });
+
+    expect(input).toHaveValue(5);
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "25" } });
+
+    expect(input).toHaveValue(25);
+  });
+
   it("edits an existing service", async () => {
     renderPage();
 

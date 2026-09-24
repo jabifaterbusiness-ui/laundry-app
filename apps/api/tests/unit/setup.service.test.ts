@@ -29,6 +29,9 @@ const {
     businessPaymentIdentity: {
       create: vi.fn(),
     },
+    color: {
+      createMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   hashPasswordMock: vi.fn(),
@@ -98,6 +101,9 @@ beforeEach(() => {
       businessPaymentIdentity: {
         create: prismaMock.businessPaymentIdentity.create,
       },
+      color: {
+        createMany: prismaMock.color.createMany,
+      },
     }),
   );
 
@@ -146,6 +152,10 @@ beforeEach(() => {
     createdAt: new Date(),
     updatedAt: new Date(),
   }));
+
+  prismaMock.color.createMany.mockResolvedValue({
+    count: 26,
+  });
 
   issueTokenPairMock.mockResolvedValue({
     accessToken: "access-token",

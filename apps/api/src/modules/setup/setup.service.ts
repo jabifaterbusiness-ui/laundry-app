@@ -4,6 +4,7 @@ import { hashPassword, issueTokenPair } from "../auth/auth.service.js";
 import type { SetupInput } from "./setup.validation.js";
 import { createBusinessPaymentIdentity } from "../payments/business-payment-identity.service.js";
 import { getEffectivePermissionCodes } from "../permissions/permissions.service.js";
+import { ensureDefaultColors } from "../colors/colors.service.js";
 
 function slugify(value: string) {
   const slug = value
@@ -79,6 +80,8 @@ export async function completeSetup(input: SetupInput) {
     });
 
     await createBusinessPaymentIdentity(tx, business.id);
+
+    await ensureDefaultColors(business.id, tx);
 
     const branch = await tx.branch.create({
       data: {
