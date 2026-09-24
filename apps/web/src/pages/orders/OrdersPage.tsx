@@ -769,19 +769,63 @@ export function OrdersPage() {
                       </td>
 
                       <td>
-                        <div>
+                        <div
+                          style={{
+                            position: "relative",
+                            minWidth: 180,
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={() => toggleColorSelector(index)}
                             aria-label={`Select colors for item ${index + 1}`}
+                            aria-expanded={openColorSelector === index}
+                            style={{
+                              width: "100%",
+                              minHeight: 40,
+                              padding: "8px 12px",
+                              border: "1px solid #ccc",
+                              borderRadius: 8,
+                              background: "#fff",
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
                           >
-                            {(line.colors ?? []).length > 0
-                              ? line.colors.join(", ")
-                              : "Select colours"}
+                            <span>
+                              {(line.colors ?? []).length > 0
+                                ? line.colors.join(", ")
+                                : "Select colours"}
+                            </span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                float: "right",
+                                marginLeft: 8,
+                              }}
+                            >
+                              ▾
+                            </span>
                           </button>
 
                           {openColorSelector === index ? (
-                            <div>
+                            <div
+                              role="dialog"
+                              aria-label={`Colour selector for item ${index + 1}`}
+                              style={{
+                                position: "absolute",
+                                top: "calc(100% + 6px)",
+                                left: 0,
+                                right: 0,
+                                minWidth: 260,
+                                zIndex: 100,
+                                background: "#fff",
+                                border: "1px solid #ddd",
+                                borderRadius: 8,
+                                boxShadow:
+                                  "0 8px 24px rgba(0, 0, 0, 0.12)",
+                                padding: 12,
+                              }}
+                            >
                               <input
                                 type="search"
                                 placeholder="Search colours"
@@ -793,9 +837,24 @@ export function OrdersPage() {
                                 }
                                 aria-label={`Search colours for item ${index + 1}`}
                                 autoFocus
+                                style={{
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  padding: "9px 11px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: 8,
+                                  marginBottom: 8,
+                                }}
                               />
 
-                              <div>
+                              <div
+                                style={{
+                                  maxHeight: 220,
+                                  overflowY: "auto",
+                                  border: "1px solid #eee",
+                                  borderRadius: 6,
+                                }}
+                              >
                                 {colors
                                   .filter((color) =>
                                     color.name
@@ -812,7 +871,16 @@ export function OrdersPage() {
                                     ).includes(color.name);
 
                                     return (
-                                      <label key={color.id}>
+                                      <label
+                                        key={color.id}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          padding: "9px 10px",
+                                          cursor: "pointer",
+                                        }}
+                                      >
                                         <input
                                           type="checkbox"
                                           checked={checked}
@@ -823,7 +891,7 @@ export function OrdersPage() {
                                             )
                                           }
                                         />
-                                        {color.name}
+                                        <span>{color.name}</span>
                                       </label>
                                     );
                                   })}
@@ -837,12 +905,25 @@ export function OrdersPage() {
                                         .toLowerCase(),
                                     ),
                                 ).length === 0 ? (
-                                  <p>No matching colours.</p>
+                                  <p
+                                    style={{
+                                      padding: "10px",
+                                      margin: 0,
+                                    }}
+                                  >
+                                    No matching colours.
+                                  </p>
                                 ) : null}
                               </div>
 
                               {canManageColors ? (
-                                <div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    marginTop: 10,
+                                  }}
+                                >
                                   <input
                                     value={newColorName}
                                     onChange={(event) =>
@@ -852,6 +933,13 @@ export function OrdersPage() {
                                     }
                                     placeholder="New colour name"
                                     aria-label="New colour name"
+                                    style={{
+                                      flex: 1,
+                                      minWidth: 0,
+                                      padding: "8px 10px",
+                                      border: "1px solid #ccc",
+                                      borderRadius: 8,
+                                    }}
                                   />
 
                                   <button
@@ -883,6 +971,10 @@ export function OrdersPage() {
                                 onClick={() =>
                                   toggleColorSelector(index)
                                 }
+                                style={{
+                                  width: "100%",
+                                  marginTop: 10,
+                                }}
                               >
                                 Done
                               </button>
