@@ -66,6 +66,7 @@ import { recordAuditEvent } from "../../src/lib/audit.js";
 import { createApp } from "../../src/app.js";
 
 const businessFindFirst = vi.mocked(prisma.business.findFirst);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const userFindFirst = vi.mocked(prisma.user.findFirst);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
 const iouFindFirst = vi.mocked(prisma.iOU.findFirst);
@@ -88,6 +89,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -180,6 +182,7 @@ const repaymentFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findUserOverride.mockResolvedValue(null);
 
   (prisma.$transaction as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     async (callback: any) => callback(prisma),
@@ -297,6 +300,7 @@ describe("Financial Repayments routes - authorization", () => {
 
   it("BRANCH_MANAGER can create a repayment", async () => {
     allowBranch("user-manager-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     userFindFirst.mockResolvedValue(employeeFixture as never);
     branchFindFirst.mockResolvedValue(branchFixture as never);

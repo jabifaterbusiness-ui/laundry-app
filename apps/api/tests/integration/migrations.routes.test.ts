@@ -53,6 +53,7 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
       id: auth.userId,
       email: auth.email,
       role: auth.role,
+      securityRole: auth.role,
       businessId: auth.businessId,
     };
 

@@ -91,7 +91,13 @@ describe("create - security: businessId cannot be client-controlled", () => {
 
     const req = makeReq({
       body: { name: "Jane", phone: "555-123-4567", businessId: "attacker-business-id" },
-      user: { id: "user-1", email: "a@example.com", role: "BUSINESS_OWNER", businessId: "real-biz-id" },
+      user: {
+        id: "user-1",
+        email: "a@example.com",
+        role: "BUSINESS_OWNER",
+        securityRole: "BUSINESS_OWNER",
+        businessId: "real-biz-id",
+      },
     });
 
     await create(req, makeRes());

@@ -223,6 +223,7 @@ export async function updateFinancialStatementRecipient(
       user: {
         select: {
           role: true,
+          securityRole: true,
           isActive: true,
         },
       },
@@ -235,7 +236,7 @@ export async function updateFinancialStatementRecipient(
 
   if (
     existing.user.isActive &&
-    existing.user.role === "BUSINESS_OWNER" &&
+    existing.user.securityRole === "BUSINESS_OWNER" &&
     input.enabled === false
   ) {
     throw new AppError(
@@ -291,6 +292,7 @@ export async function removeFinancialStatementRecipient(
       user: {
         select: {
           role: true,
+          securityRole: true,
           isActive: true,
         },
       },
@@ -301,7 +303,7 @@ export async function removeFinancialStatementRecipient(
     throw new AppError("Financial statement recipient not found", 404);
   }
 
-  if (existing.user.isActive && existing.user.role === "BUSINESS_OWNER") {
+  if (existing.user.isActive && existing.user.securityRole === "BUSINESS_OWNER") {
     throw new AppError(
       "An active business owner must remain a financial statement recipient",
       409,

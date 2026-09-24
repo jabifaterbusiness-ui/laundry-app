@@ -14,7 +14,7 @@ export async function requireActiveBusinessSubscription(
 
   // Platform administrators are not tenant-scoped and must retain access
   // to administrative/repair capabilities even when a tenant is expired.
-  if (req.user.role === "PLATFORM_ADMIN") {
+  if (req.user.securityRole === "PLATFORM_ADMIN") {
     next();
     return;
   }

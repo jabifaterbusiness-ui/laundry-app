@@ -197,8 +197,11 @@ model User {
   email        String  @unique
   passwordHash String
   fullName     String
-  role         Role    @default(STAFF)
-  position     String?
+  // Visible business job title chosen by management.
+  // This is descriptive only and never grants access.
+  role         String  @default("Staff")
+  // Internal security foundation used only for protected system behavior.
+  securityRole Role    @default(STAFF)
   isActive     Boolean @default(true)
   deletedAt    DateTime?
 

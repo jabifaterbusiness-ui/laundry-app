@@ -323,7 +323,8 @@ describe("financial statement recipients", () => {
         enabled: true,
         whatsappNumber: null,
         user: {
-          role: "BUSINESS_OWNER",
+          role: "Owner",
+          securityRole: "BUSINESS_OWNER",
           isActive: true,
         },
       });
@@ -352,7 +353,8 @@ describe("financial statement recipients", () => {
         id: "owner-recipient-1",
         userId: "owner-1",
         user: {
-          role: "BUSINESS_OWNER",
+          role: "Owner",
+          securityRole: "BUSINESS_OWNER",
           isActive: true,
         },
       });

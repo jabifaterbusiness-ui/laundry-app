@@ -64,6 +64,9 @@ const loanFindMany = vi.mocked(prisma.loan.findMany);
 const loanCreate = vi.mocked(prisma.loan.create);
 const loanUpdate = vi.mocked(prisma.loan.update);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const userPermissionOverrideFindUnique = vi.mocked(
+  prisma.userPermissionOverride.findUnique,
+);
 
 function tokenFor(
   role: string,
@@ -75,6 +78,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -134,6 +138,8 @@ const loanFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  userPermissionOverrideFindUnique.mockResolvedValue(null);
 
   businessFindFirst.mockResolvedValue({
     id: "biz-A",
@@ -225,6 +231,7 @@ describe("Loans routes - authorization", () => {
 
   it("BRANCH_MANAGER can create a loan", async () => {
     allowBranch("user-manager-a", BRANCH_A, "biz-A");
+    userPermissionOverrideFindUnique.mockResolvedValue({ allowed: true } as never);
 
     userFindFirst.mockResolvedValue(employeeFixture as never);
     branchFindFirst.mockResolvedValue({

@@ -4,43 +4,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { PermissionsPage } from "./PermissionsPage.js";
 import {
-  getRolePermissions,
+  allowAllUserPermissions,
+  disallowAllUserPermissions,
   getUserPermissions,
   listPermissions,
-  removeRolePermission,
   removeUserPermission,
-  updateRolePermission,
   updateUserPermission,
 } from "../../lib/permissions-api.js";
 import { listUsers } from "../../lib/users-api.js";
 
+let mockUser = {
+  id: "manager-1",
+  fullName: "Jane Manager",
+  email: "jane@example.com",
+  role: "Branch Manager",
+  securityRole: "BRANCH_MANAGER" as const,
+  permissions: ["users.manage_permissions"],
+};
+
 vi.mock("../../lib/permissions-api.js", () => ({
-  getRolePermissions: vi.fn(),
+  allowAllUserPermissions: vi.fn(),
+  disallowAllUserPermissions: vi.fn(),
   getUserPermissions: vi.fn(),
   listPermissions: vi.fn(),
-  removeRolePermission: vi.fn(),
   removeUserPermission: vi.fn(),
-  updateRolePermission: vi.fn(),
   updateUserPermission: vi.fn(),
 }));
 
 vi.mock("../../lib/users-api.js", () => ({
   listUsers: vi.fn(),
 }));
-
-let mockUser: {
-  id: string;
-  fullName: string;
-  email: string;
-  role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF";
-  permissions: string[];
-} | null = {
-  id: "manager-1",
-  fullName: "Jane Manager",
-  email: "jane@example.com",
-  role: "BRANCH_MANAGER",
-  permissions: ["users.manage_permissions"],
-};
 
 vi.mock("../../state/auth-store.js", () => ({
   useAuthStore: (selector: (state: {
@@ -54,13 +47,12 @@ vi.mock("../../state/auth-store.js", () => ({
 }));
 
 const mockedListPermissions = vi.mocked(listPermissions);
-const mockedGetRolePermissions = vi.mocked(getRolePermissions);
 const mockedGetUserPermissions = vi.mocked(getUserPermissions);
 const mockedListUsers = vi.mocked(listUsers);
-const mockedUpdateRolePermission = vi.mocked(updateRolePermission);
 const mockedUpdateUserPermission = vi.mocked(updateUserPermission);
-const mockedRemoveRolePermission = vi.mocked(removeRolePermission);
 const mockedRemoveUserPermission = vi.mocked(removeUserPermission);
+const mockedAllowAll = vi.mocked(allowAllUserPermissions);
+const mockedDisallowAll = vi.mocked(disallowAllUserPermissions);
 
 const permissions: import("../../lib/permissions-api.js").RolePermission[] = [
   {
@@ -68,16 +60,16 @@ const permissions: import("../../lib/permissions-api.js").RolePermission[] = [
     module: "orders",
     action: "view",
     description: "View orders",
-    source: "default" as const,
-    allowed: true,
+    source: "default",
+    allowed: false,
   },
   {
     code: "orders.create",
     module: "orders",
     action: "create",
     description: "Create orders",
-    source: "business_role_override" as const,
-    allowed: false,
+    source: "user_override",
+    allowed: true,
   },
 ];
 
@@ -106,7 +98,8 @@ beforeEach(() => {
     id: "manager-1",
     fullName: "Jane Manager",
     email: "jane@example.com",
-    role: "BRANCH_MANAGER",
+    role: "Branch Manager",
+    securityRole: "BRANCH_MANAGER",
     permissions: ["users.manage_permissions"],
   };
 
@@ -118,23 +111,25 @@ beforeEach(() => {
       description,
     })),
   );
-  mockedGetRolePermissions.mockResolvedValue(permissions);
+
   mockedGetUserPermissions.mockResolvedValue({
     user: {
       id: "staff-1",
       fullName: "John Staff",
       email: "john@example.com",
-      role: "STAFF",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
+      isActive: true,
     },
     permissions,
   });
+
   mockedListUsers.mockResolvedValue([
     {
       id: "staff-1",
       email: "john@example.com",
       fullName: "John Staff",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
       isActive: true,
       businessId: "business-1",
       createdAt: "2026-09-01T00:00:00.000Z",
@@ -142,64 +137,82 @@ beforeEach(() => {
       branches: [],
     },
   ]);
-  const viewOrdersPermission = permissions.find(
-    ({ code }) => code === "orders.view",
-  )!;
-  mockedUpdateRolePermission.mockResolvedValue(viewOrdersPermission);
-  mockedUpdateUserPermission.mockResolvedValue(viewOrdersPermission);
-  mockedRemoveRolePermission.mockResolvedValue(undefined);
+
+  mockedUpdateUserPermission.mockResolvedValue(permissions[0]!);
   mockedRemoveUserPermission.mockResolvedValue(undefined);
+  mockedAllowAll.mockResolvedValue({
+    allowed: true,
+    count: permissions.length,
+  });
+  mockedDisallowAll.mockResolvedValue({
+    allowed: false,
+    count: permissions.length,
+  });
 });
 
 describe("PermissionsPage", () => {
   it("blocks users who do not have users.manage_permissions", () => {
     mockUser = {
-      id: "staff-1",
-      fullName: "John Staff",
-      email: "john@example.com",
-      role: "STAFF",
+      ...mockUser,
       permissions: [],
     };
 
     renderPermissions();
 
     expect(
-      screen.getByText(/do not have permission to manage user permissions/i),
+      screen.getByText(
+        /do not have permission to manage user permissions/i,
+      ),
     ).toBeInTheDocument();
+
     expect(mockedListPermissions).not.toHaveBeenCalled();
   });
 
-  it("loads and displays role permissions", async () => {
+  it("manages permissions for an individual user", async () => {
     renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", {
+      name: /John Staff — Laundry Supervisor/,
+    });
+
+    fireEvent.change(userSelect, {
+      target: { value: "staff-1" },
+    });
 
     expect(
       await screen.findByText("View orders"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Create orders")).toBeInTheDocument();
-    expect(screen.getByText("business role override")).toBeInTheDocument();
-  });
 
-  it("updates a role permission", async () => {
-    renderPermissions();
-
-    await screen.findByText("View orders");
+    expect(
+      screen.getByText(/John Staff.*Laundry Supervisor/),
+    ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Deny" }),
+      screen.getByRole("button", { name: "Allow" }),
     );
 
     await waitFor(() => {
-      expect(mockedUpdateRolePermission).toHaveBeenCalledWith(
-        "STAFF",
+      expect(mockedUpdateUserPermission).toHaveBeenCalledWith(
+        "staff-1",
         "orders.view",
-        false,
+        true,
         "token",
       );
     });
   });
 
-  it("resets a role override", async () => {
+  it("resets an individual permission override", async () => {
     renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", {
+      name: /John Staff — Laundry Supervisor/,
+    });
+
+    fireEvent.change(userSelect, {
+      target: { value: "staff-1" },
+    });
 
     await screen.findByText("Create orders");
 
@@ -208,43 +221,61 @@ describe("PermissionsPage", () => {
     );
 
     await waitFor(() => {
-      expect(mockedRemoveRolePermission).toHaveBeenCalledWith(
-        "STAFF",
+      expect(mockedRemoveUserPermission).toHaveBeenCalledWith(
+        "staff-1",
         "orders.create",
         "token",
       );
     });
   });
 
-  it("supports individual user permissions", async () => {
+  it("supports Allow All for an individual user", async () => {
     renderPermissions();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Individual user" }),
-    );
-
     const userSelect = await screen.findByLabelText("User");
-    await screen.findByRole("option", { name: /John Staff.*Staff/ });
+    await screen.findByRole("option", {
+      name: /John Staff — Laundry Supervisor/,
+    });
 
     fireEvent.change(userSelect, {
       target: { value: "staff-1" },
     });
 
-    await waitFor(() => {
-      expect(userSelect).toHaveValue("staff-1");
-    });
-
-    expect(await screen.findByText("View orders")).toBeInTheDocument();
+    await screen.findByText("View orders");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Deny" }),
+      screen.getByRole("button", { name: "Allow All" }),
     );
 
     await waitFor(() => {
-      expect(mockedUpdateUserPermission).toHaveBeenCalledWith(
+      expect(mockedAllowAll).toHaveBeenCalledWith(
         "staff-1",
-        "orders.view",
-        false,
+        "token",
+      );
+    });
+  });
+
+  it("supports Disallow All for an individual user", async () => {
+    renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", {
+      name: /John Staff — Laundry Supervisor/,
+    });
+
+    fireEvent.change(userSelect, {
+      target: { value: "staff-1" },
+    });
+
+    await screen.findByText("View orders");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disallow All" }),
+    );
+
+    await waitFor(() => {
+      expect(mockedDisallowAll).toHaveBeenCalledWith(
+        "staff-1",
         "token",
       );
     });
@@ -256,8 +287,7 @@ describe("PermissionsPage", () => {
         id: "owner-1",
         email: "owner@example.com",
         fullName: "Jane Owner",
-        role: "BUSINESS_OWNER",
-        position: null,
+        role: "Business Owner",
         isActive: true,
         businessId: "business-1",
         createdAt: "2026-09-01T00:00:00.000Z",
@@ -271,33 +301,35 @@ describe("PermissionsPage", () => {
         id: "owner-1",
         fullName: "Jane Owner",
         email: "owner@example.com",
-        role: "BUSINESS_OWNER",
+        role: "Business Owner",
+        securityRole: "BUSINESS_OWNER",
+        isActive: true,
       },
       permissions,
     });
 
     renderPermissions();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Individual user" }),
-    );
-
     const userSelect = await screen.findByLabelText("User");
     await screen.findByRole("option", {
-      name: /Jane Owner.*Business Owner/,
+      name: /Jane Owner — Business Owner/,
     });
 
     fireEvent.change(userSelect, {
       target: { value: "owner-1" },
     });
 
-    await waitFor(() => {
-      expect(userSelect).toHaveValue("owner-1");
-    });
-
     expect(
       await screen.findByText(/Business Owner access is system-wide/i),
     ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: "Allow All" }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: "Disallow All" }),
+    ).not.toBeInTheDocument();
 
     expect(
       screen.getAllByRole("button", { name: /Deny|Allow/ }).every(

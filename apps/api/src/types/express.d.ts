@@ -10,7 +10,8 @@ declare global {
       // src/middleware/branch-context.ts.
       user?: {
         id: string;
-        role: Role;
+        role: string;
+        securityRole: Role;
         email: string;
         businessId: string | null;
       };

@@ -22,14 +22,14 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
 // src/middleware/branch-context.ts. businessId is included because, for
 // v1, a user's business membership is fixed at creation and doesn't
 // change during a session.
-type TokenSubject = Pick<User, "id" | "email" | "role" | "businessId">;
+type TokenSubject = Pick<User, "id" | "email" | "securityRole" | "businessId">;
 
 function signAccessToken(user: TokenSubject): string {
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      securityRole: user.securityRole,
       businessId: user.businessId,
     },
     config.auth.accessTokenSecret,

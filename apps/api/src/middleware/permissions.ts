@@ -12,7 +12,7 @@ export function requirePermission(permissionCode: string) {
     void hasPermission(
       req.user.id,
       req.user.businessId,
-      req.user.role,
+      req.user.securityRole,
       permissionCode,
     )
       .then((allowed) => {

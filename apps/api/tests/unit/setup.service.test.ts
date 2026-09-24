@@ -124,6 +124,7 @@ beforeEach(() => {
     email: input.ownerEmail,
     fullName: input.ownerName,
     role: "BUSINESS_OWNER",
+        securityRole: "BUSINESS_OWNER",
     businessId: "business-1",
   });
 

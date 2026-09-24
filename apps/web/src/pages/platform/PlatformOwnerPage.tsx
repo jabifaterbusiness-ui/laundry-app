@@ -49,7 +49,7 @@ function formatDate(value: string): string {
 
 export function PlatformOwnerPage() {
   const { user, accessToken } = useAuthStore();
-  const isPlatformAdmin = user?.role === "PLATFORM_ADMIN";
+  const isPlatformAdmin = user?.securityRole === "PLATFORM_ADMIN";
 
   const overviewQuery = useQuery({
     queryKey: ["platform", "overview"],

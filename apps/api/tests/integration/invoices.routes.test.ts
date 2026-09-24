@@ -68,6 +68,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -222,6 +223,7 @@ describe("Invoices routes - branch context", () => {
 describe("Invoices routes - authorization", () => {
   it("STAFF can list invoices", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindMany.mockResolvedValue([]);
     invoiceCount.mockResolvedValue(0);
@@ -236,6 +238,7 @@ describe("Invoices routes - authorization", () => {
 
   it("BRANCH_MANAGER can list invoices", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindMany.mockResolvedValue([]);
     invoiceCount.mockResolvedValue(0);
@@ -264,6 +267,7 @@ describe("Invoices routes - authorization", () => {
 
   it("STAFF can create an invoice", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,
@@ -327,7 +331,7 @@ describe("Invoices routes - permission enforcement", () => {
   it("rejects STAFF when invoices.manage is explicitly denied", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
-    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+    findUserOverride.mockResolvedValue({ allowed: false } as never);
 
     const res = await request(app)
       .post("/api/v1/invoices")

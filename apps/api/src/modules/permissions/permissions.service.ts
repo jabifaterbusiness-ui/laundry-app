@@ -1,10 +1,7 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
-import {
-  DEFAULT_ROLE_PERMISSIONS,
-  PERMISSIONS,
-} from "./permissions.catalog.js";
+import { PERMISSIONS } from "./permissions.catalog.js";
 
 export async function hasPermission(
   userId: string,
@@ -51,22 +48,10 @@ export async function hasPermission(
     return userOverride.allowed;
   }
 
-  const roleOverride = await prisma.businessRolePermission.findUnique({
-    where: {
-      businessId_role_permissionId: {
-        businessId,
-        role,
-        permissionId: permission.id,
-      },
-    },
-    select: { allowed: true },
-  });
-
-  if (roleOverride) {
-    return roleOverride.allowed;
-  }
-
-  return DEFAULT_ROLE_PERMISSIONS[role]?.includes(permissionCode) ?? false;
+  // Ordinary-user access is controlled exclusively by the individual
+  // user permission override. The visible Role is a job title only and
+  // must never grant access through role defaults or role overrides.
+  return false;
 }
 
 export async function getEffectivePermissionCodes(
@@ -88,36 +73,20 @@ export async function getEffectivePermissionCodes(
     return [];
   }
 
-  const [userOverrides, roleOverrides] = await Promise.all([
-    prisma.userPermissionOverride.findMany({
-      where: {
-        businessId,
-        userId,
-      },
-      select: {
-        permission: {
-          select: {
-            code: true,
-          },
+  const userOverrides = await prisma.userPermissionOverride.findMany({
+    where: {
+      businessId,
+      userId,
+    },
+    select: {
+      permission: {
+        select: {
+          code: true,
         },
-        allowed: true,
       },
-    }),
-    prisma.businessRolePermission.findMany({
-      where: {
-        businessId,
-        role,
-      },
-      select: {
-        permission: {
-          select: {
-            code: true,
-          },
-        },
-        allowed: true,
-      },
-    }),
-  ]);
+      allowed: true,
+    },
+  });
 
   const userOverrideMap = new Map(
     userOverrides.map((override) => [
@@ -126,24 +95,9 @@ export async function getEffectivePermissionCodes(
     ]),
   );
 
-  const roleOverrideMap = new Map(
-    roleOverrides.map((override) => [
-      override.permission.code,
-      override.allowed,
-    ]),
-  );
-
-  return PERMISSIONS.filter((permission) => {
-    if (userOverrideMap.has(permission.code)) {
-      return userOverrideMap.get(permission.code) === true;
-    }
-
-    if (roleOverrideMap.has(permission.code)) {
-      return roleOverrideMap.get(permission.code) === true;
-    }
-
-    return DEFAULT_ROLE_PERMISSIONS[role]?.includes(permission.code) ?? false;
-  }).map((permission) => permission.code);
+  return PERMISSIONS
+    .filter((permission) => userOverrideMap.get(permission.code) === true)
+    .map((permission) => permission.code);
 }
 
 export function getPermissionDefinition(permissionCode: string) {
@@ -169,6 +123,7 @@ async function requireBusinessUser(userId: string, businessId: string) {
       email: true,
       fullName: true,
       role: true,
+      securityRole: true,
       isActive: true,
       businessId: true,
     },
@@ -235,10 +190,7 @@ export async function getRolePermissions(
       source: overrideMap.has(permission.code)
         ? "business_role_override"
         : "default",
-      allowed:
-        overrideMap.get(permission.code) ??
-        DEFAULT_ROLE_PERMISSIONS[role]?.includes(permission.code) ??
-        false,
+      allowed: overrideMap.get(permission.code) ?? false,
     };
   });
 }
@@ -274,30 +226,8 @@ export async function getUserPermissions(
     },
   });
 
-  const roleOverrides = await prisma.businessRolePermission.findMany({
-    where: {
-      businessId,
-      role: user.role,
-    },
-    select: {
-      permission: {
-        select: {
-          code: true,
-        },
-      },
-      allowed: true,
-    },
-  });
-
   const userOverrideMap = new Map(
     overrides.map((override) => [
-      override.permission.code,
-      override.allowed,
-    ]),
-  );
-
-  const roleOverrideMap = new Map(
-    roleOverrides.map((override) => [
       override.permission.code,
       override.allowed,
     ]),
@@ -309,10 +239,11 @@ export async function getUserPermissions(
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      securityRole: user.securityRole,
       isActive: user.isActive,
     },
     permissions: PERMISSIONS.map((permission) => {
-      if (user.role === "BUSINESS_OWNER") {
+      if (user.securityRole === "BUSINESS_OWNER") {
         return {
           ...permission,
           source: "default" as const,
@@ -320,26 +251,14 @@ export async function getUserPermissions(
         };
       }
 
-      let source: "user_override" | "business_role_override" | "default";
-      let allowed: boolean;
-
-      if (userOverrideMap.has(permission.code)) {
-        source = "user_override";
-        allowed = userOverrideMap.get(permission.code)!;
-      } else if (roleOverrideMap.has(permission.code)) {
-        source = "business_role_override";
-        allowed = roleOverrideMap.get(permission.code)!;
-      } else {
-        source = "default";
-        allowed =
-          DEFAULT_ROLE_PERMISSIONS[user.role]?.includes(permission.code) ??
-          false;
-      }
+      const source = userOverrideMap.has(permission.code)
+        ? "user_override" as const
+        : "default" as const;
 
       return {
         ...permission,
         source,
-        allowed,
+        allowed: userOverrideMap.get(permission.code) ?? false,
       };
     }),
   };
@@ -472,7 +391,7 @@ export async function upsertUserPermissionOverride(
 ) {
   const user = await requireBusinessUser(userId, businessId);
 
-  if (user.role === "BUSINESS_OWNER") {
+  if (user.securityRole === "BUSINESS_OWNER") {
     throw new AppError(
       "BUSINESS_OWNER permissions cannot be restricted",
       400,
@@ -524,6 +443,82 @@ export async function upsertUserPermissionOverride(
   });
 }
 
+export async function allowAllUserPermissions(
+  businessId: string,
+  userId: string,
+) {
+  const user = await requireBusinessUser(userId, businessId);
+
+  if (user.securityRole === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted",
+      400,
+    );
+  }
+
+  const permissionRecords = await prisma.permission.findMany({
+    where: {
+      code: { in: PERMISSIONS.map((permission) => permission.code) },
+    },
+    select: { id: true, code: true },
+  });
+
+  if (permissionRecords.length !== PERMISSIONS.length) {
+    throw new AppError(
+      "Permission catalogue is incomplete; cannot allow all permissions",
+      500,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const permission of permissionRecords) {
+      await tx.userPermissionOverride.upsert({
+        where: {
+          businessId_userId_permissionId: {
+            businessId,
+            userId,
+            permissionId: permission.id,
+          },
+        },
+        create: {
+          businessId,
+          userId,
+          permissionId: permission.id,
+          allowed: true,
+        },
+        update: {
+          allowed: true,
+        },
+      });
+    }
+  });
+
+  return { allowed: true, count: permissionRecords.length };
+}
+
+export async function disallowAllUserPermissions(
+  businessId: string,
+  userId: string,
+) {
+  const user = await requireBusinessUser(userId, businessId);
+
+  if (user.securityRole === "BUSINESS_OWNER") {
+    throw new AppError(
+      "BUSINESS_OWNER permissions cannot be restricted",
+      400,
+    );
+  }
+
+  const result = await prisma.userPermissionOverride.deleteMany({
+    where: {
+      businessId,
+      userId,
+    },
+  });
+
+  return { allowed: false, count: result.count };
+}
+
 export async function removeUserPermissionOverride(
   businessId: string,
   userId: string,
@@ -531,7 +526,7 @@ export async function removeUserPermissionOverride(
 ) {
   const user = await requireBusinessUser(userId, businessId);
 
-  if (user.role === "BUSINESS_OWNER") {
+  if (user.securityRole === "BUSINESS_OWNER") {
     throw new AppError(
       "BUSINESS_OWNER permissions cannot be restricted",
       400,

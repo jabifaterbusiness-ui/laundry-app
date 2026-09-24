@@ -1,9 +1,8 @@
 import { apiFetch } from "./api-client.js";
 
-export type UserRole =
-  | "BUSINESS_OWNER"
-  | "BRANCH_MANAGER"
-  | "STAFF";
+// Visible job title chosen by management. It is descriptive only and
+// never determines access permissions.
+export type UserRole = string;
 
 export type UserStatus = "active" | "inactive" | "all";
 
@@ -18,7 +17,6 @@ export interface ManagedUser {
   email: string;
   fullName: string;
   role: UserRole;
-  position: string | null;
   isActive: boolean;
   businessId: string;
   createdAt: string;
@@ -38,7 +36,6 @@ export interface CreateUserInput {
   email: string;
   password: string;
   role: UserRole;
-  position?: string | null;
   branchIds: string[];
 }
 
@@ -47,7 +44,6 @@ export interface UpdateUserInput {
   email?: string;
   password?: string;
   role?: UserRole;
-  position?: string | null;
   branchIds?: string[];
 }
 

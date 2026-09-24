@@ -10,7 +10,8 @@ const mockAuthState = {
     id: "current-user",
     email: "owner@example.com",
     fullName: "Business Owner",
-    role: "BUSINESS_OWNER" as const,
+    role: "Business Owner",
+    securityRole: "BUSINESS_OWNER" as "BUSINESS_OWNER" | "BRANCH_MANAGER",
     businessId: "business-1",
     branches: [],
     permissions: ["users.view", "users.create", "users.update"],
@@ -59,7 +60,7 @@ const users = [
     id: "user-1",
     email: "manager@example.com",
     fullName: "Branch Manager",
-    role: "BRANCH_MANAGER" as const,
+    role: "Branch Manager",
     isActive: true,
     businessId: "business-1",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -76,7 +77,7 @@ const users = [
     id: "user-2",
     email: "staff@example.com",
     fullName: "Inactive Staff",
-    role: "STAFF" as const,
+    role: "Staff",
     isActive: false,
     businessId: "business-1",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -88,7 +89,8 @@ const users = [
 describe("UsersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuthState.user.role = "BUSINESS_OWNER";
+    mockAuthState.user.role = "Business Owner";
+    mockAuthState.user.securityRole = "BUSINESS_OWNER";
 
     listUsersMock.mockResolvedValue(users);
     listBranchesMock.mockResolvedValue([
@@ -186,6 +188,9 @@ describe("UsersPage", () => {
     fireEvent.change(screen.getByLabelText(/Password/), {
       target: { value: "password123" },
     });
+    fireEvent.change(screen.getByLabelText("Role"), {
+      target: { value: "Staff" },
+    });
 
     fireEvent.click(screen.getByLabelText("Main Branch"));
     fireEvent.click(screen.getByLabelText("Second Branch"));
@@ -198,8 +203,7 @@ describe("UsersPage", () => {
           fullName: "New Staff",
           email: "newstaff@example.com",
           password: "password123",
-          role: "STAFF",
-          position: null,
+          role: "Staff",
           branchIds: ["branch-1", "branch-2"],
         },
         "test-token",
@@ -218,7 +222,7 @@ describe("UsersPage", () => {
 
     expect(screen.getByRole("heading", { name: "Edit User" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("manager@example.com")).toBeInTheDocument();
-    expect(screen.getByLabelText("Role")).toHaveValue("BRANCH_MANAGER");
+    expect(screen.getByLabelText("Role")).toHaveValue("Branch Manager");
     expect(screen.getByLabelText("Main Branch")).toBeChecked();
   });
 
@@ -258,7 +262,8 @@ describe("UsersPage", () => {
         ...users[0],
         id: "current-user",
         fullName: "Business Owner",
-        role: "BUSINESS_OWNER" as const,
+        role: "Business Owner",
+        securityRole: "BUSINESS_OWNER" as const,
         branches: [],
       },
     ]);
@@ -273,7 +278,8 @@ describe("UsersPage", () => {
   });
 
   it("allows a branch manager with effective user permissions to manage users", async () => {
-    mockAuthState.user.role = "BRANCH_MANAGER";
+    mockAuthState.user.role = "Branch Manager";
+    mockAuthState.user.securityRole = "BRANCH_MANAGER";
     mockAuthState.user.permissions = [
       "users.view",
       "users.create",

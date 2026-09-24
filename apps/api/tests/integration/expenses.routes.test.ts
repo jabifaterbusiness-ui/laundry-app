@@ -66,6 +66,7 @@ const expenseCreate = vi.mocked(prisma.expense.create);
 const expenseUpdate = vi.mocked(prisma.expense.update);
 
 const auditEvent = vi.mocked(recordAuditEvent);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -77,6 +78,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -136,6 +138,7 @@ function allowBranch(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findUserOverride.mockResolvedValue(null);
 
   subscriptionFindUnique.mockResolvedValue({
     id: "sub-test",
@@ -264,6 +267,8 @@ describe("Expenses routes - authorization", () => {
   });
 
   it("BRANCH_MANAGER can create an expense through expenses.manage", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     expenseCreate.mockResolvedValue({
       ...expenseFixture,
       createdById: "user-manager-a",

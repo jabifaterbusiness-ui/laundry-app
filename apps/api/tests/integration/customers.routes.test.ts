@@ -52,7 +52,7 @@ const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, businessId },
+    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -103,6 +103,8 @@ describe("Customers routes - authentication", () => {
 
 describe("Customers routes - tenant isolation end-to-end", () => {
   it("business A can list its own customers", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     findMany.mockResolvedValue([{ id: "cust-1", businessId: "biz-A", name: "Jane" }] as never);
     count.mockResolvedValue(1);
 
@@ -113,6 +115,8 @@ describe("Customers routes - tenant isolation end-to-end", () => {
   });
 
   it("business B cannot access business A's customer by id (404, not leaked)", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     // The mocked findFirst simulates the real DB behavior: a query
     // scoped to {id, businessId: "biz-B"} finds nothing because the
     // record actually belongs to biz-A.
@@ -170,6 +174,8 @@ describe("Customers routes - permission enforcement", () => {
 
 describe("Customers routes - authorization matrix", () => {
   it("STAFF can create a customer", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     findMany.mockResolvedValue([]);
     create.mockResolvedValue({ id: "cust-1" } as never);
 
@@ -182,6 +188,8 @@ describe("Customers routes - authorization matrix", () => {
   });
 
   it("STAFF can list customers", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
@@ -206,6 +214,8 @@ describe("Customers routes - authorization matrix", () => {
   });
 
   it("BRANCH_MANAGER can deactivate a customer", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValue({ id: "cust-1", isActive: false } as never);
 

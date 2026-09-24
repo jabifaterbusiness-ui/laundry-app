@@ -28,7 +28,7 @@ export async function search(req: Request, res: Response) {
 
   const results = await globalSearch(
     req.user!.id,
-    req.user!.role,
+    req.user!.securityRole,
     businessId,
     branchId,
     query,

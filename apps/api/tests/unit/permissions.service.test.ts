@@ -115,22 +115,15 @@ describe("getEffectivePermissionCodes", () => {
     expect(findRoleOverrides).not.toHaveBeenCalled();
   });
 
-  it("applies user override before role override and default role", async () => {
+  it("uses only individual user overrides for ordinary users", async () => {
     findUserOverrides.mockResolvedValue([
-      {
-        permission: { code: "customers.view" },
-        allowed: false,
-      },
-    ]);
-
-    findRoleOverrides.mockResolvedValue([
       {
         permission: { code: "customers.view" },
         allowed: true,
       },
       {
         permission: { code: "reports.view" },
-        allowed: true,
+        allowed: false,
       },
     ]);
 
@@ -140,9 +133,9 @@ describe("getEffectivePermissionCodes", () => {
       "STAFF" as Role,
     );
 
-    expect(permissions).not.toContain("customers.view");
-    expect(permissions).toContain("reports.view");
-    expect(permissions).toContain("customers.create");
+    expect(permissions).toContain("customers.view");
+    expect(permissions).not.toContain("reports.view");
+    expect(findRoleOverrides).not.toHaveBeenCalled();
   });
 });
 
@@ -231,10 +224,9 @@ describe("hasPermission", () => {
     expect(findRoleOverride).not.toHaveBeenCalled();
   });
 
-  it("uses the business role override when there is no user override", async () => {
+  it("denies ordinary users unless an individual override grants access", async () => {
     findPermission.mockResolvedValue({ id: "permission-1" });
     findUserOverride.mockResolvedValue(null);
-    findRoleOverride.mockResolvedValue({ allowed: false });
 
     await expect(
       hasPermission(
@@ -244,30 +236,8 @@ describe("hasPermission", () => {
         "customers.view",
       ),
     ).resolves.toBe(false);
-  });
 
-  it("falls back to the default role permission", async () => {
-    findPermission.mockResolvedValue({ id: "permission-1" });
-    findUserOverride.mockResolvedValue(null);
-    findRoleOverride.mockResolvedValue(null);
-
-    await expect(
-      hasPermission(
-        "user-1",
-        "business-1",
-        "STAFF" as Role,
-        "customers.view",
-      ),
-    ).resolves.toBe(true);
-
-    await expect(
-      hasPermission(
-        "user-1",
-        "business-1",
-        "STAFF" as Role,
-        "payroll.manage",
-      ),
-    ).resolves.toBe(false);
+    expect(findRoleOverride).not.toHaveBeenCalled();
   });
 
   it("uses the supplied businessId when resolving overrides", async () => {
@@ -339,7 +309,7 @@ describe("permission administration helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: "customers.view",
-          allowed: true,
+          allowed: false,
           source: "default",
         }),
         expect.objectContaining({
@@ -468,7 +438,7 @@ describe("permission administration helpers", () => {
 
   it("allows an actor to grant a permission they possess", async () => {
     findPermission.mockResolvedValue({ id: "permission-1" });
-    findUserOverride.mockResolvedValue(null);
+    findUserOverride.mockResolvedValue({ allowed: true });
     findRoleOverride.mockResolvedValue(null);
 
     await expect(
@@ -628,7 +598,8 @@ describe("permission administration helpers", () => {
     findUser.mockResolvedValue({
       id: "owner-1",
       businessId: "business-1",
-      role: "BUSINESS_OWNER",
+      role: "Business Owner",
+      securityRole: "BUSINESS_OWNER",
     });
 
     await expect(

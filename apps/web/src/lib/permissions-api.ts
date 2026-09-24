@@ -26,7 +26,9 @@ export interface UserPermissionResponse {
     id: string;
     fullName: string;
     email: string;
-    role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF";
+    role: string;
+    securityRole: "PLATFORM_ADMIN" | "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF";
+    isActive: boolean;
   };
   permissions: RolePermission[];
 }
@@ -111,6 +113,33 @@ export function removeUserPermission(
     `/permissions/users/${userId}/${encodeURIComponent(permissionCode)}`,
     {
       method: "DELETE",
+      accessToken,
+    },
+  );
+}
+
+
+export function allowAllUserPermissions(
+  userId: string,
+  accessToken: string,
+) {
+  return apiFetch<{ allowed: boolean; count: number }>(
+    `/permissions/users/${userId}/allow-all`,
+    {
+      method: "PUT",
+      accessToken,
+    },
+  );
+}
+
+export function disallowAllUserPermissions(
+  userId: string,
+  accessToken: string,
+) {
+  return apiFetch<{ allowed: boolean; count: number }>(
+    `/permissions/users/${userId}/disallow-all`,
+    {
+      method: "PUT",
       accessToken,
     },
   );

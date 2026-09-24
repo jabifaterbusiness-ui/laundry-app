@@ -68,6 +68,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -154,6 +155,13 @@ describe("GET /api/v1/search", () => {
   });
 
   it("returns searchable results for an authorized staff user", async () => {
+    findUserOverride.mockImplementation(((args: any) => {
+      const code = args.where?.businessId_userId_permissionId
+        ? undefined
+        : undefined;
+      return Promise.resolve({ allowed: true });
+    }) as never);
+
     customerFindMany.mockResolvedValue([
       {
         id: "customer-1",
@@ -198,6 +206,8 @@ describe("GET /api/v1/search", () => {
   });
 
   it("does not return modules denied by permission", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     findPermission.mockImplementation(((args: {
       where: { code?: string };
     }) => {

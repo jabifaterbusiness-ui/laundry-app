@@ -10,6 +10,8 @@ import {
   removeBusinessRolePermission,
   upsertUserPermissionOverride,
   removeUserPermissionOverride,
+  allowAllUserPermissions,
+  disallowAllUserPermissions,
   requirePermissionForGrant,
 } from "./permissions.service.js";
 import {
@@ -73,7 +75,7 @@ export async function updateRolePermission(
     await requirePermissionForGrant(
       req.user!.id,
       businessId,
-      req.user!.role,
+      req.user!.securityRole,
       permissionCode,
     );
   }
@@ -148,6 +150,61 @@ export async function userPermissions(req: Request, res: Response) {
   );
 }
 
+export async function allowAllUserPermissionsController(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { userId } = userIdParamSchema.parse(req.params);
+
+  // Verify the actor possesses every permission before granting the full
+  // catalogue, preventing a partial/unauthorized escalation.
+  for (const permission of await listPermissions()) {
+    await requirePermissionForGrant(
+      req.user!.id,
+      businessId,
+      req.user!.securityRole,
+      permission.code,
+    );
+  }
+
+  const result = await allowAllUserPermissions(businessId, userId);
+
+  await recordAuditEvent({
+    action: "permission.user.allow_all",
+    entityType: "UserPermissionOverride",
+    entityId: userId,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: { userId, count: result.count },
+  });
+
+  res.status(200).json(result);
+}
+
+export async function disallowAllUserPermissionsController(
+  req: Request,
+  res: Response,
+) {
+  const businessId = requireBusinessId(req);
+  const { userId } = userIdParamSchema.parse(req.params);
+
+  const result = await disallowAllUserPermissions(businessId, userId);
+
+  await recordAuditEvent({
+    action: "permission.user.disallow_all",
+    entityType: "UserPermissionOverride",
+    entityId: userId,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: { userId, count: result.count },
+  });
+
+  res.status(200).json(result);
+}
+
 export async function updateUserPermission(
   req: Request,
   res: Response,
@@ -161,7 +218,7 @@ export async function updateUserPermission(
     await requirePermissionForGrant(
       req.user!.id,
       businessId,
-      req.user!.role,
+      req.user!.securityRole,
       permissionCode,
     );
   }

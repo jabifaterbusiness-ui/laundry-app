@@ -68,6 +68,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -202,6 +203,7 @@ describe("Payments routes - branch context", () => {
 describe("Payments routes - authorization", () => {
   it("STAFF can create a payment", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindFirst.mockResolvedValue({
       id: INVOICE_A,
@@ -243,6 +245,7 @@ describe("Payments routes - authorization", () => {
 
   it("BRANCH_MANAGER can create a payment", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindFirst.mockResolvedValue({
       id: INVOICE_A,
@@ -675,6 +678,7 @@ describe("Payment void route", () => {
 
   it("BRANCH_MANAGER can void a posted payment", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     paymentFindFirst.mockResolvedValue(paymentFixture as never);
 
@@ -697,6 +701,7 @@ describe("Payment void route", () => {
 
   it("STAFF can void a payment when payments.manage is allowed", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     paymentFindFirst.mockResolvedValue(paymentFixture as never);
 

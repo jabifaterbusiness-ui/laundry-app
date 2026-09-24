@@ -13,6 +13,8 @@ import {
   userPermissions,
   updateUserPermission,
   removeUserPermission,
+  allowAllUserPermissionsController,
+  disallowAllUserPermissionsController,
 } from "./permissions.controller.js";
 
 export const permissionsRouter = Router();
@@ -43,6 +45,16 @@ permissionsRouter.delete(
 permissionsRouter.get(
   "/users/:userId",
   asyncHandler(userPermissions),
+);
+
+permissionsRouter.put(
+  "/users/:userId/allow-all",
+  asyncHandler(allowAllUserPermissionsController),
+);
+
+permissionsRouter.put(
+  "/users/:userId/disallow-all",
+  asyncHandler(disallowAllUserPermissionsController),
 );
 
 permissionsRouter.put(

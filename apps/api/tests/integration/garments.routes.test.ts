@@ -68,6 +68,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -335,6 +336,8 @@ describe("Garments routes - generation", () => {
 
 describe("Garments routes - authorization", () => {
   it("STAFF can generate garments", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
     orderFindFirst.mockResolvedValue({
@@ -355,6 +358,8 @@ describe("Garments routes - authorization", () => {
   });
 
   it("BRANCH_MANAGER can update garment status", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
 
     garmentFindFirst.mockResolvedValue({

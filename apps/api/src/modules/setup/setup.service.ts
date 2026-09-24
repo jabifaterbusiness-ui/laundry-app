@@ -93,7 +93,8 @@ export async function completeSetup(input: SetupInput) {
         email: input.ownerEmail,
         passwordHash,
         fullName: input.ownerName,
-        role: "BUSINESS_OWNER",
+        role: "Business Owner",
+        securityRole: "BUSINESS_OWNER",
         isActive: true,
         businessId: business.id,
       },
@@ -127,7 +128,7 @@ export async function completeSetup(input: SetupInput) {
   const permissions = await getEffectivePermissionCodes(
     result.user.businessId,
     result.user.id,
-    result.user.role,
+    result.user.securityRole,
   );
 
   return {

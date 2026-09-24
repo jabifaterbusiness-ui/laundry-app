@@ -84,6 +84,7 @@ import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
 const subscriptionFindUnique = vi.mocked(prisma.subscription.findUnique);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const businessFindFirst = vi.mocked(prisma.business.findFirst);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
@@ -110,6 +111,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -144,6 +146,7 @@ const periodFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findUserOverride.mockResolvedValue(null);
 
   subscriptionFindUnique.mockResolvedValue({
     id: "sub-test",
@@ -232,6 +235,7 @@ describe("Payroll period routes - authorization", () => {
   });
 
   it("BRANCH_MANAGER can create a payroll period", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     payrollPeriodFindFirst.mockResolvedValue(null);
     payrollPeriodCreate.mockResolvedValue(periodFixture as never);
 

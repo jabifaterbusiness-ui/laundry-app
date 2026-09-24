@@ -73,8 +73,8 @@ const BASE_USER = {
   id: "11111111-1111-4111-8111-111111111111",
   email: "staff@example.com",
   fullName: "Staff User",
-  role: "STAFF" as const,
-  position: null,
+  role: "Staff",
+  securityRole: "STAFF" as const,
   isActive: true,
   deletedAt: null,
   businessId: "biz-A",
@@ -232,21 +232,45 @@ describe("users.service - createUser", () => {
     expect(result.id).toBe(BASE_USER.id);
   });
 
-  it("rejects platform administrator creation from a business context", async () => {
-    await expect(
-      createUser(
-        {
-          fullName: "Platform Admin",
-          email: "admin@example.com",
-          password: "password123",
-          role: "PLATFORM_ADMIN" as never,
-          branchIds: [],
-        },
-        CONTEXT,
-      ),
-    ).rejects.toMatchObject({ statusCode: 400 });
+  it("creates a business user with a custom Platform Administrator job title while keeping staff security role", async () => {
+    userCreate.mockResolvedValue({
+      ...BASE_USER,
+      id: "created-platform-title",
+      fullName: "Platform Admin",
+      email: "admin@example.com",
+      role: "Platform Administrator",
+      securityRole: "STAFF",
+    } as never);
 
-    expect(userCreate).not.toHaveBeenCalled();
+    userFindFirst.mockResolvedValue({
+      ...BASE_USER,
+      id: "created-platform-title",
+      fullName: "Platform Admin",
+      email: "admin@example.com",
+      role: "Platform Administrator",
+      securityRole: "STAFF",
+      branches: [],
+    } as never);
+
+    await createUser(
+      {
+        fullName: "Platform Admin",
+        email: "admin@example.com",
+        password: "password123",
+        role: "Platform Administrator",
+        branchIds: [],
+      },
+      CONTEXT,
+    );
+
+    expect(userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "Platform Administrator",
+          securityRole: "STAFF",
+        }),
+      }),
+    );
   });
 
   it("rejects duplicate email", async () => {
@@ -287,14 +311,14 @@ describe("users.service - createUser", () => {
     expect(userCreate).not.toHaveBeenCalled();
   });
 
-  it("creates a user with a custom position", async () => {
+  it("creates a user with a custom free-text role", async () => {
     userCreate.mockResolvedValue({
       ...BASE_USER,
-      position: "Senior Laundry Supervisor",
+      role: "Senior Laundry Supervisor",
     } as never);
     userFindFirst.mockResolvedValueOnce({
       ...BASE_USER,
-      position: "Senior Laundry Supervisor",
+      role: "Senior Laundry Supervisor",
       branches: [],
     } as never);
 
@@ -303,8 +327,7 @@ describe("users.service - createUser", () => {
         fullName: "Senior Staff",
         email: "senior@example.com",
         password: "password123",
-        role: "STAFF",
-        position: " Senior Laundry Supervisor ",
+        role: " Senior Laundry Supervisor ",
         branchIds: [],
       },
       CONTEXT,
@@ -313,7 +336,8 @@ describe("users.service - createUser", () => {
     expect(userCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          position: "Senior Laundry Supervisor",
+          role: "Senior Laundry Supervisor",
+          securityRole: "STAFF",
         }),
       }),
     );
@@ -366,21 +390,39 @@ describe("users.service - updateUser", () => {
     });
   });
 
-  it("never accepts a platform administrator role", async () => {
-    userFindFirst.mockResolvedValue({
-      ...BASE_USER,
-      branches: [],
-    } as never);
+  it("allows changing the visible job title without changing the security role", async () => {
+    userFindFirst
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        role: "Platform Administrator",
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        role: "Platform Administrator",
+        branches: [],
+      } as never);
 
-    await expect(
-      updateUser(
-        BASE_USER.id,
-        { role: "PLATFORM_ADMIN" as never },
-        CONTEXT,
-      ),
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await updateUser(
+      BASE_USER.id,
+      { role: "Platform Administrator" },
+      CONTEXT,
+    );
 
-    expect(userUpdate).not.toHaveBeenCalled();
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BASE_USER.id },
+        data: { role: "Platform Administrator" },
+      }),
+    );
+
+    const firstUpdate = userUpdate.mock.calls[0]?.[0];
+    if (!firstUpdate) throw new Error("Expected user update call");
+    expect(firstUpdate.data).not.toHaveProperty("securityRole");
   });
 
   it("does not expose or audit the new password", async () => {
@@ -413,7 +455,7 @@ describe("users.service - updateUser", () => {
     expect(JSON.stringify(auditCall)).not.toContain("newpassword123");
   });
 
-  it("updates a user's custom position", async () => {
+  it("updates a user's custom free-text role", async () => {
     userFindFirst
       .mockResolvedValueOnce({
         ...BASE_USER,
@@ -425,20 +467,20 @@ describe("users.service - updateUser", () => {
       } as never)
       .mockResolvedValueOnce({
         ...BASE_USER,
-        position: "Operations Supervisor",
+        role: "Operations Supervisor",
         branches: [],
       } as never);
 
     await updateUser(
       BASE_USER.id,
-      { position: " Operations Supervisor " },
+      { role: " Operations Supervisor " },
       CONTEXT,
     );
 
     expect(userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: BASE_USER.id },
-        data: { position: "Operations Supervisor" },
+        data: { role: "Operations Supervisor" },
       }),
     );
   });
@@ -449,7 +491,7 @@ describe("users.service - updateUser", () => {
     await expect(
       updateUser(
         BASE_USER.id,
-        { position: "Deleted User Position" },
+        { role: "Deleted User Role" },
         CONTEXT,
       ),
     ).rejects.toMatchObject({ statusCode: 404 });
@@ -457,23 +499,43 @@ describe("users.service - updateUser", () => {
     expect(userUpdate).not.toHaveBeenCalled();
   });
 
-  it("protects the last active business owner", async () => {
-    userFindFirst.mockResolvedValue({
-      ...BASE_USER,
-      role: "BUSINESS_OWNER",
-      branches: [],
-    } as never);
-    userCount.mockResolvedValue(1);
+  it("allows a business owner's visible job title to change without changing ownership security", async () => {
+    userFindFirst
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        role: "Business Owner",
+        securityRole: "BUSINESS_OWNER",
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        role: "Operations Director",
+        securityRole: "BUSINESS_OWNER",
+        branches: [],
+      } as never)
+      .mockResolvedValueOnce({
+        ...BASE_USER,
+        role: "Operations Director",
+        securityRole: "BUSINESS_OWNER",
+        branches: [],
+      } as never);
 
-    await expect(
-      updateUser(
-        BASE_USER.id,
-        { role: "STAFF" },
-        CONTEXT,
-      ),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    await updateUser(
+      BASE_USER.id,
+      { role: "Operations Director" },
+      CONTEXT,
+    );
 
-    expect(userUpdate).not.toHaveBeenCalled();
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BASE_USER.id },
+        data: { role: "Operations Director" },
+      }),
+    );
+
+    const firstUpdate = userUpdate.mock.calls[0]?.[0];
+    if (!firstUpdate) throw new Error("Expected user update call");
+    expect(firstUpdate.data).not.toHaveProperty("securityRole");
   });
 });
 
@@ -593,7 +655,9 @@ describe("users.service - setUserActiveStatus", () => {
   it("protects the last active business owner from deactivation", async () => {
     userFindFirst.mockResolvedValue({
       ...BASE_USER,
-      role: "BUSINESS_OWNER",
+      role: "Business Owner",
+      securityRole: "BUSINESS_OWNER",
+      isActive: true,
     } as never);
     userCount.mockResolvedValue(1);
 

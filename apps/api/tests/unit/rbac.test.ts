@@ -4,7 +4,19 @@ import { requireRole } from "../../src/middleware/rbac.js";
 import { AppError } from "../../src/middleware/error-handler.js";
 
 function makeReq(role?: string): Request {
-  return (role ? { user: { id: "u1", email: "a@example.com", role, businessId: "biz-1" } } : {}) as Request;
+  return (
+    role
+      ? {
+          user: {
+            id: "u1",
+            email: "a@example.com",
+            role: "",
+            securityRole: role,
+            businessId: "biz-1",
+          },
+        }
+      : {}
+  ) as Request;
 }
 
 const res = {} as Response;

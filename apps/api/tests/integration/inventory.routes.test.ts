@@ -76,6 +76,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -255,6 +256,8 @@ describe("Inventory routes - business-scoped items", () => {
   });
 
   it("allows an authenticated business user to access inventory items", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     inventoryItemFindMany.mockResolvedValue([
       {
         id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",

@@ -15,39 +15,22 @@ import {
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
-const ROLES: UserRole[] = [
-  "BUSINESS_OWNER",
-  "BRANCH_MANAGER",
-  "STAFF",
-];
-
-
 const EMPTY_FORM = {
   fullName: "",
   email: "",
   password: "",
-  role: "STAFF" as UserRole,
-  position: "",
+  role: "",
   branchIds: [] as string[],
 };
 
-function formatRole(role: UserRole) {
-  switch (role) {
-    case "BUSINESS_OWNER":
-      return "Business Owner";
-    case "BRANCH_MANAGER":
-      return "Branch Manager";
-    case "STAFF":
-      return "Staff";
-  }
-}
+
 
 export function UsersPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUser = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
 
-  const isOwner = currentUser?.role === "BUSINESS_OWNER";
+  const isOwner = currentUser?.securityRole === "BUSINESS_OWNER";
   const canView = hasPermission(currentUser, "users.view");
   const canCreate = hasPermission(currentUser, "users.create");
   const canUpdate = hasPermission(currentUser, "users.update");
@@ -56,7 +39,7 @@ export function UsersPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] =
     useState<"active" | "inactive" | "all">("active");
-  const [role, setRole] = useState<UserRole | "">("");
+  const [role, setRole] = useState("");
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -87,8 +70,7 @@ export function UsersPage() {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
           password: form.password,
-          role: form.role,
-          position: form.position.trim() || null,
+          role: form.role.trim(),
           branchIds: form.branchIds,
         },
         accessToken ?? "",
@@ -114,8 +96,7 @@ export function UsersPage() {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
           password: form.password || undefined,
-          role: form.role,
-          position: form.position.trim() || null,
+          role: form.role.trim(),
           branchIds: form.branchIds,
         },
         accessToken ?? "",
@@ -172,7 +153,6 @@ export function UsersPage() {
       email: user.email,
       password: "",
       role: user.role,
-      position: user.position ?? "",
       branchIds: user.branches.map((branch) => branch.id),
     });
     setFormError(null);
@@ -266,20 +246,13 @@ export function UsersPage() {
           <option value="all">All</option>
         </select>
 
-        <select
+        <input
+          type="search"
           aria-label="Filter users by role"
+          placeholder="Filter by role"
           value={role}
-          onChange={(event) =>
-            setRole(event.target.value as UserRole | "")
-          }
-        >
-          <option value="">All roles</option>
-          {ROLES.map((item) => (
-            <option key={item} value={item}>
-              {formatRole(item)}
-            </option>
-          ))}
-        </select>
+          onChange={(event) => setRole(event.target.value)}
+        />
 
         {canCreate ? (
           <button type="button" onClick={openCreate}>
@@ -313,7 +286,6 @@ export function UsersPage() {
               <th>Name</th>
               <th>Email</th>
               <th>Role</th>
-              <th>Position</th>
               <th>Branches</th>
               <th>Status</th>
               {canUpdate || canDelete ? <th aria-label="Actions" /> : null}
@@ -338,9 +310,7 @@ export function UsersPage() {
 
                 <td>{user.email}</td>
 
-                <td>{formatRole(user.role)}</td>
-
-                <td>{user.position || "—"}</td>
+                <td>{user.role}</td>
 
                 <td>
                   {user.branches.length > 0
@@ -430,57 +400,42 @@ export function UsersPage() {
             </div>
 
             <div>
-              <label htmlFor="user-position">Position</label>
-              <input
-                id="user-position"
-                value={form.position}
-                maxLength={120}
-                placeholder="e.g. Front Desk Officer"
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    position: event.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label htmlFor="user-password">
-                Password
-                {editingUser ? " (leave blank to keep current)" : ""}
-              </label>
+              <label htmlFor="user-password">Password</label>
               <input
                 id="user-password"
                 type="password"
                 value={form.password}
+                minLength={8}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
                     password: event.target.value,
                   }))
                 }
+                placeholder={
+                  editingUser
+                    ? "Leave blank to keep the current password"
+                    : "Minimum 8 characters"
+                }
               />
             </div>
 
             <div>
-              <label htmlFor="user-role">Role</label>
-              <select
+              <label htmlFor="user-role">
+              Role
+              <input
                 id="user-role"
                 value={form.role}
+                maxLength={120}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    role: event.target.value as UserRole,
+                    role: event.target.value,
                   }))
                 }
-              >
-                {ROLES.map((item) => (
-                  <option key={item} value={item}>
-                    {formatRole(item)}
-                  </option>
-                ))}
-              </select>
+                placeholder="e.g. Accountant, Cashier, Laundry Supervisor"
+              />
+            </label>
             </div>
 
             <fieldset>

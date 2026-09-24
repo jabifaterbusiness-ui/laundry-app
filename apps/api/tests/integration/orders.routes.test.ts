@@ -79,6 +79,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -349,7 +350,7 @@ describe("Orders routes - permission enforcement", () => {
   it("rejects STAFF when orders.create is explicitly denied", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -368,7 +369,7 @@ describe("Orders routes - permission enforcement", () => {
   it("rejects STAFF when orders.view is explicitly denied", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -384,7 +385,7 @@ describe("Orders routes - permission enforcement", () => {
   it("rejects BRANCH_MANAGER when orders.change_status is explicitly denied", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
 
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -402,6 +403,7 @@ describe("Orders routes - permission enforcement", () => {
 describe("Orders routes - transfer", () => {
   it("STAFF can transfer an order when orders.update is allowed", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     const previousOrder = {
       id: ORDER_A,
@@ -453,7 +455,7 @@ describe("Orders routes - transfer", () => {
   it("rejects transfer when orders.update is explicitly denied", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
 
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -487,6 +489,7 @@ describe("Orders routes - transfer", () => {
 
   it("rejects transferring an order to the same customer", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,
@@ -511,6 +514,7 @@ describe("Orders routes - transfer", () => {
 describe("Orders routes - authorization", () => {
   it("STAFF can list orders", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     orderFindMany.mockResolvedValue([]);
     orderCount.mockResolvedValue(0);
@@ -525,6 +529,7 @@ describe("Orders routes - authorization", () => {
 
   it("BRANCH_MANAGER can list orders", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     orderFindMany.mockResolvedValue([]);
     orderCount.mockResolvedValue(0);
@@ -551,6 +556,7 @@ describe("Orders routes - authorization", () => {
 
   it("BRANCH_MANAGER can change order status", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,

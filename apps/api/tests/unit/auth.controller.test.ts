@@ -63,6 +63,7 @@ const baseUser = {
   passwordHash: "hash",
   fullName: "Owner",
   role: "BUSINESS_OWNER",
+  securityRole: "BUSINESS_OWNER",
   isActive: true,
   businessId: "biz-1",
   createdAt: new Date(),
@@ -225,7 +226,7 @@ describe("auth controller - multi-branch membership", () => {
     findUniqueUser.mockResolvedValue(baseUser as never);
     findManyUserBranch.mockResolvedValue(twoBranchMemberships as never);
 
-    const req = { user: { id: "user-1", email: "owner@example.com", role: "BUSINESS_OWNER", businessId: "biz-1" } } as unknown as Request;
+    const req = { user: { id: "user-1", email: "owner@example.com", role: "Business Owner", securityRole: "BUSINESS_OWNER", businessId: "biz-1" } } as unknown as Request;
     const res = makeRes();
 
     await me(req, res);

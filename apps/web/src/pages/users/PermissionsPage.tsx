@@ -2,30 +2,31 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
-  getRolePermissions,
+  allowAllUserPermissions,
+  disallowAllUserPermissions,
   getUserPermissions,
   listPermissions,
-  removeRolePermission,
   removeUserPermission,
-  updateRolePermission,
   updateUserPermission,
   type RolePermission,
 } from "../../lib/permissions-api.js";
-import { listUsers, type UserRole } from "../../lib/users-api.js";
+import { listUsers } from "../../lib/users-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
-const MANAGED_ROLES: Array<"BRANCH_MANAGER" | "STAFF"> = [
-  "BRANCH_MANAGER",
-  "STAFF",
-];
-
-function formatRole(role: UserRole) {
-  return role === "BRANCH_MANAGER"
-    ? "Branch Manager"
-    : role === "BUSINESS_OWNER"
-      ? "Business Owner"
-      : "Staff";
+function formatSecurityRole(role: string) {
+  switch (role) {
+    case "BUSINESS_OWNER":
+      return "Business Owner";
+    case "PLATFORM_ADMIN":
+      return "Platform Admin";
+    case "BRANCH_MANAGER":
+      return "Branch Manager";
+    case "STAFF":
+      return "Staff";
+    default:
+      return role;
+  }
 }
 
 export function PermissionsPage() {
@@ -38,9 +39,6 @@ export function PermissionsPage() {
     "users.manage_permissions",
   );
 
-  const [mode, setMode] = useState<"role" | "user">("role");
-  const [selectedRole, setSelectedRole] =
-    useState<"BRANCH_MANAGER" | "STAFF">("STAFF");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,16 +49,9 @@ export function PermissionsPage() {
     queryFn: () => listPermissions(accessToken ?? ""),
   });
 
-  const roleQuery = useQuery({
-    queryKey: ["permissions", "role", selectedRole],
-    enabled: canManage && mode === "role",
-    queryFn: () =>
-      getRolePermissions(selectedRole, accessToken ?? ""),
-  });
-
   const usersQuery = useQuery({
     queryKey: ["users", "permissions"],
-    enabled: canManage && mode === "user",
+    enabled: canManage,
     queryFn: () =>
       listUsers({
         accessToken: accessToken ?? "",
@@ -70,18 +61,22 @@ export function PermissionsPage() {
 
   const userQuery = useQuery({
     queryKey: ["permissions", "user", selectedUserId],
-    enabled: canManage && mode === "user" && Boolean(selectedUserId),
+    enabled: canManage && Boolean(selectedUserId),
     queryFn: () =>
       getUserPermissions(selectedUserId, accessToken ?? ""),
   });
 
   const permissions = useMemo<RolePermission[]>(() => {
-    if (mode === "role") return roleQuery.data ?? [];
+    if (!selectedUserId) return [];
     return userQuery.data?.permissions ?? [];
-  }, [mode, roleQuery.data, userQuery.data]);
+  }, [selectedUserId, userQuery.data]);
 
   const modules = useMemo(
-    () => [...new Set(permissions.map((permission) => permission.module))],
+    () => [
+      ...new Set(
+        permissions.map((permission) => permission.module),
+      ),
+    ],
     [permissions],
   );
 
@@ -90,29 +85,21 @@ export function PermissionsPage() {
   );
 
   const updateMutation = useMutation({
-    mutationFn: async (input: {
+    mutationFn: (input: {
       permission: RolePermission;
       allowed: boolean;
-    }) => {
-      if (mode === "role") {
-        return updateRolePermission(
-          selectedRole,
-          input.permission.code,
-          input.allowed,
-          accessToken ?? "",
-        );
-      }
-
-      return updateUserPermission(
+    }) =>
+      updateUserPermission(
         selectedUserId,
         input.permission.code,
         input.allowed,
         accessToken ?? "",
-      );
-    },
+      ),
     onSuccess: () => {
       setError(null);
-      queryClient.invalidateQueries({ queryKey: ["permissions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["permissions", "user", selectedUserId],
+      });
     },
     onError: (mutationError) => {
       setError(
@@ -124,30 +111,65 @@ export function PermissionsPage() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: async (permission: RolePermission) => {
-      if (mode === "role") {
-        return removeRolePermission(
-          selectedRole,
-          permission.code,
-          accessToken ?? "",
-        );
-      }
-
-      return removeUserPermission(
+    mutationFn: (permission: RolePermission) =>
+      removeUserPermission(
         selectedUserId,
         permission.code,
         accessToken ?? "",
-      );
-    },
+      ),
     onSuccess: () => {
       setError(null);
-      queryClient.invalidateQueries({ queryKey: ["permissions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["permissions", "user", selectedUserId],
+      });
     },
     onError: (mutationError) => {
       setError(
         mutationError instanceof ApiError
           ? mutationError.message
           : "Unable to reset permission.",
+      );
+    },
+  });
+
+  const allowAllMutation = useMutation({
+    mutationFn: () =>
+      allowAllUserPermissions(
+        selectedUserId,
+        accessToken ?? "",
+      ),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({
+        queryKey: ["permissions", "user", selectedUserId],
+      });
+    },
+    onError: (mutationError) => {
+      setError(
+        mutationError instanceof ApiError
+          ? mutationError.message
+          : "Unable to allow all permissions.",
+      );
+    },
+  });
+
+  const disallowAllMutation = useMutation({
+    mutationFn: () =>
+      disallowAllUserPermissions(
+        selectedUserId,
+        accessToken ?? "",
+      ),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({
+        queryKey: ["permissions", "user", selectedUserId],
+      });
+    },
+    onError: (mutationError) => {
+      setError(
+        mutationError instanceof ApiError
+          ? mutationError.message
+          : "Unable to disallow all permissions.",
       );
     },
   });
@@ -162,75 +184,95 @@ export function PermissionsPage() {
   }
 
   const businessOwnerSelected =
-    mode === "user" && userQuery.data?.user.role === "BUSINESS_OWNER";
+    userQuery.data?.user.securityRole === "BUSINESS_OWNER";
+
+  const bulkMutationPending =
+    allowAllMutation.isPending ||
+    disallowAllMutation.isPending;
 
   return (
     <main>
       <header>
         <h1>Permissions</h1>
         <p>
-          Management controls access by role and by individual user.
-          Effective permissions are enforced by the server.
+          Management controls each user's access individually.
+          The Role field is the user's job title and does not grant
+          permissions.
         </p>
       </header>
 
       <section aria-label="Permission target">
-        <button
-          type="button"
-          onClick={() => setMode("role")}
-          aria-pressed={mode === "role"}
-        >
-          Role permissions
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("user")}
-          aria-pressed={mode === "user"}
-        >
-          Individual user
-        </button>
-
-        {mode === "role" ? (
-          <label>
-            Role
-            <select
-              value={selectedRole}
-              onChange={(event) =>
-                setSelectedRole(
-                  event.target.value as "BRANCH_MANAGER" | "STAFF",
-                )
-              }
-            >
-              {MANAGED_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {formatRole(role)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <label>
-            User
-            <select
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-            >
-              <option value="">Select a user</option>
-              {(usersQuery.data ?? []).map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.fullName} — {formatRole(user.role)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <label>
+          User
+          <select
+            value={selectedUserId}
+            onChange={(event) => {
+              setSelectedUserId(event.target.value);
+              setModuleFilter("");
+              setError(null);
+            }}
+          >
+            <option value="">Select a user</option>
+            {(usersQuery.data ?? []).map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.fullName} — {user.role}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
+
+      {selectedUserId && userQuery.data ? (
+        <section aria-label="Selected user">
+          <p>
+            <strong>{userQuery.data.user.fullName}</strong>
+            {" — "}
+            {userQuery.data.user.role}
+          </p>
+          <p>
+            Security foundation:{" "}
+            {formatSecurityRole(userQuery.data.user.securityRole)}
+          </p>
+        </section>
+      ) : null}
 
       {businessOwnerSelected ? (
         <p>
           Business Owner access is system-wide and cannot be restricted
           through a business-level permission override.
         </p>
+      ) : null}
+
+      {selectedUserId && !businessOwnerSelected ? (
+        <section aria-label="Bulk permission controls">
+          <button
+            type="button"
+            disabled={
+              bulkMutationPending ||
+              updateMutation.isPending ||
+              resetMutation.isPending
+            }
+            onClick={() => allowAllMutation.mutate()}
+          >
+            {allowAllMutation.isPending
+              ? "Allowing..."
+              : "Allow All"}
+          </button>
+
+          <button
+            type="button"
+            disabled={
+              bulkMutationPending ||
+              updateMutation.isPending ||
+              resetMutation.isPending
+            }
+            onClick={() => disallowAllMutation.mutate()}
+          >
+            {disallowAllMutation.isPending
+              ? "Disallowing..."
+              : "Disallow All"}
+          </button>
+        </section>
       ) : null}
 
       <section aria-label="Permission filters">
@@ -253,15 +295,16 @@ export function PermissionsPage() {
       {error ? <p role="alert">{error}</p> : null}
 
       {(permissionsQuery.isLoading ||
-        roleQuery.isLoading ||
         usersQuery.isLoading ||
-        userQuery.isLoading) && <p>Loading permissions...</p>}
+        userQuery.isLoading) && (
+        <p>Loading permissions...</p>
+      )}
 
-      {mode === "user" && !selectedUserId ? (
+      {!selectedUserId ? (
         <p>Select a user to manage individual permissions.</p>
       ) : null}
 
-      {filteredPermissions.length > 0 ? (
+      {selectedUserId && filteredPermissions.length > 0 ? (
         <table>
           <thead>
             <tr>
@@ -278,7 +321,8 @@ export function PermissionsPage() {
               const locked =
                 businessOwnerSelected ||
                 updateMutation.isPending ||
-                resetMutation.isPending;
+                resetMutation.isPending ||
+                bulkMutationPending;
 
               return (
                 <tr key={permission.code}>
@@ -300,11 +344,15 @@ export function PermissionsPage() {
                     >
                       {permission.allowed ? "Deny" : "Allow"}
                     </button>
-                    {permission.source !== "default" && !businessOwnerSelected ? (
+
+                    {permission.source !== "default" &&
+                    !businessOwnerSelected ? (
                       <button
                         type="button"
                         disabled={locked}
-                        onClick={() => resetMutation.mutate(permission)}
+                        onClick={() =>
+                          resetMutation.mutate(permission)
+                        }
                       >
                         Reset
                       </button>
@@ -315,9 +363,11 @@ export function PermissionsPage() {
             })}
           </tbody>
         </table>
-      ) : (
+      ) : selectedUserId &&
+        !userQuery.isLoading &&
+        !userQuery.isError ? (
         <p>No permission records to display.</p>
-      )}
+      ) : null}
     </main>
   );
 }

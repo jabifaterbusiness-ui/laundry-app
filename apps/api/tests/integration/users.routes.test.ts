@@ -70,6 +70,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -210,13 +211,17 @@ describe("Users routes - permissions", () => {
     expect(userCreate).not.toHaveBeenCalled();
   });
 
-  it("allows BRANCH_MANAGER to create users with default permission", async () => {
+  it("allows BRANCH_MANAGER to create users when users.create is explicitly granted", async () => {
+    vi.mocked(prisma.userPermissionOverride.findUnique).mockResolvedValue({
+      allowed: true,
+    } as never);
+
     const user = {
       id: "88888888-8888-4888-8888-888888888888",
       email: "manager-created@example.com",
       fullName: "Manager Created Staff",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -237,7 +242,6 @@ describe("Users routes - permissions", () => {
         email: "manager-created@example.com",
         password: "password123",
         role: "STAFF",
-        position: "Laundry Supervisor",
         branchIds: [],
       });
 
@@ -269,8 +273,8 @@ describe("Users routes - permissions", () => {
       id: "77777777-7777-4777-8777-777777777777",
       email: "granted@example.com",
       fullName: "Granted Staff",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -290,7 +294,7 @@ describe("Users routes - permissions", () => {
         fullName: "Granted Staff",
         email: "granted@example.com",
         password: "password123",
-        role: "STAFF",
+        role: "Laundry Supervisor",
         branchIds: [],
       });
 
@@ -303,8 +307,8 @@ describe("Users routes - permissions", () => {
       id: "11111111-1111-4111-8111-111111111111",
       email: "new@example.com",
       fullName: "New Staff",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -324,7 +328,7 @@ describe("Users routes - permissions", () => {
         fullName: "New Staff",
         email: "new@example.com",
         password: "password123",
-        role: "STAFF",
+        role: "Laundry Supervisor",
         branchIds: [],
       });
 
@@ -334,21 +338,22 @@ describe("Users routes - permissions", () => {
         data: expect.objectContaining({
           businessId: "biz-A",
           email: "new@example.com",
-          role: "STAFF",
+          role: "Laundry Supervisor",
+          securityRole: "STAFF",
         }),
       }),
     );
   });
 });
 
-describe("Users routes - custom positions", () => {
-  it("allows management to create a user with a custom position", async () => {
+describe("Users routes - custom roles", () => {
+  it("allows management to create a user with a custom free-text role", async () => {
     const user = {
       id: "88888888-8888-4888-8888-888888888888",
       email: "positioned@example.com",
       fullName: "Positioned Staff",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
       isActive: true,
       deletedAt: null,
       businessId: "biz-A",
@@ -367,8 +372,7 @@ describe("Users routes - custom positions", () => {
         fullName: "Positioned Staff",
         email: "positioned@example.com",
         password: "password123",
-        role: "STAFF",
-        position: "Laundry Supervisor",
+        role: "Laundry Supervisor",
         branchIds: [],
       });
 
@@ -376,19 +380,20 @@ describe("Users routes - custom positions", () => {
     expect(userCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          position: "Laundry Supervisor",
+          role: "Laundry Supervisor",
+          securityRole: "STAFF",
         }),
       }),
     );
   });
 
-  it("allows management to update only the custom position", async () => {
+  it("allows management to update the user's custom free-text role", async () => {
     const user = {
       id: "99999999-9999-4999-8999-999999999999",
       email: "position-update@example.com",
       fullName: "Position Update",
-      role: "STAFF",
-      position: "Laundry Supervisor",
+      role: "Laundry Supervisor",
+      securityRole: "STAFF",
       isActive: true,
       deletedAt: null,
       businessId: "biz-A",
@@ -402,26 +407,26 @@ describe("Users routes - custom positions", () => {
       .mockResolvedValueOnce(user as never)
       .mockResolvedValueOnce({
         ...user,
-        position: "Operations Supervisor",
+        role: "Operations Supervisor",
       } as never);
 
     userUpdate.mockResolvedValue({
       ...user,
-      position: "Operations Supervisor",
+      role: "Operations Supervisor",
     } as never);
 
     const response = await request(app)
       .patch(`/api/v1/users/${user.id}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .send({
-        position: "Operations Supervisor",
+        role: "Operations Supervisor",
       });
 
     expect(response.status).toBe(200);
     expect(userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          position: "Operations Supervisor",
+          role: "Operations Supervisor",
         }),
       }),
     );
@@ -447,8 +452,8 @@ describe("Users routes - deletion", () => {
       id: "88888888-8888-4888-8888-888888888888",
       email: "deletable@example.com",
       fullName: "Deletable User",
-      role: "STAFF",
-      position: null,
+      role: "Staff",
+      securityRole: "STAFF",
       isActive: true,
       deletedAt: null,
       businessId: "biz-A",
@@ -482,8 +487,8 @@ describe("Users routes - deletion", () => {
       id: "88888888-8888-4888-8888-888888888888",
       email: "deletable@example.com",
       fullName: "Deletable User",
-      role: "STAFF",
-      position: null,
+      role: "Staff",
+      securityRole: "STAFF",
       isActive: true,
       deletedAt: null,
       businessId: "biz-A",
@@ -509,6 +514,7 @@ describe("Users routes - status management", () => {
       email: "owner@example.com",
       fullName: "Owner",
       role: "BUSINESS_OWNER",
+      securityRole: "BUSINESS_OWNER",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),
@@ -529,6 +535,7 @@ describe("Users routes - status management", () => {
       email: "owner@example.com",
       fullName: "Owner",
       role: "BUSINESS_OWNER",
+      securityRole: "BUSINESS_OWNER",
       isActive: true,
       businessId: "biz-A",
       createdAt: new Date(),

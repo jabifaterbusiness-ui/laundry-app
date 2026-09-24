@@ -9,7 +9,7 @@ const USER_SELECT = {
   email: true,
   fullName: true,
   role: true,
-  position: true,
+  securityRole: true,
   isActive: true,
   deletedAt: true,
   businessId: true,
@@ -96,22 +96,22 @@ async function validateBranches(businessId: string, branchIds: string[]) {
 async function assertNotLastActiveOwner(
   tx: Prisma.TransactionClient,
   current: {
-    role: Role;
+    securityRole: Role;
     isActive: boolean;
   },
   businessId: string,
-  nextRole: Role,
+  nextSecurityRole: Role,
   nextActive: boolean,
 ) {
   if (
-    current.role === "BUSINESS_OWNER" &&
+    current.securityRole === "BUSINESS_OWNER" &&
     current.isActive &&
-    (nextRole !== "BUSINESS_OWNER" || !nextActive)
+    (nextSecurityRole !== "BUSINESS_OWNER" || !nextActive)
   ) {
     const ownerCount = await tx.user.count({
       where: {
         businessId,
-        role: "BUSINESS_OWNER",
+        securityRole: "BUSINESS_OWNER",
         isActive: true,
       },
     });
@@ -139,14 +139,14 @@ export async function listUsers(
   params: {
     search?: string;
     status: "active" | "inactive" | "all";
-    role?: Role;
+    role?: string;
   },
 ) {
   const where: {
     businessId: string;
     deletedAt: null;
     isActive?: boolean;
-    role?: Role;
+    role?: string;
     OR?: Array<Record<string, unknown>>;
   } = { businessId, deletedAt: null };
 
@@ -198,8 +198,7 @@ export async function createUser(
     fullName: string;
     email: string;
     password: string;
-    role: Role;
-    position?: string | null;
+    role: string;
     branchIds: string[];
   },
   context: {
@@ -208,7 +207,13 @@ export async function createUser(
     correlationId?: string | null;
   },
 ) {
-  assertBusinessRole(input.role);
+  const roleTitle = input.role.trim();
+  if (!roleTitle) {
+    throw new AppError("Role is required", 400);
+  }
+  if (roleTitle.length > 120) {
+    throw new AppError("Role must be 120 characters or less", 400);
+  }
 
   const email = input.email.trim().toLowerCase();
   const branches = await validateBranches(context.businessId, input.branchIds);
@@ -232,10 +237,8 @@ export async function createUser(
         fullName: input.fullName.trim(),
         email,
         passwordHash,
-        role: input.role,
-        ...(input.position !== undefined
-          ? { position: input.position?.trim() || null }
-          : {}),
+        role: roleTitle,
+        securityRole: "STAFF",
         isActive: true,
       },
       select: USER_SELECT,
@@ -276,8 +279,7 @@ export async function updateUser(
     fullName?: string;
     email?: string;
     password?: string;
-    role?: Role;
-    position?: string | null;
+    role?: string;
     branchIds?: string[];
   },
   context: {
@@ -301,7 +303,13 @@ export async function updateUser(
   }
 
   if (input.role !== undefined) {
-    assertBusinessRole(input.role);
+    const roleTitle = input.role.trim();
+    if (!roleTitle) {
+      throw new AppError("Role cannot be empty", 400);
+    }
+    if (roleTitle.length > 120) {
+      throw new AppError("Role must be 120 characters or less", 400);
+    }
   }
 
   if (input.branchIds !== undefined) {
@@ -349,14 +357,14 @@ export async function updateUser(
         throw new AppError("User not found", 404);
       }
 
-      const nextRoleInTransaction =
-        input.role ?? currentInTransaction.role;
+      const nextSecurityRoleInTransaction =
+        currentInTransaction.securityRole;
 
       await assertNotLastActiveOwner(
         tx,
         currentInTransaction,
         context.businessId,
-        nextRoleInTransaction,
+        nextSecurityRoleInTransaction,
         currentInTransaction.isActive,
       );
 
@@ -370,10 +378,7 @@ export async function updateUser(
             ? { email: input.email.trim().toLowerCase() }
             : {}),
           ...(passwordHash !== undefined ? { passwordHash } : {}),
-          ...(input.role !== undefined ? { role: input.role } : {}),
-          ...(input.position !== undefined
-            ? { position: input.position?.trim() || null }
-            : {}),
+          ...(input.role !== undefined ? { role: input.role.trim() } : {}),
         },
       });
 
@@ -443,7 +448,7 @@ export async function deleteUser(
     prisma,
     current,
     input.businessId,
-    current.role,
+    current.securityRole,
     false,
   );
 
@@ -483,7 +488,7 @@ export async function deleteUser(
     actorUserId: input.actorUserId,
     correlationId: input.correlationId ?? null,
     metadata: {
-      previousRole: current.role,
+      previousRole: current.securityRole,
       previousIsActive: current.isActive,
       deletedAt: deletedAt.toISOString(),
     },
@@ -545,7 +550,7 @@ export async function setUserActiveStatus(
           tx,
           currentInTransaction,
           context.businessId,
-          currentInTransaction.role,
+          currentInTransaction.securityRole,
           false,
         );
       }

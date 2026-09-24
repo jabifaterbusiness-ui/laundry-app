@@ -76,7 +76,13 @@ describe("requireBranchContext", () => {
 
   it("rejects when the caller has no business context at all", async () => {
     const req = makeReq({
-      user: { id: "user-1", email: "a@example.com", role: "STAFF", businessId: null },
+      user: {
+        id: "user-1",
+        email: "a@example.com",
+        role: "STAFF",
+        securityRole: "STAFF",
+        businessId: null,
+      },
       headers: { "x-branch-id": "branch-1" },
     });
 

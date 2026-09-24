@@ -27,7 +27,8 @@ let mockUser = {
   id: "manager-1",
   fullName: "Jane Manager",
   email: "jane@example.com",
-  role: "BRANCH_MANAGER" as const,
+  role: "Branch Manager",
+  securityRole: "BRANCH_MANAGER",
   businessId: "business-1",
   branches: [],
   permissions: [
@@ -62,8 +63,7 @@ const users: import("../../lib/users-api.js").ManagedUser[] = [
     id: "staff-1",
     email: "john@example.com",
     fullName: "John Staff",
-    role: "STAFF" as const,
-    position: "Laundry Supervisor",
+    role: "Laundry Supervisor",
     isActive: true,
     businessId: "business-1",
     createdAt: "2026-09-01T00:00:00.000Z",
@@ -74,8 +74,7 @@ const users: import("../../lib/users-api.js").ManagedUser[] = [
     id: "staff-2",
     email: "inactive@example.com",
     fullName: "Inactive Staff",
-    role: "STAFF" as const,
-    position: null,
+    role: "Cashier",
     isActive: false,
     businessId: "business-1",
     createdAt: "2026-09-01T00:00:00.000Z",
@@ -109,7 +108,8 @@ beforeEach(() => {
     id: "manager-1",
     fullName: "Jane Manager",
     email: "jane@example.com",
-    role: "BRANCH_MANAGER",
+    role: "Branch Manager",
+    securityRole: "BRANCH_MANAGER",
     businessId: "business-1",
     branches: [],
     permissions: [
@@ -130,22 +130,23 @@ beforeEach(() => {
 });
 
 describe("UsersPage", () => {
-  it("renders custom user positions", async () => {
+  it("renders custom user roles", async () => {
     renderUsers();
 
     expect(
       await screen.findByText("Laundry Supervisor"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Cashier")).toBeInTheDocument();
   });
 
-  it("includes the custom position when creating a user", async () => {
+  it("includes the custom role when creating a user", async () => {
     renderUsers();
 
     await screen.findByText("Laundry Supervisor");
 
     fireEvent.click(screen.getByRole("button", { name: "New user" }));
 
-    fireEvent.change(screen.getByLabelText("Position"), {
+    fireEvent.change(screen.getByLabelText("Role"), {
       target: { value: "Operations Supervisor" },
     });
 
@@ -159,12 +160,15 @@ describe("UsersPage", () => {
       target: { value: "Password123!" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /create user/i }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /create user/i }),
+    );
 
     await waitFor(() => {
       expect(mockedCreateUser).toHaveBeenCalledWith(
         expect.objectContaining({
-          position: "Operations Supervisor",
+          role: "Operations Supervisor",
         }),
         "token",
       );
@@ -190,7 +194,7 @@ describe("UsersPage", () => {
     renderUsers();
 
     const johnRow = await screen.findByRole("row", {
-      name: /John Staff john@example.com Staff Laundry Supervisor/,
+      name: /John Staff john@example.com Laundry Supervisor/,
     });
 
     expect(
@@ -227,7 +231,7 @@ describe("UsersPage", () => {
     await screen.findByText("John Staff");
 
     const johnRow = screen.getByRole("row", {
-      name: /John Staff john@example.com Staff Laundry Supervisor/i,
+      name: /John Staff john@example.com Laundry Supervisor/i,
     });
 
     fireEvent.click(

@@ -80,7 +80,7 @@ export async function exportBusinessBackup(businessId: string, userId: string, p
     exportedAt: new Date().toISOString(),
     business: { ...business, createdAt: business.createdAt.toISOString(), updatedAt: business.updatedAt.toISOString() },
     branches: branches.map((branch) => ({ ...branch, createdAt: branch.createdAt.toISOString(), updatedAt: branch.updatedAt.toISOString() })),
-    users: users.map((user) => ({ id: user.id, email: user.email, fullName: user.fullName, role: user.role, isActive: user.isActive, createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() })),
+    users: users.map((user) => ({ id: user.id, email: user.email, fullName: user.fullName, role: user.role, securityRole: user.securityRole, isActive: user.isActive, createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() })),
     customers: customers.map((customer) => ({ ...customer, createdAt: customer.createdAt.toISOString(), updatedAt: customer.updatedAt.toISOString() })),
   };
 

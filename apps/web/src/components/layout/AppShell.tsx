@@ -270,7 +270,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
-              {user?.role === "PLATFORM_ADMIN" ? (
+              {user?.securityRole === "PLATFORM_ADMIN" ? (
                 <Link
                   to="/platform"
                   className={`nav-item ${

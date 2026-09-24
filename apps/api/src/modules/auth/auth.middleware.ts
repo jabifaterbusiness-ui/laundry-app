@@ -7,7 +7,7 @@ import type { Role } from "@prisma/client";
 interface AccessTokenPayload {
   sub: string;
   email: string;
-  role: Role;
+  securityRole: Role;
   businessId: string | null;
 }
 
@@ -26,7 +26,8 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     req.user = {
       id: payload.sub,
       email: payload.email,
-      role: payload.role,
+      role: "",
+      securityRole: payload.securityRole,
       businessId: payload.businessId,
     };
     next();

@@ -174,7 +174,7 @@ async function ensureOwnerRecipients(
   const owners = await prisma.user.findMany({
     where: {
       businessId,
-      role: "BUSINESS_OWNER",
+      securityRole: "BUSINESS_OWNER",
       isActive: true,
     },
     select: {

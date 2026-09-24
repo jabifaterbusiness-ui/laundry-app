@@ -284,7 +284,7 @@ describe("financial statement scheduler", () => {
     expect(prismaMock.user.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
-        role: "BUSINESS_OWNER",
+        securityRole: "BUSINESS_OWNER",
         isActive: true,
       },
       select: {

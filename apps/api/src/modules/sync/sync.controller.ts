@@ -42,7 +42,7 @@ export async function enqueue(req: Request, res: Response) {
       businessId,
       branchId,
       actorUserId: req.user!.id,
-      actorRole: req.user!.role,
+      actorRole: req.user!.securityRole,
     },
     clientOperationId: input.clientOperationId,
     operationType: input.operationType,
@@ -79,7 +79,7 @@ export async function list(req: Request, res: Response) {
       businessId,
       branchId,
       actorUserId: req.user!.id,
-      actorRole: req.user!.role,
+      actorRole: req.user!.securityRole,
     },
     ...(query.status !== undefined && {
       status: query.status,
@@ -102,7 +102,7 @@ export async function replay(req: Request, res: Response) {
       businessId,
       branchId,
       actorUserId: req.user!.id,
-      actorRole: req.user!.role,
+      actorRole: req.user!.securityRole,
     },
     id,
   });

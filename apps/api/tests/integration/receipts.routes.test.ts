@@ -51,6 +51,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -269,6 +270,7 @@ describe("Customer receipt endpoint", () => {
 describe("Company receipt endpoint", () => {
   it("returns the company receipt including the private internal note", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     invoiceFindFirst.mockResolvedValue(invoiceFixture as never);
 
     const res = await request(app)
@@ -285,6 +287,7 @@ describe("Company receipt endpoint", () => {
 
   it("never exposes customer phone, email or address", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     invoiceFindFirst.mockResolvedValue(invoiceFixture as never);
 
     const res = await request(app)
@@ -358,6 +361,7 @@ describe("Receipt routes - validation and authorization", () => {
 
   it("allows STAFF to access both receipt projections", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     invoiceFindFirst.mockResolvedValue(invoiceFixture as never);
 
     const customerRes = await request(app)

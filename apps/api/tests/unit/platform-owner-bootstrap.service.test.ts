@@ -55,7 +55,8 @@ describe("bootstrapPlatformOwner", () => {
           id: "platform-owner-1",
           email: "owner@example.com",
           fullName: "Platform Owner",
-          role: "PLATFORM_ADMIN",
+          role: "Platform Administrator",
+          securityRole: "PLATFORM_ADMIN",
           businessId: null,
           isActive: true,
         }),
@@ -82,7 +83,8 @@ describe("bootstrapPlatformOwner", () => {
         fullName: "Platform Owner",
         email: "owner@example.com",
         passwordHash: "hashed-password",
-        role: "PLATFORM_ADMIN",
+        role: "Platform Administrator",
+        securityRole: "PLATFORM_ADMIN",
         isActive: true,
         businessId: null,
       },
@@ -91,6 +93,7 @@ describe("bootstrapPlatformOwner", () => {
         email: true,
         fullName: true,
         role: true,
+        securityRole: true,
         businessId: true,
         isActive: true,
       },
@@ -100,7 +103,8 @@ describe("bootstrapPlatformOwner", () => {
       id: "platform-owner-1",
       email: "owner@example.com",
       fullName: "Platform Owner",
-      role: "PLATFORM_ADMIN",
+      role: "Platform Administrator",
+      securityRole: "PLATFORM_ADMIN",
       businessId: null,
       isActive: true,
     });
@@ -112,7 +116,8 @@ describe("bootstrapPlatformOwner", () => {
       businessId: null,
       actorUserId: null,
       metadata: {
-        role: "PLATFORM_ADMIN",
+        role: "Platform Administrator",
+        securityRole: "PLATFORM_ADMIN",
         email: "owner@example.com",
         bootstrap: true,
       },
@@ -226,7 +231,7 @@ describe("bootstrapPlatformOwner", () => {
     });
 
     expect(tx.user.count).toHaveBeenCalledWith({
-      where: { role: "PLATFORM_ADMIN" },
+      where: { securityRole: "PLATFORM_ADMIN" },
     });
     expect(tx.user.create).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();

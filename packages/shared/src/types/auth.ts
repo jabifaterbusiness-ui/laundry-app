@@ -18,7 +18,10 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   fullName: string;
-  role: Role;
+  /** Visible business job title chosen by management; does not grant access. */
+  role: string;
+  /** Internal security foundation used for protected system behavior. */
+  securityRole: Role;
   businessId: string | null;
   branches: BranchMembership[];
   /** Effective permissions resolved by the API: user override > role override > default role. */

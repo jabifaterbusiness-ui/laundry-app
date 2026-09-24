@@ -53,7 +53,7 @@ function tokenFor(
   userId = "user-1",
 ) {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, businessId },
+    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -108,6 +108,7 @@ describe("Services routes - authentication", () => {
 
 describe("Services routes - tenant isolation", () => {
   it("business A can list its own services", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     findMany.mockResolvedValue([]);
 
     const res = await request(app)
@@ -146,6 +147,7 @@ describe("Services routes - tenant isolation", () => {
 
 describe("Services routes - authorization", () => {
   it("allows STAFF to view services", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     findMany.mockResolvedValue([]);
 
     const res = await request(app)
@@ -156,6 +158,7 @@ describe("Services routes - authorization", () => {
   });
 
   it("allows BRANCH_MANAGER to create a service", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     create.mockResolvedValue({
       id: "service-1",
       businessId: "biz-A",
@@ -190,7 +193,7 @@ describe("Services routes - authorization", () => {
 
 describe("Services routes - permission enforcement", () => {
   it("rejects STAFF when services.create is explicitly denied", async () => {
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -208,7 +211,7 @@ describe("Services routes - permission enforcement", () => {
   });
 
   it("rejects STAFF when services.view is explicitly denied", async () => {
-    findRoleOverride.mockResolvedValue({
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 

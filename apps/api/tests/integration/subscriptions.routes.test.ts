@@ -25,6 +25,7 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
       id: "owner-1",
       email: "owner@example.com",
       role: req.headers["x-test-role"] ?? "BUSINESS_OWNER",
+      securityRole: req.headers["x-test-role"] ?? "BUSINESS_OWNER",
       businessId: req.headers["x-test-business-id"] ?? "biz-A",
     };
     next();

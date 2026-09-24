@@ -19,7 +19,7 @@ export function requireRole(...allowedRoles: Role[]) {
       throw new AppError("Authentication required", 401);
     }
 
-    if (!allowedRoles.includes(user.role)) {
+    if (!allowedRoles.includes(user.securityRole)) {
       throw new AppError("Insufficient permissions for this action", 403);
     }
 

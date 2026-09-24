@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import {
   createUserSchema,
@@ -42,7 +41,7 @@ export async function list(req: Request, res: Response) {
   const users = await listUsers(businessId, {
     status: query.status,
     ...(query.search !== undefined && { search: query.search }),
-    ...(query.role !== undefined && { role: query.role as Role }),
+    ...(query.role !== undefined && { role: query.role }),
   });
 
   res.status(200).json(users);
@@ -63,7 +62,6 @@ export async function create(req: Request, res: Response) {
     await createUser(
       {
         ...input,
-        position: input.position ?? null,
       },
       {
         businessId,
@@ -82,9 +80,8 @@ export async function update(req: Request, res: Response) {
     ...(input.fullName !== undefined && { fullName: input.fullName }),
     ...(input.email !== undefined && { email: input.email }),
     ...(input.password !== undefined && { password: input.password }),
-    ...(input.role !== undefined && { role: input.role as Role }),
-    ...(input.position !== undefined && { position: input.position }),
-    ...(input.branchIds !== undefined && { branchIds: input.branchIds }),
+    ...(input.role !== undefined && { role: input.role }),
+        ...(input.branchIds !== undefined && { branchIds: input.branchIds }),
   };
 
   res.status(200).json(

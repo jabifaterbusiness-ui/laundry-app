@@ -64,7 +64,7 @@ const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, businessId },
+    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -147,8 +147,8 @@ describe("Branches routes - tenant isolation", () => {
 });
 
 describe("Branches routes - permission enforcement", () => {
-  it("rejects a BUSINESS_OWNER when branches.create is explicitly denied", async () => {
-    findRoleOverride.mockResolvedValue({
+  it("rejects STAFF when branches.create is explicitly denied", async () => {
+    findUserOverride.mockResolvedValue({
       allowed: false,
     } as never);
 
@@ -164,6 +164,7 @@ describe("Branches routes - permission enforcement", () => {
 
 describe("Branches routes - authorization", () => {
   it("allows STAFF to view branches", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     findMany.mockResolvedValue([] as never);
     const res = await request(app)
       .get("/api/v1/branches")
@@ -172,6 +173,7 @@ describe("Branches routes - authorization", () => {
   });
 
   it("allows BRANCH_MANAGER to view branches", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     findMany.mockResolvedValue([] as never);
     const res = await request(app)
       .get("/api/v1/branches")
@@ -188,7 +190,8 @@ describe("Branches routes - authorization", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("allows BRANCH_MANAGER to create a branch with default permission", async () => {
+  it("allows BRANCH_MANAGER to create a branch when explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     create.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
       businessId: "biz-A",
@@ -469,6 +472,7 @@ describe("Branches routes - user membership", () => {
   const USER_A = "44444444-4444-4444-4444-444444444444";
 
   it("allows STAFF to view users assigned to a branch", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     findFirst.mockResolvedValue({
       id: BRANCH_A,
       businessId: "biz-A",

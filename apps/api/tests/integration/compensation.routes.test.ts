@@ -57,6 +57,7 @@ const compensationFindFirst = vi.mocked(prisma.employeeCompensation.findFirst);
 const compensationFindMany = vi.mocked(prisma.employeeCompensation.findMany);
 const compensationCreate = vi.mocked(prisma.employeeCompensation.create);
 const compensationUpdate = vi.mocked(prisma.employeeCompensation.update);
+const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
   role: string,
@@ -68,6 +69,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -111,6 +113,7 @@ beforeEach(() => {
     name: "Test Business",
     isActive: true,
   } as never);
+  findUserOverride.mockResolvedValue(null);
 });
 
 describe("Compensation routes - authentication", () => {
@@ -169,6 +172,8 @@ describe("Compensation routes - authorization", () => {
   });
 
   it("BRANCH_MANAGER can create compensation", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {

@@ -42,7 +42,7 @@ export async function login(req: Request, res: Response) {
   const permissions = await getEffectivePermissionCodes(
     user.businessId,
     user.id,
-    user.role,
+    user.securityRole,
   );
 
   await recordAuditEvent({
@@ -115,7 +115,7 @@ export async function me(req: Request, res: Response) {
   const permissions = await getEffectivePermissionCodes(
     user.businessId,
     user.id,
-    user.role,
+    user.securityRole,
   );
 
   res.status(200).json({

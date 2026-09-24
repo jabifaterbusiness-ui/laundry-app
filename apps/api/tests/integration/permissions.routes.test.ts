@@ -66,6 +66,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -107,6 +108,7 @@ beforeEach(() => {
     email: "user@example.com",
     fullName: "Business Owner",
     role: "BUSINESS_OWNER",
+    securityRole: "BUSINESS_OWNER",
     isActive: true,
   } as never);
 });

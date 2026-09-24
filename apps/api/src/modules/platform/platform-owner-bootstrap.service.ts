@@ -30,7 +30,7 @@ export async function bootstrapPlatformOwner(input: {
   }
 
   const existingPlatformOwner = await prisma.user.findFirst({
-    where: { role: "PLATFORM_ADMIN" },
+    where: { securityRole: "PLATFORM_ADMIN" },
     select: { id: true, email: true, isActive: true },
   });
 
@@ -55,7 +55,7 @@ export async function bootstrapPlatformOwner(input: {
   const user = await prisma.$transaction(
     async (tx) => {
       const platformOwnerCount = await tx.user.count({
-        where: { role: "PLATFORM_ADMIN" },
+        where: { securityRole: "PLATFORM_ADMIN" },
       });
 
       if (platformOwnerCount > 0) {
@@ -70,7 +70,8 @@ export async function bootstrapPlatformOwner(input: {
           fullName,
           email,
           passwordHash,
-          role: Role.PLATFORM_ADMIN,
+          role: "Platform Administrator",
+          securityRole: Role.PLATFORM_ADMIN,
           isActive: true,
           businessId: null,
         },
@@ -79,6 +80,7 @@ export async function bootstrapPlatformOwner(input: {
           email: true,
           fullName: true,
           role: true,
+          securityRole: true,
           businessId: true,
           isActive: true,
         },
@@ -97,6 +99,7 @@ export async function bootstrapPlatformOwner(input: {
     actorUserId: null,
     metadata: {
       role: user.role,
+      securityRole: user.securityRole,
       email: user.email,
       bootstrap: true,
     },

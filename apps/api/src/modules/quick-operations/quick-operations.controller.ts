@@ -33,7 +33,7 @@ export async function execute(req: Request, res: Response) {
   const result = await executeQuickOperation(
     {
       userId: req.user!.id,
-      role: req.user!.role,
+      role: req.user!.securityRole,
       businessId,
       branchId,
       correlationId: req.correlationId ?? null,

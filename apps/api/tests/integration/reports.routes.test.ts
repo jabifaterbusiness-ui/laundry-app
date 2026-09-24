@@ -118,6 +118,7 @@ function tokenFor(
       sub: userId,
       email: "user@example.com",
       role,
+      securityRole: role,
       businessId,
     },
     process.env.JWT_ACCESS_SECRET as string,
@@ -315,6 +316,7 @@ describe("Reports routes - authorization", () => {
 
   it("BRANCH_MANAGER can view reports", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     mockReportData();
 
     const res = await request(app)
