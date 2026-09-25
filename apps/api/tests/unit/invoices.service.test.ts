@@ -136,6 +136,7 @@ describe("invoices.service", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             invoiceNumber: "00042",
+            status: "ISSUED",
             customerName: "John Customer",
             companyName: "Clean Laundry",
             companyPhone: "08000000000",

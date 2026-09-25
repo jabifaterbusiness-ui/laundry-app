@@ -717,6 +717,30 @@ describe("Invoices routes - creation security", () => {
   });
 });
 
+describe("Invoices routes - immutability", () => {
+  it("does not expose invoice update or delete endpoints", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+
+    const updateResponse = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        customerAgreement: "Changed agreement",
+      });
+
+    expect(updateResponse.status).toBe(404);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(deleteResponse.status).toBe(404);
+    expect(invoiceCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe("Invoices routes - list filters and pagination", () => {
   it("passes status, customerId and pagination filters through safely", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
