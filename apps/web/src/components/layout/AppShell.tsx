@@ -26,6 +26,11 @@ const MANAGEMENT: NavItem[] = [
   { label: "Inventory", href: "/inventory", icon: "□" },
   { label: "Users", href: "/users", icon: "♟" },
   { label: "Permissions", href: "/permissions", icon: "⚙" },
+  {
+    label: "Suspicious / Unusual Activity",
+    href: "/security/suspicious-activity",
+    icon: "⚠",
+  },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -194,7 +199,9 @@ export function AppShell({ children }: PropsWithChildren) {
                 const active = isActive(item.href);
                 const isBusinessUserManagement =
                   item.href === "/users";
-                  const isPermissionsRoute = item.href === "/permissions";
+                const isPermissionsRoute = item.href === "/permissions";
+                const isSuspiciousActivityRoute =
+                  item.href === "/security/suspicious-activity";
 
                 if (
                   isBusinessUserManagement &&
@@ -213,6 +220,13 @@ export function AppShell({ children }: PropsWithChildren) {
                 if (
                   item.href === "/colors" &&
                   !hasPermission(user, "colors.view")
+                ) {
+                  return null;
+                }
+
+                if (
+                  isSuspiciousActivityRoute &&
+                  !hasPermission(user, "security.suspicious_activity.view")
                 ) {
                   return null;
                 }

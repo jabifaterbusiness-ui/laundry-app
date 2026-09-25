@@ -84,6 +84,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
 
   { code: "business.view", module: "business", action: "view", description: "View business settings" },
   { code: "business.update", module: "business", action: "update", description: "Update business settings" },
+  { code: "security.suspicious_activity.view", module: "security", action: "suspicious_activity_view", description: "View suspicious and high-risk activity" },
 ];
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {

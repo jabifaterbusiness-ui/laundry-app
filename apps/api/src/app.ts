@@ -7,6 +7,7 @@ import { logger } from "./lib/logger.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { requestContext } from "./middleware/request-context.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { auditRouter } from "./modules/audit/audit.routes.js";
 import { businessesRouter } from "./modules/businesses/businesses.routes.js";
 import { customersRouter } from "./modules/customers/customers.routes.js";
 import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
@@ -100,6 +101,7 @@ export function createApp() {
   mountProtectedTenantRoute("/businesses", businessesRouter);
   mountProtectedTenantRoute("/branches", branchesRouter);
   mountProtectedTenantRoute("/customers", customersRouter);
+  mountProtectedTenantRoute("/audit", auditRouter);
   mountProtectedTenantRoute("/services", servicesRouter);
   mountProtectedTenantRoute("/colors", colorsRouter);
   mountProtectedTenantRoute("/orders", ordersRouter);
