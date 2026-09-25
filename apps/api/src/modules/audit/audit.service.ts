@@ -1,24 +1,54 @@
 import { prisma } from "../../lib/prisma.js";
 
 const SUSPICIOUS_ACTIVITY_ACTIONS = [
+  // Security / authentication
   "user.login",
+  "user.logout",
   "user.password_reset_requested",
   "user.password_reset_completed",
+
+  // User lifecycle
+  "user.created",
+  "user.updated",
+  "user.deleted",
+  "user.deactivated",
+
+  // Permissions
   "permission.role.updated",
   "permission.role.removed",
   "permission.user.allow_all",
   "permission.user.disallow_all",
   "permission.user.updated",
   "permission.user.removed",
-  "user.created",
-  "user.updated",
-  "user.deleted",
+
+  // Invoice corrections
+  "invoice.updated",
+  "invoice.deleted",
+  "invoice.transferred",
+  "invoice.voided",
+
+  // Customer / order transfer
+  "order.customer_transferred",
+
+  // Financial
   "payment.voided",
+
+  // Inventory
+  "inventory.stock_adjusted",
+
+  // Backup / recovery
   "backup.exported",
   "backup.restored",
-  "migration.analyzed",
+
+  // Quick operations
+  "quick_operation.executed",
+
+  // Subscription / platform financial events
   "subscription.payment.verified",
   "subscription.payment_intent.reconciled",
+
+  // System
+  "migration.analyzed",
 ] as const;
 
 export type SuspiciousActivityRecord = {
