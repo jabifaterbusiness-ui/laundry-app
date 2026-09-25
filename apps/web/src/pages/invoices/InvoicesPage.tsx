@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
 import type { InvoiceStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
+  deleteInvoice,
   getCompanyReceipt,
   getCustomerReceipt,
   getInvoice,
+  getInvoiceHistory,
   listInvoices,
+  transferInvoice,
+  updateInvoice,
+  voidInvoice,
 } from "../../lib/invoices-api.js";
+import { listCustomers } from "../../lib/customers-api.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 import { CustomerReceipt } from "./receipt/CustomerReceipt.js";
@@ -31,6 +38,10 @@ function statusLabel(status: InvoiceStatus) {
 export function InvoicesPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
+  const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+  const canManageInvoices = hasPermission(user, "invoices.manage");
+  const canViewInvoices = hasPermission(user, "invoices.view");
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<InvoiceStatus | "">("");
@@ -40,6 +51,26 @@ export function InvoicesPage() {
   const [printMode, setPrintMode] = useState<"customer" | "company" | null>(
     null,
   );
+  const [correctionMode, setCorrectionMode] = useState<
+    "edit" | "transfer" | "void" | "delete" | "history" | null
+  >(null);
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [targetCustomerId, setTargetCustomerId] = useState("");
+  const [garmentNote, setGarmentNote] = useState("");
+  const [internalNote, setInternalNote] = useState("");
+  const [customerAgreement, setCustomerAgreement] = useState("");
+  const [editItems, setEditItems] = useState<
+    Array<{
+      itemName: string;
+      colors: string[];
+      piecesPerUnit: number;
+      quantity: number;
+      unitPrice: number;
+    }>
+  >([]);
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   const brandingQuery = useQuery({
     queryKey: ["business-branding", activeBranchId],
@@ -89,6 +120,192 @@ export function InvoicesPage() {
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
+
+  const customersQuery = useQuery({
+    queryKey: ["invoice-transfer-customers", customerSearch],
+    queryFn: () =>
+      listCustomers(
+        {
+          page: 1,
+          pageSize: 25,
+          search: customerSearch.trim() || undefined,
+          status: "all",
+        },
+        { accessToken },
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        correctionMode === "transfer",
+    ),
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ["invoice-history", selectedInvoiceId, activeBranchId],
+    queryFn: () =>
+      getInvoiceHistory(
+        selectedInvoiceId!,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        selectedInvoiceId &&
+        correctionMode === "history",
+    ),
+  });
+
+  function resetCorrectionState() {
+    setCorrectionMode(null);
+    setReason("");
+    setConfirmed(false);
+    setCustomerSearch("");
+    setTargetCustomerId("");
+    setCorrectionError(null);
+  }
+
+  function startEdit() {
+    if (!selectedInvoice) return;
+
+    setCorrectionError(null);
+    setReason("");
+    setConfirmed(false);
+    setGarmentNote(selectedInvoice.garmentNote ?? "");
+    setInternalNote(selectedInvoice.internalNote ?? "");
+    setCustomerAgreement(selectedInvoice.customerAgreement);
+    setEditItems(
+      selectedInvoice.items.map((item) => ({
+        itemName: item.itemName,
+        colors: item.colors ?? [],
+        piecesPerUnit: item.piecesPerUnit,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    );
+    setCorrectionMode("edit");
+  }
+
+  function startTransfer() {
+    setCorrectionError(null);
+    setReason("");
+    setConfirmed(false);
+    setCustomerSearch("");
+    setTargetCustomerId("");
+    setCorrectionMode("transfer");
+  }
+
+  function startDestructiveCorrection(
+    mode: "void" | "delete",
+  ) {
+    setCorrectionError(null);
+    setReason("");
+    setConfirmed(false);
+    setCorrectionMode(mode);
+  }
+
+  const correctionMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedInvoiceId) {
+        throw new Error("Select an invoice first.");
+      }
+
+      const trimmedReason = reason.trim();
+
+      if (!trimmedReason) {
+        throw new Error(
+          "A reason is required before completing this correction.",
+        );
+      }
+
+      if (!confirmed) {
+        throw new Error(
+          "Please confirm that you want to perform this correction.",
+        );
+      }
+
+      if (correctionMode === "edit") {
+        return updateInvoice(
+          selectedInvoiceId,
+          {
+            reason: trimmedReason,
+            confirmed: true,
+            garmentNote: garmentNote.trim() || null,
+            internalNote: internalNote.trim() || null,
+            customerAgreement: customerAgreement.trim(),
+            items: editItems,
+          },
+          { accessToken },
+          activeBranchId,
+        );
+      }
+
+      if (correctionMode === "transfer") {
+        if (!targetCustomerId) {
+          throw new Error(
+            "Select the customer to receive this invoice.",
+          );
+        }
+
+        return transferInvoice(
+          selectedInvoiceId,
+          {
+            customerId: targetCustomerId,
+            reason: trimmedReason,
+            confirmed: true,
+          },
+          { accessToken },
+          activeBranchId,
+        );
+      }
+
+      if (correctionMode === "void") {
+        return voidInvoice(
+          selectedInvoiceId,
+          {
+            reason: trimmedReason,
+            confirmed: true,
+          },
+          { accessToken },
+          activeBranchId,
+        );
+      }
+
+      if (correctionMode === "delete") {
+        return deleteInvoice(
+          selectedInvoiceId,
+          {
+            reason: trimmedReason,
+            confirmed: true,
+          },
+          { accessToken },
+          activeBranchId,
+        );
+      }
+
+      throw new Error("Choose an invoice correction.");
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["invoice", selectedInvoiceId, activeBranchId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["invoice-history", selectedInvoiceId, activeBranchId],
+        }),
+      ]);
+
+      resetCorrectionState();
+    },
+    onError: (error: unknown) => {
+      setCorrectionError(
+        error instanceof Error
+          ? error.message
+          : "Unable to complete the invoice correction.",
+      );
+    },
+  });
 
   const customerReceiptQuery = useQuery({
     queryKey: ["invoice-receipt", "customer", selectedInvoiceId, activeBranchId],
@@ -365,7 +582,14 @@ export function InvoicesPage() {
             {selectedInvoice.customerAgreement}
           </p>
 
-          <div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 16,
+            }}
+          >
             <button
               type="button"
               onClick={() => setPrintMode("customer")}
@@ -380,15 +604,455 @@ export function InvoicesPage() {
               Print Company Copy (Ctrl+F1)
             </button>
 
+            {canManageInvoices ? (
+              <>
+                <button type="button" onClick={startEdit}>
+                  Edit Invoice
+                </button>
+
+                <button type="button" onClick={startTransfer}>
+                  Transfer Invoice
+                </button>
+
+                {selectedInvoice.status === "ISSUED" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startDestructiveCorrection("void")
+                      }
+                    >
+                      Void Invoice
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startDestructiveCorrection("delete")
+                      }
+                    >
+                      Delete Invoice
+                    </button>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+
+            {canViewInvoices ? (
+              <button
+                type="button"
+                onClick={() => setCorrectionMode("history")}
+              >
+                Correction History
+              </button>
+            ) : null}
+
             <button
               type="button"
-              onClick={() => setSelectedInvoiceId(null)}
+              onClick={() => {
+                resetCorrectionState();
+                setSelectedInvoiceId(null);
+              }}
             >
               Close
             </button>
           </div>
         </section>
       )}
+
+      {selectedInvoice && correctionMode && correctionMode !== "history" ? (
+        <section
+          role="dialog"
+          aria-label={`Correct invoice ${selectedInvoice.invoiceNumber}`}
+          style={{
+            marginTop: 20,
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 10,
+          }}
+        >
+          <h3>
+            {correctionMode === "edit"
+              ? "Edit Invoice"
+              : correctionMode === "transfer"
+                ? "Transfer Invoice"
+                : correctionMode === "void"
+                  ? "Void Invoice"
+                  : "Delete Invoice"}
+          </h3>
+
+          {correctionMode === "edit" ? (
+            <>
+              <label>
+                Garment / Customer Note
+                <textarea
+                  value={garmentNote}
+                  onChange={(event) =>
+                    setGarmentNote(event.target.value)
+                  }
+                  maxLength={2000}
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+
+              <label>
+                Internal Note
+                <textarea
+                  value={internalNote}
+                  onChange={(event) =>
+                    setInternalNote(event.target.value)
+                  }
+                  maxLength={2000}
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+
+              <label>
+                Customer Agreement
+                <textarea
+                  value={customerAgreement}
+                  onChange={(event) =>
+                    setCustomerAgreement(event.target.value)
+                  }
+                  maxLength={2000}
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+
+              <h4>Invoice Items</h4>
+
+              {editItems.map((item, index) => (
+                <div
+                  key={`${selectedInvoice.id}-edit-item-${index}`}
+                  style={{
+                    display: "grid",
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <input
+                    aria-label={`Item ${index + 1} name`}
+                    value={item.itemName}
+                    onChange={(event) =>
+                      setEditItems((current) =>
+                        current.map((entry, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...entry,
+                                itemName: event.target.value,
+                              }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+
+                  <input
+                    aria-label={`Item ${index + 1} colours`}
+                    value={item.colors.join(", ")}
+                    onChange={(event) =>
+                      setEditItems((current) =>
+                        current.map((entry, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...entry,
+                                colors: event.target.value
+                                  .split(",")
+                                  .map((value) => value.trim())
+                                  .filter(Boolean),
+                              }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+
+                  <input
+                    aria-label={`Item ${index + 1} pieces per unit`}
+                    type="number"
+                    min="1"
+                    value={item.piecesPerUnit}
+                    onChange={(event) =>
+                      setEditItems((current) =>
+                        current.map((entry, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...entry,
+                                piecesPerUnit: Number(
+                                  event.target.value,
+                                ),
+                              }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+
+                  <input
+                    aria-label={`Item ${index + 1} quantity`}
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(event) =>
+                      setEditItems((current) =>
+                        current.map((entry, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...entry,
+                                quantity: Number(event.target.value),
+                              }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+
+                  <input
+                    aria-label={`Item ${index + 1} unit price`}
+                    type="number"
+                    min="0"
+                    value={item.unitPrice}
+                    onChange={(event) =>
+                      setEditItems((current) =>
+                        current.map((entry, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...entry,
+                                unitPrice: Number(
+                                  event.target.value,
+                                ),
+                              }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </>
+          ) : null}
+
+          {correctionMode === "transfer" ? (
+            <>
+              <p>
+                Invoice number{" "}
+                <strong>{selectedInvoice.invoiceNumber}</strong>{" "}
+                will be retained.
+              </p>
+
+              <label>
+                Search customer
+                <input
+                  type="search"
+                  value={customerSearch}
+                  onChange={(event) =>
+                    setCustomerSearch(event.target.value)
+                  }
+                  placeholder="Search by customer name or phone"
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+
+              <label>
+                Target customer
+                <select
+                  value={targetCustomerId}
+                  onChange={(event) =>
+                    setTargetCustomerId(event.target.value)
+                  }
+                  style={{ display: "block", width: "100%" }}
+                >
+                  <option value="">Select customer</option>
+                  {(customersQuery.data?.data ?? []).map(
+                    (customer) => (
+                      <option
+                        key={customer.id}
+                        value={customer.id}
+                      >
+                        {customer.name} — {customer.phone}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            </>
+          ) : null}
+
+          {correctionMode === "void" ||
+          correctionMode === "delete" ? (
+            <p role="alert">
+              {correctionMode === "delete"
+                ? "Delete removes this invoice from active use. Its invoice number and correction history are retained."
+                : "Voiding marks this invoice as void. The invoice history is retained."}
+            </p>
+          ) : null}
+
+          <label>
+            Reason for this correction
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Enter the reason for this change"
+              maxLength={1000}
+              required
+              style={{ display: "block", width: "100%" }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start",
+              marginTop: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(event) =>
+                setConfirmed(event.target.checked)
+              }
+              disabled={correctionMutation.isPending}
+            />
+            <span>
+              I confirm that I want to perform this invoice correction.
+            </span>
+          </label>
+
+          {correctionError ? (
+            <p role="alert">{correctionError}</p>
+          ) : null}
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginTop: 14,
+            }}
+          >
+            <button
+              type="button"
+              disabled={
+                correctionMutation.isPending ||
+                !reason.trim() ||
+                !confirmed ||
+                (correctionMode === "transfer" &&
+                  !targetCustomerId)
+              }
+              onClick={() => correctionMutation.mutate()}
+            >
+              {correctionMutation.isPending
+                ? "Saving..."
+                : "Confirm Correction"}
+            </button>
+
+            <button
+              type="button"
+              disabled={correctionMutation.isPending}
+              onClick={resetCorrectionState}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {selectedInvoice && correctionMode === "history" ? (
+        <section
+          role="dialog"
+          aria-label={`Invoice correction history ${selectedInvoice.invoiceNumber}`}
+          style={{
+            marginTop: 20,
+            padding: 20,
+            border: "1px solid #ddd",
+            borderRadius: 10,
+          }}
+        >
+          <h3>
+            Correction History — {selectedInvoice.invoiceNumber}
+          </h3>
+
+          <p>
+            Complete invoice snapshots are retained for 60 days from
+            each correction.
+          </p>
+
+          {historyQuery.isLoading ? (
+            <p>Loading correction history...</p>
+          ) : null}
+
+          {historyQuery.isError ? (
+            <p role="alert">
+              Unable to load invoice correction history.
+            </p>
+          ) : null}
+
+          {historyQuery.data?.length === 0 ? (
+            <p>No correction history exists for this invoice.</p>
+          ) : null}
+
+          {historyQuery.data && historyQuery.data.length > 0 ? (
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Action</th>
+                    <th>Reason</th>
+                    <th>Actor</th>
+                    <th>Created</th>
+                    <th>Snapshot expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyQuery.data.map((entry) => (
+                    <React.Fragment key={entry.id}>
+                      <tr>
+                        <td>{entry.version}</td>
+                        <td>{entry.action}</td>
+                        <td>{entry.reason}</td>
+                        <td>{entry.actorUserId}</td>
+                        <td>{formatDate(entry.createdAt)}</td>
+                        <td>{formatDate(entry.expiresAt)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={6}>
+                          <details>
+                            <summary>
+                              View Snapshot — Version {entry.version}
+                            </summary>
+                            <pre
+                              style={{
+                                marginTop: 12,
+                                padding: 12,
+                                overflowX: "auto",
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                background: "#f7f7f7",
+                                borderRadius: 6,
+                              }}
+                            >
+                              {JSON.stringify(entry.snapshot, null, 2)}
+                            </pre>
+                          </details>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={resetCorrectionState}
+          >
+            Close History
+          </button>
+        </section>
+      ) : null}
 
       {selectedInvoice && (
         <div className="invoice-print-area" aria-hidden="true">

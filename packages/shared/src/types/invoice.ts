@@ -6,6 +6,7 @@ export interface InvoiceItem {
   id: string;
   invoiceId: string;
   itemName: string;
+  colors: string[];
   piecesPerUnit: number;
   quantity: number;
   totalPieces: number;

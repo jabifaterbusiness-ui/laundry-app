@@ -6,6 +6,9 @@ import {
   invoiceIdParamSchema,
   invoiceOrderParamSchema,
   listInvoicesQuerySchema,
+  transferInvoiceCorrectionSchema,
+  updateInvoiceCorrectionSchema,
+  voidInvoiceCorrectionSchema,
 } from "./invoices.validation.js";
 import {
   createInvoice,
@@ -13,6 +16,13 @@ import {
   getInvoiceForOrder,
   listInvoices,
 } from "./invoices.service.js";
+import {
+  deleteInvoiceWithCorrection,
+  listInvoiceHistory,
+  transferInvoiceWithCorrection,
+  updateInvoiceWithCorrection,
+  voidInvoiceWithCorrection,
+} from "./invoice-corrections.service.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -121,4 +131,173 @@ export async function getByOrder(req: Request, res: Response) {
   }
 
   res.status(200).json(invoice);
+}
+
+
+export async function update(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+  const input = updateInvoiceCorrectionSchema.parse(req.body);
+
+  const result = await updateInvoiceWithCorrection({
+    invoiceId: id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    reason: input.reason,
+    input: {
+      ...(input.garmentNote !== undefined && {
+        garmentNote: input.garmentNote,
+      }),
+      ...(input.internalNote !== undefined && {
+        internalNote: input.internalNote,
+      }),
+      ...(input.customerAgreement !== undefined && {
+        customerAgreement: input.customerAgreement,
+      }),
+      ...(input.items !== undefined && {
+        items: input.items,
+      }),
+    },
+  });
+
+  await recordAuditEvent({
+    action: "invoice.updated",
+    entityType: "Invoice",
+    entityId: result.invoice.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceNumber: result.invoice.invoiceNumber,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+    },
+  });
+
+  res.status(200).json(result.invoice);
+}
+
+export async function voidInvoice(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+  const input = voidInvoiceCorrectionSchema.parse(req.body);
+
+  const result = await voidInvoiceWithCorrection({
+    invoiceId: id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    reason: input.reason,
+  });
+
+  await recordAuditEvent({
+    action: "invoice.voided",
+    entityType: "Invoice",
+    entityId: result.invoice.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceNumber: result.invoice.invoiceNumber,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+    },
+  });
+
+  res.status(200).json(result.invoice);
+}
+
+export async function deleteInvoice(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+  const input = voidInvoiceCorrectionSchema.parse(req.body);
+
+  const result = await deleteInvoiceWithCorrection({
+    invoiceId: id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    reason: input.reason,
+  });
+
+  await recordAuditEvent({
+    action: "invoice.deleted",
+    entityType: "Invoice",
+    entityId: result.invoice.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceNumber: result.invoice.invoiceNumber,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+      deletionType: "logical",
+    },
+  });
+
+  res.status(200).json(result.invoice);
+}
+
+export async function transfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+  const input = transferInvoiceCorrectionSchema.parse(req.body);
+
+  const result = await transferInvoiceWithCorrection({
+    invoiceId: id,
+    customerId: input.customerId,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    reason: input.reason,
+  });
+
+  await recordAuditEvent({
+    action: "invoice.transferred",
+    entityType: "Invoice",
+    entityId: result.invoice.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceNumber: result.invoice.invoiceNumber,
+      previousCustomerId: result.previousCustomerId,
+      newCustomerId: result.newCustomerId,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+    },
+  });
+
+  res.status(200).json(result.invoice);
+}
+
+export async function history(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+
+  const result = await listInvoiceHistory({
+    invoiceId: id,
+    businessId,
+    branchId,
+  });
+
+  res.status(200).json(result);
 }

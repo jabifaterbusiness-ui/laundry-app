@@ -20,8 +20,21 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
+    },
+    invoiceHistory: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+    invoiceItem: {
+      deleteMany: vi.fn(),
     },
     order: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    customer: {
       findFirst: vi.fn(),
     },
     userBranch: {
@@ -51,7 +64,14 @@ const invoiceFindMany = vi.mocked(prisma.invoice.findMany);
 const invoiceCount = vi.mocked(prisma.invoice.count);
 const invoiceFindFirst = vi.mocked(prisma.invoice.findFirst);
 const invoiceCreate = vi.mocked(prisma.invoice.create);
+const invoiceUpdate = vi.mocked(prisma.invoice.update);
+const invoiceHistoryFindFirst = vi.mocked(prisma.invoiceHistory.findFirst);
+const invoiceHistoryCreate = vi.mocked(prisma.invoiceHistory.create);
+const invoiceHistoryFindMany = vi.mocked(prisma.invoiceHistory.findMany);
+const invoiceItemDeleteMany = vi.mocked(prisma.invoiceItem.deleteMany);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
+const orderUpdate = vi.mocked(prisma.order.update);
+const customerFindFirst = vi.mocked(prisma.customer.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
@@ -143,7 +163,95 @@ const invoiceFixture = {
   },
 };
 
+
+const CORRECTION_CREATED_AT = new Date("2026-09-20T10:00:00.000Z");
+const CORRECTION_UPDATED_AT = new Date("2026-09-20T10:00:00.000Z");
+const CUSTOMER_B = "22222222-2222-2222-2222-222222222222";
+const INVOICE_ITEM_A = "99999999-9999-9999-9999-999999999999";
+
+const correctionInvoiceFixture = {
+  ...invoiceFixture,
+  logoUrl: null,
+  receiptPrimaryColor: null,
+  receiptAccentColor: null,
+  receiptBackgroundColor: null,
+  receiptTextColor: null,
+  receiptHeaderStyle: null,
+  createdAt: CORRECTION_CREATED_AT,
+  updatedAt: CORRECTION_UPDATED_AT,
+  customerName: "Jane Doe",
+  totalAmount: 9000,
+  items: [
+    {
+      id: INVOICE_ITEM_A,
+      invoiceId: INVOICE_A,
+      itemName: "Shirt",
+      colors: ["White"],
+      piecesPerUnit: 1,
+      quantity: 2,
+      totalPieces: 2,
+      unitPrice: 4500,
+      totalPrice: 9000,
+      createdAt: CORRECTION_CREATED_AT,
+    },
+  ],
+  order: {
+    id: ORDER_A,
+    customerId: CUSTOMER_A,
+    customer: {
+      id: CUSTOMER_A,
+      name: "Jane Doe",
+    },
+    branch: {
+      id: BRANCH_A,
+      name: "Main Branch",
+    },
+  },
+};
+
+const correctedInvoiceFixture = {
+  ...correctionInvoiceFixture,
+  internalNote: "Corrected by management",
+  totalAmount: 10000,
+  updatedAt: new Date("2026-09-20T10:05:00.000Z"),
+  items: [
+    {
+      ...correctionInvoiceFixture.items[0],
+      itemName: "Trouser",
+      quantity: 2,
+      unitPrice: 5000,
+      totalPrice: 10000,
+    },
+  ],
+};
+
+const targetCustomerFixture = {
+  id: CUSTOMER_B,
+  businessId: "biz-A",
+  name: "John Smith",
+};
+
+const historyFixture = {
+  id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  invoiceId: INVOICE_A,
+  businessId: "biz-A",
+  branchId: BRANCH_A,
+  action: "EDITED",
+  version: 1,
+  reason: "Corrected the garment details entered incorrectly.",
+  actorUserId: "user-1",
+  snapshot: {
+    invoiceNumber: "00042",
+    customerName: "Jane Doe",
+    totalAmount: 9000,
+  },
+  expiresAt: new Date("2026-11-19T10:00:00.000Z"),
+  createdAt: CORRECTION_CREATED_AT,
+};
+
 beforeEach(() => {
+
+
   vi.clearAllMocks();
   mockTransaction();
 
@@ -717,29 +825,430 @@ describe("Invoices routes - creation security", () => {
   });
 });
 
-describe("Invoices routes - immutability", () => {
-  it("does not expose invoice update or delete endpoints", async () => {
+describe("Invoices routes - controlled correction workflow", () => {
+  beforeEach(() => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
-    const updateResponse = await request(app)
+    invoiceFindFirst.mockResolvedValue(
+      correctionInvoiceFixture as never,
+    );
+
+    invoiceHistoryFindFirst.mockResolvedValue(null);
+    invoiceHistoryCreate.mockResolvedValue(
+      historyFixture as never,
+    );
+
+    invoiceUpdate.mockImplementation(
+      ((args: { data: Record<string, unknown> }) => {
+        const status = args.data.status ?? correctionInvoiceFixture.status;
+
+        return Promise.resolve({
+          ...correctionInvoiceFixture,
+          ...args.data,
+          status,
+          updatedAt: new Date("2026-09-20T10:05:00.000Z"),
+        });
+      }) as never,
+    );
+
+    invoiceItemDeleteMany.mockResolvedValue({ count: 1 } as never);
+    orderUpdate.mockResolvedValue({ ...correctionInvoiceFixture.order } as never);
+
+    customerFindFirst.mockResolvedValue(
+      targetCustomerFixture as never,
+    );
+  });
+
+  it("requires a nonblank reason and explicit confirmation before editing", async () => {
+    const response = await request(app)
       .patch(`/api/v1/invoices/${INVOICE_A}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        customerAgreement: "Changed agreement",
+        reason: "   ",
+        confirmed: true,
+        internalNote: "Correction",
       });
 
-    expect(updateResponse.status).toBe(404);
+    expect(response.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+    expect(invoiceHistoryCreate).not.toHaveBeenCalled();
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+  });
 
-    const deleteResponse = await request(app)
+  it("requires confirmed=true before editing", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Corrected the garment details entered incorrectly.",
+        confirmed: false,
+        internalNote: "Correction",
+      });
+
+    expect(response.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+    expect(invoiceHistoryCreate).not.toHaveBeenCalled();
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("edits an invoice while preserving a complete pre-edit snapshot", async () => {
+    invoiceUpdate.mockResolvedValue(
+      correctedInvoiceFixture as never,
+    );
+
+    const response = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "The garment details were entered incorrectly.",
+        confirmed: true,
+        internalNote: "Corrected by management",
+        items: [
+          {
+            itemName: "Trouser",
+            colors: ["Black"],
+            piecesPerUnit: 1,
+            quantity: 2,
+            unitPrice: 5000,
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(INVOICE_A);
+
+    expect(invoiceHistoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          invoiceId: INVOICE_A,
+          action: "EDITED",
+          version: 1,
+          reason: "The garment details were entered incorrectly.",
+          actorUserId: "user-1",
+          expiresAt: expect.any(Date),
+          snapshot: expect.objectContaining({
+            id: INVOICE_A,
+            invoiceNumber: "00042",
+            customerName: "Jane Doe",
+            totalAmount: 9000,
+            items: expect.arrayContaining([
+              expect.objectContaining({
+                itemName: "Shirt",
+                quantity: 2,
+                unitPrice: 4500,
+                totalPrice: 9000,
+              }),
+            ]),
+          }),
+        }),
+      }),
+    );
+
+    expect(invoiceItemDeleteMany).toHaveBeenCalledWith({
+      where: {
+        invoiceId: INVOICE_A,
+      },
+    });
+
+    expect(invoiceUpdate).toHaveBeenCalled();
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "invoice.updated",
+        entityId: INVOICE_A,
+        metadata: expect.objectContaining({
+          reason: "The garment details were entered incorrectly.",
+          historyId: historyFixture.id,
+        }),
+      }),
+    );
+  });
+
+  it("increments the invoice history version for a second correction", async () => {
+    invoiceHistoryFindFirst.mockResolvedValue({
+      version: 1,
+    } as never);
+
+    invoiceUpdate.mockResolvedValue(
+      correctedInvoiceFixture as never,
+    );
+
+    const response = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "A second management correction was required.",
+        confirmed: true,
+        internalNote: "Second correction",
+      });
+
+    expect(response.status).toBe(200);
+
+    expect(invoiceHistoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "EDITED",
+          version: 2,
+        }),
+      }),
+    );
+  });
+
+  it("transfers an invoice with a reason while preserving the invoice number", async () => {
+    invoiceUpdate.mockResolvedValue({
+      ...correctionInvoiceFixture,
+      customerName: "John Smith",
+      order: {
+        ...correctionInvoiceFixture.order,
+        customerId: CUSTOMER_B,
+        customer: targetCustomerFixture,
+      },
+    } as never);
+
+    const response = await request(app)
+      .post(`/api/v1/invoices/${INVOICE_A}/transfer`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        customerId: CUSTOMER_B,
+        reason: "It was entered on a wrong customer account.",
+        confirmed: true,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.invoiceNumber).toBe("00042");
+
+    expect(orderUpdate).toHaveBeenCalledWith({
+      where: {
+        id: ORDER_A,
+      },
+      data: {
+        customerId: CUSTOMER_B,
+      },
+    });
+
+    expect(invoiceHistoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "TRANSFERRED",
+          reason: "It was entered on a wrong customer account.",
+        }),
+      }),
+    );
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "invoice.transferred",
+        metadata: expect.objectContaining({
+          invoiceNumber: "00042",
+          previousCustomerId: CUSTOMER_A,
+          newCustomerId: CUSTOMER_B,
+          reason: "It was entered on a wrong customer account.",
+        }),
+      }),
+    );
+  });
+
+  it("voids an invoice only with a reason and confirmation", async () => {
+    invoiceUpdate.mockResolvedValue({
+      ...correctionInvoiceFixture,
+      status: "VOID",
+    } as never);
+
+    const response = await request(app)
+      .post(`/api/v1/invoices/${INVOICE_A}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "The invoice was issued in error.",
+        confirmed: true,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("VOID");
+
+    expect(invoiceHistoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "VOIDED",
+          reason: "The invoice was issued in error.",
+        }),
+      }),
+    );
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "invoice.voided",
+      }),
+    );
+  });
+
+  it("logically deletes an invoice while preserving its history and invoice number", async () => {
+    invoiceUpdate.mockResolvedValue({
+      ...correctionInvoiceFixture,
+      status: "VOID",
+    } as never);
+
+    const response = await request(app)
       .delete(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "The invoice was created against the wrong transaction.",
+        confirmed: true,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.invoiceNumber).toBe("00042");
+    expect(response.body.status).toBe("VOID");
+
+    expect(invoiceHistoryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "DELETED",
+          reason: "The invoice was created against the wrong transaction.",
+        }),
+      }),
+    );
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "invoice.deleted",
+        metadata: expect.objectContaining({
+          deletionType: "logical",
+          invoiceNumber: "00042",
+          reason: "The invoice was created against the wrong transaction.",
+        }),
+      }),
+    );
+  });
+
+  it("requires reason and confirmation before invoice deletion", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "",
+        confirmed: false,
+      });
+
+    expect(response.status).toBe(422);
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+    expect(invoiceHistoryCreate).not.toHaveBeenCalled();
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns invoice history newest version first", async () => {
+    const secondHistory = {
+      ...historyFixture,
+      id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      version: 2,
+      action: "EDITED",
+      reason: "Second correction.",
+    };
+
+    invoiceHistoryFindMany.mockResolvedValue([
+      secondHistory,
+      historyFixture,
+    ] as never);
+
+    const response = await request(app)
+      .get(`/api/v1/invoices/${INVOICE_A}/history`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A);
 
-    expect(deleteResponse.status).toBe(404);
-    expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].version).toBe(2);
+
+    expect(invoiceHistoryFindMany).toHaveBeenCalledWith({
+      where: {
+        invoiceId: INVOICE_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+      },
+      orderBy: {
+        version: "desc",
+      },
+    });
+  });
+
+  it("preserves 60-day snapshot retention", async () => {
+    invoiceUpdate.mockResolvedValue(
+      correctedInvoiceFixture as never,
+    );
+
+    const before = Date.now();
+
+    const response = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Corrected the invoice details.",
+        confirmed: true,
+        internalNote: "Correction",
+      });
+
+    expect(response.status).toBe(200);
+
+    const call = invoiceHistoryCreate.mock.calls.at(-1)?.[0];
+    const expiresAt = call?.data?.expiresAt as Date;
+
+    expect(expiresAt).toBeInstanceOf(Date);
+
+    const retentionMs =
+      expiresAt.getTime() - before;
+
+    const sixtyDaysMs =
+      60 * 24 * 60 * 60 * 1000;
+
+    expect(retentionMs).toBeGreaterThanOrEqual(
+      sixtyDaysMs - 5000,
+    );
+    expect(retentionMs).toBeLessThanOrEqual(
+      sixtyDaysMs + 5000,
+    );
+  });
+
+  it("does not allow business B to access business A invoice history", async () => {
+    allowBranch("user-owner-b", BRANCH_B, "biz-B");
+
+    invoiceFindFirst.mockResolvedValue(null);
+
+    const response = await request(app)
+      .get(`/api/v1/invoices/${INVOICE_A}/history`)
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("X-Branch-Id", BRANCH_B);
+
+    expect(response.status).toBe(404);
+    expect(invoiceHistoryFindMany).not.toHaveBeenCalled();
+  });
+
+  it("does not allow an invoice from another branch to be corrected", async () => {
+    invoiceFindFirst.mockResolvedValue(null);
+
+    const response = await request(app)
+      .patch(`/api/v1/invoices/${INVOICE_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Corrected the invoice details.",
+        confirmed: true,
+        internalNote: "Correction",
+      });
+
+    expect(response.status).toBe(404);
+    expect(invoiceHistoryCreate).not.toHaveBeenCalled();
+    expect(invoiceUpdate).not.toHaveBeenCalled();
   });
 });
+
 
 describe("Invoices routes - list filters and pagination", () => {
   it("passes status, customerId and pagination filters through safely", async () => {

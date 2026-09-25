@@ -1,18 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InvoicesPage } from "../../../src/pages/invoices/InvoicesPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as invoicesApi from "../../../src/lib/invoices-api.js";
 import * as businessesApi from "../../../src/lib/businesses-api.js";
+import * as customersApi from "../../../src/lib/customers-api.js";
 
 vi.mock("../../../src/lib/invoices-api.js");
 vi.mock("../../../src/lib/businesses-api.js");
+vi.mock("../../../src/lib/customers-api.js");
 
 const mockedInvoicesApi = vi.mocked(invoicesApi);
 const mockedBusinessesApi = vi.mocked(businessesApi);
+const mockedCustomersApi = vi.mocked(customersApi);
 
-function renderPage() {
+function renderPage(
+  permissions: string[] = [
+    "invoices.view",
+    "invoices.manage",
+  ],
+) {
   useAuthStore.setState({
     user: {
       id: "user-1",
@@ -21,6 +30,7 @@ function renderPage() {
       role: "BUSINESS_OWNER",
       businessId: "business-1",
       branches: [{ id: "branch-1", name: "Main Branch" }],
+      permissions,
     },
     accessToken: "token",
     refreshToken: "refresh-token",
@@ -41,6 +51,19 @@ function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+const invoiceItem = {
+  id: "item-1",
+  invoiceId: "invoice-1",
+  itemName: "Shirt",
+  colors: ["Blue"],
+  piecesPerUnit: 1,
+  quantity: 2,
+  totalPieces: 2,
+  unitPrice: 5000,
+  totalPrice: 10000,
+  createdAt: "2026-09-01T10:00:00.000Z",
+};
 
 const invoice = {
   id: "invoice-1",
@@ -66,7 +89,7 @@ const invoice = {
       name: "John Doe",
     },
   },
-  items: [],
+  items: [invoiceItem],
 };
 
 beforeEach(() => {
@@ -99,6 +122,68 @@ beforeEach(() => {
   });
 
   mockedInvoicesApi.getInvoice.mockResolvedValue(invoice);
+
+  mockedInvoicesApi.updateInvoice.mockResolvedValue(invoice);
+  mockedInvoicesApi.transferInvoice.mockResolvedValue(invoice);
+  mockedInvoicesApi.voidInvoice.mockResolvedValue({
+    ...invoice,
+    status: "VOID",
+  });
+  mockedInvoicesApi.deleteInvoice.mockResolvedValue({
+    ...invoice,
+    status: "VOID",
+  });
+  mockedInvoicesApi.getInvoiceHistory.mockResolvedValue([
+    {
+      id: "history-1",
+      invoiceId: "invoice-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      action: "EDITED",
+      version: 1,
+      reason: "Entered incorrectly and corrected.",
+      actorUserId: "user-1",
+      snapshot: {
+        id: "invoice-1",
+        invoiceNumber: "INV-00001",
+        customerName: "John Doe",
+        totalAmount: 10000,
+        items: [
+          {
+            itemName: "Shirt",
+            colors: ["Blue"],
+            quantity: 2,
+          },
+        ],
+      },
+      expiresAt: "2026-10-31T10:00:00.000Z",
+      createdAt: "2026-09-01T10:00:00.000Z",
+    },
+  ]);
+
+  mockedCustomersApi.listCustomers.mockResolvedValue({
+    data: [
+      {
+        id: "customer-2",
+        businessId: "business-1",
+        name: "Mary Customer",
+        phone: "08011111111",
+        email: null,
+        address: null,
+        title: null,
+        whatsapp: null,
+        isActive: true,
+        createdAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+      },
+    ],
+    pagination: {
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1,
+    },
+  });
 
   mockedInvoicesApi.getCustomerReceipt.mockResolvedValue({
     receiptType: "CUSTOMER",
@@ -134,6 +219,346 @@ beforeEach(() => {
     totalAmount: 10000,
     garmentNote: null,
     internalNote: null,
+  });
+});
+
+describe("InvoicesPage invoice correction workflow", () => {
+  async function selectInvoice() {
+    expect(await screen.findByText("INV-00001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("INV-00001"));
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.getInvoice).toHaveBeenCalledWith(
+        "invoice-1",
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Invoice INV-00001" }),
+      ).toBeInTheDocument();
+    });
+  }
+
+  it("shows correction controls with invoices.manage permission", async () => {
+    renderPage();
+    await selectInvoice();
+
+    expect(
+      screen.getByRole("button", { name: "Edit Invoice" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Transfer Invoice" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Void Invoice" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete Invoice" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows correction history with invoices.view even without invoices.manage", async () => {
+    renderPage(["invoices.view"]);
+    await selectInvoice();
+
+    expect(
+      screen.getByRole("button", { name: "Correction History" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Invoice" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Transfer Invoice" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Void Invoice" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete Invoice" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("requires a reason and confirmation before editing", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit Invoice" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    ).toBeDisabled();
+
+    fireEvent.change(
+      screen.getByLabelText("Reason for this correction"),
+      { target: { value: "Entered on the wrong account." } },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByLabelText(
+        "I confirm that I want to perform this invoice correction.",
+      ),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    ).toBeEnabled();
+  });
+
+  it("submits an invoice edit with reason, confirmation and edited items", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit Invoice" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Item 1 name"), {
+      target: { value: "Trousers" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Item 1 colours"), {
+      target: { value: "Black, Grey" },
+    });
+
+    fireEvent.change(
+      screen.getByLabelText("Reason for this correction"),
+      { target: { value: "Entered on the wrong item." } },
+    );
+
+    fireEvent.click(
+      screen.getByLabelText(
+        "I confirm that I want to perform this invoice correction.",
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    );
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.updateInvoice).toHaveBeenCalledWith(
+        "invoice-1",
+        expect.objectContaining({
+          reason: "Entered on the wrong item.",
+          confirmed: true,
+          items: [
+            expect.objectContaining({
+              itemName: "Trousers",
+              colors: ["Black", "Grey"],
+              piecesPerUnit: 1,
+              quantity: 2,
+              unitPrice: 5000,
+            }),
+          ],
+        }),
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("transfers an invoice while retaining its invoice number", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Transfer Invoice" }),
+    );
+
+    const transferDialog = screen.getByRole("dialog", {
+      name: "Correct invoice INV-00001",
+    });
+
+    expect(transferDialog).toHaveTextContent(
+      "Invoice number INV-00001 will be retained.",
+    );
+
+    await waitFor(() => {
+      expect(mockedCustomersApi.listCustomers).toHaveBeenCalled();
+      expect(
+        within(transferDialog).getByRole("option", {
+          name: "Mary Customer — 08011111111",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+
+    const targetCustomerSelect = within(transferDialog).getByRole(
+      "combobox",
+    );
+
+    await user.selectOptions(targetCustomerSelect, "customer-2");
+
+    expect(targetCustomerSelect).toHaveValue("customer-2");
+
+    const reasonInput = within(transferDialog).getByLabelText(
+      "Reason for this correction",
+    );
+
+    await user.clear(reasonInput);
+    await user.type(
+      reasonInput,
+      "It was entered on a wrong customer account.",
+    );
+
+    const confirmationCheckbox = within(transferDialog).getByRole(
+      "checkbox",
+    );
+
+    await user.click(confirmationCheckbox);
+
+    expect(confirmationCheckbox).toBeChecked();
+
+    const confirmButton = within(transferDialog).getByRole("button", {
+      name: "Confirm Correction",
+    });
+
+    expect(confirmButton).not.toBeDisabled();
+
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.transferInvoice).toHaveBeenCalledWith(
+        "invoice-1",
+        {
+          customerId: "customer-2",
+          reason: "It was entered on a wrong customer account.",
+          confirmed: true,
+        },
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("submits a void only after reason and confirmation", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Void Invoice" }),
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Reason for this correction"),
+      { target: { value: "Duplicate invoice." } },
+    );
+
+    fireEvent.click(
+      screen.getByLabelText(
+        "I confirm that I want to perform this invoice correction.",
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    );
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.voidInvoice).toHaveBeenCalledWith(
+        "invoice-1",
+        {
+          reason: "Duplicate invoice.",
+          confirmed: true,
+        },
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("submits a logical delete only after reason and confirmation", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete Invoice" }),
+    );
+
+    expect(
+      screen.getByText(
+        /Delete removes this invoice from active use/,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("Reason for this correction"),
+      { target: { value: "Invoice was created in error." } },
+    );
+
+    fireEvent.click(
+      screen.getByLabelText(
+        "I confirm that I want to perform this invoice correction.",
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm Correction" }),
+    );
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.deleteInvoice).toHaveBeenCalledWith(
+        "invoice-1",
+        {
+          reason: "Invoice was created in error.",
+          confirmed: true,
+        },
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("loads correction history and exposes the complete snapshot", async () => {
+    renderPage();
+    await selectInvoice();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Correction History" }),
+    );
+
+    expect(
+      await screen.findByText("Correction History — INV-00001"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        "Complete invoice snapshots are retained for 60 days from each correction.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText("Entered incorrectly and corrected."),
+    ).toBeInTheDocument();
+
+    const snapshotToggle = screen.getByText(
+      "View Snapshot — Version 1",
+    );
+
+    expect(snapshotToggle).toBeInTheDocument();
+
+    fireEvent.click(snapshotToggle);
+
+    expect(
+      screen.getByText(/"invoiceNumber": "INV-00001"/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/"customerName": "John Doe"/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/"itemName": "Shirt"/),
+    ).toBeInTheDocument();
   });
 });
 

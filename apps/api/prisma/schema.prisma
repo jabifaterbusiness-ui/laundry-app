@@ -712,6 +712,7 @@ model Invoice {
 
   items    InvoiceItem[]
   payments Payment[]
+  history  InvoiceHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -721,6 +722,42 @@ model Invoice {
   @@index([businessId, branchId, createdAt])
   @@index([businessId, orderId])
   @@map("invoices")
+}
+
+model InvoiceHistory {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  businessId String
+  branchId   String
+
+  // EDITED, TRANSFERRED, VOIDED, DELETED
+  action String
+
+  // Sequential version of the saved historical state.
+  version Int
+
+  // Mandatory explanation supplied by the actor.
+  reason String
+
+  // Actor is intentionally stored as an ID rather than a destructive
+  // relation so historical records survive user deactivation/deletion.
+  actorUserId String
+
+  // Complete invoice state before the correction.
+  snapshot Json
+
+  // Historical records must remain available for at least 60 days.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId, createdAt])
+  @@index([businessId, expiresAt])
+  @@index([businessId, branchId, createdAt])
+  @@map("invoice_history")
 }
 
 model InvoiceItem {

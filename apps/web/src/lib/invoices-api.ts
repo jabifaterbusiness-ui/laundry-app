@@ -143,3 +143,114 @@ export async function getCompanyReceipt(
 }
 
 export type { InvoiceStatus };
+
+export type InvoiceCorrectionItemInput = {
+  itemName: string;
+  colors: string[];
+  piecesPerUnit: number;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type UpdateInvoiceCorrectionInput = {
+  reason: string;
+  confirmed: true;
+  garmentNote?: string | null;
+  internalNote?: string | null;
+  customerAgreement?: string;
+  items?: InvoiceCorrectionItemInput[];
+};
+
+export type InvoiceHistoryEntry = {
+  id: string;
+  invoiceId: string;
+  businessId: string;
+  branchId: string;
+  action: string;
+  version: number;
+  reason: string;
+  actorUserId: string;
+  snapshot: Record<string, unknown>;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export async function updateInvoice(
+  id: string,
+  input: UpdateInvoiceCorrectionInput,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "PATCH",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function voidInvoice(
+  id: string,
+  input: {
+    reason: string;
+    confirmed: true;
+  },
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/void`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteInvoice(
+  id: string,
+  input: {
+    reason: string;
+    confirmed: true;
+  },
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "DELETE",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function transferInvoice(
+  id: string,
+  input: {
+    customerId: string;
+    reason: string;
+    confirmed: true;
+  },
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/transfer`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getInvoiceHistory(
+  id: string,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<InvoiceHistoryEntry[]> {
+  return apiFetch<InvoiceHistoryEntry[]>(
+    `/invoices/${id}/history`,
+    {
+      accessToken: auth.accessToken,
+      branchId,
+    },
+  );
+}
