@@ -7,13 +7,14 @@ import {
   listCustomersQuerySchema,
   normalizePhone,
   updateCustomerSchema,
+  changeCustomerStatusSchema,
 } from "./customers.validation.js";
 import {
   createCustomer,
   findPossibleDuplicates,
   getCustomerForBusiness,
   listCustomers,
-  setCustomerActiveStatus,
+  setCustomerLifecycleStatus,
   updateCustomer,
 } from "./customers.service.js";
 
@@ -144,28 +145,32 @@ const customer = await updateCustomer(id, businessId, patch);
   res.status(200).json(customer);
 }
 
-async function setActiveStatus(req: Request, res: Response, isActive: boolean) {
+export async function changeStatus(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id } = customerIdParamSchema.parse(req.params);
+  const input = changeCustomerStatusSchema.parse(req.body);
 
-  const customer = await setCustomerActiveStatus(id, businessId, isActive);
+  const result = await setCustomerLifecycleStatus(
+    id,
+    businessId,
+    input.status,
+    input.reason,
+    req.user!.id,
+  );
 
   await recordAuditEvent({
-    action: isActive ? "customer.activated" : "customer.deactivated",
+    action: "customer.status_changed",
     entityType: "Customer",
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
+    metadata: {
+      previousStatus: result.previousStatus,
+      newStatus: input.status,
+      reason: input.reason,
+    },
   });
 
-  res.status(200).json(customer);
-}
-
-export async function activate(req: Request, res: Response) {
-  await setActiveStatus(req, res, true);
-}
-
-export async function deactivate(req: Request, res: Response) {
-  await setActiveStatus(req, res, false);
+  res.status(200).json(result.customer);
 }

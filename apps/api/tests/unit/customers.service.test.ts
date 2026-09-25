@@ -8,6 +8,10 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     create: vi.fn(),
     updateMany: vi.fn(),
+    update: vi.fn(),
+  },
+  customerStatusHistory: {
+    create: vi.fn(),
   },
   order: {
     findMany: vi.fn(),
@@ -26,7 +30,7 @@ import {
   getCustomerForBusiness,
   listCustomers,
   mergeCustomer,
-  setCustomerActiveStatus,
+  setCustomerLifecycleStatus,
   transferCustomer,
   updateCustomer,
 } from "../../src/modules/customers/customers.service.js";
@@ -57,7 +61,7 @@ describe("listCustomers", () => {
     await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active" });
 
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-1", isActive: true }) }),
+      expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-1", lifecycleStatus: "ACTIVE" }) }),
     );
   });
 
@@ -182,19 +186,70 @@ describe("updateCustomer - tenant isolation", () => {
   });
 });
 
-describe("setCustomerActiveStatus", () => {
+describe("setCustomerLifecycleStatus", () => {
   it("throws 404 when the customer isn't in the caller's business", async () => {
-    updateMany.mockResolvedValue({ count: 0 });
-    await expect(setCustomerActiveStatus("cust-1", "biz-B", false)).rejects.toThrow(AppError);
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      setCustomerLifecycleStatus(
+        "cust-1",
+        "biz-B",
+        "BLOCKED",
+        "Repeated failed collection attempts",
+        "user-1",
+      ),
+    ).rejects.toThrow(AppError);
   });
 
-  it("deactivates a customer that is in the caller's business", async () => {
-    updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1", isActive: false } as never);
+  it("changes status and records the complete status history", async () => {
+    findFirst.mockResolvedValue({
+      id: "cust-1",
+      lifecycleStatus: "ACTIVE",
+    } as never);
 
-    const result = await setCustomerActiveStatus("cust-1", "biz-1", false);
-    expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { isActive: false } });
-    expect(result?.isActive).toBe(false);
+    prismaMock.customer.update.mockResolvedValue({
+      id: "cust-1",
+      lifecycleStatus: "BLOCKED",
+      isActive: false,
+      statusReason: "Repeated failed collection attempts",
+    } as never);
+
+    prismaMock.customerStatusHistory.create.mockResolvedValue({
+      id: "history-1",
+    } as never);
+
+    const result = await setCustomerLifecycleStatus(
+      "cust-1",
+      "biz-1",
+      "BLOCKED",
+      "Repeated failed collection attempts",
+      "user-1",
+    );
+
+    expect(prismaMock.customer.update).toHaveBeenCalledWith({
+      where: { id: "cust-1" },
+      data: {
+        lifecycleStatus: "BLOCKED",
+        isActive: false,
+        statusReason: "Repeated failed collection attempts",
+        statusChangedAt: expect.any(Date),
+        statusChangedById: "user-1",
+      },
+    });
+
+    expect(prismaMock.customerStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        customerId: "cust-1",
+        businessId: "biz-1",
+        previousStatus: "ACTIVE",
+        newStatus: "BLOCKED",
+        reason: "Repeated failed collection attempts",
+        changedById: "user-1",
+      },
+    });
+
+    expect(result.previousStatus).toBe("ACTIVE");
+    expect(result.customer.lifecycleStatus).toBe("BLOCKED");
   });
 });
 

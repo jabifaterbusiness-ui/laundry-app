@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Customer,
@@ -11,7 +12,7 @@ import {
   listOrders,
   updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
-import { listCustomers } from "../../lib/customers-api.js";
+import { getCustomer, listCustomers } from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
 import {
   createColor,
@@ -58,6 +59,7 @@ export function OrdersPage() {
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
 
   const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useOrderWorkspaceStore(
@@ -78,6 +80,10 @@ export function OrdersPage() {
     const restoreWorkspaces = useOrderWorkspaceStore(
       (s) => s.restoreWorkspaces,
     );
+
+  const customerIdFromUrl = searchParams.get("customerId");
+
+  const openedCustomerFromUrlRef = useRef<string | null>(null);
 
   const activeWorkspace =
     workspaces.find(
@@ -162,6 +168,13 @@ export function OrdersPage() {
         { accessToken },
       ),
     enabled: Boolean(accessToken),
+  });
+
+  const customerFromUrlQuery = useQuery({
+    queryKey: ["customer", customerIdFromUrl],
+    queryFn: () =>
+      getCustomer(customerIdFromUrl!, { accessToken }),
+    enabled: Boolean(accessToken && customerIdFromUrl),
   });
 
   const servicesQuery = useQuery({
@@ -311,6 +324,27 @@ export function OrdersPage() {
   });
 
   const customers = customersQuery.data?.data ?? [];
+  useEffect(() => {
+    if (
+      !customerIdFromUrl ||
+      openedCustomerFromUrlRef.current === customerIdFromUrl
+    ) {
+      return;
+    }
+
+    const customer = customerFromUrlQuery.data;
+    if (!customer) {
+      return;
+    }
+
+    openedCustomerFromUrlRef.current = customerIdFromUrl;
+    openCustomerWorkspace(customer);
+  }, [
+    customerIdFromUrl,
+    customerFromUrlQuery.data,
+    openCustomerWorkspace,
+  ]);
+
   const services = servicesQuery.data?.data ?? [];
   const colors = colorsQuery.data?.data ?? [];
   const orders = ordersQuery.data?.data ?? [];

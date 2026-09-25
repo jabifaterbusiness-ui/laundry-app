@@ -187,7 +187,7 @@ describe("CustomersPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByText("Jane Doe"));
+    fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
 
     const nameInput = await screen.findByLabelText(/name/i);
     fireEvent.change(nameInput, { target: { value: "Jane Updated" } });
@@ -254,7 +254,7 @@ describe("CustomersPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByText("Jane Doe"));
+    fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
 
     const phoneInput = await screen.findByLabelText(/phone/i);
     fireEvent.change(phoneInput, { target: { value: "555-999-8888" } });

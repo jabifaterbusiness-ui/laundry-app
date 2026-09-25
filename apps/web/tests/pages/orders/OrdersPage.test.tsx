@@ -15,6 +15,10 @@ const customerA: Customer = {
   address: null,
   notes: null,
   isActive: true,
+  lifecycleStatus: "ACTIVE",
+  statusReason: null,
+  statusChangedAt: null,
+  statusChangedById: null,
   createdAt: "",
   updatedAt: "",
 };
@@ -27,6 +31,10 @@ const customerB: Customer = {
   address: null,
   notes: null,
   isActive: true,
+  lifecycleStatus: "ACTIVE",
+  statusReason: null,
+  statusChangedAt: null,
+  statusChangedById: null,
   createdAt: "",
   updatedAt: "",
 };
@@ -39,6 +47,10 @@ const customerC: Customer = {
   address: null,
   notes: null,
   isActive: true,
+  lifecycleStatus: "ACTIVE",
+  statusReason: null,
+  statusChangedAt: null,
+  statusChangedById: null,
   createdAt: "",
   updatedAt: "",
 };
@@ -116,6 +128,7 @@ vi.mock("../../../src/lib/orders-api.js", () => ({
 }));
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
+  getCustomer: vi.fn(),
   listCustomers: vi.fn(),
 }));
 
@@ -132,14 +145,14 @@ import {
   createOrderWithOfflineQueue,
   listOrders,
 } from "../../../src/lib/orders-api.js";
-import { listCustomers } from "../../../src/lib/customers-api.js";
+import { getCustomer, listCustomers } from "../../../src/lib/customers-api.js";
 import { listServices } from "../../../src/lib/services-api.js";
 import {
   createColor,
   listColors,
 } from "../../../src/lib/colors-api.js";
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ["/orders"]) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -150,7 +163,7 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <OrdersPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -376,6 +389,34 @@ describe("OrdersPage colour selector", () => {
 });
 
 describe("OrdersPage quick customer switching", () => {
+
+  it("opens a non-active customer from the customer details Add New Order flow", async () => {
+    const dormantCustomer: Customer = {
+      ...customerA,
+      lifecycleStatus: "DORMANT",
+      isActive: false,
+      statusReason: "No orders for an extended period",
+    };
+
+    vi.mocked(getCustomer).mockResolvedValue(dormantCustomer);
+
+    renderPage([`/orders?customerId=${dormantCustomer.id}`]);
+
+    await waitFor(() => {
+      expect(getCustomer).toHaveBeenCalledWith(
+        dormantCustomer.id,
+        { accessToken: "test-token" },
+      );
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: /new order/i }),
+    ).toBeInTheDocument();
+
+    const customerSelect = screen.getByLabelText("Customer") as HTMLSelectElement;
+    expect(customerSelect.value).toBe(dormantCustomer.id);
+  });
+
   it("opens three customer workspaces", async () => {
     renderPage();
 

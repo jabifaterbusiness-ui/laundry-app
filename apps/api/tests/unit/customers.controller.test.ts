@@ -15,14 +15,14 @@ vi.mock("../../src/modules/customers/customers.service.js", async () => {
     findPossibleDuplicates: vi.fn(),
     getCustomerForBusiness: vi.fn(),
     updateCustomer: vi.fn(),
-    setCustomerActiveStatus: vi.fn(),
+    setCustomerLifecycleStatus: vi.fn(),
     listCustomers: vi.fn(),
   };
 });
 
 import { recordAuditEvent } from "../../src/lib/audit.js";
 import * as service from "../../src/modules/customers/customers.service.js";
-import { activate, create, deactivate, getOne, update } from "../../src/modules/customers/customers.controller.js";
+import { changeStatus, create, getOne, update } from "../../src/modules/customers/customers.controller.js";
 
 function makeRes() {
   const res = { status: vi.fn(), json: vi.fn() } as unknown as Response;
@@ -200,22 +200,32 @@ describe("update - duplicate phone handling", () => {
   });
 });
 
-describe("activate/deactivate - audit action naming", () => {
-  it("records customer.activated", async () => {
-    vi.mocked(service.setCustomerActiveStatus).mockResolvedValue({ id: "cust-1", isActive: true } as never);
-    const req = makeReq({ params: { id: "11111111-1111-1111-1111-111111111111" } });
+describe("changeStatus - lifecycle status and audit metadata", () => {
+  it("records previous status, new status, reason, and actor", async () => {
+    vi.mocked(service.setCustomerLifecycleStatus).mockResolvedValue({
+      customer: { id: "cust-1", lifecycleStatus: "BLOCKED" },
+      previousStatus: "ACTIVE",
+    } as never);
 
-    await activate(req, makeRes());
+    const req = makeReq({
+      params: { id: "11111111-1111-1111-1111-111111111111" },
+      body: {
+        status: "BLOCKED",
+        reason: "Repeated failed collection attempts",
+      },
+    });
 
-    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "customer.activated" }));
-  });
+    await changeStatus(req, makeRes());
 
-  it("records customer.deactivated", async () => {
-    vi.mocked(service.setCustomerActiveStatus).mockResolvedValue({ id: "cust-1", isActive: false } as never);
-    const req = makeReq({ params: { id: "11111111-1111-1111-1111-111111111111" } });
-
-    await deactivate(req, makeRes());
-
-    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "customer.deactivated" }));
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "customer.status_changed",
+        metadata: {
+          previousStatus: "ACTIVE",
+          newStatus: "BLOCKED",
+          reason: "Repeated failed collection attempts",
+        },
+      }),
+    );
   });
 });

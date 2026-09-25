@@ -5,6 +5,7 @@ import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage.js";
 import { SetupPage } from "./pages/auth/SetupPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
+import { CustomerDetailsPage } from "./pages/customers/CustomerDetailsPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
 import { DataManagementPage } from "./pages/DataManagementPage.js";
 import { ServicesPage } from "./pages/services/ServicesPage.js";
@@ -33,6 +34,7 @@ function AuthenticatedLayout() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/data-management" element={<DataManagementPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailsPage />} />
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/colors" element={<ColorsPage />} />
           <Route path="/orders" element={<OrdersPage />} />

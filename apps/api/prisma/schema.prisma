@@ -122,39 +122,40 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches            Branch[]
-  users               User[]
-  auditLogs           AuditLog[]
-  customers           Customer[]
-  services            Service[]
-  orders              Order[]
-  invoices            Invoice[]
-  payments            Payment[]
-  payrollPayments     PayrollPayment[]
-  orderNumberSequence OrderNumberSequence?
-  migrationJobs       MigrationJob[]
-  garments            Garment[]
+  branches              Branch[]
+  users                 User[]
+  auditLogs             AuditLog[]
+  customers             Customer[]              @relation("BusinessCustomers")
+  customerStatusHistory CustomerStatusHistory[] @relation("BusinessCustomerStatusHistory")
+  services              Service[]
+  orders                Order[]
+  invoices              Invoice[]
+  payments              Payment[]
+  payrollPayments       PayrollPayment[]
+  orderNumberSequence   OrderNumberSequence?
+  migrationJobs         MigrationJob[]
+  garments              Garment[]
 
-  payrollPeriods             PayrollPeriod[]
-  payrollRecords             PayrollRecord[]
-  ious                       IOU[]
-  loans                      Loan[]
-  payrollDeductions          PayrollDeduction[]
-  employeeCompensations      EmployeeCompensation[]
-  financialRepayments        FinancialRepayment[]
-  expenses                   Expense[]
-  financialStatementConfig   FinancialStatementConfig?
+  payrollPeriods               PayrollPeriod[]
+  payrollRecords               PayrollRecord[]
+  ious                         IOU[]
+  loans                        Loan[]
+  payrollDeductions            PayrollDeduction[]
+  employeeCompensations        EmployeeCompensation[]
+  financialRepayments          FinancialRepayment[]
+  expenses                     Expense[]
+  financialStatementConfig     FinancialStatementConfig?
   financialStatementRecipients FinancialStatementRecipient[]
-  financialStatements        FinancialStatement[]
-  inventoryItems             InventoryItem[]
-  inventoryStocks            InventoryStock[]
-  inventoryMovements         InventoryMovement[]
-  businessRolePermissions    BusinessRolePermission[]
-  userPermissionOverrides    UserPermissionOverride[]
-  offlineSyncOperations      OfflineSyncOperation[]
-  subscriptionPaymentIntents SubscriptionPaymentIntent[]
-  subscriptionPayments       SubscriptionPayment[]
-  paymentWebhookEvents       PaymentWebhookEvent[]
+  financialStatements          FinancialStatement[]
+  inventoryItems               InventoryItem[]
+  inventoryStocks              InventoryStock[]
+  inventoryMovements           InventoryMovement[]
+  businessRolePermissions      BusinessRolePermission[]
+  userPermissionOverrides      UserPermissionOverride[]
+  offlineSyncOperations        OfflineSyncOperation[]
+  subscriptionPaymentIntents   SubscriptionPaymentIntent[]
+  subscriptionPayments         SubscriptionPayment[]
+  paymentWebhookEvents         PaymentWebhookEvent[]
 
   @@map("businesses")
 }
@@ -195,16 +196,16 @@ model Branch {
 }
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
+  id           String    @id @default(uuid())
+  email        String    @unique
   passwordHash String
   fullName     String
   // Visible business job title chosen by management.
   // This is descriptive only and never grants access.
-  role         String  @default("Staff")
+  role         String    @default("Staff")
   // Internal security foundation used only for protected system behavior.
-  securityRole Role    @default(STAFF)
-  isActive     Boolean @default(true)
+  securityRole Role      @default(STAFF)
+  isActive     Boolean   @default(true)
   deletedAt    DateTime?
 
   // Nullable because PLATFORM_ADMIN is not tied to a single business.
@@ -237,13 +238,16 @@ model User {
   approvedIOUs  IOU[]  @relation("IOUApprover")
   approvedLoans Loan[] @relation("LoanApprover")
 
-  financialRepaymentsAsEmployee FinancialRepayment[] @relation("FinancialRepaymentEmployee")
-  financialRepaymentsCreated    FinancialRepayment[] @relation("FinancialRepaymentCreator")
-  expensesCreated               Expense[]            @relation("ExpenseCreator")
-  expensesApproved              Expense[]            @relation("ExpenseApprover")
-  expensesRecognized            Expense[]            @relation("ExpenseRecognizer")
-  financialStatementRecipients FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
-  inventoryMovementsCreated     InventoryMovement[]  @relation("InventoryMovementCreator")
+  financialRepaymentsAsEmployee FinancialRepayment[]          @relation("FinancialRepaymentEmployee")
+  financialRepaymentsCreated    FinancialRepayment[]          @relation("FinancialRepaymentCreator")
+  expensesCreated               Expense[]                     @relation("ExpenseCreator")
+  expensesApproved              Expense[]                     @relation("ExpenseApprover")
+  expensesRecognized            Expense[]                     @relation("ExpenseRecognizer")
+  financialStatementRecipients  FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
+  inventoryMovementsCreated     InventoryMovement[]           @relation("InventoryMovementCreator")
+
+  customersStatusChanged       Customer[]              @relation("CustomerStatusChangedBy")
+  customerStatusHistoryChanges CustomerStatusHistory[] @relation("CustomerStatusHistoryChangedBy")
 
   permissionOverrides UserPermissionOverride[]
 
@@ -371,10 +375,17 @@ model AuditLog {
 // a customer per branch they visit would fragment their history and
 // contact info across rows for no benefit at this stage; nothing in the
 // approved requirements calls for branch-exclusive customer lists.
+enum CustomerLifecycleStatus {
+  ACTIVE
+  DORMANT
+  BLOCKED
+  BLACKLISTED
+}
+
 model Customer {
   id         String   @id @default(uuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business @relation("BusinessCustomers", fields: [businessId], references: [id], onDelete: Cascade)
 
   name  String
   // Stored normalized (digits only, optional leading "+") - see
@@ -391,12 +402,21 @@ model Customer {
   // Examples: "Always fold his items" or "Do not give him items on credit".
   customerInstructions String?
 
+  // Legacy compatibility flag. ACTIVE keeps this true; all other
+  // lifecycle states keep it false until the legacy field is removed.
   isActive Boolean @default(true)
+
+  lifecycleStatus   CustomerLifecycleStatus @default(ACTIVE)
+  statusReason      String?
+  statusChangedAt   DateTime?
+  statusChangedById String?
+  statusChangedBy   User?                   @relation("CustomerStatusChangedBy", fields: [statusChangedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
+  orders        Order[]
+  statusHistory CustomerStatusHistory[]
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -408,6 +428,26 @@ model Customer {
   @@index([businessId, phone])
   @@index([businessId, name])
   @@map("customers")
+}
+
+model CustomerStatusHistory {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  businessId String
+  business   Business @relation("BusinessCustomerStatusHistory", fields: [businessId], references: [id], onDelete: Cascade)
+
+  previousStatus CustomerLifecycleStatus?
+  newStatus      CustomerLifecycleStatus
+  reason         String
+  changedAt      DateTime                 @default(now())
+  changedById    String?
+  changedBy      User?                    @relation("CustomerStatusHistoryChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, changedAt])
+  @@index([businessId, changedAt])
+  @@map("customer_status_history")
 }
 
 // ---------------------------------------------------------------------
@@ -609,7 +649,6 @@ enum FinancialStatementDeliveryStatus {
   SENT
   FAILED
 }
-
 
 // ---------------------------------------------------------------------
 // INVOICES / RECEIPTS MODULE
@@ -1825,9 +1864,9 @@ model SubscriptionPayment {
   metadata Json?
 
   // Subscription payment confirmation email delivery state.
-  confirmationEmailSentAt           DateTime?
+  confirmationEmailSentAt            DateTime?
   confirmationEmailProviderMessageId String?
-  confirmationEmailLastError        String?
+  confirmationEmailLastError         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1865,7 +1904,6 @@ model PaymentWebhookEvent {
   @@map("payment_webhook_events")
 }
 
-
 // ---------------------------------------------------------------------
 // MONTHLY FINANCIAL STATEMENT DELIVERY
 // ---------------------------------------------------------------------
@@ -1883,7 +1921,7 @@ model PaymentWebhookEvent {
 model FinancialStatementConfig {
   id String @id @default(uuid())
 
-  businessId String @unique
+  businessId String   @unique
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   enabled Boolean @default(true)
@@ -1897,10 +1935,10 @@ model FinancialStatementConfig {
   whatsappEnabled Boolean @default(false)
 
   // Independent daily report schedule. Monthly settings above remain unchanged.
-  dailyEnabled        Boolean @default(false)
-  dailyHour           Int     @default(8)
-  dailyMinute         Int     @default(0)
-  dailyEmailEnabled   Boolean @default(true)
+  dailyEnabled         Boolean @default(false)
+  dailyHour            Int     @default(8)
+  dailyMinute          Int     @default(0)
+  dailyEmailEnabled    Boolean @default(true)
   dailyWhatsappEnabled Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -1916,7 +1954,7 @@ model FinancialStatementRecipient {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User @relation("FinancialStatementRecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("FinancialStatementRecipientUser", fields: [userId], references: [id], onDelete: Cascade)
 
   // Explicit WhatsApp destination. Email uses the User.email address.
   whatsappNumber String?
@@ -1945,13 +1983,13 @@ model FinancialStatement {
 
   currencyCode String
 
-  grossRevenue    Int
-  refundAmount    Int
-  netRevenue      Int
+  grossRevenue     Int
+  refundAmount     Int
+  netRevenue       Int
   explicitExpenses Int
-  salaryExpense   Int
-  totalExpenses   Int
-  profitOrLoss    Int
+  salaryExpense    Int
+  totalExpenses    Int
+  profitOrLoss     Int
 
   generatedAt DateTime @default(now())
 
@@ -1974,12 +2012,12 @@ model FinancialStatementDelivery {
   channel FinancialStatementChannel
   status  FinancialStatementDeliveryStatus @default(PENDING)
 
-  destination String
+  destination       String
   providerMessageId String?
 
-  attemptCount Int @default(0)
+  attemptCount  Int       @default(0)
   lastAttemptAt DateTime?
-  sentAt DateTime?
+  sentAt        DateTime?
   failureReason String?
 
   createdAt DateTime @default(now())

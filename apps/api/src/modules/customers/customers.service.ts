@@ -10,7 +10,7 @@ interface ListParams {
   page: number;
   pageSize: number;
   search?: string;
-  status: "active" | "inactive" | "all";
+  status: "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all";
 }
 
 export async function listCustomers(params: ListParams) {
@@ -19,7 +19,20 @@ export async function listCustomers(params: ListParams) {
   const where: Prisma.CustomerWhereInput = { businessId };
 
   if (status !== "all") {
-    where.isActive = status === "active";
+    if (status === "inactive") {
+      where.isActive = false;
+    } else {
+      const lifecycleStatus =
+        status === "active"
+          ? "ACTIVE"
+          : status === "dormant"
+            ? "DORMANT"
+            : status === "blocked"
+              ? "BLOCKED"
+              : "BLACKLISTED";
+
+      where.lifecycleStatus = lifecycleStatus;
+    }
   }
 
   if (search) {
@@ -165,14 +178,54 @@ export async function updateCustomer(
   return getCustomerForBusiness(id, businessId, db);
 }
 
-export async function setCustomerActiveStatus(id: string, businessId: string, isActive: boolean) {
-  const result = await prisma.customer.updateMany({ where: { id, businessId }, data: { isActive } });
+export async function setCustomerLifecycleStatus(
+  id: string,
+  businessId: string,
+  status: "ACTIVE" | "DORMANT" | "BLOCKED" | "BLACKLISTED",
+  reason: string,
+  actorUserId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({
+      where: { id, businessId },
+      select: { id: true, lifecycleStatus: true },
+    });
 
-  if (result.count === 0) {
-    throw new AppError("Customer not found", 404);
-  }
+    if (!customer) {
+      throw new AppError("Customer not found", 404);
+    }
 
-  return getCustomerForBusiness(id, businessId);
+    if (customer.lifecycleStatus === status) {
+      throw new AppError("Customer is already in this status", 409);
+    }
+
+    const updated = await tx.customer.update({
+      where: { id: customer.id },
+      data: {
+        lifecycleStatus: status,
+        isActive: status === "ACTIVE",
+        statusReason: reason,
+        statusChangedAt: new Date(),
+        statusChangedById: actorUserId,
+      },
+    });
+
+    await tx.customerStatusHistory.create({
+      data: {
+        customerId: customer.id,
+        businessId,
+        previousStatus: customer.lifecycleStatus,
+        newStatus: status,
+        reason,
+        changedById: actorUserId,
+      },
+    });
+
+    return {
+      customer: updated,
+      previousStatus: customer.lifecycleStatus,
+    };
+  });
 }
 
 /**

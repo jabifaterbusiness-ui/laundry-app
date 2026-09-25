@@ -6,7 +6,7 @@ export interface ListCustomersParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  status?: "active" | "inactive" | "all";
+  status?: "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all";
 }
 
 export interface CreateCustomerInput {
@@ -289,13 +289,15 @@ export async function updateCustomerWithOfflineQueue(
   }
 }
 
-export async function setCustomerActive(
+export async function setCustomerLifecycleStatus(
   id: string,
-  isActive: boolean,
+  status: Customer["lifecycleStatus"],
+  reason: string,
   auth: { accessToken: string | null },
 ): Promise<Customer> {
-  return apiFetch<Customer>(`/customers/${id}/${isActive ? "activate" : "deactivate"}`, {
+  return apiFetch<Customer>(`/customers/${id}/status`, {
     method: "POST",
     accessToken: auth.accessToken,
+    body: JSON.stringify({ status, reason }),
   });
 }

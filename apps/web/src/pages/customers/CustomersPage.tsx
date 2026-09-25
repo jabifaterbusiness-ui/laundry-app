@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Customer } from "@laundry-app/shared";
@@ -5,7 +6,7 @@ import { ApiError } from "../../lib/api-client.js";
 import {
   createCustomerWithOfflineQueue,
   listCustomers,
-  setCustomerActive,
+  setCustomerLifecycleStatus,
   updateCustomerWithOfflineQueue,
   type CreateCustomerInput,
 } from "../../lib/customers-api.js";
@@ -15,6 +16,7 @@ import { CustomerFormDialog } from "./CustomerFormDialog.js";
 const PAGE_SIZE = 25;
 
 export function CustomersPage() {
+  const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
@@ -24,8 +26,15 @@ export function CustomersPage() {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null | undefined>(undefined); // undefined = dialog closed
+  const [status, setStatus] = useState<
+    "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all"
+  >("active");
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null | undefined>(undefined);
+  const [statusChange, setStatusChange] = useState<{
+    customer: Customer;
+    status: Customer["lifecycleStatus"];
+  } | null>(null);
+  const [statusReason, setStatusReason] = useState("");
 
   const listQuery = useQuery({
     queryKey: ["customers", { page, search, status }],
@@ -81,9 +90,23 @@ export function CustomersPage() {
     },
   });
 
-  const toggleActiveMutation = useMutation({
-    mutationFn: (input: { id: string; isActive: boolean }) => setCustomerActive(input.id, input.isActive, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customers"] }),
+  const lifecycleMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      status: Customer["lifecycleStatus"];
+      reason: string;
+    }) =>
+      setCustomerLifecycleStatus(
+        input.id,
+        input.status,
+        input.reason,
+        { accessToken },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setStatusChange(null);
+      setStatusReason("");
+    },
   });
 
   async function handleFormSubmit(input: CreateCustomerInput) {
@@ -128,7 +151,10 @@ export function CustomersPage() {
           }}
         >
           <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="dormant">Dormant</option>
+          <option value="blocked">Blocked</option>
+          <option value="blacklisted">Blacklisted</option>
+          <option value="inactive">Legacy inactive</option>
           <option value="all">All</option>
         </select>
         <button type="button" onClick={() => setEditingCustomer(null)}>
@@ -163,26 +189,106 @@ export function CustomersPage() {
             {customers.map((customer) => (
               <tr key={customer.id}>
                 <td>
-                  <button type="button" onClick={() => setEditingCustomer(customer)}>
+                  <button type="button" onClick={() => navigate(`/customers/${encodeURIComponent(customer.id)}`)}>
                     {customer.name}
                   </button>
                 </td>
                 <td>{customer.phone}</td>
                 <td>{customer.email ?? "-"}</td>
-                <td>{customer.isActive ? "Active" : "Inactive"}</td>
+                <td>{customer.lifecycleStatus}</td>
                 <td>
                   <button
                     type="button"
-                    disabled={toggleActiveMutation.isPending}
-                    onClick={() => toggleActiveMutation.mutate({ id: customer.id, isActive: !customer.isActive })}
+                    onClick={() => setEditingCustomer(customer)}
                   >
-                    {customer.isActive ? "Deactivate" : "Activate"}
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusChange({ customer, status: customer.lifecycleStatus });
+                      setStatusReason(customer.statusReason ?? "");
+                    }}
+                  >
+                    Change status
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {statusChange && (
+        <section role="dialog" aria-label="Change customer status">
+          <h2>Change customer status</h2>
+          <p>
+            Customer: <strong>{statusChange.customer.name}</strong>
+          </p>
+
+          <label>
+            Status
+            <select
+              value={statusChange.status}
+              onChange={(event) =>
+                setStatusChange({
+                  ...statusChange,
+                  status: event.target.value as Customer["lifecycleStatus"],
+                })
+              }
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="DORMANT">Dormant</option>
+              <option value="BLOCKED">Blocked</option>
+              <option value="BLACKLISTED">Blacklisted</option>
+            </select>
+          </label>
+
+          <label>
+            Reason
+            <textarea
+              value={statusReason}
+              onChange={(event) => setStatusReason(event.target.value)}
+              required
+              placeholder="Enter the reason for this status change"
+            />
+          </label>
+
+          {lifecycleMutation.isError && (
+            <p role="alert">
+              {lifecycleMutation.error instanceof ApiError
+                ? lifecycleMutation.error.message
+                : "Unable to change customer status. Please try again."}
+            </p>
+          )}
+
+          <button
+            type="button"
+            disabled={
+              lifecycleMutation.isPending ||
+              !statusReason.trim()
+            }
+            onClick={() =>
+              lifecycleMutation.mutate({
+                id: statusChange.customer.id,
+                status: statusChange.status,
+                reason: statusReason.trim(),
+              })
+            }
+          >
+            Save status
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setStatusChange(null);
+              setStatusReason("");
+            }}
+          >
+            Cancel
+          </button>
+        </section>
       )}
 
       {pagination && pagination.totalPages > 1 && (

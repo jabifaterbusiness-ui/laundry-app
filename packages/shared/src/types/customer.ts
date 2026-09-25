@@ -1,3 +1,9 @@
+export type CustomerLifecycleStatus =
+  | "ACTIVE"
+  | "DORMANT"
+  | "BLOCKED"
+  | "BLACKLISTED";
+
 export interface Customer {
   id: string;
   name: string;
@@ -6,6 +12,10 @@ export interface Customer {
   address: string | null;
   notes: string | null;
   isActive: boolean;
+  lifecycleStatus: CustomerLifecycleStatus;
+  statusReason: string | null;
+  statusChangedAt: string | null;
+  statusChangedById: string | null;
   createdAt: string;
   updatedAt: string;
 }
