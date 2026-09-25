@@ -209,6 +209,8 @@ export async function approveExpense({
     metadata: {
       category: updated.category,
       amount: updated.amount,
+      before: { status: expense.status },
+      after: { status: updated.status },
     },
   });
 
@@ -261,6 +263,14 @@ export async function rejectExpense({
       category: updated.category,
       amount: updated.amount,
       reason: reason ?? null,
+      before: {
+        status: expense.status,
+        note: expense.note,
+      },
+      after: {
+        status: updated.status,
+        note: updated.note,
+      },
     },
   });
 
@@ -311,7 +321,12 @@ export async function recognizeExpense({
     metadata: {
       category: updated.category,
       amount: updated.amount,
-      recognizedAt: updated.recognizedAt,
+      before: {
+        recognizedAt: expense.recognizedAt,
+      },
+      after: {
+        recognizedAt: updated.recognizedAt,
+      },
     },
   });
 
@@ -361,6 +376,12 @@ export async function voidExpense({
     metadata: {
       category: updated.category,
       amount: updated.amount,
+      before: {
+        status: expense.status,
+      },
+      after: {
+        status: updated.status,
+      },
       wasRecognized: Boolean(expense.recognizedAt),
     },
   });

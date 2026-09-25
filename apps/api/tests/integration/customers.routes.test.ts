@@ -14,6 +14,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
         endsAt: new Date("2099-01-01T00:00:00.000Z"),
       }),
     },
+    $transaction: vi.fn(),
     permission: {
       findUnique: vi.fn(),
     },
@@ -28,7 +29,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
+    },
+    customerStatusHistory: {
+      create: vi.fn(),
     },
   },
 }));
@@ -49,6 +54,10 @@ const updateMany = vi.mocked(prisma.customer.updateMany);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
+
+vi.mocked(prisma.$transaction).mockImplementation(
+  async (callback: any) => callback(prisma),
+);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(

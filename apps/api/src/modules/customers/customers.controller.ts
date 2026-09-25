@@ -131,7 +131,26 @@ const patch = {
   ...(normalizedPhone !== undefined && { phone: normalizedPhone }),
 };
 
+const existingCustomer = await getCustomerForBusiness(id, businessId);
+if (!existingCustomer) {
+  throw new AppError("Customer not found", 404);
+}
+
 const customer = await updateCustomer(id, businessId, patch);
+
+const before: Record<string, unknown> = {};
+const after: Record<string, unknown> = {};
+
+for (const field of Object.keys(patch) as Array<keyof typeof patch>) {
+    const oldValue = existingCustomer[field];
+    const newValue = customer?.[field];
+
+    if (oldValue !== newValue) {
+      before[field] = oldValue;
+      after[field] = newValue;
+    }
+  }
+
   await recordAuditEvent({
     action: "customer.updated",
     entityType: "Customer",
@@ -139,7 +158,11 @@ const customer = await updateCustomer(id, businessId, patch);
     businessId,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
-    metadata: { fields: Object.keys(fields) },
+    metadata: {
+      changedFields: Object.keys(after),
+      before,
+      after,
+    },
   });
 
   res.status(200).json(customer);

@@ -341,6 +341,10 @@ export async function updateUser(
       ? await hashPassword(input.password)
       : undefined;
 
+  const currentBranchIds = input.branchIds !== undefined
+    ? current.branches.map((branch) => branch.branchId).sort()
+    : undefined;
+
   await prisma.$transaction(
     async (tx) => {
       const currentInTransaction = await tx.user.findFirst({
@@ -410,6 +414,34 @@ export async function updateUser(
     },
   );
 
+  const changedFields = Object.keys(input);
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+
+  if (input.fullName !== undefined && current.fullName !== input.fullName.trim()) {
+    before.fullName = current.fullName;
+    after.fullName = input.fullName.trim();
+  }
+
+  if (input.email !== undefined && current.email !== input.email.trim().toLowerCase()) {
+    before.email = current.email;
+    after.email = input.email.trim().toLowerCase();
+  }
+
+  if (input.role !== undefined && current.role !== input.role.trim()) {
+    before.role = current.role;
+    after.role = input.role.trim();
+  }
+
+  if (input.branchIds !== undefined) {
+    const nextBranchIds = [...new Set(input.branchIds)].sort();
+
+    if (JSON.stringify(currentBranchIds) !== JSON.stringify(nextBranchIds)) {
+      before.branchIds = currentBranchIds;
+      after.branchIds = nextBranchIds;
+    }
+  }
+
   await recordAuditEvent({
     action: "user.updated",
     entityType: "User",
@@ -418,7 +450,13 @@ export async function updateUser(
     actorUserId: context.actorUserId,
     correlationId: context.correlationId ?? null,
     metadata: {
-      changedFields: Object.keys(input),
+      changedFields,
+      ...(input.password !== undefined
+        ? { passwordChanged: true }
+        : {}),
+      ...(Object.keys(before).length > 0
+        ? { before, after }
+        : {}),
     },
   });
 
@@ -488,9 +526,16 @@ export async function deleteUser(
     actorUserId: input.actorUserId,
     correlationId: input.correlationId ?? null,
     metadata: {
-      previousRole: current.securityRole,
-      previousIsActive: current.isActive,
-      deletedAt: deletedAt.toISOString(),
+      before: {
+        securityRole: current.securityRole,
+        isActive: current.isActive,
+        deletedAt: current.deletedAt ?? null,
+      },
+      after: {
+        securityRole: current.securityRole,
+        isActive: false,
+        deletedAt: deletedAt.toISOString(),
+      },
     },
   });
 
@@ -575,6 +620,10 @@ export async function setUserActiveStatus(
     businessId: context.businessId,
     actorUserId: context.actorUserId,
     correlationId: context.correlationId ?? null,
+    metadata: {
+      before: { isActive: current.isActive },
+      after: { isActive },
+    },
   });
 
   return getUserWithBranches(userId, context.businessId);

@@ -104,6 +104,16 @@ export async function upsertSubscriptionPrice(
 
   validateAmount(input.amount);
 
+  const existing = await prisma.subscriptionPlanPrice.findUnique({
+    where: {
+      plan_countryCode_currencyCode: {
+        plan: input.plan,
+        countryCode,
+        currencyCode,
+      },
+    },
+  });
+
   const price = await prisma.subscriptionPlanPrice.upsert({
     where: {
       plan_countryCode_currencyCode: {
@@ -133,11 +143,22 @@ export async function upsertSubscriptionPrice(
     actorUserId,
     correlationId: correlationId ?? null,
     metadata: {
-      plan: price.plan,
-      countryCode: price.countryCode,
-      currencyCode: price.currencyCode,
-      amount: price.amount,
-      isActive: price.isActive,
+      before: existing
+        ? {
+            plan: existing.plan,
+            countryCode: existing.countryCode,
+            currencyCode: existing.currencyCode,
+            amount: existing.amount,
+            isActive: existing.isActive,
+          }
+        : null,
+      after: {
+        plan: price.plan,
+        countryCode: price.countryCode,
+        currencyCode: price.currencyCode,
+        amount: price.amount,
+        isActive: price.isActive,
+      },
     },
   });
 
@@ -169,19 +190,21 @@ export async function deleteSubscriptionPrice(
     where: { id: priceId },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      actorUserId,
-      action: "platform.subscription_price.deleted",
-      entityType: "SubscriptionPlanPrice",
-      entityId: priceId,
-      correlationId: correlationId ?? null,
-      metadata: {
+  await recordAuditEvent({
+    action: "platform.subscription_price.deleted",
+    entityType: "SubscriptionPlanPrice",
+    entityId: priceId,
+    actorUserId,
+    correlationId: correlationId ?? null,
+    metadata: {
+      before: {
         plan: price.plan,
         countryCode: price.countryCode,
         currencyCode: price.currencyCode,
         amount: price.amount,
+        isActive: price.isActive,
       },
+      after: null,
     },
   });
 
@@ -218,11 +241,20 @@ export async function setSubscriptionPriceActive(
     actorUserId,
     correlationId: correlationId ?? null,
     metadata: {
-      plan: updated.plan,
-      countryCode: updated.countryCode,
-      currencyCode: updated.currencyCode,
-      previousActive: existing.isActive,
-      isActive: updated.isActive,
+      before: {
+        plan: existing.plan,
+        countryCode: existing.countryCode,
+        currencyCode: existing.currencyCode,
+        amount: existing.amount,
+        isActive: existing.isActive,
+      },
+      after: {
+        plan: updated.plan,
+        countryCode: updated.countryCode,
+        currencyCode: updated.currencyCode,
+        amount: updated.amount,
+        isActive: updated.isActive,
+      },
     },
   });
 

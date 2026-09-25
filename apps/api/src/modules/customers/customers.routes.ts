@@ -17,3 +17,21 @@ customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list)
 customersRouter.get("/:id", requirePermission("customers.view"), asyncHandler(getOne));
 customersRouter.patch("/:id", requirePermission("customers.update"), asyncHandler(update));
 customersRouter.post("/:id/status", requirePermission("customers.change_status"), asyncHandler(changeStatus));
+
+customersRouter.post(
+  "/:id/activate",
+  requirePermission("customers.change_status"),
+  asyncHandler((req, res) => {
+    req.body = { status: "ACTIVE", reason: "Legacy activate endpoint" };
+    return changeStatus(req, res);
+  }),
+);
+
+customersRouter.post(
+  "/:id/deactivate",
+  requirePermission("customers.change_status"),
+  asyncHandler((req, res) => {
+    req.body = { status: "DORMANT", reason: "Legacy deactivate endpoint" };
+    return changeStatus(req, res);
+  }),
+);

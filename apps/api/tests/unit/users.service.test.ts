@@ -451,6 +451,7 @@ describe("users.service - updateUser", () => {
     const auditCall = vi.mocked(recordAuditEvent).mock.calls.at(-1)?.[0];
     expect(auditCall?.metadata).toEqual({
       changedFields: ["password"],
+      passwordChanged: true,
     });
     expect(JSON.stringify(auditCall)).not.toContain("newpassword123");
   });

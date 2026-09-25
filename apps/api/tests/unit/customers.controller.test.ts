@@ -119,13 +119,24 @@ describe("getOne - cross-business access", () => {
 
 describe("update - audit metadata", () => {
   it("records only the changed field names, never full customer data", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "Original",
+    } as never);
     vi.mocked(service.updateCustomer).mockResolvedValue({ id: "cust-1", name: "Updated" } as never);
 
     const req = makeReq({ params: { id: "11111111-1111-1111-1111-111111111111" }, body: { name: "Updated" } });
     await update(req, makeRes());
 
     expect(recordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "customer.updated", metadata: { fields: ["name"] } }),
+      expect.objectContaining({
+        action: "customer.updated",
+        metadata: {
+          changedFields: ["name"],
+          before: { name: "Original" },
+          after: { name: "Updated" },
+        },
+      }),
     );
   });
 });
@@ -134,6 +145,11 @@ describe("update - duplicate phone handling", () => {
   const id = "11111111-1111-1111-1111-111111111111";
 
   it("returns 409 with matches and does not update when the new phone matches another active customer", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id,
+      name: "Existing Customer",
+      phone: "5551234567",
+    } as never);
     vi.mocked(service.findPossibleDuplicates).mockResolvedValue([{ id: "other-1", name: "Jane Doe", phone: "5551234567" }] as never);
 
     const req = makeReq({ params: { id }, body: { phone: "555-123-4567" } });
@@ -146,6 +162,11 @@ describe("update - duplicate phone handling", () => {
   });
 
   it("excludes the customer being updated from the duplicate search", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id,
+      name: "Existing Customer",
+      phone: "5550000000",
+    } as never);
     vi.mocked(service.findPossibleDuplicates).mockResolvedValue([]);
     vi.mocked(service.updateCustomer).mockResolvedValue({ id, phone: "5551234567" } as never);
 
@@ -156,6 +177,10 @@ describe("update - duplicate phone handling", () => {
   });
 
   it("does not run the duplicate check when phone is not part of the update", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id,
+      name: "Existing Customer",
+    } as never);
     vi.mocked(service.updateCustomer).mockResolvedValue({ id, name: "New Name" } as never);
 
     const req = makeReq({ params: { id }, body: { name: "New Name" } });
@@ -166,6 +191,11 @@ describe("update - duplicate phone handling", () => {
   });
 
   it("allows the update when confirmDuplicate is true, even with a match", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id,
+      name: "Existing Customer",
+      phone: "5550000000",
+    } as never);
     vi.mocked(service.findPossibleDuplicates).mockResolvedValue([{ id: "other-1", name: "Jane Doe", phone: "5551234567" }] as never);
     vi.mocked(service.updateCustomer).mockResolvedValue({ id, phone: "5551234567" } as never);
 
@@ -195,7 +225,14 @@ describe("update - duplicate phone handling", () => {
     await update(req, makeRes());
 
     expect(recordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "customer.updated", metadata: { fields: ["phone"] } }),
+      expect.objectContaining({
+        action: "customer.updated",
+        metadata: expect.objectContaining({
+          changedFields: ["phone"],
+          before: { phone: "5550000000" },
+          after: { phone: "5551234567" },
+        }),
+      }),
     );
   });
 });

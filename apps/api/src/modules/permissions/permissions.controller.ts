@@ -80,6 +80,14 @@ export async function updateRolePermission(
     );
   }
 
+  const previousPermissions = await getRolePermissions(
+    businessId,
+    role as Role,
+  );
+  const previous = previousPermissions.find(
+    (permission) => permission.code === permissionCode,
+  );
+
   const result = await upsertBusinessRolePermission(
     businessId,
     role as Role,
@@ -97,7 +105,12 @@ export async function updateRolePermission(
     metadata: {
       role,
       permissionCode,
-      allowed,
+      before: {
+        allowed: previous?.allowed ?? false,
+      },
+      after: {
+        allowed,
+      },
     },
   });
 
@@ -119,6 +132,14 @@ export async function removeRolePermission(
     );
   }
 
+  const previousPermissions = await getRolePermissions(
+    businessId,
+    role as Role,
+  );
+  const previous = previousPermissions.find(
+    (permission) => permission.code === permissionCode,
+  );
+
   const result = await removeBusinessRolePermission(
     businessId,
     role as Role,
@@ -135,6 +156,10 @@ export async function removeRolePermission(
     metadata: {
       role,
       permissionCode,
+      before: {
+        allowed: previous?.allowed ?? false,
+      },
+      after: null,
     },
   });
 
@@ -168,6 +193,15 @@ export async function allowAllUserPermissionsController(
     );
   }
 
+  const previousPermissions = await getUserPermissions(
+    businessId,
+    userId,
+  );
+  const previousAllowed = previousPermissions.permissions
+    .filter((permission) => permission.allowed)
+    .map((permission) => permission.code)
+    .sort();
+
   const result = await allowAllUserPermissions(businessId, userId);
 
   await recordAuditEvent({
@@ -177,7 +211,18 @@ export async function allowAllUserPermissionsController(
     businessId,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
-    metadata: { userId, count: result.count },
+    metadata: {
+      userId,
+      count: result.count,
+      before: {
+        allowedPermissionCodes: previousAllowed,
+      },
+      after: {
+        allowedPermissionCodes: (await listPermissions())
+          .map((permission) => permission.code)
+          .sort(),
+      },
+    },
   });
 
   res.status(200).json(result);
@@ -190,6 +235,15 @@ export async function disallowAllUserPermissionsController(
   const businessId = requireBusinessId(req);
   const { userId } = userIdParamSchema.parse(req.params);
 
+  const previousPermissions = await getUserPermissions(
+    businessId,
+    userId,
+  );
+  const previousAllowed = previousPermissions.permissions
+    .filter((permission) => permission.allowed)
+    .map((permission) => permission.code)
+    .sort();
+
   const result = await disallowAllUserPermissions(businessId, userId);
 
   await recordAuditEvent({
@@ -199,7 +253,16 @@ export async function disallowAllUserPermissionsController(
     businessId,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
-    metadata: { userId, count: result.count },
+    metadata: {
+      userId,
+      count: result.count,
+      before: {
+        allowedPermissionCodes: previousAllowed,
+      },
+      after: {
+        allowedPermissionCodes: [],
+      },
+    },
   });
 
   res.status(200).json(result);
@@ -223,6 +286,14 @@ export async function updateUserPermission(
     );
   }
 
+  const previousPermissions = await getUserPermissions(
+    businessId,
+    userId,
+  );
+  const previous = previousPermissions.permissions.find(
+    (permission) => permission.code === permissionCode,
+  );
+
   const result = await upsertUserPermissionOverride(
     businessId,
     userId,
@@ -240,7 +311,12 @@ export async function updateUserPermission(
     metadata: {
       userId,
       permissionCode,
-      allowed,
+      before: {
+        allowed: previous?.allowed ?? false,
+      },
+      after: {
+        allowed,
+      },
     },
   });
 
@@ -254,6 +330,14 @@ export async function removeUserPermission(
   const businessId = requireBusinessId(req);
   const { userId, permissionCode } =
     userPermissionParamsSchema.parse(req.params);
+
+  const previousPermissions = await getUserPermissions(
+    businessId,
+    userId,
+  );
+  const previous = previousPermissions.permissions.find(
+    (permission) => permission.code === permissionCode,
+  );
 
   const result = await removeUserPermissionOverride(
     businessId,
@@ -271,6 +355,10 @@ export async function removeUserPermission(
     metadata: {
       userId,
       permissionCode,
+      before: {
+        allowed: previous?.allowed ?? false,
+      },
+      after: null,
     },
   });
 
