@@ -114,7 +114,7 @@ describe("SuspiciousActivityPage", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("button", { name: /^allow all permissions(?:\s+\d+)?$/i }),
+      screen.getByRole("button", { name: /(?:^|\s)allow all permissions\b.*view records/i }),
     ).toBeInTheDocument();
 
     expect(
@@ -181,7 +181,7 @@ describe("SuspiciousActivityPage", () => {
     ).not.toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /^allow all permissions(?:\s+\d+)?$/i }),
+      screen.getByRole("button", { name: /(?:^|\s)allow all permissions\b.*view records/i }),
     );
 
     expect(
@@ -287,13 +287,13 @@ describe("SuspiciousActivityPage", () => {
 
     expect(
       await screen.findByRole("button", {
-        name: /^allow all permissions(?:\s+\d+)?$/i,
+        name: /(?:^|\s)allow all permissions\b.*view records/i,
       }),
     ).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", {
-        name: /^disallow all permissions(?:\s+\d+)?$/i,
+        name: /(?:^|\s)disallow all permissions\b.*view records/i,
       }),
     ).toBeInTheDocument();
 
@@ -307,7 +307,7 @@ describe("SuspiciousActivityPage", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /^allow all permissions(?:\s+\d+)?$/i,
+        name: /(?:^|\s)allow all permissions\b.*view records/i,
       }),
     );
 
@@ -321,7 +321,7 @@ describe("SuspiciousActivityPage", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /^disallow all permissions(?:\s+\d+)?$/i,
+        name: /(?:^|\s)disallow all permissions\b.*view records/i,
       }),
     );
 

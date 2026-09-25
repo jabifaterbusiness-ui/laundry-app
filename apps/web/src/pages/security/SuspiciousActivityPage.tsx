@@ -1,7 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { hasPermission } from "../../lib/permissions.js";
 import { listSuspiciousActivity } from "../../lib/audit-api.js";
+import {
+  loadSuspiciousActivityReadState,
+  markSuspiciousActivityEventSeen,
+} from "../../lib/suspicious-activity-persistence.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 type ActivityRisk = "High" | "Critical";
@@ -340,27 +344,97 @@ function getReason(metadata: unknown) {
     : null;
 }
 
-function getButtonClass(
-  risk: ActivityRisk,
-  selected: boolean,
-) {
-  if (selected) {
-    return risk === "Critical"
-      ? "activity-event-button activity-event-button-critical activity-event-button-selected"
-      : "activity-event-button activity-event-button-high activity-event-button-selected";
+function getActivityCategory(definition: ActivityDefinition) {
+  const action = definition.actions[0] ?? "";
+
+  if (action.startsWith("user.password") || action.startsWith("user.login")) {
+    return "security";
   }
 
-  return risk === "Critical"
-    ? "activity-event-button activity-event-button-critical"
-    : "activity-event-button activity-event-button-high";
+  if (action.startsWith("user.")) {
+    return "users";
+  }
+
+  if (action.startsWith("permission.")) {
+    return "permissions";
+  }
+
+  if (action.startsWith("payment.") || action.startsWith("subscription.")) {
+    return "financial";
+  }
+
+  if (action.startsWith("invoice.")) {
+    return "invoices";
+  }
+
+  if (action.startsWith("order.customer_")) {
+    return "customers";
+  }
+
+  if (action.startsWith("inventory.")) {
+    return "inventory";
+  }
+
+  if (action.startsWith("backup.")) {
+    return "backup";
+  }
+
+  if (action.startsWith("quick_operation.")) {
+    return "operations";
+  }
+
+  if (action.startsWith("migration.")) {
+    return "system";
+  }
+
+  return "security";
+}
+
+function getCategoryLabel(category: string) {
+  switch (category) {
+    case "security":
+      return "Security & authentication";
+    case "users":
+      return "User activity";
+    case "permissions":
+      return "Permissions";
+    case "financial":
+      return "Financial";
+    case "invoices":
+      return "Invoices";
+    case "customers":
+      return "Customers";
+    case "inventory":
+      return "Inventory";
+    case "backup":
+      return "Backup & recovery";
+    case "operations":
+      return "Quick operations";
+    case "system":
+      return "System";
+    default:
+      return "Security";
+  }
 }
 
 export function SuspiciousActivityPage() {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const activeBranchId = useAuthStore((state) => state.activeBranchId);
+
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     null,
   );
+  const [readState, setReadState] = useState(() => {
+    if (typeof window === "undefined" || !user?.id || !activeBranchId) {
+      return {};
+    }
+
+    return loadSuspiciousActivityReadState(
+      user.id,
+      activeBranchId,
+    ).lastSeenEventIds;
+  });
 
   const canView = hasPermission(
     user,
@@ -418,6 +492,96 @@ export function SuspiciousActivityPage() {
     });
   }, [activities, selectedDefinition]);
 
+  useEffect(() => {
+    if (!user?.id || !activeBranchId) {
+      setReadState({});
+      return;
+    }
+
+    setReadState(
+      loadSuspiciousActivityReadState(
+        user.id,
+        activeBranchId,
+      ).lastSeenEventIds,
+    );
+  }, [user?.id, activeBranchId]);
+
+  const activityCounts = useMemo(() => {
+    return new Map(
+      ACTIVITY_DEFINITIONS.map((definition) => {
+        const matching = activities.filter((activity) => {
+          if (!definition.actions.includes(activity.action)) {
+            return false;
+          }
+
+          if (!definition.operationNames) {
+            return true;
+          }
+
+          if (!activity.metadata || typeof activity.metadata !== "object") {
+            return false;
+          }
+
+          const operationName = (
+            activity.metadata as Record<string, unknown>
+          ).operationName;
+
+          return (
+            typeof operationName === "string" &&
+            definition.operationNames.includes(operationName)
+          );
+        });
+
+        const latest = matching.reduce<(typeof matching)[number] | null>(
+          (current, activity) => {
+            if (!current) {
+              return activity;
+            }
+
+            return new Date(activity.timestamp).getTime() >
+              new Date(current.timestamp).getTime()
+              ? activity
+              : current;
+          },
+          null,
+        );
+
+        return [
+          definition.id,
+          {
+            count: matching.length,
+            latestActivityId: latest?.id ?? null,
+          },
+        ];
+      }),
+    );
+  }, [activities]);
+
+  const markEventAsSeen = (definition: ActivityDefinition) => {
+    if (!user?.id || !activeBranchId) {
+      return;
+    }
+
+    const latestActivityId =
+      activityCounts.get(definition.id)?.latestActivityId;
+
+    if (!latestActivityId) {
+      return;
+    }
+
+    markSuspiciousActivityEventSeen(
+      user.id,
+      activeBranchId,
+      definition.id,
+      latestActivityId,
+    );
+
+    setReadState((current) => ({
+      ...current,
+      [definition.id]: latestActivityId,
+    }));
+  };
+
   const criticalCount = activities.filter((activity) =>
     ACTIVITY_DEFINITIONS.some((definition) => {
       if (!definition.actions.includes(activity.action)) {
@@ -460,15 +624,18 @@ export function SuspiciousActivityPage() {
   }
 
   return (
-    <main>
-      <header>
-        <h1>Suspicious / Unusual Activity</h1>
+    <main className="suspicious-activity-page">
+      <header className="suspicious-activity-page-header">
+        <div>
+          <p className="dashboard-panel-eyebrow">Security centre</p>
+          <h1>Suspicious / Unusual Activity</h1>
         <p>
           Select an event type to view only that event&apos;s records.
           Security, authentication, login history, users, permissions,
           financial events, invoices, backups and other sensitive
           activities remain separately organized.
         </p>
+        </div>
       </header>
 
       {activityQuery.isLoading ? (
@@ -479,68 +646,117 @@ export function SuspiciousActivityPage() {
         </p>
       ) : (
         <>
-          <section aria-label="Activity summary">
-            <div>
-              <strong>Total events</strong>
-              <span>{activities.length}</span>
-            </div>
-            <div>
-              <strong>Critical events</strong>
-              <span>{criticalCount}</span>
-            </div>
-            <div>
-              <strong>Event types</strong>
-              <span>{ACTIVITY_DEFINITIONS.length}</span>
-            </div>
+          <section
+            className="suspicious-activity-summary-grid"
+            aria-label="Activity summary"
+          >
+            <article className="suspicious-activity-summary-card suspicious-activity-summary-card-primary">
+              <div>
+                <p className="dashboard-panel-eyebrow">Activity volume</p>
+                <h2>Total events</h2>
+                <strong>{activities.length}</strong>
+              </div>
+              <span className="suspicious-activity-summary-icon">◉</span>
+            </article>
+
+            <article className="suspicious-activity-summary-card suspicious-activity-summary-card-critical">
+              <div>
+                <p className="dashboard-panel-eyebrow">Risk level</p>
+                <h2>Critical events</h2>
+                <strong>{criticalCount}</strong>
+              </div>
+              <span className="suspicious-activity-summary-icon">!</span>
+            </article>
+
+            <article className="suspicious-activity-summary-card suspicious-activity-summary-card-types">
+              <div>
+                <p className="dashboard-panel-eyebrow">Monitoring</p>
+                <h2>Event types</h2>
+                <strong>{ACTIVITY_DEFINITIONS.length}</strong>
+              </div>
+              <span className="suspicious-activity-summary-icon">⌁</span>
+            </article>
           </section>
 
-          <section aria-label="Activity event types">
-            <div>
+          <section
+            className="suspicious-activity-events"
+            aria-label="Activity event types"
+          >
+            <div className="suspicious-activity-section-heading">
+              <div>
+                <p className="dashboard-panel-eyebrow">Event centre</p>
+                <h2>Unusual activity</h2>
+              </div>
+              <span>{ACTIVITY_DEFINITIONS.length} event types</span>
+            </div>
+
+            <div className="suspicious-activity-event-grid">
               {ACTIVITY_DEFINITIONS.map((definition) => {
-                const count = activities.filter((activity) => {
-                  if (!definition.actions.includes(activity.action)) {
-                    return false;
-                  }
-
-                  if (!definition.operationNames) {
-                    return true;
-                  }
-
-                  if (!activity.metadata || typeof activity.metadata !== "object") {
-                    return false;
-                  }
-
-                  const operationName = (
-                    activity.metadata as Record<string, unknown>
-                  ).operationName;
-
-                  return (
-                    typeof operationName === "string" &&
-                    definition.operationNames.includes(operationName)
-                  );
-                }).length;
-
+                const activitySummary = activityCounts.get(definition.id);
+                const count = activitySummary?.count ?? 0;
+                const latestActivityId =
+                  activitySummary?.latestActivityId ?? null;
+                const lastSeenActivityId = readState[definition.id];
+                const unread =
+                  Boolean(latestActivityId) &&
+                  latestActivityId !== lastSeenActivityId;
                 const selected = definition.id === selectedEventId;
+                const category = getActivityCategory(definition);
 
                 return (
                   <button
                     key={definition.id}
                     type="button"
-                    className={getButtonClass(
-                      definition.risk,
-                      selected,
-                    )}
+                    className={[
+                      "suspicious-activity-event-card",
+                      `suspicious-activity-event-card-${category}`,
+                      definition.risk === "Critical"
+                        ? "suspicious-activity-event-card-critical"
+                        : "suspicious-activity-event-card-high",
+                      selected
+                        ? "suspicious-activity-event-card-selected"
+                        : "",
+                    ].filter(Boolean).join(" ")}
                     aria-pressed={selected}
-                    onClick={() =>
+                    onClick={() => {
+                      markEventAsSeen(definition);
                       setSelectedEventId((current) =>
-                        current === definition.id
-                          ? null
-                          : definition.id,
-                      )
-                    }
+                        current === definition.id ? null : definition.id,
+                      );
+                    }}
                   >
-                    <strong>{definition.label}</strong>
-                    <span>{count}</span>
+                    <div className="suspicious-activity-event-card-top">
+                      <span className="suspicious-activity-event-icon">
+                        {definition.risk === "Critical" ? "!" : "•"}
+                      </span>
+
+                      <span
+                        className={[
+                          "suspicious-activity-event-badge",
+                          unread
+                            ? "suspicious-activity-event-badge-unread"
+                            : "",
+                        ].filter(Boolean).join(" ")}
+                        aria-label={
+                          unread
+                            ? `${count} new ${definition.label} events`
+                            : `${count} ${definition.label} events`
+                        }
+                      >
+                        {count}
+                      </span>
+                    </div>
+
+                    <div className="suspicious-activity-event-card-body">
+                      <p>{getCategoryLabel(category)}</p>
+                      <strong>{definition.label}</strong>
+                      <span>{definition.description}</span>
+                    </div>
+
+                    <div className="suspicious-activity-event-card-footer">
+                      <span>{definition.risk}</span>
+                      <span>{selected ? "Viewing" : "View records"}</span>
+                    </div>
                   </button>
                 );
               })}
