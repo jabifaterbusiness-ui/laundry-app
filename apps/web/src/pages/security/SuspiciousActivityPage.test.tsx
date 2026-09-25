@@ -83,7 +83,7 @@ describe("SuspiciousActivityPage", () => {
     expect(mockedListSuspiciousActivity).not.toHaveBeenCalled();
   });
 
-  it("loads and displays suspicious activity for an authorized user", async () => {
+  it("classifies payment activity and renders an organized table", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "audit-1",
@@ -100,23 +100,69 @@ describe("SuspiciousActivityPage", () => {
     renderPage();
 
     expect(
-      await screen.findByText("payment.voided"),
+      await screen.findByText("Financial & Payments"),
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByText(/Payment · payment-1/i),
-    ).toBeInTheDocument();
-
+    expect(screen.getByText("Payment voided")).toBeInTheDocument();
+    expect(screen.getByText("payment.voided")).toBeInTheDocument();
+    expect(screen.getByText("Critical")).toBeInTheDocument();
+    expect(screen.getByText("Payment · payment-1")).toBeInTheDocument();
     expect(screen.getByText("manager-1")).toBeInTheDocument();
-    expect(screen.getByText("corr-1")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Duplicate payment/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Duplicate payment")).toBeInTheDocument();
+    expect(screen.getByText("Total events")).toBeInTheDocument();
+    expect(screen.getByText("Critical events")).toBeInTheDocument();
 
     expect(mockedListSuspiciousActivity).toHaveBeenCalledWith(
       "token",
       100,
     );
+  });
+
+  it("groups activities into their correct categories", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "audit-1",
+        timestamp: "2026-09-25T06:30:00.000Z",
+        action: "user.login",
+        entityType: "User",
+        entityId: "user-1",
+        actorUserId: "user-1",
+        metadata: {},
+        correlationId: null,
+      },
+      {
+        id: "audit-2",
+        timestamp: "2026-09-25T06:31:00.000Z",
+        action: "permission.user.allow_all",
+        entityType: "UserPermission",
+        entityId: "permission-1",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+      {
+        id: "audit-3",
+        timestamp: "2026-09-25T06:32:00.000Z",
+        action: "backup.restored",
+        entityType: "Business",
+        entityId: "business-1",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+    ]);
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Security & Authentication"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Permissions & Access"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Backup & Recovery"),
+    ).toBeInTheDocument();
   });
 
   it("shows an empty state", async () => {
