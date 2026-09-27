@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { PermissionsPage } from "./PermissionsPage.js";
 import {
@@ -151,6 +151,14 @@ beforeEach(() => {
 });
 
 describe("PermissionsPage", () => {
+  beforeEach(() => {
+    vi.spyOn(window, "prompt").mockReturnValue("Test permission change reason");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("blocks users who do not have users.manage_permissions", () => {
     mockUser = {
       ...mockUser,
@@ -197,6 +205,7 @@ describe("PermissionsPage", () => {
         "staff-1",
         "orders.view",
         true,
+        "Test permission change reason",
         "token",
       );
     });
@@ -224,6 +233,7 @@ describe("PermissionsPage", () => {
       expect(mockedRemoveUserPermission).toHaveBeenCalledWith(
         "staff-1",
         "orders.create",
+        "Test permission change reason",
         "token",
       );
     });
@@ -250,6 +260,7 @@ describe("PermissionsPage", () => {
     await waitFor(() => {
       expect(mockedAllowAll).toHaveBeenCalledWith(
         "staff-1",
+        "Test permission change reason",
         "token",
       );
     });
@@ -276,6 +287,7 @@ describe("PermissionsPage", () => {
     await waitFor(() => {
       expect(mockedDisallowAll).toHaveBeenCalledWith(
         "staff-1",
+        "Test permission change reason",
         "token",
       );
     });
