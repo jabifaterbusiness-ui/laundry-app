@@ -7,6 +7,7 @@ import { hashPassword } from "../auth/auth.service.js";
 const USER_SELECT = {
   id: true,
   email: true,
+  username: true,
   fullName: true,
   role: true,
   securityRole: true,
@@ -158,6 +159,7 @@ export async function listUsers(
     where.OR = [
       { fullName: { contains: params.search, mode: "insensitive" } },
       { email: { contains: params.search, mode: "insensitive" } },
+      { username: { contains: params.search, mode: "insensitive" } },
     ];
   }
 
@@ -197,6 +199,7 @@ export async function createUser(
   input: {
     fullName: string;
     email: string;
+    username?: string;
     password: string;
     role: string;
     branchIds: string[];
@@ -216,6 +219,7 @@ export async function createUser(
   }
 
   const email = input.email.trim().toLowerCase();
+  const username = input.username?.trim().toLowerCase() || null;
   const branches = await validateBranches(context.businessId, input.branchIds);
 
   if (branches.some((branch) => !branch.isActive)) {
@@ -228,6 +232,17 @@ export async function createUser(
     throw new AppError("A user with this email already exists", 409);
   }
 
+  if (username) {
+    const existingUsername = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+
+    if (existingUsername) {
+      throw new AppError("A user with this username already exists", 409);
+    }
+  }
+
   const passwordHash = await hashPassword(input.password);
 
   const user = await prisma.$transaction(async (tx) => {
@@ -236,6 +251,7 @@ export async function createUser(
         businessId: context.businessId,
         fullName: input.fullName.trim(),
         email,
+        username,
         passwordHash,
         role: roleTitle,
         securityRole: "STAFF",
@@ -278,6 +294,7 @@ export async function updateUser(
   input: {
     fullName?: string;
     email?: string;
+    username?: string | null;
     password?: string;
     role?: string;
     branchIds?: string[];
@@ -336,6 +353,22 @@ export async function updateUser(
     }
   }
 
+  if (input.username !== undefined && input.username !== null) {
+    const username = input.username.trim().toLowerCase();
+
+    const existingUsername = await prisma.user.findFirst({
+      where: {
+        username,
+        NOT: { id: userId },
+      },
+      select: { id: true },
+    });
+
+    if (existingUsername) {
+      throw new AppError("A user with this username already exists", 409);
+    }
+  }
+
   const passwordHash =
     input.password !== undefined
       ? await hashPassword(input.password)
@@ -380,6 +413,9 @@ export async function updateUser(
             : {}),
           ...(input.email !== undefined
             ? { email: input.email.trim().toLowerCase() }
+            : {}),
+          ...(input.username !== undefined
+            ? { username: input.username?.trim().toLowerCase() || null }
             : {}),
           ...(passwordHash !== undefined ? { passwordHash } : {}),
           ...(input.role !== undefined ? { role: input.role.trim() } : {}),

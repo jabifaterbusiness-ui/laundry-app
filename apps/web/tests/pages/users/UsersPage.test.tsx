@@ -227,6 +227,10 @@ describe("UsersPage", () => {
   });
 
   it("activates and deactivates users", async () => {
+    const promptSpy = vi
+      .spyOn(window, "prompt")
+      .mockReturnValue("routine test deactivation");
+
     renderPage();
 
     await screen.findByText("manager@example.com");
@@ -240,8 +244,10 @@ describe("UsersPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
 
     await waitFor(() => {
+      expect(promptSpy).toHaveBeenCalled();
       expect(deactivateUserMock).toHaveBeenCalledWith(
         "user-1",
+        "routine test deactivation",
         "test-token",
       );
     });
@@ -254,6 +260,8 @@ describe("UsersPage", () => {
         "test-token",
       );
     });
+
+    promptSpy.mockRestore();
   });
 
   it("does not allow the current owner to deactivate themselves", async () => {

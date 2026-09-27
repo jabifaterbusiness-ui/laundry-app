@@ -289,6 +289,7 @@ beforeEach(() => {
     user: {
       id: "platform-admin",
       email: "platform@example.com",
+      username: null,
       fullName: "Platform Owner",
       role: "Platform Administrator",
       securityRole: "PLATFORM_ADMIN",
@@ -831,6 +832,7 @@ describe("PlatformOwnerPage", () => {
       user: {
         id: "owner-1",
         email: "owner@example.com",
+        username: null,
         fullName: "Business Owner",
         role: "Business Owner",
         securityRole: "BUSINESS_OWNER",
@@ -1048,6 +1050,7 @@ describe("PlatformOwnerPage", () => {
       user: {
         id: "owner-1",
         email: "owner@example.com",
+        username: null,
         fullName: "Business Owner",
         role: "Business Owner",
         securityRole: "BUSINESS_OWNER",

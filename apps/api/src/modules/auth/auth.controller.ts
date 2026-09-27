@@ -24,14 +24,17 @@ async function branchMemberships(userId: string) {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().trim().min(1, "Email or username is required"),
   password: z.string().min(1),
 });
 
 export async function login(req: Request, res: Response) {
-  const { email, password } = loginSchema.parse(req.body);
+  const { identifier, password } = loginSchema.parse(req.body);
+  const normalizedIdentifier = identifier.toLowerCase();
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = normalizedIdentifier.includes("@")
+    ? await prisma.user.findUnique({ where: { email: normalizedIdentifier } })
+    : await prisma.user.findUnique({ where: { username: normalizedIdentifier } });
 
   if (!user || !user.isActive || !(await verifyPassword(user.passwordHash, password))) {
     throw new AppError("Invalid email or password", 401);
@@ -58,8 +61,10 @@ export async function login(req: Request, res: Response) {
     user: {
       id: user.id,
       email: user.email,
+      username: user.username,
       fullName: user.fullName,
       role: user.role,
+      securityRole: user.securityRole,
       businessId: user.businessId,
       branches,
       permissions,
@@ -121,8 +126,10 @@ export async function me(req: Request, res: Response) {
   res.status(200).json({
     id: user.id,
     email: user.email,
+    username: user.username,
     fullName: user.fullName,
     role: user.role,
+    securityRole: user.securityRole,
     businessId: user.businessId,
     branches,
     permissions,

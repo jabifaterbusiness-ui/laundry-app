@@ -27,6 +27,7 @@ let mockUser = {
   id: "manager-1",
   fullName: "Jane Manager",
   email: "jane@example.com",
+  username: "jane.manager",
   role: "Branch Manager",
   securityRole: "BRANCH_MANAGER",
   businessId: "business-1",
@@ -62,6 +63,7 @@ const users: import("../../lib/users-api.js").ManagedUser[] = [
   {
     id: "staff-1",
     email: "john@example.com",
+    username: "john.staff",
     fullName: "John Staff",
     role: "Laundry Supervisor",
     isActive: true,
@@ -73,6 +75,7 @@ const users: import("../../lib/users-api.js").ManagedUser[] = [
   {
     id: "staff-2",
     email: "inactive@example.com",
+    username: null,
     fullName: "Inactive Staff",
     role: "Cashier",
     isActive: false,
@@ -108,6 +111,7 @@ beforeEach(() => {
     id: "manager-1",
     fullName: "Jane Manager",
     email: "jane@example.com",
+    username: "jane.manager",
     role: "Branch Manager",
     securityRole: "BRANCH_MANAGER",
     businessId: "business-1",
@@ -139,6 +143,16 @@ describe("UsersPage", () => {
     expect(screen.getByText("Cashier")).toBeInTheDocument();
   });
 
+  it("shows managed usernames when present", async () => {
+    renderUsers();
+
+    const johnRow = await screen.findByRole("row", {
+      name: /John Staff john@example.com john\.staff Laundry Supervisor/i,
+    });
+
+    expect(within(johnRow).getByText("john.staff")).toBeInTheDocument();
+  });
+
   it("includes the custom role when creating a user", async () => {
     renderUsers();
 
@@ -156,6 +170,9 @@ describe("UsersPage", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "new@example.com" },
     });
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "new.staff" },
+    });
     fireEvent.change(screen.getByLabelText("Password"), {
       target: { value: "Password123!" },
     });
@@ -168,6 +185,7 @@ describe("UsersPage", () => {
     await waitFor(() => {
       expect(mockedCreateUser).toHaveBeenCalledWith(
         expect.objectContaining({
+          username: "new.staff",
           role: "Operations Supervisor",
         }),
         "token",
@@ -194,7 +212,7 @@ describe("UsersPage", () => {
     renderUsers();
 
     const johnRow = await screen.findByRole("row", {
-      name: /John Staff john@example.com Laundry Supervisor/,
+      name: /John Staff john@example.com john\.staff Laundry Supervisor/,
     });
 
     expect(
@@ -225,13 +243,16 @@ describe("UsersPage", () => {
     const confirmSpy = vi
       .spyOn(window, "confirm")
       .mockReturnValue(true);
+    const promptSpy = vi
+      .spyOn(window, "prompt")
+      .mockReturnValue("routine test deletion");
 
     renderUsers();
 
     await screen.findByText("John Staff");
 
     const johnRow = screen.getByRole("row", {
-      name: /John Staff john@example.com Laundry Supervisor/i,
+      name: /John Staff john@example.com john\.staff Laundry Supervisor/i,
     });
 
     fireEvent.click(
@@ -240,16 +261,23 @@ describe("UsersPage", () => {
 
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalled();
+      expect(promptSpy).toHaveBeenCalled();
       expect(mockedDeleteUser).toHaveBeenCalledWith(
         "staff-1",
+        "routine test deletion",
         "token",
       );
     });
 
     confirmSpy.mockRestore();
+    promptSpy.mockRestore();
   });
 
   it("supports activation and deactivation controls", async () => {
+    const promptSpy = vi
+      .spyOn(window, "prompt")
+      .mockReturnValue("routine test deactivation");
+
     renderUsers();
 
     await screen.findByText("John Staff");
@@ -259,10 +287,14 @@ describe("UsersPage", () => {
     );
 
     await waitFor(() => {
+      expect(promptSpy).toHaveBeenCalled();
       expect(mockedDeactivateUser).toHaveBeenCalledWith(
         "staff-1",
+        "routine test deactivation",
         "token",
       );
     });
+
+    promptSpy.mockRestore();
   });
 });

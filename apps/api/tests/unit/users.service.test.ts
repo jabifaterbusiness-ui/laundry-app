@@ -158,6 +158,7 @@ describe("users.service - listUsers", () => {
           OR: [
             { fullName: { contains: "staff", mode: "insensitive" } },
             { email: { contains: "staff", mode: "insensitive" } },
+            { username: { contains: "staff", mode: "insensitive" } },
           ],
         }),
       }),

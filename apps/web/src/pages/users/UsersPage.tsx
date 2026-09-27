@@ -18,6 +18,7 @@ import { useAuthStore } from "../../state/auth-store.js";
 const EMPTY_FORM = {
   fullName: "",
   email: "",
+  username: "",
   password: "",
   role: "",
   branchIds: [] as string[],
@@ -69,6 +70,7 @@ export function UsersPage() {
         {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
+          username: form.username.trim() || undefined,
           password: form.password,
           role: form.role.trim(),
           branchIds: form.branchIds,
@@ -95,6 +97,7 @@ export function UsersPage() {
         {
           fullName: form.fullName.trim(),
           email: form.email.trim(),
+          username: form.username.trim() || null,
           password: form.password || undefined,
           role: form.role.trim(),
           branchIds: form.branchIds,
@@ -159,6 +162,7 @@ export function UsersPage() {
     setForm({
       fullName: user.fullName,
       email: user.email,
+      username: user.username ?? "",
       password: "",
       role: user.role,
       branchIds: user.branches.map((branch) => branch.id),
@@ -293,6 +297,7 @@ export function UsersPage() {
             <tr>
               <th>Name</th>
               <th>Email</th>
+              <th>Username</th>
               <th>Role</th>
               <th>Branches</th>
               <th>Status</th>
@@ -317,6 +322,8 @@ export function UsersPage() {
                 </td>
 
                 <td>{user.email}</td>
+
+                <td>{user.username || "—"}</td>
 
                 <td>{user.role}</td>
 
@@ -450,6 +457,28 @@ export function UsersPage() {
                   }))
                 }
               />
+            </div>
+
+            <div>
+              <label htmlFor="user-username">Username</label>
+              <input
+                id="user-username"
+                type="text"
+                value={form.username}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    username: event.target.value,
+                  }))
+                }
+                placeholder="Optional username"
+                minLength={3}
+                maxLength={50}
+                autoComplete="username"
+              />
+              <small>
+                Optional. Use letters, numbers, periods, underscores, or hyphens.
+              </small>
             </div>
 
             <div>

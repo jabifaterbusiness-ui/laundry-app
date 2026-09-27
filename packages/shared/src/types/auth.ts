@@ -17,6 +17,7 @@ export interface BranchMembership {
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  username: string | null;
   fullName: string;
   /** Visible business job title chosen by management; does not grant access. */
   role: string;

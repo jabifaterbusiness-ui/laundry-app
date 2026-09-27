@@ -15,6 +15,7 @@ export interface UserBranch {
 export interface ManagedUser {
   id: string;
   email: string;
+  username: string | null;
   fullName: string;
   role: UserRole;
   isActive: boolean;
@@ -34,6 +35,7 @@ export interface ListUsersParams {
 export interface CreateUserInput {
   fullName: string;
   email: string;
+  username?: string;
   password: string;
   role: UserRole;
   branchIds: string[];
@@ -42,6 +44,7 @@ export interface CreateUserInput {
 export interface UpdateUserInput {
   fullName?: string;
   email?: string;
+  username?: string | null;
   password?: string;
   role?: UserRole;
   branchIds?: string[];

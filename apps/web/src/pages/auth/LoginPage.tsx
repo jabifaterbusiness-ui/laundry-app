@@ -5,7 +5,7 @@ import { apiFetch, ApiError } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 export function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,7 +25,7 @@ export function LoginPage() {
         {
           method: "POST",
           body: JSON.stringify({
-            email: email.trim().toLowerCase(),
+            identifier: identifier.trim().toLowerCase(),
             password,
           }),
         },
@@ -79,15 +79,15 @@ export function LoginPage() {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-field">
-            <label htmlFor="login-email">Email address</label>
+            <label htmlFor="login-identifier">Email or username</label>
             <input
-              id="login-email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
+              id="login-identifier"
+              name="identifier"
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              placeholder="you@example.com or username"
+              autoComplete="username"
               required
             />
           </div>

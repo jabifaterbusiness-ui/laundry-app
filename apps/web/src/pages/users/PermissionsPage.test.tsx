@@ -128,6 +128,7 @@ beforeEach(() => {
     {
       id: "staff-1",
       email: "john@example.com",
+      username: null,
       fullName: "John Staff",
       role: "Laundry Supervisor",
       isActive: true,
@@ -298,6 +299,7 @@ describe("PermissionsPage", () => {
       {
         id: "owner-1",
         email: "owner@example.com",
+        username: null,
         fullName: "Jane Owner",
         role: "Business Owner",
         isActive: true,

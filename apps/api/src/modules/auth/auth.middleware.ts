@@ -7,6 +7,7 @@ import type { Role } from "@prisma/client";
 interface AccessTokenPayload {
   sub: string;
   email: string;
+  username?: string | null;
   securityRole: Role;
   businessId: string | null;
 }

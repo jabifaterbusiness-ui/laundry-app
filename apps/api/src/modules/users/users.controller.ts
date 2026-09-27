@@ -60,11 +60,27 @@ export async function create(req: Request, res: Response) {
   const businessId = businessContext(req);
   const input = createUserSchema.parse(req.body);
 
+  const createInput =
+    input.username === undefined
+      ? {
+          fullName: input.fullName,
+          email: input.email,
+          password: input.password,
+          role: input.role,
+          branchIds: input.branchIds,
+        }
+      : {
+          fullName: input.fullName,
+          email: input.email,
+          username: input.username,
+          password: input.password,
+          role: input.role,
+          branchIds: input.branchIds,
+        };
+
   res.status(201).json(
     await createUser(
-      {
-        ...input,
-      },
+      createInput,
       {
         businessId,
         ...actor(req),

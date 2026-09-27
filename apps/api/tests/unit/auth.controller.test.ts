@@ -60,6 +60,7 @@ const getEffectivePermissionCodesMock = vi.mocked(getEffectivePermissionCodes);
 const baseUser = {
   id: "user-1",
   email: "owner@example.com",
+  username: "owner",
   passwordHash: "hash",
   fullName: "Owner",
   role: "BUSINESS_OWNER",
@@ -180,12 +181,39 @@ describe("auth controller - password reset", () => {
   });
 });
 
+describe("auth controller - username login", () => {
+  it("logs in with a username and returns the username in the authenticated user", async () => {
+    findUniqueUser.mockResolvedValue({
+      ...baseUser,
+      username: "owner",
+    } as never);
+    findManyUserBranch.mockResolvedValue([]);
+
+    const req = {
+      body: { identifier: "OWNER", password: "pw" },
+      correlationId: "corr-username-1",
+    } as unknown as Request;
+    const res = makeRes();
+
+    await login(req, res);
+
+    expect(findUniqueUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { username: "owner" },
+      }),
+    );
+
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(payload.user.username).toBe("owner");
+  });
+});
+
 describe("auth controller - multi-branch membership", () => {
   it("login returns all of a user's branch memberships, not just one", async () => {
     findUniqueUser.mockResolvedValue(baseUser as never);
     findManyUserBranch.mockResolvedValue(twoBranchMemberships as never);
 
-    const req = { body: { email: "owner@example.com", password: "pw" }, correlationId: "corr-1" } as unknown as Request;
+    const req = { body: { identifier: "owner@example.com", password: "pw" }, correlationId: "corr-1" } as unknown as Request;
     const res = makeRes();
 
     await login(req, res);
@@ -210,7 +238,7 @@ describe("auth controller - multi-branch membership", () => {
     findUniqueUser.mockResolvedValue(baseUser as never);
     findManyUserBranch.mockResolvedValue([]);
 
-    const req = { body: { email: "owner@example.com", password: "pw" }, correlationId: "corr-1" } as unknown as Request;
+    const req = { body: { identifier: "owner@example.com", password: "pw" }, correlationId: "corr-1" } as unknown as Request;
     await login(req, makeRes());
 
     expect(recordAuditEvent).toHaveBeenCalledWith(
@@ -232,6 +260,7 @@ describe("auth controller - multi-branch membership", () => {
     await me(req, res);
 
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(payload.username).toBe("owner");
     expect(payload.branches).toHaveLength(2);
     expect(payload.permissions).toEqual([
       "orders.view",

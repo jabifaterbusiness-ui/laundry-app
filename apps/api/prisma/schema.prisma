@@ -198,6 +198,7 @@ model Branch {
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
+  username     String?   @unique
   passwordHash String
   fullName     String
   // Visible business job title chosen by management.

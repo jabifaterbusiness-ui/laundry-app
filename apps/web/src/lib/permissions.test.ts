@@ -8,6 +8,7 @@ function createUser(
   return {
     id: "user-1",
     email: "user@example.com",
+    username: null,
     fullName: "Test User",
     role: "Staff",
     securityRole: "STAFF",
