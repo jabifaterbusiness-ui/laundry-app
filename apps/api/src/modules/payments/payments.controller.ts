@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import {
   createPaymentSchema,
@@ -135,11 +136,15 @@ export async function voidPaymentController(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = paymentIdParamSchema.parse(req.params);
+  const reason = requireReason(
+    (req.body as { reason?: unknown }).reason,
+  );
 
   const payment = await voidPayment(
     id,
     businessId,
     branchId,
+    reason,
   );
 
   await recordAuditEvent({
@@ -155,6 +160,7 @@ export async function voidPaymentController(req: Request, res: Response) {
       amount: payment.amount,
       method: payment.method,
       status: payment.status,
+      reason,
     },
   });
 

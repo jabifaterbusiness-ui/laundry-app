@@ -22,6 +22,7 @@ type CreateExpenseArgs = ExpenseScope & {
 type ExpenseActionArgs = ExpenseScope & {
   id: string;
   actorUserId: string;
+  reason?: string;
 };
 
 async function assertActiveBranch(scope: ExpenseScope) {
@@ -338,7 +339,12 @@ export async function voidExpense({
   branchId,
   id,
   actorUserId,
+  reason,
 }: ExpenseActionArgs) {
+  if (!reason?.trim()) {
+    throw new AppError("A reason is required for this action", 422);
+  }
+
   const expense = await prisma.expense.findFirst({
     where: {
       id,

@@ -42,6 +42,14 @@ async function replayOne(
     return "FAILED";
   }
 
+  if (!entry.reason?.trim()) {
+    await updateOfflineSubscriptionPayment(entry.id, {
+      status: "FAILED",
+      lastError: "A reason is required for this offline subscription payment.",
+    });
+    return "FAILED";
+  }
+
   await updateOfflineSubscriptionPayment(entry.id, {
     status: "SYNCING",
     attemptCount: entry.attemptCount + 1,
@@ -76,6 +84,7 @@ async function replayOne(
         intentId: intent.id,
         providerKey: entry.providerKey,
         paymentMethodKey: entry.paymentMethodKey,
+        reason: entry.reason.trim(),
       },
     );
 

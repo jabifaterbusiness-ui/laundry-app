@@ -22,7 +22,9 @@ export function DataManagementPage() {
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
   const [customerMapping, setCustomerMapping] = useState<MigrationAnalysisResponse["summary"]["customerMapping"]>({});
   const [backupPassword, setBackupPassword] = useState("");
+  const [backupReason, setBackupReason] = useState("");
   const [restorePassword, setRestorePassword] = useState("");
+  const [restoreReason, setRestoreReason] = useState("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,10 +60,19 @@ export function DataManagementPage() {
   }
 
   async function handleExport() {
-    if (!backupPassword) return;
+    const normalizedReason = backupReason.trim();
+    if (!backupPassword || !normalizedReason) {
+      setMessage("A reason is required to export a backup.");
+      return;
+    }
+
     setBusy(true); setMessage(null);
     try {
-      const blob = await exportBackup(backupPassword, { accessToken });
+      const blob = await exportBackup(
+        backupPassword,
+        normalizedReason,
+        { accessToken },
+      );
       downloadBlob(blob, `laundry-backup-${new Date().toISOString().slice(0, 10)}.laundry-backup`);
       setMessage("Encrypted backup downloaded successfully.");
     } catch (error) {
@@ -70,10 +81,20 @@ export function DataManagementPage() {
   }
 
   async function handleRestore() {
-    if (!restoreFile || !restorePassword) return;
+    const normalizedReason = restoreReason.trim();
+    if (!restoreFile || !restorePassword || !normalizedReason) {
+      setMessage("A reason is required to restore a backup.");
+      return;
+    }
+
     setBusy(true); setMessage(null);
     try {
-      const result = await restoreBackup(restoreFile, restorePassword, { accessToken });
+      const result = await restoreBackup(
+        restoreFile,
+        restorePassword,
+        normalizedReason,
+        { accessToken },
+      );
       setMessage(`Restore completed: ${result.createdCustomers} customers created and ${result.updatedCustomers} customers updated. Existing staff credentials were preserved.`);
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Restore failed.");
@@ -140,7 +161,8 @@ export function DataManagementPage() {
             <h2>Export encrypted backup</h2>
             <p>The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and keep it separately from the backup file.</p>
             <input type="password" placeholder="Backup password" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} />
-            <button type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
+            <input type="text" placeholder="Reason for exporting backup" value={backupReason} onChange={(e) => setBackupReason(e.target.value)} />
+            <button type="button" disabled={busy || backupPassword.length < 12 || !backupReason.trim()} onClick={handleExport}>Download backup</button>
           </section>
 
           <section>
@@ -148,7 +170,8 @@ export function DataManagementPage() {
             <p>Restore is merge-only in this first version: it never deletes current data and never overwrites staff credentials.</p>
             <input type="file" accept=".laundry-backup" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} />
             <input type="password" placeholder="Backup password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
-            <button type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
+            <input type="text" placeholder="Reason for restoring backup" value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
+            <button type="button" disabled={busy || !restoreFile || restorePassword.length < 12 || !restoreReason.trim()} onClick={handleRestore}>Restore backup</button>
           </section>
         </>
       )}

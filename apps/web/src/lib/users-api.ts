@@ -133,21 +133,25 @@ export function activateUser(
 
 export function deactivateUser(
   userId: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<ManagedUser>(`/users/${userId}/deactivate`, {
     method: "PATCH",
     accessToken,
+    body: JSON.stringify({ reason }),
   });
 }
 
 export function deleteUser(
   userId: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<ManagedUser>(`/users/${userId}`, {
     method: "DELETE",
     accessToken,
+    body: JSON.stringify({ reason }),
   });
 }
 

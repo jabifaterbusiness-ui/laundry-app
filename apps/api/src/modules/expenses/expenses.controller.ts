@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { ExpenseCategory, ExpenseStatus } from "@prisma/client";
 
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 
 import {
   approveExpense,
@@ -162,6 +163,9 @@ export async function voidExpenseController(
     branchId: branchId(req),
     id: req.params.id!,
     actorUserId: req.user!.id,
+    reason: requireReason(
+      (req.body as { reason?: unknown }).reason,
+    ),
   });
 
   res.json(result);

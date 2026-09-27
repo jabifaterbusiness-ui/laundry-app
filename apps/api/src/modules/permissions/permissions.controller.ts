@@ -20,6 +20,7 @@ import {
   roleParamSchema,
   userPermissionParamsSchema,
   permissionValueSchema,
+  permissionReasonSchema,
 } from "./permissions.validation.js";
 
 function requireBusinessId(req: Request): string {
@@ -32,6 +33,8 @@ function requireBusinessId(req: Request): string {
 
   return req.user.businessId;
 }
+
+import { requireReason } from "../../lib/reason.js";
 
 export async function list(req: Request, res: Response) {
   requireBusinessId(req);
@@ -62,7 +65,8 @@ export async function updateRolePermission(
   const businessId = requireBusinessId(req);
   const { role, permissionCode } =
     rolePermissionParamsSchema.parse(req.params);
-  const { allowed } = permissionValueSchema.parse(req.body);
+  const { allowed, reason } = permissionValueSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
 
   if (role === "PLATFORM_ADMIN") {
     throw new AppError(
@@ -111,6 +115,7 @@ export async function updateRolePermission(
       after: {
         allowed,
       },
+      reason: normalizedReason,
     },
   });
 
@@ -124,6 +129,8 @@ export async function removeRolePermission(
   const businessId = requireBusinessId(req);
   const { role, permissionCode } =
     rolePermissionParamsSchema.parse(req.params);
+  const { reason } = permissionReasonSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
 
   if (role === "PLATFORM_ADMIN") {
     throw new AppError(
@@ -160,6 +167,7 @@ export async function removeRolePermission(
         allowed: previous?.allowed ?? false,
       },
       after: null,
+      reason: normalizedReason,
     },
   });
 
@@ -179,6 +187,8 @@ export async function allowAllUserPermissionsController(
   req: Request,
   res: Response,
 ) {
+  const { reason } = permissionReasonSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
   const businessId = requireBusinessId(req);
   const { userId } = userIdParamSchema.parse(req.params);
 
@@ -222,6 +232,7 @@ export async function allowAllUserPermissionsController(
           .map((permission) => permission.code)
           .sort(),
       },
+      reason: normalizedReason,
     },
   });
 
@@ -232,6 +243,8 @@ export async function disallowAllUserPermissionsController(
   req: Request,
   res: Response,
 ) {
+  const { reason } = permissionReasonSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
   const businessId = requireBusinessId(req);
   const { userId } = userIdParamSchema.parse(req.params);
 
@@ -262,6 +275,7 @@ export async function disallowAllUserPermissionsController(
       after: {
         allowedPermissionCodes: [],
       },
+      reason: normalizedReason,
     },
   });
 
@@ -275,7 +289,8 @@ export async function updateUserPermission(
   const businessId = requireBusinessId(req);
   const { userId, permissionCode } =
     userPermissionParamsSchema.parse(req.params);
-  const { allowed } = permissionValueSchema.parse(req.body);
+  const { allowed, reason } = permissionValueSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
 
   if (allowed) {
     await requirePermissionForGrant(
@@ -317,6 +332,7 @@ export async function updateUserPermission(
       after: {
         allowed,
       },
+      reason: normalizedReason,
     },
   });
 
@@ -330,6 +346,8 @@ export async function removeUserPermission(
   const businessId = requireBusinessId(req);
   const { userId, permissionCode } =
     userPermissionParamsSchema.parse(req.params);
+  const { reason } = permissionReasonSchema.parse(req.body);
+  const normalizedReason = requireReason(reason);
 
   const previousPermissions = await getUserPermissions(
     businessId,
@@ -359,6 +377,7 @@ export async function removeUserPermission(
         allowed: previous?.allowed ?? false,
       },
       after: null,
+      reason: normalizedReason,
     },
   });
 

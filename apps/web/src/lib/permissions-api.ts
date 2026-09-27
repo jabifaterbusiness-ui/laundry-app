@@ -62,6 +62,7 @@ export function updateRolePermission(
   role: "BRANCH_MANAGER" | "STAFF",
   permissionCode: string,
   allowed: boolean,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<RolePermission>(
@@ -69,7 +70,7 @@ export function updateRolePermission(
     {
       method: "PUT",
       accessToken,
-      body: JSON.stringify({ allowed }),
+      body: JSON.stringify({ allowed, reason }),
     },
   );
 }
@@ -78,6 +79,7 @@ export function updateUserPermission(
   userId: string,
   permissionCode: string,
   allowed: boolean,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<RolePermission>(
@@ -85,7 +87,7 @@ export function updateUserPermission(
     {
       method: "PUT",
       accessToken,
-      body: JSON.stringify({ allowed }),
+      body: JSON.stringify({ allowed, reason }),
     },
   );
 }
@@ -93,6 +95,7 @@ export function updateUserPermission(
 export function removeRolePermission(
   role: "BRANCH_MANAGER" | "STAFF",
   permissionCode: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<void>(
@@ -100,6 +103,7 @@ export function removeRolePermission(
     {
       method: "DELETE",
       accessToken,
+      body: JSON.stringify({ reason }),
     },
   );
 }
@@ -107,6 +111,7 @@ export function removeRolePermission(
 export function removeUserPermission(
   userId: string,
   permissionCode: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<void>(
@@ -114,6 +119,7 @@ export function removeUserPermission(
     {
       method: "DELETE",
       accessToken,
+      body: JSON.stringify({ reason }),
     },
   );
 }
@@ -121,6 +127,7 @@ export function removeUserPermission(
 
 export function allowAllUserPermissions(
   userId: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<{ allowed: boolean; count: number }>(
@@ -128,12 +135,14 @@ export function allowAllUserPermissions(
     {
       method: "PUT",
       accessToken,
+      body: JSON.stringify({ reason }),
     },
   );
 }
 
 export function disallowAllUserPermissions(
   userId: string,
+  reason: string,
   accessToken: string,
 ) {
   return apiFetch<{ allowed: boolean; count: number }>(
@@ -141,6 +150,7 @@ export function disallowAllUserPermissions(
     {
       method: "PUT",
       accessToken,
+      body: JSON.stringify({ reason }),
     },
   );
 }

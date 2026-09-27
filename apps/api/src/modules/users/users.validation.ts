@@ -24,6 +24,10 @@ export const userBranchParamsSchema = z.object({
   branchId: branchIdSchema,
 });
 
+export const userActionReasonSchema = z.object({
+  reason: z.string().trim().min(1, "Reason is required").max(1000),
+});
+
 const fullNameSchema = z.string().trim().min(1, "Full name is required").max(120);
 const emailSchema = z.string().trim().email("Invalid email address").max(254);
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(128);

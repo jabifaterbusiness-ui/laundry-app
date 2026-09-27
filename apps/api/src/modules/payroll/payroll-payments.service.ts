@@ -1,3 +1,4 @@
+
 import type {
   PayrollPaymentStatus,
   Prisma,
@@ -5,6 +6,7 @@ import type {
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { requireReason } from "../../lib/reason.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 export interface CreatePayrollPaymentData {
@@ -241,7 +243,10 @@ export async function voidPayrollPayment(
   businessId: string,
   branchId: string,
   actorUserId: string,
+  rawReason?: unknown,
 ) {
+  const reason = requireReason(rawReason);
+
   const result = await prisma.$transaction(async (tx) => {
     const payment = await tx.payrollPayment.findFirst({
       where: {
@@ -303,6 +308,7 @@ export async function voidPayrollPayment(
       employeeId: result.payment.employeeId,
       amount: result.payment.amount,
       payrollPeriodStatus: result.payrollPeriodStatus,
+      reason,
     },
   });
 

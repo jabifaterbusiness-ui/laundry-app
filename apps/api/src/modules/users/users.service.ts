@@ -470,6 +470,7 @@ export async function deleteUser(
     businessId: string;
     actorUserId: string;
     correlationId?: string | null;
+    reason?: string;
   },
 ) {
   const current = await getUserRecord(userId, input.businessId);
@@ -480,6 +481,10 @@ export async function deleteUser(
 
   if (current.id === input.actorUserId) {
     throw new AppError("You cannot delete your own account", 400);
+  }
+
+  if (!input.reason?.trim()) {
+    throw new AppError("A reason is required for this action", 422);
   }
 
   await assertNotLastActiveOwner(
@@ -526,6 +531,7 @@ export async function deleteUser(
     actorUserId: input.actorUserId,
     correlationId: input.correlationId ?? null,
     metadata: {
+      reason: input.reason?.trim(),
       before: {
         securityRole: current.securityRole,
         isActive: current.isActive,
@@ -549,6 +555,7 @@ export async function setUserActiveStatus(
     businessId: string;
     actorUserId: string;
     correlationId?: string | null;
+    reason?: string;
   },
 ) {
   const current = await getUserRecord(userId, context.businessId);
@@ -566,6 +573,10 @@ export async function setUserActiveStatus(
 
   if (!isActive) {
     await assertCannotDeactivateSelf(userId, context.actorUserId);
+
+    if (!context.reason?.trim()) {
+      throw new AppError("A reason is required for this action", 422);
+    }
   }
 
   await prisma.$transaction(
@@ -621,6 +632,9 @@ export async function setUserActiveStatus(
     actorUserId: context.actorUserId,
     correlationId: context.correlationId ?? null,
     metadata: {
+      ...(context.reason?.trim()
+        ? { reason: context.reason.trim() }
+        : {}),
       before: { isActive: current.isActive },
       after: { isActive },
     },

@@ -41,6 +41,7 @@ export async function execute(req: Request, res: Response) {
     input.code,
     input.input,
     input.confirmed,
+    input.reason,
   );
 
   res.status(200).json({

@@ -115,8 +115,8 @@ export function UsersPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (userId: string) =>
-      deleteUser(userId, accessToken ?? ""),
+    mutationFn: (input: { id: string; reason: string }) =>
+      deleteUser(input.id, input.reason, accessToken ?? ""),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -130,10 +130,18 @@ export function UsersPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (input: { id: string; isActive: boolean }) =>
+    mutationFn: (input: {
+      id: string;
+      isActive: boolean;
+      reason?: string;
+    }) =>
       input.isActive
         ? activateUser(input.id, accessToken ?? "")
-        : deactivateUser(input.id, accessToken ?? ""),
+        : deactivateUser(
+            input.id,
+            input.reason ?? "",
+            accessToken ?? "",
+          ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -329,12 +337,37 @@ export function UsersPage() {
                           user.id === currentUser?.id ||
                           statusMutation.isPending
                         }
-                        onClick={() =>
+                        onClick={() => {
+                          if (!user.isActive) {
+                            statusMutation.mutate({
+                              id: user.id,
+                              isActive: true,
+                            });
+                            return;
+                          }
+
+                          const reason = window.prompt(
+                            `Reason for deactivating ${user.fullName}:`,
+                          );
+                          if (reason === null) {
+                            return;
+                          }
+
+                          const normalizedReason = reason.trim();
+                          if (!normalizedReason) {
+                            setFormError(
+                              "A reason is required for this sensitive action.",
+                            );
+                            return;
+                          }
+
+                          setFormError(null);
                           statusMutation.mutate({
                             id: user.id,
-                            isActive: !user.isActive,
-                          })
-                        }
+                            isActive: false,
+                            reason: normalizedReason,
+                          });
+                        }}
                       >
                         {user.isActive ? "Deactivate" : "Activate"}
                       </button>
@@ -348,10 +381,30 @@ export function UsersPage() {
                           const confirmed = window.confirm(
                             `Delete ${user.fullName}? This will deactivate the account and preserve its history.`,
                           );
-                          if (confirmed) {
-                            setFormError(null);
-                            deleteMutation.mutate(user.id);
+                          if (!confirmed) {
+                            return;
                           }
+
+                          const reason = window.prompt(
+                            `Reason for deleting ${user.fullName}:`,
+                          );
+                          if (reason === null) {
+                            return;
+                          }
+
+                          const normalizedReason = reason.trim();
+                          if (!normalizedReason) {
+                            setFormError(
+                              "A reason is required for this sensitive action.",
+                            );
+                            return;
+                          }
+
+                          setFormError(null);
+                          deleteMutation.mutate({
+                            id: user.id,
+                            reason: normalizedReason,
+                          });
                         }}
                       >
                         Delete

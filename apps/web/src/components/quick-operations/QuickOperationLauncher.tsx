@@ -309,9 +309,6 @@ export function QuickOperationLauncher({
         return {
           inventoryItemId: recordId.trim(),
           quantity: parsedQuantity,
-          ...(reason.trim()
-            ? { reason: reason.trim() }
-            : {}),
           ...(reference.trim()
             ? { reference: reference.trim() }
             : {}),
@@ -383,6 +380,14 @@ export function QuickOperationLauncher({
     }
 
     if (
+      activeOperation.sensitive &&
+      !reason.trim()
+    ) {
+      setError("A reason is required for this sensitive operation.");
+      return;
+    }
+
+    if (
       activeOperation.requiresConfirmation &&
       !confirmed
     ) {
@@ -395,7 +400,7 @@ export function QuickOperationLauncher({
     if (
       activeOperation.code === "SOS" &&
       pendingOrderMutations > 0
-    ) {
+    ){
       setError(
         "SOS is temporarily blocked while an order operation is still in progress. Please wait and try again.",
       );
@@ -441,6 +446,7 @@ export function QuickOperationLauncher({
                 pendingOfflineOperations.length,
             },
             confirmed,
+            reason: reason.trim(),
           },
           { accessToken },
           activeBranchId,
@@ -497,6 +503,9 @@ export function QuickOperationLauncher({
           code: activeOperation.code,
           input,
           confirmed,
+          ...(reason.trim()
+            ? { reason: reason.trim() }
+            : {}),
         },
         { accessToken },
         activeBranchId,
@@ -782,19 +791,21 @@ export function QuickOperationLauncher({
                   />
 
                   <Field
-                    label="Reason"
-                    value={reason}
-                    onChange={setReason}
-                    disabled={isSubmitting}
-                  />
-
-                  <Field
                     label="Reference"
                     value={reference}
                     onChange={setReference}
                     disabled={isSubmitting}
                   />
                 </>
+              ) : null}
+
+              {activeOperation.sensitive ? (
+                <Field
+                  label="Reason"
+                  value={reason}
+                  onChange={setReason}
+                  disabled={isSubmitting}
+                />
               ) : null}
 
               {activeOperation.requiresConfirmation ? (

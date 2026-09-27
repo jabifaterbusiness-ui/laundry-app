@@ -652,7 +652,10 @@ describe("Payment void route", () => {
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Payment was posted in error and needs to be voided",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(PAYMENT_A);
@@ -692,7 +695,10 @@ describe("Payment void route", () => {
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${MANAGER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Payment was posted in error and needs to be voided",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(PAYMENT_A);
@@ -717,7 +723,10 @@ describe("Payment void route", () => {
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Payment was posted in error and needs to be voided",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(PAYMENT_A);
@@ -733,7 +742,10 @@ describe("Payment void route", () => {
     const res = await request(app)
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_B}`)
-      .set("X-Branch-Id", BRANCH_B);
+      .set("X-Branch-Id", BRANCH_B)
+      .send({
+        reason: "Payment was posted in error and needs to be voided",
+      });
 
     expect(res.status).toBe(404);
 

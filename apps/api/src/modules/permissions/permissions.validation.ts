@@ -26,6 +26,11 @@ export const userPermissionParamsSchema = z.object({
   permissionCode: z.string().trim().min(1).max(150),
 });
 
+export const permissionReasonSchema = z.object({
+  reason: z.string().trim().min(1, "Reason is required").max(1000),
+});
+
 export const permissionValueSchema = z.object({
   allowed: z.boolean(),
+  reason: z.string().trim().min(1, "Reason is required").max(1000),
 });

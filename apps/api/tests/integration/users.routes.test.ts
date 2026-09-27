@@ -437,7 +437,8 @@ describe("Users routes - deletion", () => {
   it("rejects STAFF from deleting users by default", async () => {
     const response = await request(app)
       .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ reason: "Removing an inactive or unauthorized account" });
 
     expect(response.status).toBe(403);
     expect(userUpdateMany).not.toHaveBeenCalled();
@@ -465,7 +466,10 @@ describe("Users routes - deletion", () => {
 
     const response = await request(app)
       .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({
+        reason: "Removing a user account as authorized by management",
+      });
 
     expect(response.status).not.toBe(403);
     expect(userUpdateMany).toHaveBeenCalledWith(
@@ -500,7 +504,8 @@ describe("Users routes - deletion", () => {
 
     const response = await request(app)
       .delete("/api/v1/users/88888888-8888-4888-8888-888888888888")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ reason: "Removing an obsolete user account" });
 
     expect(response.status).not.toBe(403);
     expect(userUpdateMany).toHaveBeenCalled();
@@ -523,7 +528,8 @@ describe("Users routes - status management", () => {
 
     const response = await request(app)
       .patch("/api/v1/users/11111111-1111-4111-8111-111111111111/deactivate")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ reason: "Testing protected self-deactivation rule" });
 
     expect(response.status).toBe(400);
     expect(userUpdateMany).not.toHaveBeenCalled();
@@ -545,7 +551,8 @@ describe("Users routes - status management", () => {
 
     const response = await request(app)
       .patch("/api/v1/users/66666666-6666-4666-8666-666666666666/deactivate")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ reason: "Testing last active owner protection" });
 
     expect(response.status).toBe(409);
     expect(userUpdateMany).not.toHaveBeenCalled();

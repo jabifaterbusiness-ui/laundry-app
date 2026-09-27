@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 
 import {
   createRepayment,
@@ -140,6 +141,9 @@ export async function voidRepaymentController(
     branchId: branchId(req),
     id: req.params.id!,
     actorUserId: req.user!.id,
+    reason: requireReason(
+      (req.body as { reason?: unknown }).reason,
+    ),
   });
 
   res.json(result);

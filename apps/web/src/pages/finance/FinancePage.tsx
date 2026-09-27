@@ -1245,9 +1245,27 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                             return;
                           }
 
+                          const reason = window.prompt(
+                            "Reason for voiding this expense:",
+                          );
+                          if (reason === null) {
+                            return;
+                          }
+
+                          const normalizedReason = reason.trim();
+                          if (!normalizedReason) {
+                            setActionError(
+                              "A reason is required to void an expense.",
+                            );
+                            return;
+                          }
+
+                          setActionError("");
+
                           void expenseAction(() =>
                             voidExpense(
                               expense.id,
+                              normalizedReason,
                               { accessToken },
                               activeBranchId,
                             ),

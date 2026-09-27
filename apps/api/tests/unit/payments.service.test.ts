@@ -690,6 +690,7 @@ describe("payments.service", () => {
         payment.id,
         "biz-A",
         "branch-A",
+        "Payment was posted in error and needs to be voided",
       );
 
       expect(result).toBe(voidedPayment);
@@ -728,6 +729,7 @@ describe("payments.service", () => {
           "payment-void-2",
           "biz-A",
           "branch-A",
+          "Payment was posted in error and needs to be voided",
         ),
       ).rejects.toMatchObject({
         message: "Payment is already void",
@@ -745,6 +747,7 @@ describe("payments.service", () => {
           "payment-from-another-scope",
           "biz-B",
           "branch-B",
+          "Payment was posted in error and needs to be voided",
         ),
       ).rejects.toMatchObject({
         message: "Payment not found",

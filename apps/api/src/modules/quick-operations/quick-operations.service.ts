@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { requireReason } from "../../lib/reason.js";
 import { hasPermission } from "../permissions/permissions.service.js";
 import {
   getQuickOperationDefinition,
@@ -56,6 +57,7 @@ export async function executeQuickOperation(
   code: string,
   rawInput: unknown,
   confirmed = false,
+  rawReason?: unknown,
 ) {
   const definition = getQuickOperationDefinition(code);
 
@@ -67,6 +69,7 @@ export async function executeQuickOperation(
     code,
     input: rawInput,
     confirmed,
+    reason: rawReason,
   });
 
   const allowed = await hasPermission(
@@ -89,6 +92,10 @@ export async function executeQuickOperation(
       422,
     );
   }
+
+  const reason = definition.sensitive
+    ? requireReason(execution.reason)
+    : undefined;
 
   const input = execution.input;
 
@@ -138,6 +145,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           orderNumber: result.orderNumber,
           beforeStatus: currentOrder.status,
           afterStatus: result.status,
@@ -171,6 +179,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           orderNumber: result.orderNumber,
           customerId: result.customerId,
         },
@@ -201,6 +210,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           targetCustomerId: result.targetCustomer.id,
           transferredOrderCount: result.transferredOrderCount,
           transferredOrderIds: result.transferredOrders.map((order) => order.id),
@@ -235,6 +245,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           targetCustomerId: result.targetCustomer.id,
           mergedOrderCount: result.mergedOrderCount,
           mergedOrderIds: result.mergedOrders.map((order) => order.id),
@@ -258,6 +269,7 @@ export async function executeQuickOperation(
         parsed.paymentId,
         context.businessId,
         context.branchId,
+        reason,
       );
 
       await recordAuditEvent({
@@ -271,6 +283,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           invoiceId: result.invoiceId,
           amount: result.amount,
           method: result.method,
@@ -305,6 +318,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           invoiceId: parsed.invoiceId,
           channel: parsed.channel,
         },
@@ -340,6 +354,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           orderNumber: result.orderNumber,
           customerId: result.customerId,
         },
@@ -374,6 +389,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           customerId: result.id,
         },
       });
@@ -421,6 +437,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           safeStop: true,
           offlineQueueReconciled: false,
           pendingOfflineOperationCount,
@@ -460,6 +477,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           invoiceId: result.invoiceId,
           invoiceNumber: result.invoiceNumber,
           issueCount: result.issueCount,
@@ -504,6 +522,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           invoiceNumber: receipt.invoiceNumber,
           orderNumber: receipt.orderNumber,
           receiptType: receipt.receiptType,
@@ -544,6 +563,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           originalPaymentId: result.refundOfPaymentId,
           invoiceId: result.invoiceId,
           amount: result.amount,
@@ -575,8 +595,8 @@ export async function executeQuickOperation(
           quantity: parsed.quantity,
           type,
           createdById: context.userId,
-          ...(parsed.reason !== undefined && {
-            reason: parsed.reason,
+          ...(reason !== undefined && {
+            reason,
           }),
           ...(parsed.reference !== undefined && {
             reference: parsed.reference,
@@ -595,6 +615,7 @@ export async function executeQuickOperation(
         metadata: {
           operationCode: definition.code,
           operationName: definition.name,
+          ...(reason !== undefined ? { reason } : {}),
           inventoryItemId: result.inventoryItem.id,
           type: result.movement.type,
           quantity: result.movement.quantity,

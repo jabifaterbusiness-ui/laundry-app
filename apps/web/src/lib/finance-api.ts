@@ -247,6 +247,7 @@ export async function recognizeExpense(
 
 export async function voidExpense(
   expenseId: string,
+  reason: string,
   auth: AuthOptions,
   branchId: string | null,
 ): Promise<Expense> {
@@ -254,6 +255,7 @@ export async function voidExpense(
     method: "POST",
     accessToken: auth.accessToken,
     branchId,
+    body: JSON.stringify({ reason }),
   });
 }
 

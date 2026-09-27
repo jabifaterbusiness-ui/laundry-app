@@ -581,6 +581,7 @@ describe("users.service - deleteUser", () => {
         businessId: "biz-A",
         actorUserId: "owner-A",
         correlationId: "corr-1",
+        reason: "Removing a user account as authorized by management",
       },
     );
 
@@ -621,6 +622,7 @@ describe("users.service - deleteUser", () => {
           businessId: "biz-A",
           actorUserId: BASE_USER.id,
           correlationId: "corr-1",
+          reason: "Testing protected self-deletion rule",
         },
       ),
     ).rejects.toMatchObject({ statusCode: 400 });
@@ -647,6 +649,7 @@ describe("users.service - setUserActiveStatus", () => {
       setUserActiveStatus(BASE_USER.id, false, {
         ...CONTEXT,
         actorUserId: BASE_USER.id,
+        reason: "Testing protected self-deactivation rule",
       }),
     ).rejects.toMatchObject({ statusCode: 400 });
 
@@ -663,7 +666,10 @@ describe("users.service - setUserActiveStatus", () => {
     userCount.mockResolvedValue(1);
 
     await expect(
-      setUserActiveStatus(BASE_USER.id, false, CONTEXT),
+      setUserActiveStatus(BASE_USER.id, false, {
+        ...CONTEXT,
+        reason: "Testing last active owner protection",
+      }),
     ).rejects.toMatchObject({ statusCode: 409 });
 
     expect(userUpdateMany).not.toHaveBeenCalled();
@@ -684,7 +690,10 @@ describe("users.service - setUserActiveStatus", () => {
       } as never);
     userUpdateMany.mockResolvedValue({ count: 1 } as never);
 
-    await setUserActiveStatus(BASE_USER.id, false, CONTEXT);
+    await setUserActiveStatus(BASE_USER.id, false, {
+      ...CONTEXT,
+      reason: "User deactivated after management review",
+    });
 
     expect(userUpdateMany).toHaveBeenCalledWith({
       where: {

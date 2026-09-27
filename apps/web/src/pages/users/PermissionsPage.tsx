@@ -43,6 +43,21 @@ export function PermissionsPage() {
   const [moduleFilter, setModuleFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  function requireActionReason(action: string): string | null {
+    const reason = window.prompt(`Reason for ${action}:`);
+    if (reason === null) {
+      return null;
+    }
+
+    const normalized = reason.trim();
+    if (!normalized) {
+      setError("A reason is required for this sensitive action.");
+      return null;
+    }
+
+    return normalized;
+  }
+
   const permissionsQuery = useQuery({
     queryKey: ["permissions", "catalog"],
     enabled: canManage,
@@ -88,13 +103,22 @@ export function PermissionsPage() {
     mutationFn: (input: {
       permission: RolePermission;
       allowed: boolean;
-    }) =>
-      updateUserPermission(
+    }) => {
+      const reason = requireActionReason(
+        `${input.allowed ? "allowing" : "denying"} ${input.permission.code}`,
+      );
+      if (!reason) {
+        throw new Error("A reason is required for this sensitive action.");
+      }
+
+      return updateUserPermission(
         selectedUserId,
         input.permission.code,
         input.allowed,
+        reason,
         accessToken ?? "",
-      ),
+      );
+    },
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({
@@ -111,12 +135,19 @@ export function PermissionsPage() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: (permission: RolePermission) =>
-      removeUserPermission(
+    mutationFn: (permission: RolePermission) => {
+      const reason = requireActionReason(`resetting ${permission.code}`);
+      if (!reason) {
+        throw new Error("A reason is required for this sensitive action.");
+      }
+
+      return removeUserPermission(
         selectedUserId,
         permission.code,
+        reason,
         accessToken ?? "",
-      ),
+      );
+    },
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({
@@ -133,11 +164,18 @@ export function PermissionsPage() {
   });
 
   const allowAllMutation = useMutation({
-    mutationFn: () =>
-      allowAllUserPermissions(
+    mutationFn: () => {
+      const reason = requireActionReason("allowing all permissions");
+      if (!reason) {
+        throw new Error("A reason is required for this sensitive action.");
+      }
+
+      return allowAllUserPermissions(
         selectedUserId,
+        reason,
         accessToken ?? "",
-      ),
+      );
+    },
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({
@@ -154,11 +192,18 @@ export function PermissionsPage() {
   });
 
   const disallowAllMutation = useMutation({
-    mutationFn: () =>
-      disallowAllUserPermissions(
+    mutationFn: () => {
+      const reason = requireActionReason("disallowing all permissions");
+      if (!reason) {
+        throw new Error("A reason is required for this sensitive action.");
+      }
+
+      return disallowAllUserPermissions(
         selectedUserId,
+        reason,
         accessToken ?? "",
-      ),
+      );
+    },
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({

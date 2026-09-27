@@ -129,7 +129,11 @@ export async function voidPayment(
   id: string,
   businessId: string,
   branchId: string,
+  reason?: string,
 ) {
+  if (!reason?.trim()) {
+    throw new AppError("A reason is required for this action", 422);
+  }
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findFirst({
       where: {

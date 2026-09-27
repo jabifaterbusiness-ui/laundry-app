@@ -293,6 +293,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("New Customer ID"), {
       target: { value: "customer-2" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping the current workflow" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
     expect(
@@ -318,6 +321,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("New Order Status"), {
       target: { value: "IN_PROGRESS" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Correcting an incorrectly entered order status" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -330,6 +336,7 @@ describe("QuickOperationLauncher", () => {
             status: "IN_PROGRESS",
           },
           confirmed: true,
+          reason: "Correcting an incorrectly entered order status",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -351,6 +358,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("New Customer ID"), {
       target: { value: "customer-2" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Invoice was entered on the wrong customer account" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -363,6 +373,7 @@ describe("QuickOperationLauncher", () => {
             customerId: "customer-2",
           },
           confirmed: true,
+          reason: "Invoice was entered on the wrong customer account",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -388,6 +399,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Customer account correction requested" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -400,6 +414,7 @@ describe("QuickOperationLauncher", () => {
             targetCustomerId: "customer-2",
           },
           confirmed: true,
+          reason: "Customer account correction requested",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -421,6 +436,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Customer account correction requested" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -433,6 +451,7 @@ describe("QuickOperationLauncher", () => {
             targetCustomerId: "customer-2",
           },
           confirmed: true,
+          reason: "Customer account correction requested",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -451,6 +470,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Payment ID"), {
       target: { value: "payment-1" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Payment was entered incorrectly" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -462,6 +484,7 @@ describe("QuickOperationLauncher", () => {
             paymentId: "payment-1",
           },
           confirmed: true,
+          reason: "Payment was entered incorrectly",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -492,6 +515,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Note"), {
       target: { value: "Customer refund" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Customer refund approved after payment correction" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -507,6 +533,7 @@ describe("QuickOperationLauncher", () => {
             note: "Customer refund",
           },
           confirmed: true,
+          reason: "Customer refund approved after payment correction",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -605,6 +632,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Invoice ID"), {
       target: { value: "invoice-1" },
     });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Reconciliation correction requested" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -616,6 +646,7 @@ describe("QuickOperationLauncher", () => {
             invoiceId: "invoice-1",
           },
           confirmed: true,
+          reason: "Reconciliation correction requested",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -653,10 +684,10 @@ describe("QuickOperationLauncher", () => {
           input: {
             inventoryItemId: "item-1",
             quantity: 4,
-            reason: "Damaged stock",
             reference: "ADJ-001",
           },
           confirmed: true,
+          reason: "Damaged stock",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -694,10 +725,10 @@ describe("QuickOperationLauncher", () => {
           input: {
             inventoryItemId: "item-1",
             quantity: 7,
-            reason: "Supplier delivery",
             reference: "REC-001",
           },
           confirmed: true,
+          reason: "Supplier delivery",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -812,6 +843,9 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping the current workflow" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
     expect(
@@ -851,6 +885,9 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping the current workflow" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -877,6 +914,7 @@ describe("QuickOperationLauncher", () => {
             pendingOfflineOperationCount: 2,
           },
           confirmed: true,
+          reason: "Safely stopping the current workflow",
         },
         { accessToken: "access-token" },
         "branch-1",
@@ -896,6 +934,9 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping while an order operation is pending" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -922,6 +963,9 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping before closing the workflow" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -946,6 +990,9 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Safely stopping after workflow failure" },
+    });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
@@ -987,6 +1034,9 @@ describe("QuickOperationLauncher", () => {
 
     fireEvent.change(screen.getByLabelText("Payment ID"), {
       target: { value: "payment-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Correcting a voided payment" },
     });
     fireEvent.click(screen.getByLabelText(/confirm/i));
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));

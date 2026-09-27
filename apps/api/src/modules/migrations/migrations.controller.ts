@@ -36,6 +36,12 @@ const importSchema = z.object({
 
 const restoreSchema = z.object({ password: z.string().min(12) });
 
+const backupActionReasonSchema = z
+  .string()
+  .trim()
+  .min(1, "Reason is required")
+  .max(1000);
+
 export async function analyze(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const userId = req.user!.id;
@@ -69,7 +75,13 @@ const result = await importMigrationJob({
 export async function exportBackup(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const password = restoreSchema.parse(req.body).password;
-  const backup = await exportBusinessBackup(businessId, req.user!.id, password);
+  const reason = backupActionReasonSchema.parse(req.body.reason);
+  const backup = await exportBusinessBackup(
+    businessId,
+    req.user!.id,
+    password,
+    reason,
+  );
   res.status(200);
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="laundry-backup-${new Date().toISOString().slice(0, 10)}.laundry-backup"`);
@@ -82,7 +94,18 @@ export async function restoreBackup(req: Request, res: Response) {
   const passwordHeader = req.headers["x-backup-password"];
   if (typeof passwordHeader !== "string") throw new AppError("X-Backup-Password header is required", 422);
   const password = restoreSchema.parse({ password: passwordHeader }).password;
+  const reasonHeader = req.headers["x-backup-reason"];
+  if (typeof reasonHeader !== "string") {
+    throw new AppError("X-Backup-Reason header is required", 422);
+  }
+  const reason = backupActionReasonSchema.parse(reasonHeader);
   const buffer = await readRawBody(req, config.migrations.maxUploadBytes);
-  const result = await restoreBusinessBackup(businessId, req.user!.id, buffer, password);
+  const result = await restoreBusinessBackup(
+    businessId,
+    req.user!.id,
+    buffer,
+    password,
+    reason,
+  );
   res.status(200).json(result);
 }

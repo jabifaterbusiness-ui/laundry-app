@@ -11,6 +11,7 @@ export interface ExecuteQuickOperationInput {
   code: string;
   input?: Record<string, unknown>;
   confirmed?: boolean;
+  reason?: string;
 }
 
 export async function executeQuickOperation(
@@ -28,6 +29,9 @@ export async function executeQuickOperation(
         code: input.code,
         input: input.input ?? {},
         confirmed: input.confirmed ?? false,
+        ...(input.reason !== undefined
+          ? { reason: input.reason }
+          : {}),
       }),
     },
   );

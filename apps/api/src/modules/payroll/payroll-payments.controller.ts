@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 
 import {
   createPayrollPayment,
@@ -120,6 +121,7 @@ export async function voidPayrollPaymentController(
     businessId(req),
     branchId(req),
     req.user!.id,
+    requireReason((req.body as { reason?: unknown }).reason),
   );
 
   res.json(result);

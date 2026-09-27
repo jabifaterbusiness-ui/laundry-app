@@ -229,7 +229,7 @@ describe("permissions routes", () => {
       const response = await request(app)
         .put("/api/v1/permissions/roles/STAFF/customers.view")
         .set("Authorization", `Bearer ${OWNER_A}`)
-        .send({ allowed: true });
+        .send({ allowed: true, reason: "Permission change approved by management" });
 
       expect(response.status).toBe(200);
       expect(upsertRoleOverride).toHaveBeenCalled();
@@ -291,7 +291,7 @@ describe("permissions routes", () => {
       const response = await request(app)
         .put("/api/v1/permissions/roles/STAFF/payroll.approve")
         .set("Authorization", `Bearer ${OWNER_A}`)
-        .send({ allowed: false });
+        .send({ allowed: false, reason: "Permission restriction required" });
 
       expect(response.status).toBe(200);
       expect(upsertRoleOverride).toHaveBeenCalled();
@@ -302,7 +302,8 @@ describe("permissions routes", () => {
 
       const response = await request(app)
         .delete("/api/v1/permissions/roles/STAFF/customers.view")
-        .set("Authorization", `Bearer ${OWNER_A}`);
+        .set("Authorization", `Bearer ${OWNER_A}`)
+        .send({ reason: "Removing obsolete permission override" });
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ removed: true });
@@ -390,7 +391,7 @@ describe("permissions routes", () => {
       const response = await request(app)
         .put("/api/v1/permissions/users/11111111-1111-4111-8111-111111111111/customers.view")
         .set("Authorization", `Bearer ${OWNER_A}`)
-        .send({ allowed: false });
+        .send({ allowed: false, reason: "Restricting this user permission" });
 
       expect(response.status).toBe(200);
       expect(upsertUserOverride).toHaveBeenCalled();
@@ -417,7 +418,8 @@ describe("permissions routes", () => {
 
       const response = await request(app)
         .delete("/api/v1/permissions/users/11111111-1111-4111-8111-111111111111/customers.view")
-        .set("Authorization", `Bearer ${OWNER_A}`);
+        .set("Authorization", `Bearer ${OWNER_A}`)
+        .send({ reason: "Removing obsolete user permission override" });
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ removed: true });

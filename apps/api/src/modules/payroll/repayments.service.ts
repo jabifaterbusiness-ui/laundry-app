@@ -42,6 +42,7 @@ type ScopedRepaymentArgs = {
 
 type VoidRepaymentArgs = ScopedRepaymentArgs & {
   actorUserId: string;
+  reason?: string;
 };
 
 const REPAYABLE_IOU_STATUSES: IOUStatus[] = [
@@ -389,7 +390,12 @@ export async function voidRepayment({
   branchId,
   id,
   actorUserId,
+  reason,
 }: VoidRepaymentArgs) {
+  if (!reason?.trim()) {
+    throw new AppError("A reason is required for this action", 422);
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const repayment = await tx.financialRepayment.findFirst({
       where: {
@@ -499,6 +505,7 @@ export async function voidRepayment({
     entityType: "FINANCIAL_REPAYMENT",
     entityId: result.id,
     metadata: {
+      reason: reason.trim(),
       employeeId: result.employeeId,
       type: result.type,
       iouId: result.iouId ?? null,

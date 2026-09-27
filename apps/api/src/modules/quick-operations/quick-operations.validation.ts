@@ -7,6 +7,7 @@ export const executeQuickOperationSchema = z
     code: z.string().trim().min(1).max(10),
     input: z.record(z.string(), z.unknown()).default({}),
     confirmed: z.boolean().default(false),
+    reason: z.string().trim().max(1000).optional(),
   })
   .strict();
 

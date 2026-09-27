@@ -25,6 +25,7 @@ describe("offline-subscription-payment-queue", () => {
       providerKey: "paystack",
       paymentMethodKey: "CARD",
       idempotencyKey: "offline-payment-123",
+      reason: "Offline subscription payment test reason",
     });
 
     expect(entry.id).toBeTypeOf("number");
@@ -49,6 +50,7 @@ describe("offline-subscription-payment-queue", () => {
       providerKey: "paystack",
       paymentMethodKey: "CARD",
       idempotencyKey: "offline-payment-456",
+      reason: "Offline subscription payment duplicate test reason",
     });
 
     const second = await enqueueOfflineSubscriptionPayment({
@@ -60,6 +62,7 @@ describe("offline-subscription-payment-queue", () => {
       providerKey: "paystack",
       paymentMethodKey: "CARD",
       idempotencyKey: "offline-payment-456",
+      reason: "Offline subscription payment duplicate test reason",
     });
 
     expect(second.id).toBe(first.id);
@@ -78,6 +81,7 @@ describe("offline-subscription-payment-queue", () => {
       providerKey: "paystack",
       paymentMethodKey: "BANK_TRANSFER",
       idempotencyKey: "offline-payment-789",
+      reason: "Offline subscription payment update test reason",
     });
 
     await updateOfflineSubscriptionPayment(entry.id!, {

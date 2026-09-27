@@ -58,23 +58,33 @@ export async function importMigrationJob(jobId: string, duplicatePolicy: "skip" 
   });
 }
 
-export async function exportBackup(password: string, auth: { accessToken: string | null }): Promise<Blob> {
+export async function exportBackup(
+  password: string,
+  reason: string,
+  auth: { accessToken: string | null },
+): Promise<Blob> {
   const res = await fetch(`${API_BASE_URL}/migrations/backup/export`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}) },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ password, reason }),
   });
   if (!res.ok) return parseError(res);
   return res.blob();
 }
 
-export async function restoreBackup(file: File, password: string, auth: { accessToken: string | null }) {
+export async function restoreBackup(
+  file: File,
+  password: string,
+  reason: string,
+  auth: { accessToken: string | null },
+) {
   const res = await fetch(`${API_BASE_URL}/migrations/backup/restore`, {
     method: "POST",
     headers: {
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
       "Content-Type": file.type || "application/octet-stream",
       "X-Backup-Password": password,
+      "X-Backup-Reason": reason,
     },
     body: file,
   });

@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 import {
   createUserSchema,
   listUsersQuerySchema,
   updateUserSchema,
+  userActionReasonSchema,
   userIdParamSchema,
 } from "./users.validation.js";
 import {
@@ -107,11 +109,13 @@ export async function activate(req: Request, res: Response) {
 export async function deactivate(req: Request, res: Response) {
   const businessId = businessContext(req);
   const { userId } = userIdParamSchema.parse(req.params);
+  const { reason } = userActionReasonSchema.parse(req.body);
 
   res.status(200).json(
     await setUserActiveStatus(userId, false, {
       businessId,
       ...actor(req),
+      reason: requireReason(reason),
     }),
   );
 }
@@ -120,11 +124,13 @@ export async function deactivate(req: Request, res: Response) {
 export async function remove(req: Request, res: Response) {
   const businessId = businessContext(req);
   const { userId } = userIdParamSchema.parse(req.params);
+  const { reason } = userActionReasonSchema.parse(req.body);
 
   res.status(200).json(
     await deleteUser(userId, {
       businessId,
       ...actor(req),
+      reason: requireReason(reason),
     }),
   );
 }

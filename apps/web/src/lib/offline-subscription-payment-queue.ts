@@ -33,6 +33,7 @@ export interface OfflineSubscriptionPaymentQueueEntry {
   providerKey: string;
   paymentMethodKey: string;
   idempotencyKey: string;
+  reason?: string;
   status: OfflineSubscriptionPaymentStatus;
   intentId: string | null;
   paymentReference: string | null;
@@ -144,6 +145,7 @@ export async function enqueueOfflineSubscriptionPayment(input: {
   providerKey: string;
   paymentMethodKey: string;
   idempotencyKey: string;
+  reason: string;
 }): Promise<OfflineSubscriptionPaymentQueueEntry> {
   const db = await getDb();
 

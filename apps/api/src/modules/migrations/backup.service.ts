@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 
+import { requireReason } from "../../lib/reason.js";
 const MAGIC = Buffer.from("LAUNDRYBK");
 const VERSION = 1;
 const SALT_BYTES = 16;
@@ -65,7 +66,14 @@ function decrypt(buffer: Buffer, password: string): BackupPayload {
   }
 }
 
-export async function exportBusinessBackup(businessId: string, userId: string, password: string): Promise<Buffer> {
+export async function exportBusinessBackup(
+  businessId: string,
+  userId: string,
+  password: string,
+  rawReason?: unknown,
+): Promise<Buffer> {
+  const reason = requireReason(rawReason);
+
   const [business, branches, users, customers] = await Promise.all([
     prisma.business.findFirst({ where: { id: businessId } }),
     prisma.branch.findMany({ where: { businessId }, orderBy: { name: "asc" } }),
@@ -85,11 +93,25 @@ export async function exportBusinessBackup(businessId: string, userId: string, p
   };
 
   const encrypted = encrypt(payload, password);
-  await recordAuditEvent({ action: "backup.exported", entityType: "BusinessBackup", businessId, actorUserId: userId, correlationId: null, metadata: { version: 1, sha256: createHash("sha256").update(encrypted).digest("hex"), customers: customers.length, branches: branches.length, users: users.length } });
+  await recordAuditEvent({ action: "backup.exported", entityType: "BusinessBackup", businessId, actorUserId: userId, correlationId: null, metadata: {
+      version: 1,
+      sha256: createHash("sha256").update(encrypted).digest("hex"),
+      customers: customers.length,
+      branches: branches.length,
+      users: users.length,
+      reason,
+    } });
   return encrypted;
 }
 
-export async function restoreBusinessBackup(businessId: string, userId: string, buffer: Buffer, password: string) {
+export async function restoreBusinessBackup(
+  businessId: string,
+  userId: string,
+  buffer: Buffer,
+  password: string,
+  rawReason?: unknown,
+) {
+  const reason = requireReason(rawReason);
   const payload = decrypt(buffer, password);
   if (payload.business.slug === "") throw new AppError("Backup does not contain a valid business", 422);
 
@@ -125,6 +147,12 @@ export async function restoreBusinessBackup(businessId: string, userId: string, 
     return { createdCustomers, updatedCustomers, skippedUsers };
   });
 
-  await recordAuditEvent({ action: "backup.restored", entityType: "BusinessBackup", businessId, actorUserId: userId, correlationId: null, metadata: { version: 1, createdCustomers: result.createdCustomers, updatedCustomers: result.updatedCustomers, skippedUsers: result.skippedUsers } });
+  await recordAuditEvent({ action: "backup.restored", entityType: "BusinessBackup", businessId, actorUserId: userId, correlationId: null, metadata: {
+      version: 1,
+      createdCustomers: result.createdCustomers,
+      updatedCustomers: result.updatedCustomers,
+      skippedUsers: result.skippedUsers,
+      reason,
+    } });
   return result;
 }
