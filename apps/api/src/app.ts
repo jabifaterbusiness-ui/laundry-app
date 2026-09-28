@@ -34,6 +34,7 @@ import { usersRouter } from "./modules/users/users.routes.js";
 import { syncRouter } from "./modules/sync/sync.routes.js";
 import { whatsappRouter } from "./modules/whatsapp/whatsapp.routes.js";
 import { setupRouter } from "./modules/setup/setup.routes.js";
+import { businessRegistrationRouter } from "./modules/business-registration/business-registration.routes.js";
 import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middleware.js";
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
@@ -73,6 +74,7 @@ export function createApp() {
   // Subscription management must remain reachable so an owner can renew.
   v1.use("/auth", authRouter);
   v1.use("/setup", setupRouter);
+  v1.use("/business-registration", businessRegistrationRouter);
   v1.use("/subscriptions", subscriptionsRouter);
   v1.use("/migrations", migrationsRouter);
   v1.use("/whatsapp", whatsappRouter);

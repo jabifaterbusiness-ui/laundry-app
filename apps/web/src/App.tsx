@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPasswordPage.js";
 import { LoginPage } from "./pages/auth/LoginPage.js";
+import { BusinessRegistrationPage } from "./pages/auth/BusinessRegistrationPage.js";
 import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage.js";
 import { SetupPage } from "./pages/auth/SetupPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -59,6 +60,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register-business" element={<BusinessRegistrationPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/setup" element={<SetupPage />} />

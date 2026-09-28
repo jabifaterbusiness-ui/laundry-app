@@ -84,6 +84,7 @@ beforeEach(() => {
   prismaMock.$transaction.mockImplementation(async (callback) =>
     callback({
       business: {
+        findUnique: prismaMock.business.findUnique,
         create: prismaMock.business.create,
       },
       branch: {

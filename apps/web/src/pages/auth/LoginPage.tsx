@@ -126,7 +126,7 @@ export function LoginPage() {
           <span>New to Laundry Angel?</span>
         </div>
 
-        <Link to="/setup" className="auth-signup">
+        <Link to="/register-business" className="auth-signup">
           Create your Laundry Angel account
         </Link>
 
