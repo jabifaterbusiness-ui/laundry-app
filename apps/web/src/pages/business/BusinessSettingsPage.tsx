@@ -66,8 +66,64 @@ export function BusinessSettingsPage() {
 
   async function uploadLogo(file: File) {
     if (!accessToken) return;
+
+    const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+    const maxBytes = 5 * 1024 * 1024;
+    const minDimension = 200;
+
+    if (!allowedTypes.has(file.type)) {
+      setMessage("Logo must be a PNG, JPG/JPEG, or WebP image.");
+      return;
+    }
+
+    if (file.size > maxBytes) {
+      setMessage("Logo must be 5 MB or smaller.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const dimensions = await new Promise<{ width: number; height: number }>(
+        (resolve, reject) => {
+          const image = new Image();
+
+          image.onload = () => {
+            resolve({
+              width: image.naturalWidth,
+              height: image.naturalHeight,
+            });
+          };
+
+          image.onerror = () => {
+            reject(new Error("Unable to read the selected image."));
+          };
+
+          image.src = objectUrl;
+        },
+      );
+
+      if (
+        dimensions.width < minDimension ||
+        dimensions.height < minDimension
+      ) {
+        setMessage("Logo must be at least 200 × 200 pixels.");
+        return;
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to validate the selected image.",
+      );
+      return;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+
     setUploading(true);
     setMessage("");
+
     try {
       const result = await apiFetch<typeof branding>("/businesses/logo", {
         method: "POST",
@@ -129,6 +185,10 @@ export function BusinessSettingsPage() {
 
         <div>
           <h2>Logo</h2>
+          <p>
+            PNG, JPG/JPEG, or WebP • Minimum 200 × 200 px • Recommended 500 × 500 px
+            • Maximum 5 MB • Square (1:1) recommended
+          </p>
           {branding.logoUrl ? (
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
               <img src={branding.logoUrl} alt={`${branding.name} logo`} style={{ maxWidth: 180, maxHeight: 100, objectFit: "contain" }} />

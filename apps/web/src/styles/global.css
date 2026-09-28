@@ -165,6 +165,157 @@ a {
   text-transform: capitalize;
 }
 
+.account-menu,
+.topbar-actions-menu {
+  position: relative;
+}
+
+.account-trigger,
+.topbar-actions-trigger {
+  list-style: none;
+  cursor: pointer;
+}
+
+.account-trigger::-webkit-details-marker,
+.topbar-actions-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 3px 6px;
+  border-radius: 10px;
+}
+
+.account-trigger:hover {
+  background: #f8fafc;
+}
+
+.account-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 500;
+  width: min(360px, calc(100vw - 28px));
+  padding: 16px;
+  border: 1px solid var(--la-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.14);
+}
+
+.account-popover-header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--la-border);
+}
+
+.account-popover-header strong {
+  color: var(--la-text);
+  font-size: 15px;
+}
+
+.account-popover-header span {
+  color: var(--la-muted);
+  font-size: 12px;
+}
+
+.account-popover-details {
+  display: grid;
+  gap: 11px;
+  padding: 13px 0;
+}
+
+.account-popover-details > div {
+  display: grid;
+  gap: 3px;
+}
+
+.account-popover-details span {
+  color: var(--la-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.account-popover-details strong {
+  color: var(--la-text);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-manage-link {
+  display: block;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--la-primary-soft);
+  color: var(--la-primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+}
+
+.account-manage-link:hover {
+  filter: brightness(0.97);
+}
+
+.topbar-actions-trigger {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--la-muted);
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.topbar-actions-trigger:hover {
+  background: #f8fafc;
+  color: var(--la-text);
+}
+
+.topbar-actions-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 500;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+
+.topbar-actions-popover a,
+.topbar-actions-popover button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--la-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.topbar-actions-popover a:hover,
+.topbar-actions-popover button:hover {
+  background: #f8fafc;
+}
+
 .logout-button {
   margin-left: 8px;
   padding: 8px 13px;

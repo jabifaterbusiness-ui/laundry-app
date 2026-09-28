@@ -86,6 +86,25 @@ describe("BusinessSettingsPage", () => {
   it("uploads an accepted image using its real MIME type", async () => {
     const file = new File(["logo"], "logo.png", { type: "image/png" });
 
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:logo"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = 500;
+      naturalHeight = 500;
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    vi.stubGlobal("Image", MockImage);
+
     render(<BusinessSettingsPage />);
 
     await screen.findByText("LaundryAngel Demo");
@@ -93,5 +112,103 @@ describe("BusinessSettingsPage", () => {
     fireEvent.change(screen.getByLabelText("Business logo file"), {
       target: { files: [file] },
     });
+
+    await waitFor(() => {
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        "/businesses/logo",
+        expect.objectContaining({
+          method: "POST",
+          accessToken: "token",
+          branchId: "branch-1",
+          headers: { "Content-Type": "image/png" },
+          body: file,
+        }),
+      );
+    });
+  });
+
+  it("rejects unsupported logo formats before upload", async () => {
+    const file = new File(["logo"], "logo.gif", { type: "image/gif" });
+
+    render(<BusinessSettingsPage />);
+
+    await screen.findByText("LaundryAngel Demo");
+
+    fireEvent.change(screen.getByLabelText("Business logo file"), {
+      target: { files: [file] },
+    });
+
+    expect(
+      await screen.findByText("Logo must be a PNG, JPG/JPEG, or WebP image."),
+    ).toBeInTheDocument();
+    expect(mockedApiFetch).not.toHaveBeenCalledWith(
+      "/businesses/logo",
+      expect.anything(),
+    );
+  });
+
+  it("rejects logos larger than 5 MB before upload", async () => {
+    const file = new File(
+      [new Uint8Array(5 * 1024 * 1024 + 1)],
+      "large.png",
+      { type: "image/png" },
+    );
+
+    render(<BusinessSettingsPage />);
+
+    await screen.findByText("LaundryAngel Demo");
+
+    fireEvent.change(screen.getByLabelText("Business logo file"), {
+      target: { files: [file] },
+    });
+
+    expect(
+      await screen.findByText("Logo must be 5 MB or smaller."),
+    ).toBeInTheDocument();
+    expect(mockedApiFetch).not.toHaveBeenCalledWith(
+      "/businesses/logo",
+      expect.anything(),
+    );
+  });
+
+  it("rejects images below the minimum 200 by 200 dimensions", async () => {
+    const file = new File(["logo"], "small.png", { type: "image/png" });
+
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:small"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = 199;
+      naturalHeight = 200;
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    vi.stubGlobal("Image", MockImage);
+
+    render(<BusinessSettingsPage />);
+
+    await screen.findByText("LaundryAngel Demo");
+
+    fireEvent.change(screen.getByLabelText("Business logo file"), {
+      target: { files: [file] },
+    });
+
+    expect(
+      await screen.findByText(
+        "Logo must be at least 200 × 200 pixels.",
+      ),
+    ).toBeInTheDocument();
+    expect(mockedApiFetch).not.toHaveBeenCalledWith(
+      "/businesses/logo",
+      expect.anything(),
+    );
   });
 });

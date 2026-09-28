@@ -124,26 +124,98 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
 
           <div className="topbar-user">
-            <div className="user-avatar">
-              {(user?.fullName?.charAt(0) ?? "U").toUpperCase()}
-            </div>
+            <details className="account-menu">
+              <summary className="account-trigger" aria-label="Open account details">
+                <span className="user-avatar">
+                  {(user?.fullName?.charAt(0) ?? "U").toUpperCase()}
+                </span>
 
-            <div className="user-details">
-              <span className="user-name">
-                {user?.fullName ?? "User"}
-              </span>
-              <span className="user-role">
-                {user?.role?.replaceAll("_", " ") ?? "User"}
-              </span>
-            </div>
+                <span className="user-details">
+                  <span className="user-name">
+                    {user?.fullName ?? "User"}
+                  </span>
+                  <span className="user-role">
+                    {user?.role ?? "User"}
+                  </span>
+                </span>
+              </summary>
 
-            <button
-              type="button"
-              className="logout-button"
-              onClick={logout}
-            >
-              Logout
-            </button>
+              <div className="account-popover">
+                <div className="account-popover-header">
+                  <strong>{user?.fullName ?? "User"}</strong>
+                  <span>{user?.role ?? "User"}</span>
+                </div>
+
+                <div className="account-popover-details">
+                  <div>
+                    <span>Email</span>
+                    <strong>{user?.email ?? "Not configured"}</strong>
+                  </div>
+
+                  <div>
+                    <span>Username</span>
+                    <strong>{user?.username ?? "Not configured"}</strong>
+                  </div>
+
+                  <div>
+                    <span>Branches</span>
+                    <strong>
+                      {user?.branches?.length
+                        ? user.branches.map((branch) => branch.name).join(", ")
+                        : "No branch assigned"}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Access</span>
+                    <strong>
+                      {user?.permissions?.length ?? 0} permission
+                      {(user?.permissions?.length ?? 0) === 1 ? "" : "s"}
+                    </strong>
+                  </div>
+                </div>
+
+                <Link
+                  to="/account"
+                  className="account-manage-link"
+                  onClick={closeMobileNav}
+                >
+                  Manage My Account
+                </Link>
+              </div>
+            </details>
+
+            <details className="topbar-actions-menu">
+              <summary
+                className="topbar-actions-trigger"
+                aria-label="Open account actions"
+              >
+                ⋮
+              </summary>
+
+              <div className="topbar-actions-popover">
+                <Link
+                  to="/account"
+                  onClick={closeMobileNav}
+                >
+                  My Account
+                </Link>
+
+                <Link
+                  to="/account"
+                  onClick={closeMobileNav}
+                >
+                  Change password
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                >
+                  Logout
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       </header>
