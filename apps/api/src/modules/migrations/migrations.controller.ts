@@ -85,7 +85,7 @@ export async function exportBackup(req: Request, res: Response) {
   res.status(200);
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="laundry-backup-${new Date().toISOString().slice(0, 10)}.laundry-backup"`);
-  res.setHeader("X-Backup-Version", "1");
+  res.setHeader("X-Backup-Version", "2");
   res.send(backup);
 }
 

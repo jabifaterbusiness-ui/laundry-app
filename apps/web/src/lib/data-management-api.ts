@@ -89,5 +89,44 @@ export async function restoreBackup(
     body: file,
   });
   if (!res.ok) return parseError(res);
-  return res.json() as Promise<{ createdCustomers: number; updatedCustomers: number; skippedUsers: number }>;
+  return res.json() as Promise<{
+      business: number;
+      branches: number;
+      users: number;
+      userBranches: number;
+      customers: number;
+      customerStatusHistory: number;
+      services: number;
+      colors: number;
+      orderNumberSequence: number;
+      orders: number;
+      orderItems: number;
+      garments: number;
+      invoices: number;
+      invoiceItems: number;
+      invoiceHistory: number;
+      payments: number;
+      inventoryItems: number;
+      inventoryStock: number;
+      inventoryMovements: number;
+      expenses: number;
+      employeeCompensation: number;
+      payrollPeriods: number;
+      payrollRecords: number;
+      payrollDeductions: number;
+      payrollPayments: number;
+      ious: number;
+      loans: number;
+      financialRepayments: number;
+      businessRolePermissions: number;
+      userPermissionOverrides: number;
+      financialStatementConfig: number;
+      financialStatementRecipients: number;
+      financialStatements: number;
+      financialStatementDeliveries: number;
+      created: number;
+      updated: number;
+      mapped: number;
+      skippedUsers: number;
+    }>;
 }

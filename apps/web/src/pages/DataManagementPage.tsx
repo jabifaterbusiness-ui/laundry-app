@@ -95,7 +95,9 @@ export function DataManagementPage() {
         normalizedReason,
         { accessToken },
       );
-      setMessage(`Restore completed: ${result.createdCustomers} customers created and ${result.updatedCustomers} customers updated. Existing staff credentials were preserved.`);
+      setMessage(
+          `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
+        );
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Restore failed.");
     } finally { setBusy(false); }
@@ -167,7 +169,7 @@ export function DataManagementPage() {
 
           <section>
             <h2>Restore encrypted backup</h2>
-            <p>Restore is merge-only in this first version: it never deletes current data and never overwrites staff credentials.</p>
+            <p>Restore is merge-only: it never deletes current data, never overwrites passwords or security access, and restores the operational business dataset transactionally.</p>
             <input type="file" accept=".laundry-backup" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} />
             <input type="password" placeholder="Backup password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
             <input type="text" placeholder="Reason for restoring backup" value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
