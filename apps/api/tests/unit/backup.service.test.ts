@@ -156,9 +156,34 @@ describe("#20 backup service", () => {
       businessRolePermissions: [],
       userPermissionOverrides: [],
       financialStatementConfig: null,
-      financialStatementRecipients: [],
-      financialStatements: [],
-      financialStatementDeliveries: [],
+      financialStatementRecipients: [
+        {
+          id: "recipient-backup",
+          businessId,
+          userId: "user-1",
+          whatsappNumber: "+2348000000000",
+          enabled: true,
+        },
+      ],
+      financialStatements: [
+        {
+          id: "statement-1",
+          businessId,
+          year: 2026,
+          month: 9,
+        },
+      ],
+      financialStatementDeliveries: [
+        {
+          id: "delivery-1",
+          statementId: "statement-1",
+          recipientId: "recipient-backup",
+          channel: "EMAIL",
+          status: "PENDING",
+          destination: "owner@example.com",
+          attemptCount: 0,
+        },
+      ],
     };
 
     const encrypted = __backupTestHooks.encrypt(payload, password);
@@ -445,7 +470,11 @@ describe("#20 backup service", () => {
         upsert: vi.fn().mockResolvedValue({}),
       },
       financialStatementRecipient: {
-        findUnique: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue({
+          id: "recipient-existing",
+          businessId,
+          userId: "user-1",
+        }),
         create: vi.fn().mockResolvedValue({}),
         update: vi.fn().mockResolvedValue({}),
       },
@@ -572,9 +601,34 @@ describe("#20 backup service", () => {
       ],
       userPermissionOverrides: [],
       financialStatementConfig: null,
-      financialStatementRecipients: [],
-      financialStatements: [],
-      financialStatementDeliveries: [],
+      financialStatementRecipients: [
+          {
+            id: "recipient-backup",
+            businessId,
+            userId: "user-1",
+            whatsappNumber: "+2348000000000",
+            enabled: true,
+          },
+        ],
+        financialStatements: [
+          {
+            id: "statement-1",
+            businessId,
+            year: 2026,
+            month: 9,
+          },
+        ],
+        financialStatementDeliveries: [
+          {
+            id: "delivery-1",
+            statementId: "statement-1",
+            recipientId: "recipient-backup",
+            channel: "EMAIL",
+            status: "PENDING",
+            destination: "owner@example.com",
+            attemptCount: 0,
+          },
+        ],
     };
 
     const encrypted = __backupTestHooks.encrypt(payload, password);
@@ -605,6 +659,22 @@ describe("#20 backup service", () => {
         businessId,
         branchId: "branch-1",
         customerId: "customer-1",
+      }),
+    });
+
+    expect(tx.financialStatementRecipient.update).toHaveBeenCalledWith({
+      where: { id: "recipient-existing" },
+      data: expect.objectContaining({
+        businessId,
+        userId: "user-1",
+      }),
+    });
+
+    expect(tx.financialStatementDelivery.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        id: "delivery-1",
+        statementId: "statement-1",
+        recipientId: "recipient-existing",
       }),
     });
 

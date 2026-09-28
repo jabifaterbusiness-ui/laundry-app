@@ -22,6 +22,7 @@ export const config = {
   migrations: {
     storageDir: env.MIGRATION_STORAGE_DIR,
     storageKey: env.MIGRATION_STORAGE_KEY,
+    minUploadBytes: env.MIGRATION_MIN_UPLOAD_BYTES,
     maxUploadBytes: env.MIGRATION_MAX_UPLOAD_BYTES,
     maxUncompressedBytes: env.MIGRATION_MAX_UNCOMPRESSED_BYTES,
   },

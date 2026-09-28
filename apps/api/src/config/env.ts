@@ -15,6 +15,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   MIGRATION_STORAGE_DIR: z.string().default("./data/migrations"),
   MIGRATION_STORAGE_KEY: z.string().min(16).default("dev-only-migration-storage-key-change-me"),
+  MIGRATION_MIN_UPLOAD_BYTES: z.coerce.number().int().positive().default(1),
   MIGRATION_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(250 * 1024 * 1024),
   MIGRATION_MAX_UNCOMPRESSED_BYTES: z.coerce.number().int().positive().default(500 * 1024 * 1024),
   BUSINESS_BRANDING_STORAGE_DIR: z.string().default("./data/business-branding"),

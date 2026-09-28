@@ -1381,6 +1381,8 @@ export async function restoreBusinessBackup(
         counts[status] += 1;
       }
 
+      const recipientMap = new Map<string, string>();
+
       for (const recipient of payload.financialStatementRecipients) {
         const mappedUser = userMap.get(String(recipient.userId));
         if (!mappedUser) continue;
@@ -1409,6 +1411,7 @@ export async function restoreBusinessBackup(
             where: { id: String(existing.id) },
             data,
           });
+          recipientMap.set(String(recipient.id), String(existing.id));
           counts.updated += 1;
         } else {
           await delegate(tx, "financialStatementRecipient").create({
@@ -1417,18 +1420,28 @@ export async function restoreBusinessBackup(
               ...data,
             },
           });
+          recipientMap.set(String(recipient.id), String(recipient.id));
           counts.created += 1;
         }
       }
 
       for (const delivery of payload.financialStatementDeliveries) {
+        const mappedRecipientId = recipientMap.get(String(delivery.recipientId));
+
+        if (!mappedRecipientId) {
+          throw new AppError(
+            `Backup financialStatementDelivery ${delivery.id} references missing recipient ${delivery.recipientId}`,
+            409,
+          );
+        }
+
         const status = await restoreChild(
           tx,
           "financialStatementDelivery",
           delivery,
           [["statementId", statementMap]],
           {
-            recipientId: delivery.recipientId,
+            recipientId: mappedRecipientId,
           },
         );
         counts[status] += 1;

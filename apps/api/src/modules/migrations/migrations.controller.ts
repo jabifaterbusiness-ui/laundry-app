@@ -11,17 +11,35 @@ function requireBusinessId(req: Request): string {
   return req.user.businessId;
 }
 
-async function readRawBody(req: Request, maxBytes: number): Promise<Buffer> {
+async function readRawBody(
+  req: Request,
+  minBytes: number,
+  maxBytes: number,
+): Promise<Buffer> {
   const declared = Number(req.headers["content-length"] ?? 0);
-  if (declared > maxBytes) throw new AppError("Uploaded file is too large", 413);
+
+  if (declared > maxBytes) {
+    throw new AppError("Uploaded file is too large. Maximum size is 250 MiB.", 413);
+  }
+
   const chunks: Buffer[] = [];
   let total = 0;
+
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.length;
-    if (total > maxBytes) throw new AppError("Uploaded file is too large", 413);
+
+    if (total > maxBytes) {
+      throw new AppError("Uploaded file is too large. Maximum size is 250 MiB.", 413);
+    }
+
     chunks.push(buffer);
   }
+
+  if (total < minBytes) {
+    throw new AppError("Uploaded file is empty.", 422);
+  }
+
   return Buffer.concat(chunks);
 }
 
@@ -47,7 +65,7 @@ export async function analyze(req: Request, res: Response) {
   const userId = req.user!.id;
   const sourceNameHeader = req.headers["x-file-name"];
   const sourceName = typeof sourceNameHeader === "string" && sourceNameHeader.trim() ? sourceNameHeader.trim() : "uploaded-backup";
-  const buffer = await readRawBody(req, config.migrations.maxUploadBytes);
+  const buffer = await readRawBody(req, config.migrations.minUploadBytes, config.migrations.maxUploadBytes);
   const result = await analyzeMigrationSource({ businessId, userId, sourceName, buffer });
   await recordAuditEvent({ action: "migration.analyzed", entityType: "MigrationJob", entityId: result.job.id, businessId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { sourceType: result.job.sourceType, sourceName, files: result.summary.files, records: result.summary.records, customers: result.summary.supported.customers } });
   res.status(201).json(result);
@@ -99,7 +117,7 @@ export async function restoreBackup(req: Request, res: Response) {
     throw new AppError("X-Backup-Reason header is required", 422);
   }
   const reason = backupActionReasonSchema.parse(reasonHeader);
-  const buffer = await readRawBody(req, config.migrations.maxUploadBytes);
+  const buffer = await readRawBody(req, config.migrations.minUploadBytes, config.migrations.maxUploadBytes);
   const result = await restoreBusinessBackup(
     businessId,
     req.user!.id,

@@ -130,6 +130,7 @@ vi.mock("../../src/lib/audit.js", () => ({
 vi.mock("../../src/config/index.js", () => ({
   config: {
     migrations: {
+      minUploadBytes: 1,
       maxUploadBytes: 1024 * 1024,
     },
   },
@@ -237,6 +238,74 @@ describe("Migrations routes - permission enforcement", () => {
     expect(response.status).toBe(403);
     expect(response.body.message).toBe("Insufficient permissions for this action");
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty migration upload before analysis", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockResolvedValue(true);
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/jobs/analyze")
+      .set("Authorization", "Bearer test-token")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.alloc(0));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/empty/i);
+    expect(analyzeMigrationSource).not.toHaveBeenCalled();
+  });
+
+  it("rejects a migration upload above the configured maximum", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockResolvedValue(true);
+
+    const oversized = Buffer.alloc(1024 * 1024 + 1);
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/jobs/analyze")
+      .set("Authorization", "Bearer test-token")
+      .set("Content-Type", "application/octet-stream")
+      .send(oversized);
+
+    expect(response.status).toBe(413);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/too large|250 MiB/i);
+    expect(analyzeMigrationSource).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty encrypted backup restore before restore processing", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockResolvedValue(true);
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Backup-Reason", "Testing empty backup rejection")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.alloc(0));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/empty/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("rejects an encrypted backup restore above the configured maximum", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockResolvedValue(true);
+
+    const oversized = Buffer.alloc(1024 * 1024 + 1);
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Backup-Reason", "Testing oversized backup rejection")
+      .set("Content-Type", "application/octet-stream")
+      .send(oversized);
+
+    expect(response.status).toBe(413);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/too large|250 MiB/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
   });
 
   it("denies migration job lookup when migrations.view is explicitly denied", async () => {
