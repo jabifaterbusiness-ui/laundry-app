@@ -22,6 +22,9 @@ import { FinancePage } from "./pages/finance/FinancePage.js";
 import { SubscriptionPage } from "./pages/subscriptions/SubscriptionPage.js";
 import { PlatformOwnerPage } from "./pages/platform/PlatformOwnerPage.js";
 import { SuspiciousActivityPage } from "./pages/security/SuspiciousActivityPage.js";
+import { BusinessSettingsPage } from "./pages/business/BusinessSettingsPage.js";
+import { BranchesPage } from "./pages/branches/BranchesPage.js";
+import { AccountPage } from "./pages/account/AccountPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
@@ -50,6 +53,9 @@ function AuthenticatedLayout() {
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/platform" element={<PlatformOwnerPage />} />
           <Route path="/security/suspicious-activity" element={<SuspiciousActivityPage />} />
+          <Route path="/business/settings" element={<BusinessSettingsPage />} />
+          <Route path="/branches" element={<BranchesPage />} />
+          <Route path="/account" element={<AccountPage />} />
         </Routes>
       </AppShell>
     </RequireAuth>

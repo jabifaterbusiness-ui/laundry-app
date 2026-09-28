@@ -24,3 +24,24 @@ export async function getBusinessBranding(
     branchId,
   });
 }
+
+
+export async function updateBusinessBranding(
+  input: {
+    receiptPrimaryColor?: string | null;
+    receiptAccentColor?: string | null;
+    receiptBackgroundColor?: string | null;
+    receiptTextColor?: string | null;
+    receiptHeaderStyle?: string | null;
+    defaultCustomerAgreement?: string;
+  },
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<BusinessBranding> {
+  return apiFetch<BusinessBranding>("/businesses/branding", {
+    method: "PATCH",
+    accessToken: auth.accessToken,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}

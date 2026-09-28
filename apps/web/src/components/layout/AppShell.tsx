@@ -26,6 +26,8 @@ const MANAGEMENT: NavItem[] = [
   { label: "Inventory", href: "/inventory", icon: "□" },
   { label: "Users", href: "/users", icon: "♟" },
   { label: "Permissions", href: "/permissions", icon: "⚙" },
+  { label: "Branches", href: "/branches", icon: "⌘" },
+  { label: "Business Settings", href: "/business/settings", icon: "◆" },
   {
     label: "Suspicious / Unusual Activity",
     href: "/security/suspicious-activity",
@@ -304,6 +306,28 @@ export function AppShell({ children }: PropsWithChildren) {
                     ◆
                   </span>
                   <span>Platform Control Center</span>
+                </Link>
+              ) : null}
+
+              {hasPermission(user, "branches.view") ? (
+                <Link
+                  to="/branches"
+                  className={`nav-item ${isActive("/branches") ? "active" : ""}`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">⌘</span>
+                  <span>Branches</span>
+                </Link>
+              ) : null}
+
+              {hasPermission(user, "business.view") ? (
+                <Link
+                  to="/business/settings"
+                  className={`nav-item ${isActive("/business/settings") ? "active" : ""}`}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">◆</span>
+                  <span>Business Settings</span>
                 </Link>
               ) : null}
 

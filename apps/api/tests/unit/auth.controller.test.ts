@@ -3,8 +3,13 @@ import type { Request, Response } from "express";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
-    user: { findUnique: vi.fn() },
+    user: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
     userBranch: { findMany: vi.fn() },
+    refreshToken: { deleteMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -31,6 +36,7 @@ vi.mock("../../src/modules/auth/auth.service.js", () => ({
   revokeRefreshToken: vi.fn(),
   rotateRefreshToken: vi.fn(),
   verifyPassword: vi.fn().mockResolvedValue(true),
+  hashPassword: vi.fn().mockResolvedValue("new-hash"),
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
@@ -39,18 +45,27 @@ import {
   createPasswordResetToken,
   invalidatePasswordResetToken,
   resetPassword,
+  verifyPassword,
+  hashPassword,
 } from "../../src/modules/auth/auth.service.js";
 import {
   forgotPassword,
   login,
   me,
   resetPasswordController,
+  account,
+  changePassword,
 } from "../../src/modules/auth/auth.controller.js";
 
 import { getEffectivePermissionCodes } from "../../src/modules/permissions/permissions.service.js";
 
 const findUniqueUser = vi.mocked(prisma.user.findUnique);
+const updateUser = vi.mocked(prisma.user.update);
 const findManyUserBranch = vi.mocked(prisma.userBranch.findMany);
+const deleteRefreshTokens = vi.mocked(prisma.refreshToken.deleteMany);
+const transaction = vi.mocked(prisma.$transaction);
+const verifyPasswordMock = vi.mocked(verifyPassword);
+const hashPasswordMock = vi.mocked(hashPassword);
 const createPasswordResetTokenMock = vi.mocked(createPasswordResetToken);
 const invalidatePasswordResetTokenMock = vi.mocked(invalidatePasswordResetToken);
 const resetPasswordMock = vi.mocked(resetPassword);
@@ -271,5 +286,179 @@ describe("auth controller - multi-branch membership", () => {
       "user-1",
       "BUSINESS_OWNER",
     );
+  });
+});
+
+
+describe("auth controller - account management", () => {
+  beforeEach(() => {
+    findUniqueUser.mockResolvedValue(baseUser as never);
+    updateUser.mockResolvedValue({
+      ...baseUser,
+      fullName: "Updated Owner",
+    } as never);
+
+    findUniqueUser.mockResolvedValue({
+      ...baseUser,
+      fullName: "Updated Owner",
+    } as never);
+
+    findManyUserBranch.mockResolvedValue(twoBranchMemberships as never);
+    getEffectivePermissionCodesMock.mockResolvedValue([
+      "orders.view",
+      "orders.create",
+    ]);
+  });
+
+  it("updates the authenticated user's full name and returns refreshed identity", async () => {
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        fullName: "Updated Owner",
+      },
+      correlationId: "corr-account-1",
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await account(req, res);
+
+    expect(updateUser).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { fullName: "Updated Owner" },
+    });
+
+    expect(res.status).toHaveBeenCalledWith(200);
+
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+
+    expect(payload).toMatchObject({
+      id: "user-1",
+      fullName: "Updated Owner",
+      email: "owner@example.com",
+      username: "owner",
+      businessId: "biz-1",
+      securityRole: "BUSINESS_OWNER",
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.account.updated",
+        entityType: "User",
+        entityId: "user-1",
+        businessId: "biz-1",
+        actorUserId: "user-1",
+      }),
+    );
+  });
+});
+
+describe("auth controller - change password", () => {
+  beforeEach(() => {
+    findUniqueUser.mockResolvedValue(baseUser as never);
+    transaction.mockResolvedValue([] as never);
+    deleteRefreshTokens.mockResolvedValue({ count: 2 } as never);
+    verifyPasswordMock.mockResolvedValue(true);
+    hashPasswordMock.mockResolvedValue("new-hash");
+  });
+
+  it("rejects a new password identical to the current password", async () => {
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        currentPassword: "same-password",
+        newPassword: "same-password",
+      },
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await expect(changePassword(req, res)).rejects.toMatchObject({
+      statusCode: 422,
+    });
+
+    expect(verifyPasswordMock).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an incorrect current password", async () => {
+    verifyPasswordMock.mockResolvedValue(false);
+
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        currentPassword: "wrong-password",
+        newPassword: "new-password-123",
+      },
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await expect(changePassword(req, res)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+
+    expect(verifyPasswordMock).toHaveBeenCalledWith(
+      "hash",
+      "wrong-password",
+    );
+    expect(hashPasswordMock).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("hashes the new password, revokes refresh tokens, and records an audit event", async () => {
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        currentPassword: "current-password",
+        newPassword: "new-password-123",
+      },
+      correlationId: "corr-password-1",
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await changePassword(req, res);
+
+    expect(verifyPasswordMock).toHaveBeenCalledWith(
+      "hash",
+      "current-password",
+    );
+
+    expect(hashPasswordMock).toHaveBeenCalledWith("new-password-123");
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+
+    expect(deleteRefreshTokens).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.password_changed",
+        entityType: "User",
+        entityId: "user-1",
+        businessId: "biz-1",
+        actorUserId: "user-1",
+      }),
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message:
+        "Password changed successfully. Other active sessions have been signed out.",
+    });
   });
 });

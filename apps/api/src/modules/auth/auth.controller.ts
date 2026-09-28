@@ -137,6 +137,106 @@ export async function me(req: Request, res: Response) {
 }
 
 
+
+const accountSchema = z.object({
+  fullName: z.string().trim().min(1).max(160),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+});
+
+async function currentUserResponse(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError("User not found", 404);
+
+  const branches = await branchMemberships(user.id);
+  const permissions = await getEffectivePermissionCodes(
+    user.businessId,
+    user.id,
+    user.securityRole,
+  );
+
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    fullName: user.fullName,
+    role: user.role,
+    securityRole: user.securityRole,
+    businessId: user.businessId,
+    branches,
+    permissions,
+  };
+}
+
+export async function account(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+
+  const { fullName } = accountSchema.parse(req.body);
+
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data: { fullName },
+  });
+
+  const result = await currentUserResponse(req.user.id);
+
+  await recordAuditEvent({
+    action: "user.account.updated",
+    entityType: "User",
+    entityId: req.user.id,
+    businessId: req.user.businessId,
+    actorUserId: req.user.id,
+    correlationId: req.correlationId ?? null,
+  });
+
+  res.status(200).json(result);
+}
+
+export async function changePassword(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+  if (currentPassword === newPassword) {
+    throw new AppError("New password must be different from the current password", 422);
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) throw new AppError("User not found", 404);
+
+  if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+    throw new AppError("Current password is incorrect", 401);
+  }
+
+  const passwordHash = await (await import("./auth.service.js")).hashPassword(newPassword);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    }),
+    prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    }),
+  ]);
+
+  await recordAuditEvent({
+    action: "user.password_changed",
+    entityType: "User",
+    entityId: user.id,
+    businessId: user.businessId,
+    actorUserId: user.id,
+    correlationId: req.correlationId ?? null,
+  });
+
+  res.status(200).json({
+    message: "Password changed successfully. Other active sessions have been signed out.",
+  });
+}
+
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
 });

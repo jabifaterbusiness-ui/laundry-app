@@ -165,3 +165,88 @@ export function listBranches(
     accessToken,
   });
 }
+
+
+export interface CreateBranchInput {
+  name: string;
+  address?: string;
+}
+
+export interface UpdateBranchInput {
+  name?: string;
+  address?: string;
+}
+
+export function createBranch(
+  input: CreateBranchInput,
+  accessToken: string,
+) {
+  return apiFetch<Branch>("/branches", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateBranch(
+  branchId: string,
+  input: UpdateBranchInput,
+  accessToken: string,
+) {
+  return apiFetch<Branch>(`/branches/${branchId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify(input),
+  });
+}
+
+export function activateBranch(
+  branchId: string,
+  accessToken: string,
+) {
+  return apiFetch<Branch>(`/branches/${branchId}/activate`, {
+    method: "PATCH",
+    accessToken,
+  });
+}
+
+export function deactivateBranch(
+  branchId: string,
+  accessToken: string,
+) {
+  return apiFetch<Branch>(`/branches/${branchId}/deactivate`, {
+    method: "PATCH",
+    accessToken,
+  });
+}
+
+export function listBranchUsers(
+  branchId: string,
+  accessToken: string,
+) {
+  return apiFetch<ManagedUser[]>(`/branches/${branchId}/users`, {
+    accessToken,
+  });
+}
+
+export function assignUserToBranch(
+  branchId: string,
+  userId: string,
+  accessToken: string,
+) {
+  return apiFetch<ManagedUser>(`/branches/${branchId}/users/${userId}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+export function removeUserFromBranch(
+  branchId: string,
+  userId: string,
+  accessToken: string,
+) {
+  return apiFetch<void>(`/branches/${branchId}/users/${userId}`, {
+    method: "DELETE",
+    accessToken,
+  });
+}
