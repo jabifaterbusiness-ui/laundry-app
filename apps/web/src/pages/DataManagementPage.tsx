@@ -16,7 +16,7 @@ function downloadBlob(blob: Blob, filename: string) {
 export function DataManagementPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
-  const role = user?.role;
+  const securityRole = user?.securityRole;
   const [migrationFile, setMigrationFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<MigrationAnalysisResponse | null>(null);
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
@@ -31,10 +31,10 @@ export function DataManagementPage() {
 
   const canManage =
     hasPermission(user, "migrations.view") &&
-    (role === "BUSINESS_OWNER" || role === "BRANCH_MANAGER");
+    (securityRole === "BUSINESS_OWNER" || securityRole === "BRANCH_MANAGER");
   const canRestore =
     hasPermission(user, "migrations.manage") &&
-    role === "BUSINESS_OWNER";
+    securityRole === "BUSINESS_OWNER";
 
   async function handleAnalyze() {
     if (!migrationFile) return;
