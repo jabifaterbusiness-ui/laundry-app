@@ -12,6 +12,60 @@ export interface DbfTable {
   rows: Record<string, unknown>[];
 }
 
+export interface DbfHeader {
+  name: string;
+  recordCount: number;
+  headerLength: number;
+  recordLength: number;
+  fields: DbfField[];
+}
+
+export function readDbfHeader(name: string, buffer: Buffer): DbfHeader {
+  if (buffer.length < 32) throw new Error(`Invalid DBF: ${name}`);
+
+  const recordCount = buffer.readUInt32LE(4);
+  const headerLength = buffer.readUInt16LE(8);
+  const recordLength = buffer.readUInt16LE(10);
+
+  if (
+    headerLength < 33 ||
+    recordLength < 2 ||
+    headerLength > buffer.length
+  ) {
+    throw new Error(`Invalid DBF header: ${name}`);
+  }
+
+  const fields: DbfField[] = [];
+
+  for (let offset = 32; offset + 32 <= headerLength; offset += 32) {
+    if (buffer[offset] === 0x0d) break;
+
+    const descriptor = buffer.subarray(offset, offset + 32);
+    const fieldName = descriptor
+      .subarray(0, 11)
+      .toString("ascii")
+      .replace(/\\0/g, "")
+      .trim();
+
+    if (!fieldName) continue;
+
+    fields.push({
+      name: fieldName.toUpperCase(),
+      type: String.fromCharCode(descriptor[11] ?? 32),
+      length: descriptor[16] ?? 0,
+      decimals: descriptor[17] ?? 0,
+    });
+  }
+
+  return {
+    name,
+    recordCount,
+    headerLength,
+    recordLength,
+    fields,
+  };
+}
+
 function readIntLE(buffer: Buffer, offset: number, length: number): number {
   if (length === 4) return buffer.readInt32LE(offset);
   if (length === 2) return buffer.readInt16LE(offset);
@@ -68,21 +122,10 @@ const text = iconv.decode(raw, "windows-1252").replace(/\0/g, "").trim();
 }
 
 export function parseDbf(name: string, buffer: Buffer, maxRows = 250_000, memoBuffer?: Buffer): DbfTable {
-  if (buffer.length < 32) throw new Error(`Invalid DBF: ${name}`);
-  const recordCount = buffer.readUInt32LE(4);
-  const headerLength = buffer.readUInt16LE(8);
-  const recordLength = buffer.readUInt16LE(10);
-  if (headerLength < 33 || recordLength < 2 || headerLength > buffer.length) throw new Error(`Invalid DBF header: ${name}`);
-  if (recordCount > maxRows) throw new Error(`DBF has too many rows: ${name}`);
+  const header = readDbfHeader(name, buffer);
+  const { recordCount, headerLength, recordLength, fields } = header;
 
-  const fields: DbfField[] = [];
-  for (let offset = 32; offset + 32 <= headerLength; offset += 32) {
-    if (buffer[offset] === 0x0d) break;
-    const descriptor = buffer.subarray(offset, offset + 32);
-    const fieldName = descriptor.subarray(0, 11).toString("ascii").replace(/\0/g, "").trim();
-    if (!fieldName) continue;
-    fields.push({ name: fieldName.toUpperCase(), type: String.fromCharCode(descriptor[11] ?? 32), length: descriptor[16] ?? 0, decimals: descriptor[17] ?? 0 });
-  }
+  if (recordCount > maxRows) throw new Error(`DBF has too many rows: ${name}`);
 
   const rows: Record<string, unknown>[] = [];
   for (let rowIndex = 0; rowIndex < recordCount; rowIndex += 1) {

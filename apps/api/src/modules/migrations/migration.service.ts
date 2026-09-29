@@ -3,7 +3,7 @@ import path from "node:path";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { readZip } from "./archive.js";
-import { parseDbf, type DbfTable } from "./formats/dbf.js";
+import { parseDbf, readDbfHeader, type DbfTable } from "./formats/dbf.js";
 import { parseCsv, parseJson, type TabularTable } from "./formats/tabular.js";
 import { readMigrationSource, storeMigrationSource } from "./storage.js";
 import type { MigrationSourceType, Prisma } from "@prisma/client";
@@ -155,16 +155,53 @@ function parseFile(name: string, buffer: Buffer, memoBuffer?: Buffer): DetectedT
 }
 
 function parseSource(sourceName: string, buffer: Buffer): DetectedTable[] {
-  if (path.extname(sourceName).toLowerCase() !== ".zip") return parseFile(sourceName, buffer);
+  if (path.extname(sourceName).toLowerCase() !== ".zip") {
+    return parseFile(sourceName, buffer);
+  }
+
   const entries = readZip(buffer);
   const tables: DetectedTable[] = [];
   const byPath = new Map(entries.map((entry) => [entry.path.toLowerCase(), entry.data]));
+
   for (const entry of entries) {
     const ext = path.extname(entry.path).toLowerCase();
-    if (![".dbf", ".csv", ".json", ".xlsx", ".xls"].includes(ext)) continue;
-    const memoPath = ext === ".dbf" ? `${entry.path.slice(0, -4)}.fpt`.toLowerCase() : undefined;
-    tables.push(...parseFile(entry.path, entry.data, memoPath ? byPath.get(memoPath) : undefined));
+
+    if (ext === ".dbf") {
+      const header = readDbfHeader(entry.path, entry.data);
+      const headers = header.fields.map((field) => field.name);
+
+      const customerLike =
+        CUSTOMER_FILE_NAMES.has(sourceFileBaseName(entry.path)) ||
+        (
+          headers.some((field) =>
+            ["FNAME", "FIRSTNAME", "FIRST_NAME", "GIVENNAME"].includes(field)
+          ) &&
+          headers.some((field) =>
+            ["LNAME", "LASTNAME", "LAST_NAME", "SURNAME"].includes(field)
+          ) &&
+          headers.some((field) =>
+            ["WPHONE", "HPHONE", "CPHONE", "PHONE", "MOBILE", "MOBILEPHONE"].includes(field)
+          )
+        );
+
+      if (!customerLike) continue;
+
+      const memoPath = `${entry.path.slice(0, -4)}.fpt`.toLowerCase();
+      tables.push(
+        ...parseFile(
+          entry.path,
+          entry.data,
+          byPath.get(memoPath),
+        ),
+      );
+      continue;
+    }
+
+    if (![".csv", ".json", ".xlsx", ".xls"].includes(ext)) continue;
+
+    tables.push(...parseFile(entry.path, entry.data));
   }
+
   return tables;
 }
 
