@@ -4,13 +4,69 @@ import { analyzeMigration, exportBackup, importMigrationJob, restoreBackup, type
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 
-function downloadBlob(blob: Blob, filename: string) {
+type SaveFilePickerOptions = {
+  suggestedName?: string;
+  types?: Array<{
+    description?: string;
+    accept: Record<string, string[]>;
+  }>;
+};
+
+type SaveFileHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+
+type WindowWithSaveFilePicker = Window & {
+  showSaveFilePicker?: (
+    options?: SaveFilePickerOptions,
+  ) => Promise<SaveFileHandle>;
+};
+
+function backupFilename() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return [
+    "LaundryAngel_Backup",
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`,
+  ].join("_") + ".laundry-backup";
+}
+
+async function saveBackupBlob(blob: Blob) {
+  const filename = backupFilename();
+  const picker = (window as WindowWithSaveFilePicker).showSaveFilePicker;
+
+  if (picker) {
+    const handle = await picker({
+      suggestedName: filename,
+      types: [
+        {
+          description: "LaundryAngel encrypted backup",
+          accept: {
+            "application/octet-stream": [".laundry-backup"],
+          },
+        },
+      ],
+    });
+
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function DataManagementPage() {
@@ -73,8 +129,8 @@ export function DataManagementPage() {
         normalizedReason,
         { accessToken },
       );
-      downloadBlob(blob, `laundry-backup-${new Date().toISOString().slice(0, 10)}.laundry-backup`);
-      setMessage("Encrypted backup downloaded successfully.");
+      await saveBackupBlob(blob);
+      setMessage("Encrypted backup saved successfully.");
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Backup export failed.");
     } finally { setBusy(false); }

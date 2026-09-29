@@ -9,6 +9,7 @@ import { readMigrationSource, storeMigrationSource } from "./storage.js";
 import type { MigrationSourceType, Prisma } from "@prisma/client";
 import { normalizePhone } from "../customers/customers.validation.js";
 import * as XLSX from "xlsx";
+import { config } from "../../config/index.js";
 
 interface DetectedTable {
   fileName: string;
@@ -138,11 +139,11 @@ function parseXlsx(name: string, buffer: Buffer): DetectedTable[] {
 function parseFile(name: string, buffer: Buffer, memoBuffer?: Buffer): DetectedTable[] {
   const ext = path.extname(name).toLowerCase();
   if (ext === ".dbf") {
-    const table: DbfTable = parseDbf(name, buffer, 250_000, memoBuffer);
+    const table: DbfTable = parseDbf(name, buffer, config.migrations.maxRowsPerTable, memoBuffer);
     return [{ fileName: name, format: "dbf", rows: table.rows, headers: table.fields.map((field) => field.name), tableName: path.basename(name, ext).toUpperCase(), sizeBytes: buffer.length, sha256: createHash("sha256").update(buffer).digest("hex") }];
   }
   if (ext === ".csv") {
-    const table: TabularTable = parseCsv(name, buffer);
+    const table: TabularTable = parseCsv(name, buffer, config.migrations.maxRowsPerTable);
     return [{ fileName: name, format: "csv", rows: table.rows, headers: table.headers, tableName: path.basename(name, ext).toUpperCase(), sizeBytes: buffer.length, sha256: createHash("sha256").update(buffer).digest("hex") }];
   }
   if (ext === ".json") {

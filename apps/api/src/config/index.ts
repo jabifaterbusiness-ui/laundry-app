@@ -25,6 +25,7 @@ export const config = {
     minUploadBytes: env.MIGRATION_MIN_UPLOAD_BYTES,
     maxUploadBytes: env.MIGRATION_MAX_UPLOAD_BYTES,
     maxUncompressedBytes: env.MIGRATION_MAX_UNCOMPRESSED_BYTES,
+    maxRowsPerTable: env.MIGRATION_MAX_ROWS_PER_TABLE,
   },
   businessBranding: {
     storageDir: env.BUSINESS_BRANDING_STORAGE_DIR,

@@ -33,7 +33,7 @@ function findEndOfCentralDirectory(buffer: Buffer): number {
  * common ZIP methods used by business backups: stored (0) and raw-deflate (8).
  * Paths are normalized and traversal is rejected before any data is exposed.
  */
-export function readZip(buffer: Buffer, limits = { maxFiles: 10_000, maxUncompressedBytes: 500 * 1024 * 1024 }): ArchiveEntry[] {
+export function readZip(buffer: Buffer, limits = { maxFiles: 10_000, maxUncompressedBytes: 2 * 1024 * 1024 * 1024 }): ArchiveEntry[] {
   const eocd = findEndOfCentralDirectory(buffer);
   const entryCount = buffer.readUInt16LE(eocd + 10);
   const centralOffset = buffer.readUInt32LE(eocd + 16);
