@@ -7,6 +7,7 @@ function makeReceipt(
 ): CustomerReceipt {
   return {
     receiptType: "CUSTOMER",
+    businessId: "business-1",
     invoiceNumber: "INV-00001",
     orderNumber: "00001",
     companyName: "Fresh & Clean Laundry",

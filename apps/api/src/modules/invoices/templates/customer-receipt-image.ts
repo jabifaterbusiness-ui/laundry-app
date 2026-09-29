@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { readBusinessLogo } from "../../businesses/business-branding.storage.js";
 import type { CustomerReceipt } from "../receipts.service.js";
 
 function escapeXml(value: string): string {
@@ -169,21 +170,42 @@ export async function renderCustomerReceiptImage(
   const footerY = totalY + 205;
   const height = footerY + 80;
 
-  // Do not fetch or embed arbitrary remote logo URLs during server-side
-  // rendering. Use the branded initials fallback until logos are supplied
-  // through a trusted local/storage pipeline.
-  const logoMarkup = `
-    <rect x="${padding}" y="52" width="90" height="90" rx="20" fill="${accentColor}" />
-    <text
-      x="${padding + 45}"
-      y="110"
-      text-anchor="middle"
-      font-size="30"
-      font-family="Arial"
-      font-weight="700"
-      fill="#ffffff"
-    >${escapeXml(initials(receipt.companyName))}</text>
-  `;
+  // Read the logo directly from private, business-scoped storage.
+  // Never fetch the authenticated logo URL from the server-side renderer.
+  const storedLogo =
+    receipt.logoUrl ? await readBusinessLogo(receipt.businessId) : null;
+
+  const logoMarkup = storedLogo
+    ? `
+      <rect
+        x="${padding}"
+        y="52"
+        width="90"
+        height="90"
+        rx="20"
+        fill="${accentColor}"
+      />
+      <image
+        x="${padding + 8}"
+        y="60"
+        width="74"
+        height="74"
+        preserveAspectRatio="xMidYMid meet"
+        href="data:image/png;base64,${storedLogo.toString("base64")}"
+      />
+    `
+    : `
+      <rect x="${padding}" y="52" width="90" height="90" rx="20" fill="${accentColor}" />
+      <text
+        x="${padding + 45}"
+        y="110"
+        text-anchor="middle"
+        font-size="30"
+        font-family="Arial"
+        font-weight="700"
+        fill="#ffffff"
+      >${escapeXml(initials(receipt.companyName))}</text>
+    `;
 
   const contactParts = [
     receipt.companyPhone,

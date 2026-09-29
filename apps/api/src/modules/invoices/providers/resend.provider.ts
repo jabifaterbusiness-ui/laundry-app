@@ -36,7 +36,7 @@ export async function sendHtmlEmail(
   return { id: data.id };
 }
 
-export interface SendReceiptEmailInput extends SendHtmlEmailInput {}
+export type SendReceiptEmailInput = SendHtmlEmailInput;
 
 export async function sendReceiptEmail(
   input: SendReceiptEmailInput,

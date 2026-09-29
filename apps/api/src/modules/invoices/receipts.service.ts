@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 
 export type CustomerReceipt = {
   receiptType: "CUSTOMER";
+  businessId: string;
   invoiceNumber: string;
   orderNumber: string;
   companyName: string;
@@ -135,6 +136,7 @@ export async function getCustomerReceipt(
   }
 
   return {
+    businessId: invoice.businessId,
     receiptType: "CUSTOMER",
     invoiceNumber: invoice.invoiceNumber,
     orderNumber: invoice.order.orderNumber,
