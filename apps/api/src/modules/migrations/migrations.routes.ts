@@ -26,7 +26,7 @@ migrationsRouter.get(
 migrationsRouter.post(
   "/jobs/:id/import",
   requireRole(...ADMIN_ROLES),
-  requirePermission("migrations.view"),
+  requirePermission("migrations.manage"),
   asyncHandler(importJob),
 );
 migrationsRouter.post(

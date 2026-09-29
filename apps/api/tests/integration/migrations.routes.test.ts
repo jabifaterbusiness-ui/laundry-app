@@ -321,9 +321,16 @@ describe("Migrations routes - permission enforcement", () => {
     expect(getMigrationJob).not.toHaveBeenCalled();
   });
 
-  it("denies migration import when migrations.view is explicitly denied", async () => {
+  it("denies migration import when migrations.manage is explicitly denied", async () => {
     authAs("BUSINESS_OWNER");
-    hasPermission.mockResolvedValue(false);
+    hasPermission.mockImplementation(
+      async (
+        _userId: string,
+        _businessId: string,
+        _role: string,
+        permissionCode: string,
+      ) => permissionCode !== "migrations.manage",
+    );
     findUserOverride.mockResolvedValue({ allowed: false });
 
     const response = await request(createApp())
@@ -336,6 +343,41 @@ describe("Migrations routes - permission enforcement", () => {
 
     expect(response.status).toBe(403);
     expect(importMigrationJob).not.toHaveBeenCalled();
+  });
+
+  it("allows migration import when migrations.manage is granted", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockImplementation(
+      async (
+        _userId: string,
+        _businessId: string,
+        _role: string,
+        permissionCode: string,
+      ) => permissionCode === "migrations.manage",
+    );
+    findUserOverride.mockResolvedValue(null);
+    findRoleOverride.mockResolvedValue(null);
+
+    importMigrationJob.mockResolvedValue({
+      imported: {
+        customersCreated: 1,
+        customersMerged: 0,
+        customersSkipped: 0,
+        invalidRows: 0,
+      },
+      duplicatePolicy: "skip",
+    });
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/jobs/job-1/import")
+      .set("Authorization", "Bearer test-token")
+      .send({
+        duplicatePolicy: "skip",
+        confirm: true,
+      });
+
+    expect(response.status).toBe(200);
+    expect(importMigrationJob).toHaveBeenCalledOnce();
   });
 
   it("denies backup export when migrations.view is explicitly denied", async () => {

@@ -287,59 +287,211 @@ async function loadCandidates(job: { sourceName: string; sourcePath: string }, m
   return candidates;
 }
 
-export async function importMigrationJob(input: { businessId: string; userId: string; jobId: string; duplicatePolicy: "skip" | "merge" | "create"; mapping?: CustomerFieldMapping }) {
-  const job = await prisma.migrationJob.findFirst({ where: { id: input.jobId, businessId: input.businessId } });
-  if (!job) throw new AppError("Migration job not found", 404);
-  if (job.status !== "READY") throw new AppError(`Migration job is ${job.status.toLowerCase()} and cannot be imported`, 409);
+export async function importMigrationJob(input: {
+  businessId: string;
+  userId: string;
+  jobId: string;
+  duplicatePolicy: "skip" | "merge" | "create";
+  mapping?: CustomerFieldMapping;
+}) {
+  const job = await prisma.migrationJob.findFirst({
+    where: {
+      id: input.jobId,
+      businessId: input.businessId,
+    },
+  });
 
-  await prisma.migrationJob.update({ where: { id: job.id }, data: { status: "IMPORTING" } });
+  if (!job) {
+    throw new AppError("Migration job not found", 404);
+  }
+
+  if (job.status !== "READY") {
+    throw new AppError(
+      `Migration job is ${job.status.toLowerCase()} and cannot be imported`,
+      409,
+    );
+  }
+
+  await prisma.migrationJob.update({
+    where: { id: job.id },
+    data: { status: "IMPORTING" },
+  });
+
   try {
+    // Parse the source before opening the transaction so file I/O and
+    // CPU-heavy parsing do not hold a database transaction open.
     const candidates = await loadCandidates(job, input.mapping);
-    let created = 0;
-    let skipped = 0;
-    let merged = 0;
-    let invalid = 0;
 
-    const chunkSize = 500;
-    for (let offset = 0; offset < candidates.length; offset += chunkSize) {
-      const chunk = candidates.slice(offset, offset + chunkSize);
-      const phones = [...new Set(chunk.map((candidate) => candidate.phone))];
-      const existing = await prisma.customer.findMany({ where: { businessId: input.businessId, phone: { in: phones } } });
-      const existingByPhone = new Map(existing.map((customer) => [customer.phone, customer]));
-      const toCreate = [] as Prisma.CustomerCreateManyInput[];
+    const result = await prisma.$transaction(
+      async (tx) => {
+        let created = 0;
+        let skipped = 0;
+        let merged = 0;
+        let invalid = 0;
 
-      for (const candidate of chunk) {
-        if (!candidate.name || !candidate.phone) { invalid += 1; continue; }
-        const current = existingByPhone.get(candidate.phone);
-        if (current) {
-          if (input.duplicatePolicy === "skip") { skipped += 1; continue; }
-          if (input.duplicatePolicy === "create") {
-            toCreate.push({ businessId: input.businessId, name: candidate.name, phone: candidate.phone, email: candidate.email ?? null, address: candidate.address ?? null, notes: candidate.notes ?? null });
-            continue;
+        const chunkSize = 500;
+
+        // Prevent repeated source rows from creating multiple customers
+        // under skip/merge policies. "create" intentionally permits them.
+        const acceptedSourcePhones = new Set<string>();
+
+        for (let offset = 0; offset < candidates.length; offset += chunkSize) {
+          const chunk = candidates.slice(offset, offset + chunkSize);
+
+          const phones = [
+            ...new Set(
+              chunk
+                .map((candidate) => candidate.phone)
+                .filter((phone): phone is string => Boolean(phone)),
+            ),
+          ];
+
+          const existing = phones.length
+            ? await tx.customer.findMany({
+                where: {
+                  businessId: input.businessId,
+                  phone: { in: phones },
+                },
+              })
+            : [];
+
+          const existingByPhone = new Map(
+            existing.map((customer) => [customer.phone, customer]),
+          );
+
+          const toCreate: Prisma.CustomerCreateManyInput[] = [];
+
+          for (const candidate of chunk) {
+            if (!candidate.name || !candidate.phone) {
+              invalid += 1;
+              continue;
+            }
+
+            const current = existingByPhone.get(candidate.phone);
+
+            if (current) {
+              if (input.duplicatePolicy === "skip") {
+                skipped += 1;
+                continue;
+              }
+
+              if (input.duplicatePolicy === "create") {
+                toCreate.push({
+                  businessId: input.businessId,
+                  name: candidate.name,
+                  phone: candidate.phone,
+                  email: candidate.email ?? null,
+                  address: candidate.address ?? null,
+                  notes: candidate.notes ?? null,
+                });
+                continue;
+              }
+
+              const data: Prisma.CustomerUpdateInput = {};
+
+              if (!current.email && candidate.email) {
+                data.email = candidate.email;
+              }
+
+              if (!current.address && candidate.address) {
+                data.address = candidate.address;
+              }
+
+              if (!current.notes && candidate.notes) {
+                data.notes = candidate.notes;
+              }
+
+              if (Object.keys(data).length) {
+                await tx.customer.update({
+                  where: { id: current.id },
+                  data,
+                });
+              }
+
+              merged += 1;
+              continue;
+            }
+
+            if (
+              input.duplicatePolicy !== "create" &&
+              acceptedSourcePhones.has(candidate.phone)
+            ) {
+              skipped += 1;
+              continue;
+            }
+
+            toCreate.push({
+              businessId: input.businessId,
+              name: candidate.name,
+              phone: candidate.phone,
+              email: candidate.email ?? null,
+              address: candidate.address ?? null,
+              notes: candidate.notes ?? null,
+            });
+
+            if (input.duplicatePolicy !== "create") {
+              acceptedSourcePhones.add(candidate.phone);
+            }
           }
-          const data: Prisma.CustomerUpdateInput = {};
-          if (!current.email && candidate.email) data.email = candidate.email;
-          if (!current.address && candidate.address) data.address = candidate.address;
-          if (!current.notes && candidate.notes) data.notes = candidate.notes;
-          if (Object.keys(data).length) await prisma.customer.update({ where: { id: current.id }, data });
-          merged += 1;
-          continue;
+
+          if (toCreate.length) {
+            const createResult = await tx.customer.createMany({
+              data: toCreate,
+            });
+
+            created += createResult.count;
+          }
         }
-        toCreate.push({ businessId: input.businessId, name: candidate.name, phone: candidate.phone, email: candidate.email ?? null, address: candidate.address ?? null, notes: candidate.notes ?? null });
-      }
 
-      if (toCreate.length) {
-        const result = await prisma.customer.createMany({ data: toCreate });
-        created += result.count;
-      }
-    }
+        const summary = {
+          imported: {
+            customersCreated: created,
+            customersMerged: merged,
+            customersSkipped: skipped,
+            invalidRows: invalid,
+          },
+          duplicatePolicy: input.duplicatePolicy,
+        };
 
-    const summary = { imported: { customersCreated: created, customersMerged: merged, customersSkipped: skipped, invalidRows: invalid }, duplicatePolicy: input.duplicatePolicy };
-    const existingSummary = job.summary && typeof job.summary === "object" ? (job.summary as Record<string, unknown>) : {};
-    await prisma.migrationJob.update({ where: { id: job.id }, data: { status: "COMPLETED", completedAt: new Date(), summary: { ...existingSummary, import: summary } } });
-    return summary;
+        const existingSummary =
+          job.summary && typeof job.summary === "object"
+            ? (job.summary as Record<string, unknown>)
+            : {};
+
+        await tx.migrationJob.update({
+          where: { id: job.id },
+          data: {
+            status: "COMPLETED",
+            completedAt: new Date(),
+            errorMessage: null,
+            summary: {
+              ...existingSummary,
+              import: summary,
+            },
+          },
+        });
+
+        return summary;
+      },
+      {
+        maxWait: 10_000,
+        timeout: 120_000,
+      },
+    );
+
+    return result;
   } catch (error) {
-    await prisma.migrationJob.update({ where: { id: job.id }, data: { status: "FAILED", errorMessage: error instanceof Error ? error.message : "Migration import failed" } });
+    // The transaction has already rolled back. Keep the job auditable as
+    // FAILED using a separate database operation outside that transaction.
+    await prisma.migrationJob.update({
+      where: { id: job.id },
+      data: {
+        status: "FAILED",
+        errorMessage:
+          error instanceof Error ? error.message : "Migration import failed",
+      },
+    });
+
     throw error;
   }
 }
