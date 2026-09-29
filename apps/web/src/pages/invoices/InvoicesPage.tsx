@@ -358,7 +358,10 @@ export function InvoicesPage() {
 
         window.dispatchEvent(
           new CustomEvent("quick-operation:open", {
-            detail: resendReceiptOperation,
+            detail: {
+              ...resendReceiptOperation,
+              recordId: selectedInvoiceId,
+            },
           }),
         );
         return;
@@ -602,6 +605,30 @@ export function InvoicesPage() {
               onClick={() => setPrintMode("company")}
             >
               Print Company Copy (Ctrl+F1)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const resendReceiptOperation = QUICK_OPERATIONS.find(
+                  (operation) => operation.code === "RS",
+                );
+
+                if (!resendReceiptOperation) {
+                  return;
+                }
+
+                window.dispatchEvent(
+                  new CustomEvent("quick-operation:open", {
+                    detail: {
+                      ...resendReceiptOperation,
+                      recordId: selectedInvoice.id,
+                    },
+                  }),
+                );
+              }}
+            >
+              Digital Receipt (Ctrl+Shift+F1)
             </button>
 
             {canManageInvoices ? (

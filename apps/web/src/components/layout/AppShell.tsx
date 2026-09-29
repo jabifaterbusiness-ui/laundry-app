@@ -44,6 +44,8 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const [quickOperation, setQuickOperation] =
     useState<QuickOperationDefinition | null>(null);
+  const [quickOperationRecordId, setQuickOperationRecordId] =
+    useState<string>("");
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -60,7 +62,12 @@ export function AppShell({ children }: PropsWithChildren) {
         return;
       }
 
-      setQuickOperation(detail as QuickOperationDefinition);
+      const operation = detail as QuickOperationDefinition & {
+        recordId?: string;
+      };
+
+      setQuickOperation(operation);
+      setQuickOperationRecordId(operation.recordId ?? "");
     }
 
     window.addEventListener(
@@ -436,7 +443,11 @@ export function AppShell({ children }: PropsWithChildren) {
 
       <QuickOperationLauncher
         operation={quickOperation}
-        onClose={() => setQuickOperation(null)}
+        initialRecordId={quickOperationRecordId}
+        onClose={() => {
+          setQuickOperation(null);
+          setQuickOperationRecordId("");
+        }}
       />
     </div>
   );

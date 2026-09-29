@@ -14,6 +14,7 @@ import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 
 interface Props {
   operation: QuickOperationDefinition | null;
+  initialRecordId?: string;
   onClose: () => void;
 }
 
@@ -120,6 +121,7 @@ function Field({
 
 export function QuickOperationLauncher({
   operation,
+  initialRecordId = "",
   onClose,
 }: Props) {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -144,7 +146,7 @@ export function QuickOperationLauncher({
     mutationKey: ["orders"],
   });
 
-  const [recordId, setRecordId] = useState("");
+  const [recordId, setRecordId] = useState(initialRecordId);
   const [customerId, setCustomerId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [amount, setAmount] = useState("");
@@ -161,7 +163,7 @@ export function QuickOperationLauncher({
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    setRecordId("");
+    setRecordId(initialRecordId);
     setCustomerId("");
     setQuantity("1");
     setAmount("");
@@ -176,7 +178,7 @@ export function QuickOperationLauncher({
     setIsSubmitting(false);
     setError(null);
     setSuccess(null);
-  }, [operation]);
+  }, [operation, initialRecordId]);
 
   useEffect(() => {
     if (!operation) return;
