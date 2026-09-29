@@ -44,7 +44,7 @@ export function readDbfHeader(name: string, buffer: Buffer): DbfHeader {
     const fieldName = descriptor
       .subarray(0, 11)
       .toString("ascii")
-      .replace(/\\0/g, "")
+      .replace(/\x00/g, "")
       .trim();
 
     if (!fieldName) continue;
