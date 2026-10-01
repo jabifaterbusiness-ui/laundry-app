@@ -380,6 +380,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-999-8888" });
 
     expect(res.status).toBe(200);
@@ -392,6 +393,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
     expect(res.status).toBe(409);
@@ -410,6 +412,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
     expect(res.status).toBe(200);
@@ -426,6 +429,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
     expect(res.status).toBe(200);
@@ -436,10 +440,20 @@ describe("Customers routes - update duplicate-phone handling", () => {
     findMany.mockResolvedValue([]);
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    sensitiveAuthorizationFindUnique.mockResolvedValue({
+      id: "sensitive-auth-b",
+      tokenHash: "test-token-hash",
+      userId: "user-owner-b",
+      businessId: "biz-B",
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    } as never);
 
-    await request(app)
+    const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-B" }) }));
@@ -451,6 +465,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
     expect(recordAuditEvent).not.toHaveBeenCalled();
@@ -464,6 +479,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "customer.updated" }));

@@ -88,6 +88,11 @@ describe("payments.service", () => {
           branchId: "branch-A",
         },
         include: {
+          order: {
+            select: {
+              customerId: true,
+            },
+          },
           payments: {
             where: {
               status: "POSTED",

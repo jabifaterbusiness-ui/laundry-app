@@ -97,7 +97,7 @@ describe("listCustomers", () => {
     expect(result.pagination).toEqual({ page: 1, pageSize: 20, total: 47, totalPages: 3 });
   });
 
-  it("searches by name and normalized phone", async () => {
+  it("searches by name, email, order, invoice, and normalized phone", async () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
@@ -106,6 +106,25 @@ describe("listCustomers", () => {
     const call = findMany.mock.calls[0]![0];
     expect(call!.where!.OR).toEqual([
       { name: { contains: "555-1234", mode: "insensitive" } },
+      { email: { contains: "555-1234", mode: "insensitive" } },
+      {
+        orders: {
+          some: {
+            orderNumber: { contains: "555-1234", mode: "insensitive" },
+          },
+        },
+      },
+      {
+        orders: {
+          some: {
+            invoice: {
+              is: {
+                invoiceNumber: { contains: "555-1234", mode: "insensitive" },
+              },
+            },
+          },
+        },
+      },
       { phone: { contains: "5551234" } },
     ]);
   });
@@ -117,7 +136,28 @@ describe("listCustomers", () => {
     await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active", search: "Jane" });
 
     const call = findMany.mock.calls[0]![0];
-   expect(call!.where!.OR).toEqual([{ name: { contains: "Jane", mode: "insensitive" } }]);
+    expect(call!.where!.OR).toEqual([
+      { name: { contains: "Jane", mode: "insensitive" } },
+      { email: { contains: "Jane", mode: "insensitive" } },
+      {
+        orders: {
+          some: {
+            orderNumber: { contains: "Jane", mode: "insensitive" },
+          },
+        },
+      },
+      {
+        orders: {
+          some: {
+            invoice: {
+              is: {
+                invoiceNumber: { contains: "Jane", mode: "insensitive" },
+              },
+            },
+          },
+        },
+      },
+    ]);
   });
 });
 
