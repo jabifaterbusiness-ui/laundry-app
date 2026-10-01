@@ -37,13 +37,36 @@ export async function listCustomers(params: ListParams) {
 
   if (search) {
     const normalizedSearch = normalizePhone(search);
-    const searchClauses: Prisma.CustomerWhereInput[] = [{ name: { contains: search, mode: "insensitive" } }];
+    const searchClauses: Prisma.CustomerWhereInput[] = [
+      { name: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      {
+        orders: {
+          some: {
+            orderNumber: { contains: search, mode: "insensitive" },
+          },
+        },
+      },
+      {
+        orders: {
+          some: {
+            invoice: {
+              is: {
+                invoiceNumber: { contains: search, mode: "insensitive" },
+              },
+            },
+          },
+        },
+      },
+    ];
+
     // Only add a phone clause if the search string contains at least one
     // digit - otherwise a pure-name search like "an" would also
     // (uselessly, since normalizedSearch would be "") match every phone.
     if (normalizedSearch.replace(/[^0-9]/g, "").length > 0) {
       searchClauses.push({ phone: { contains: normalizedSearch } });
     }
+
     where.OR = searchClauses;
   }
 

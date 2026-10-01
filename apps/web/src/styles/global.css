@@ -3973,3 +3973,41 @@ a {
   justify-content: flex-end;
   gap: 0.75rem;
 }
+
+.app-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--la-border, #ddd);
+  border-radius: 8px;
+  background: var(--la-surface, #fff);
+}
+
+.app-mode-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  margin-right: 2px;
+}
+
+.app-mode-option {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-mode-option:hover {
+  background: #f3f4f6;
+}
+
+.app-mode-option.active {
+  border-color: #cfd4dc;
+  background: #eef2f7;
+  font-weight: 700;
+}

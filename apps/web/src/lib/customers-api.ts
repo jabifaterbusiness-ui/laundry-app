@@ -196,7 +196,10 @@ export async function createCustomerWithOfflineQueue(
 export async function updateCustomer(
   id: string,
   input: UpdateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: {
+    accessToken: string | null;
+    sensitiveAuthorization?: string | null;
+  },
 ): Promise<Customer> {
   let res: Response;
 
@@ -206,6 +209,9 @@ export async function updateCustomer(
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+        ...(auth.sensitiveAuthorization
+          ? { "X-Sensitive-Authorization": auth.sensitiveAuthorization }
+          : {}),
       },
       body: JSON.stringify(input),
     });

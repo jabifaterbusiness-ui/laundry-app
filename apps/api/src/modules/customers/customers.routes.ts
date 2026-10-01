@@ -45,7 +45,12 @@ customersRouter.post(
 );
 
 customersRouter.get("/:id", requirePermission("customers.view"), asyncHandler(getOne));
-customersRouter.patch("/:id", requirePermission("customers.update"), asyncHandler(update));
+customersRouter.patch(
+  "/:id",
+  requirePermission("customers.update"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(update),
+);
 customersRouter.post("/:id/status", requirePermission("customers.change_status"), asyncHandler(changeStatus));
 
 customersRouter.post(

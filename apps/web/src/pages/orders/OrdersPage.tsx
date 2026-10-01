@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -59,6 +59,7 @@ export function OrdersPage() {
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
@@ -82,6 +83,7 @@ export function OrdersPage() {
     );
 
   const customerIdFromUrl = searchParams.get("customerId");
+  const returnToFromUrl = searchParams.get("returnTo");
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
 
@@ -287,6 +289,14 @@ export function OrdersPage() {
       setFormOpen(false);
       setFormError(null);
       setSelectedOrder(order);
+
+      if (returnToFromUrl === "customer-workstation") {
+        navigate(
+          `/customer-workstation?customerId=${encodeURIComponent(
+            order.customerId,
+          )}`,
+        );
+      }
     },
     onError: (error) => {
       setFormError(

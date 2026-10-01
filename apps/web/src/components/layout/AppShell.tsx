@@ -5,6 +5,7 @@ import { QuickOperationLauncher } from "../quick-operations/QuickOperationLaunch
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useWorkstationModeStore } from "../../state/workstation-mode-store.js";
 
 interface NavItem {
   label: string;
@@ -41,6 +42,8 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
+  const appMode = useWorkstationModeStore((state) => state.mode);
+  const setAppMode = useWorkstationModeStore((state) => state.setMode);
 
   const [quickOperation, setQuickOperation] =
     useState<QuickOperationDefinition | null>(null);
@@ -131,6 +134,43 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
 
           <div className="topbar-user">
+            <div
+              className="app-mode-switch"
+              aria-label="Application mode"
+            >
+              <span className="app-mode-label">Mode</span>
+
+              <button
+                type="button"
+                className={`app-mode-option ${
+                  appMode === "NORMAL" ? "active" : ""
+                }`}
+                aria-pressed={appMode === "NORMAL"}
+                onClick={() => {
+                  setAppMode("NORMAL");
+                  if (location.pathname === "/customer-workstation") {
+                    navigate("/");
+                  }
+                }}
+              >
+                Normal Mode
+              </button>
+
+              <button
+                type="button"
+                className={`app-mode-option ${
+                  appMode === "CUSTOMER_WORKSTATION" ? "active" : ""
+                }`}
+                aria-pressed={appMode === "CUSTOMER_WORKSTATION"}
+                onClick={() => {
+                  setAppMode("CUSTOMER_WORKSTATION");
+                  navigate("/customer-workstation");
+                }}
+              >
+                Customer Workstation Mode
+              </button>
+            </div>
+
             <details className="account-menu">
               <summary className="account-trigger" aria-label="Open account details">
                 <span className="user-avatar">
