@@ -488,6 +488,7 @@ describe("repayments.service", () => {
         branchId: "branch-A",
         id: REPAYMENT_A,
         actorUserId: "owner-A",
+        reason: "test repayment void",
       });
 
       expect(result).toBe(voided);
@@ -514,6 +515,7 @@ describe("repayments.service", () => {
           iouId: IOU_A,
           loanId: null,
           amount: 4000,
+          reason: "test repayment void",
         },
       });
     });
@@ -536,6 +538,7 @@ describe("repayments.service", () => {
           branchId: "branch-A",
           id: REPAYMENT_A,
           actorUserId: "owner-A",
+          reason: "test repayment void",
         }),
       ).rejects.toMatchObject({
         message: "This repayment has already been voided",
@@ -554,6 +557,7 @@ describe("repayments.service", () => {
           branchId: "branch-B",
           id: REPAYMENT_A,
           actorUserId: "owner-B",
+          reason: "test repayment scope",
         }),
       ).rejects.toMatchObject({
         message: "Repayment not found",
@@ -608,6 +612,7 @@ describe("repayments.service", () => {
         branchId: "branch-A",
         id: REPAYMENT_A,
         actorUserId: "owner-A",
+        reason: "test loan repayment void",
       });
 
       expect(prismaMock.loan.update).toHaveBeenCalledWith({

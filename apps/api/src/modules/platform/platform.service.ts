@@ -189,6 +189,11 @@ export async function getPlatformRevenueAnalytics() {
       refunds: 0,
       net: 0,
     },
+    PAY_FROM_ACCOUNT: {
+      payments: 0,
+      refunds: 0,
+      net: 0,
+    },
   };
 
   for (const row of paymentMethods) {

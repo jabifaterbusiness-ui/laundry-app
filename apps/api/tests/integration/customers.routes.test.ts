@@ -4,6 +4,20 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        allowNewBusinessRegistration: true,
+        maintenanceMode: false,
+        whatsappMessagingEnabled: true,
+        automatedNotificationsEnabled: true,
+        offlineSyncEnabled: true,
+        version: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+      update: vi.fn(),
+    },
     subscription: {
       findUnique: vi.fn().mockResolvedValue({
         id: "sub-test",
@@ -35,6 +49,21 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerStatusHistory: {
       create: vi.fn(),
     },
+    customerAccount: {
+      findFirst: vi.fn(),
+      upsert: vi.fn(),
+    },
+    customerAccountTransaction: {
+      create: vi.fn(),
+    },
+    userBranch: {
+      findUnique: vi.fn(),
+    },
+    sensitiveAuthorization: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -54,6 +83,15 @@ const updateMany = vi.mocked(prisma.customer.updateMany);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
+const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
+const customerAccountUpsert = vi.mocked(prisma.customerAccount.upsert);
+const customerAccountTransactionCreate = vi.mocked(
+  prisma.customerAccountTransaction.create,
+);
+const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const sensitiveAuthorizationFindUnique = vi.mocked(
+  prisma.sensitiveAuthorization.findUnique,
+);
 
 vi.mocked(prisma.$transaction).mockImplementation(
   async (callback: any) => callback(prisma),
@@ -96,6 +134,25 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+
+  userBranchFindUnique.mockResolvedValue({
+    userId: "user-1",
+    branchId: "branch-A",
+    branch: {
+      id: "branch-A",
+      businessId: "biz-A",
+    },
+  } as never);
+
+  sensitiveAuthorizationFindUnique.mockResolvedValue({
+    id: "sensitive-auth-1",
+    tokenHash: "test-token-hash",
+    userId: "user-1",
+    businessId: "biz-A",
+    expiresAt: new Date(Date.now() + 60_000),
+    revokedAt: null,
+    createdAt: new Date(),
+  } as never);
 });
 
 describe("Customers routes - authentication", () => {
@@ -410,6 +467,282 @@ describe("Customers routes - update duplicate-phone handling", () => {
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "customer.updated" }));
+  });
+});
+
+
+describe("Customers routes - customer account / POA", () => {
+  const CUSTOMER_ID = "11111111-1111-1111-1111-111111111111";
+  const BRANCH_A = "branch-A";
+
+  it("views a customer account without requiring branch context", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+    } as never);
+
+    customerAccountFindFirst.mockResolvedValue({
+      id: "account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      transactions: [
+        { id: "tx-1", type: "CREDIT", amount: 10000 },
+        { id: "tx-2", type: "DEBIT", amount: 2500 },
+        { id: "tx-3", type: "ADJUSTMENT", amount: 500 },
+      ],
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.balance).toBe(8000);
+    expect(res.body.customerId).toBe(CUSTOMER_ID);
+    expect(customerAccountFindFirst).toHaveBeenCalledWith({
+      where: {
+        customerId: CUSTOMER_ID,
+        businessId: "biz-A",
+      },
+      include: {
+        transactions: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    });
+    expect(userBranchFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("returns a zero balance when the customer has no account yet", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+    } as never);
+
+    customerAccountFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      id: null,
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      balance: 0,
+      transactions: [],
+    });
+  });
+
+  it("does not leak another business customer's account", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    findFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${OWNER_B}`);
+
+    expect(res.status).toBe(404);
+    expect(customerAccountFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("denies account viewing when customer_accounts.view is explicitly denied", async () => {
+    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(403);
+    expect(customerAccountFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("requires the customer_accounts.manage permission to fund an account", async () => {
+    findRoleOverride.mockResolvedValue({ allowed: false } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
+  });
+
+  it("requires branch context before funding an account", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain("Missing X-Branch-Id");
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("requires sensitive authorization before funding an account", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain("Sensitive authorization is required");
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects funding when the selected branch is not accessible", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    userBranchFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects funding through a branch belonging to another business", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    userBranchFindUnique.mockResolvedValue({
+      userId: "user-1",
+      branchId: "branch-B",
+      branch: {
+        id: "branch-B",
+        businessId: "biz-B",
+      },
+    } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B")
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+  });
+
+  it("funds the customer account with a positive whole-naira CREDIT", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+    } as never);
+
+    customerAccountUpsert.mockResolvedValue({
+      id: "account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      transactions: [],
+    } as never);
+
+    customerAccountTransactionCreate.mockResolvedValue({
+      id: "tx-fund-1",
+      customerAccountId: "account-1",
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      type: "CREDIT",
+      amount: 7500,
+      note: "Customer POA",
+    } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({
+        amount: 7500,
+        note: "Customer POA",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      id: "tx-fund-1",
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      customerAccountId: "account-1",
+      type: "CREDIT",
+      amount: 7500,
+      note: "Customer POA",
+    });
+
+    expect(customerAccountTransactionCreate).toHaveBeenCalledWith({
+      data: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        customerAccountId: "account-1",
+        type: "CREDIT",
+        amount: 7500,
+        note: "Customer POA",
+      },
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "customer.account.funded",
+        entityType: "CustomerAccountTransaction",
+        entityId: "tx-fund-1",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-1",
+        metadata: expect.objectContaining({
+          customerId: CUSTOMER_ID,
+          amount: 7500,
+          type: "CREDIT",
+          note: "Customer POA",
+        }),
+      }),
+    );
+  });
+
+  it("rejects zero, fractional, negative, and unknown funding input", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    for (const body of [
+      { amount: 0 },
+      { amount: -100 },
+      { amount: 100.5 },
+      { amount: 5000, unexpected: "blocked" },
+    ]) {
+      const res = await request(app)
+        .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("X-Branch-Id", BRANCH_A)
+        .set("X-Sensitive-Authorization", "a".repeat(64))
+        .send(body);
+
+      expect(res.status).toBe(422);
+    }
+
+    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 });
 

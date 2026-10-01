@@ -14,7 +14,9 @@ import {
   type PaymentStatus,
 } from "../../lib/payments-api.js";
 import { listInvoices } from "../../lib/invoices-api.js";
+import { getCustomerAccount } from "../../lib/customer-account-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 
 const PAGE_SIZE = 25;
 
@@ -34,6 +36,8 @@ export function PaymentsPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
+  const { requestSensitiveAuthorization } =
+    useSensitiveAuthorization();
   const queryClient = useQueryClient();
 
   const canVoidPayment =
@@ -127,8 +131,14 @@ export function PaymentsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      createPayment(
+    mutationFn: async () => {
+      const authorization = await requestSensitiveAuthorization();
+
+      if (!authorization) {
+        throw new Error("Sensitive authorization was cancelled.");
+      }
+
+      return createPayment(
         {
           invoiceId,
           amount: Number(amount),
@@ -136,9 +146,13 @@ export function PaymentsPage() {
           reference: reference.trim() || undefined,
           note: note.trim() || undefined,
         },
-        { accessToken },
+        {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        },
         activeBranchId,
-      ),
+      );
+    },
     onSuccess: async (payment) => {
       await queryClient.invalidateQueries({
         queryKey: ["payments"],
@@ -165,12 +179,29 @@ export function PaymentsPage() {
   });
 
   const voidMutation = useMutation({
-    mutationFn: (paymentId: string) =>
-      voidPayment(
+    mutationFn: async ({
+      paymentId,
+      reason,
+    }: {
+      paymentId: string;
+      reason: string;
+    }) => {
+      const authorization = await requestSensitiveAuthorization();
+
+      if (!authorization) {
+        throw new Error("Sensitive authorization was cancelled.");
+      }
+
+      return voidPayment(
         paymentId,
-        { accessToken },
+        {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        },
         activeBranchId,
-      ),
+        reason,
+      );
+    },
     onSuccess: async (payment) => {
       await queryClient.invalidateQueries({
         queryKey: ["payments"],
@@ -205,7 +236,18 @@ export function PaymentsPage() {
       return;
     }
 
-    voidMutation.mutate(payment.id);
+    const reason = window.prompt(
+      "Enter the reason for voiding this payment:",
+    )?.trim();
+
+    if (!reason) {
+      return;
+    }
+
+    voidMutation.mutate({
+      paymentId: payment.id,
+      reason,
+    });
   }
 
   const payments = paymentsQuery.data?.data ?? [];
@@ -215,9 +257,23 @@ export function PaymentsPage() {
   const selectedFormInvoice = invoices.find(
     (invoice) => invoice.id === invoiceId,
   );
+
+  const selectedFormCustomerId =
+    selectedFormInvoice?.order.customer.id ?? null;
+
+  const formAccountQuery = useQuery({
+    queryKey: ["customer-account", selectedFormCustomerId],
+    queryFn: () =>
+      getCustomerAccount(selectedFormCustomerId!, {
+        accessToken,
+      }),
+    enabled:
+      method === "PAY_FROM_ACCOUNT" && Boolean(selectedFormCustomerId),
+  });
   const summary = summaryQuery.data;
   const formSummary = formSummaryQuery.data;
   const formBalance = formSummary?.balance ?? null;
+  const formAccountBalance = formAccountQuery.data?.balance ?? null;
 
   function resetForm() {
     setFormOpen(false);
@@ -274,6 +330,25 @@ export function PaymentsPage() {
         `Payment amount cannot exceed the outstanding balance of ${formatMoney(formSummary.balance)}.`,
       );
       return;
+    }
+
+    if (method === "PAY_FROM_ACCOUNT") {
+      if (formAccountQuery.isLoading) {
+        setFormError("Please wait while the customer account balance is loaded.");
+        return;
+      }
+
+      if (formAccountQuery.isError || !formAccountQuery.data) {
+        setFormError("Unable to load the customer account balance. Please try again.");
+        return;
+      }
+
+      if (formAccountQuery.data.balance < numericAmount) {
+        setFormError(
+          `Payment amount cannot exceed the available account balance of ${formatMoney(formAccountQuery.data.balance)}.`,
+        );
+        return;
+      }
     }
 
     createMutation.mutate();
@@ -371,7 +446,7 @@ export function PaymentsPage() {
                         disabled={voidMutation.isPending}
                       >
                         {voidMutation.isPending &&
-                        voidMutation.variables === payment.id
+                        voidMutation.variables?.paymentId === payment.id
                           ? "Voiding..."
                           : "Void"}
                       </button>
@@ -553,7 +628,25 @@ export function PaymentsPage() {
                 <option value="CASH">Cash</option>
                 <option value="TRANSFER">Transfer</option>
                 <option value="POS">POS</option>
+                <option value="PAY_FROM_ACCOUNT">Pay from Account</option>
               </select>
+
+              {method === "PAY_FROM_ACCOUNT" && (
+                <div className="form-help">
+                  {formAccountQuery.isLoading && "Loading customer account balance..."}
+                  {formAccountQuery.isError && (
+                    <span>
+                      Unable to load the customer account balance.
+                    </span>
+                  )}
+                  {formAccountBalance !== null && (
+                    <span>
+                      Available account balance:{" "}
+                      <strong>{formatMoney(formAccountBalance)}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>

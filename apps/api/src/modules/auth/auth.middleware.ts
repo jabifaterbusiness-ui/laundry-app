@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { requireSensitiveAuthorization as requireSensitiveAuthorizationToken } from "./sensitive-authorization.service.js";
 import type { Role } from "@prisma/client";
 
 interface AccessTokenPayload {
@@ -53,6 +54,36 @@ export function requireBusinessContext(req: Request, _res: Response, next: NextF
   if (!req.user.businessId) {
     throw new AppError("This action requires an account scoped to a business", 403);
   }
+
+  next();
+}
+
+
+/**
+ * Requires a recently password-reauthorized sensitive authorization.
+ * Must run after requireAuth and, for business-scoped operations,
+ * after requireBusinessContext.
+ */
+export async function requireSensitiveAuthorization(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  if (!req.user?.id) {
+    throw new AppError("Authentication is required", 401);
+  }
+
+  const token = req.headers["x-sensitive-authorization"];
+
+  if (typeof token !== "string" || !token.trim()) {
+    throw new AppError("Sensitive authorization is required", 403);
+  }
+
+  await requireSensitiveAuthorizationToken({
+    token: token.trim(),
+    userId: req.user.id,
+    businessId: req.user.businessId,
+  });
 
   next();
 }

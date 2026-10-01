@@ -1,6 +1,6 @@
 import { apiFetch } from "./api-client.js";
 
-export type PaymentMethod = "CASH" | "TRANSFER" | "POS";
+export type PaymentMethod = "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT";
 export type PaymentStatus = "POSTED" | "VOID";
 
 export interface PaymentInvoiceSummary {
@@ -63,6 +63,7 @@ export interface ListPaymentsParams {
 
 interface AuthOptions {
   accessToken: string | null;
+  sensitiveAuthorization?: string | null;
 }
 
 function branchHeaders(branchId: string | null): Record<string, string> {
@@ -83,6 +84,7 @@ export async function createPayment(
     headers: branchHeaders(branchId),
     body: JSON.stringify(input),
     accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
   });
 }
 
@@ -125,11 +127,14 @@ export async function voidPayment(
   id: string,
   auth: AuthOptions,
   branchId: string | null,
+  reason: string,
 ) {
   return apiFetch<Payment>(`/payments/${id}/void`, {
     method: "PATCH",
     headers: branchHeaders(branchId),
+    body: JSON.stringify({ reason }),
     accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
   });
 }
 

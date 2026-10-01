@@ -7,7 +7,7 @@ export interface CreatePaymentData {
   branchId: string;
   invoiceId: string;
   amount: number;
-  method: "CASH" | "TRANSFER" | "POS";
+  method: "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT";
   reference?: string;
   note?: string;
 }
@@ -61,6 +61,11 @@ export async function createPayment(data: CreatePaymentData) {
             type: true,
           },
         },
+        order: {
+          select: {
+            customerId: true,
+          },
+        },
       },
     });
 
@@ -97,6 +102,92 @@ export async function createPayment(data: CreatePaymentData) {
       );
     }
 
+    if (data.method !== "PAY_FROM_ACCOUNT") {
+      return tx.payment.create({
+        data: {
+          businessId: data.businessId,
+          branchId: data.branchId,
+          invoiceId: data.invoiceId,
+          amount: data.amount,
+          method: data.method,
+          ...(data.reference !== undefined && {
+            reference: data.reference,
+          }),
+          ...(data.note !== undefined && {
+            note: data.note,
+          }),
+        },
+      });
+    }
+
+    const customerId = invoice.order.customerId;
+
+    const account = await tx.customerAccount.findFirst({
+      where: {
+        customerId,
+        businessId: data.businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!account) {
+      throw new AppError(
+        "This customer does not have an account balance",
+        422,
+      );
+    }
+
+    const transactions = await tx.customerAccountTransaction.findMany({
+      where: {
+        customerAccountId: account.id,
+        businessId: data.businessId,
+      },
+      select: {
+        type: true,
+        amount: true,
+      },
+    });
+
+    const availableBalance = transactions.reduce(
+      (sum, transaction) => {
+        switch (transaction.type) {
+          case "CREDIT":
+            return sum + transaction.amount;
+          case "DEBIT":
+            return sum - transaction.amount;
+          case "ADJUSTMENT":
+            return sum + transaction.amount;
+          default:
+            return sum;
+        }
+      },
+      0,
+    );
+
+    if (availableBalance < data.amount) {
+      throw new AppError(
+        `Insufficient customer account balance. Available balance is ${availableBalance}`,
+        422,
+      );
+    }
+
+    const accountTransaction =
+      await tx.customerAccountTransaction.create({
+        data: {
+          businessId: data.businessId,
+          branchId: data.branchId,
+          customerAccountId: account.id,
+          type: "DEBIT",
+          amount: data.amount,
+          invoiceId: invoice.id,
+          ...(data.note !== undefined && {
+            note: data.note,
+          }),
+        },
+      });
+
     return tx.payment.create({
       data: {
         businessId: data.businessId,
@@ -104,6 +195,7 @@ export async function createPayment(data: CreatePaymentData) {
         invoiceId: data.invoiceId,
         amount: data.amount,
         method: data.method,
+        customerAccountTransactionId: accountTransaction.id,
         ...(data.reference !== undefined && {
           reference: data.reference,
         }),

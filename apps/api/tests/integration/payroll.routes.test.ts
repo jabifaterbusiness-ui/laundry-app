@@ -1448,7 +1448,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/payments/${PAYMENT_ID}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "Routine payroll payment void test" });
 
     expect(res.status).toBe(200);
     expect(res.body.payment.status).toBe("VOID");

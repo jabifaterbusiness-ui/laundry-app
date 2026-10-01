@@ -39,6 +39,7 @@ import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middlew
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
+import { requirePlatformOperational } from "./modules/platform/platform-controls.middleware.js";
 import { subscriptionPaymentWebhookRouter } from "./modules/subscriptions/subscription-payment-webhook.routes.js";
 
 export function createApp() {
@@ -94,6 +95,7 @@ export function createApp() {
     v1.use(
       path,
       requireAuth,
+      requirePlatformOperational,
       requireBusinessContext,
       requireActiveBusinessSubscription,
       router,

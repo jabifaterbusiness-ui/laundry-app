@@ -28,6 +28,14 @@ vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
   ]),
 }));
 
+vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
+  issueSensitiveAuthorization: vi.fn().mockResolvedValue({
+    token: "sensitive-token",
+    expiresAt: new Date(Date.now() + 300000),
+  }),
+  revokeSensitiveAuthorizations: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/modules/auth/auth.service.js", () => ({
   createPasswordResetToken: vi.fn().mockResolvedValue("raw-reset-token"),
   invalidatePasswordResetToken: vi.fn().mockResolvedValue(undefined),
@@ -52,11 +60,13 @@ import {
   forgotPassword,
   login,
   me,
+  reauthorize,
   resetPasswordController,
   account,
   changePassword,
 } from "../../src/modules/auth/auth.controller.js";
 
+import { issueSensitiveAuthorization } from "../../src/modules/auth/sensitive-authorization.service.js";
 import { getEffectivePermissionCodes } from "../../src/modules/permissions/permissions.service.js";
 
 const findUniqueUser = vi.mocked(prisma.user.findUnique);
@@ -69,6 +79,9 @@ const hashPasswordMock = vi.mocked(hashPassword);
 const createPasswordResetTokenMock = vi.mocked(createPasswordResetToken);
 const invalidatePasswordResetTokenMock = vi.mocked(invalidatePasswordResetToken);
 const resetPasswordMock = vi.mocked(resetPassword);
+const issueSensitiveAuthorizationMock = vi.mocked(
+  issueSensitiveAuthorization,
+);
 
 const getEffectivePermissionCodesMock = vi.mocked(getEffectivePermissionCodes);
 
@@ -97,8 +110,155 @@ function makeRes() {
   return res;
 }
 
+describe("reauthorize", () => {
+  it("requires the current password and returns a sensitive authorization", async () => {
+    findUniqueUser.mockResolvedValue({
+      ...baseUser,
+      passwordHash: "stored-hash",
+    } as never);
+
+    verifyPasswordMock.mockResolvedValue(true);
+    issueSensitiveAuthorizationMock.mockResolvedValue({
+      token: "sensitive-token",
+      expiresAt: new Date(Date.now() + 300000),
+    });
+
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        password: "correct-password",
+      },
+      correlationId: "corr-1",
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await reauthorize(req, res);
+
+    expect(verifyPasswordMock).toHaveBeenCalledWith(
+      "stored-hash",
+      "correct-password",
+    );
+
+    expect(issueSensitiveAuthorizationMock).toHaveBeenCalledWith({
+      userId: "user-1",
+      businessId: "biz-1",
+    });
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.sensitive_reauthorization",
+        entityType: "User",
+        entityId: "user-1",
+        businessId: "biz-1",
+        actorUserId: "user-1",
+        correlationId: "corr-1",
+      }),
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      token: "sensitive-token",
+      expiresAt: expect.any(Date),
+    });
+  });
+
+  it("rejects an incorrect password and does not issue authorization", async () => {
+    findUniqueUser.mockResolvedValue({
+      ...baseUser,
+      passwordHash: "stored-hash",
+    } as never);
+
+    verifyPasswordMock.mockResolvedValue(false);
+
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        password: "wrong-password",
+      },
+      correlationId: "corr-2",
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await expect(reauthorize(req, res)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+
+    expect(issueSensitiveAuthorizationMock).not.toHaveBeenCalled();
+
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.sensitive_reauthorization_failed",
+        entityType: "User",
+        entityId: "user-1",
+        businessId: "biz-1",
+        actorUserId: "user-1",
+        correlationId: "corr-2",
+      }),
+    );
+  });
+
+  it("does not issue authorization for an inactive user", async () => {
+    findUniqueUser.mockResolvedValue({
+      ...baseUser,
+      passwordHash: "stored-hash",
+      isActive: false,
+    } as never);
+
+    const req = {
+      user: {
+        id: "user-1",
+        businessId: "biz-1",
+      },
+      body: {
+        password: "correct-password",
+      },
+      correlationId: "corr-3",
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await expect(reauthorize(req, res)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+
+    expect(verifyPasswordMock).not.toHaveBeenCalled();
+    expect(issueSensitiveAuthorizationMock).not.toHaveBeenCalled();
+  });
+
+  it("requires authentication", async () => {
+    const req = {
+      user: undefined,
+      body: {
+        password: "correct-password",
+      },
+    } as unknown as Request;
+
+    const res = makeRes();
+
+    await expect(reauthorize(req, res)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+
+    expect(findUniqueUser).not.toHaveBeenCalled();
+    expect(issueSensitiveAuthorizationMock).not.toHaveBeenCalled();
+  });
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  verifyPasswordMock.mockResolvedValue(true);
+  issueSensitiveAuthorizationMock.mockResolvedValue({
+    token: "sensitive-token",
+    expiresAt: new Date(Date.now() + 300000),
+  });
 });
 
 describe("auth controller - password reset", () => {

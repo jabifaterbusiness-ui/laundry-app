@@ -314,6 +314,53 @@ export async function mergeCustomer(
       });
     }
 
+    const sourceAccount = await tx.customerAccount.findFirst({
+      where: {
+        customerId: customer.id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const targetAccount = await tx.customerAccount.findFirst({
+      where: {
+        customerId: targetCustomer.id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (sourceAccount && targetAccount) {
+      await tx.customerAccountTransaction.updateMany({
+        where: {
+          businessId,
+          customerAccountId: sourceAccount.id,
+        },
+        data: {
+          customerAccountId: targetAccount.id,
+        },
+      });
+
+      await tx.customerAccount.delete({
+        where: {
+          id: sourceAccount.id,
+        },
+      });
+    } else if (sourceAccount && !targetAccount) {
+      await tx.customerAccount.update({
+        where: {
+          id: sourceAccount.id,
+        },
+        data: {
+          customerId: targetCustomer.id,
+        },
+      });
+    }
+
     await tx.customer.updateMany({
       where: {
         id: customer.id,
@@ -334,18 +381,6 @@ export async function mergeCustomer(
   });
 }
 
-/**
- * Transfers everything represented by a customer's order history to another
- * customer account within the same business.
- *
- * Orders are reassigned to the target customer in one transaction. Their
- * related order items, garments, invoices, and payments remain attached to
- * those orders/invoices, so the complete transactional history moves with
- * the account without rewriting historical invoice/payment snapshots.
- *
- * Customer records themselves are not deleted or merged here. Full duplicate
- * account consolidation belongs to MA.
- */
 export async function transferCustomer(
   customerId: string,
   businessId: string,
@@ -411,6 +446,53 @@ export async function transferCustomer(
         where: {
           businessId,
           customerId: customer.id,
+        },
+        data: {
+          customerId: targetCustomer.id,
+        },
+      });
+    }
+
+    const sourceAccount = await tx.customerAccount.findFirst({
+      where: {
+        customerId: customer.id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const targetAccount = await tx.customerAccount.findFirst({
+      where: {
+        customerId: targetCustomer.id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (sourceAccount && targetAccount) {
+      await tx.customerAccountTransaction.updateMany({
+        where: {
+          businessId,
+          customerAccountId: sourceAccount.id,
+        },
+        data: {
+          customerAccountId: targetAccount.id,
+        },
+      });
+
+      await tx.customerAccount.delete({
+        where: {
+          id: sourceAccount.id,
+        },
+      });
+    } else if (sourceAccount && !targetAccount) {
+      await tx.customerAccount.update({
+        where: {
+          id: sourceAccount.id,
         },
         data: {
           customerId: targetCustomer.id,

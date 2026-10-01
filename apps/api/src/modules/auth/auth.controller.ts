@@ -14,6 +14,7 @@ import {
   rotateRefreshToken,
   verifyPassword,
 } from "./auth.service.js";
+import { issueSensitiveAuthorization, revokeSensitiveAuthorizations } from "./sensitive-authorization.service.js";
 
 async function branchMemberships(userId: string) {
   const memberships = await prisma.userBranch.findMany({
@@ -73,6 +74,61 @@ export async function login(req: Request, res: Response) {
   });
 }
 
+const reauthorizeSchema = z.object({
+  password: z.string().min(1, "Password is required"),
+});
+
+export async function reauthorize(req: Request, res: Response) {
+  if (!req.user?.id) {
+    throw new AppError("Authentication is required", 401);
+  }
+
+  const { password } = reauthorizeSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      id: true,
+      passwordHash: true,
+      isActive: true,
+      businessId: true,
+    },
+  });
+
+  if (
+    !user ||
+    !user.isActive ||
+    !(await verifyPassword(user.passwordHash, password))
+  ) {
+    await recordAuditEvent({
+      action: "user.sensitive_reauthorization_failed",
+      entityType: "User",
+      entityId: req.user.id,
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      correlationId: req.correlationId ?? null,
+    });
+
+    throw new AppError("Invalid password", 401);
+  }
+
+  const authorization = await issueSensitiveAuthorization({
+    userId: user.id,
+    businessId: user.businessId,
+  });
+
+  await recordAuditEvent({
+    action: "user.sensitive_reauthorization",
+    entityType: "User",
+    entityId: user.id,
+    businessId: user.businessId,
+    actorUserId: user.id,
+    correlationId: req.correlationId ?? null,
+  });
+
+  res.status(200).json(authorization);
+}
+
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
@@ -92,6 +148,8 @@ export async function logout(req: Request, res: Response) {
   const owner = await revokeRefreshToken(refreshToken);
 
   if (owner) {
+    await revokeSensitiveAuthorizations(owner.id);
+
     await recordAuditEvent({
       action: "user.logout",
       entityType: "User",
@@ -223,6 +281,8 @@ export async function changePassword(req: Request, res: Response) {
     }),
   ]);
 
+  await revokeSensitiveAuthorizations(user.id);
+
   await recordAuditEvent({
     action: "user.password_changed",
     entityType: "User",
@@ -303,6 +363,8 @@ export async function resetPasswordController(req: Request, res: Response) {
   const { token, password } = resetPasswordSchema.parse(req.body);
 
   const userId = await resetPassword(token, password);
+
+  await revokeSensitiveAuthorizations(userId);
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

@@ -6,6 +6,7 @@ import { generateBusinessFinancialStatement } from "./business-financial-stateme
 import { renderFinancialStatementEmail } from "./templates/financial-statement-email.js";
 import { renderFinancialStatementImage } from "./templates/financial-statement-image.js";
 import { logger } from "../../lib/logger.js";
+import { getPlatformConfig } from "../platform/platform-config.service.js";
 
 type BusinessForScheduler = {
   id: string;
@@ -308,7 +309,9 @@ async function deliverOne(
 async function processBusiness(
   business: BusinessForScheduler,
   now: Date,
+  platformConfig: Awaited<ReturnType<typeof getPlatformConfig>>,
 ) {
+  if (!platformConfig.automatedNotificationsEnabled) return;
   if (!isDue(now, business)) return;
 
   const range = previousMonthRange(now, business.timezone);
@@ -376,7 +379,11 @@ async function processBusiness(
       }
     }
 
-    if (config.whatsappEnabled && recipient.whatsappNumber) {
+    if (
+      platformConfig.whatsappMessagingEnabled &&
+      config.whatsappEnabled &&
+      recipient.whatsappNumber
+    ) {
       try {
         await deliverOne(
           statement.id,
@@ -418,6 +425,14 @@ async function processBusiness(
 export async function processMonthlyFinancialStatements(
   now = new Date(),
 ) {
+  const platformConfig = await getPlatformConfig();
+
+  if (!platformConfig.automatedNotificationsEnabled) {
+    return {
+      businessesScanned: 0,
+    };
+  }
+
   const businesses = await prisma.business.findMany({
     where: {
       isActive: true,
@@ -449,7 +464,7 @@ export async function processMonthlyFinancialStatements(
 
   for (const business of businesses) {
     try {
-      await processBusiness(business, now);
+      await processBusiness(business, now, platformConfig);
     } catch (error) {
       logger.error(
         error instanceof Error

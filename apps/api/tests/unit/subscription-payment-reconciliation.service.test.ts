@@ -106,7 +106,6 @@ describe("subscription payment reconciliation", () => {
         origin: "ONLINE",
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
         status: "CREATED",
       },
     });

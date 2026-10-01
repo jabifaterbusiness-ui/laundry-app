@@ -175,12 +175,14 @@ describe("quick-operations.service", () => {
           paymentId: "33333333-3333-4333-8333-333333333333",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(voidPaymentMock).toHaveBeenCalledWith(
         "33333333-3333-4333-8333-333333333333",
         "biz-A",
         "branch-A",
+        "test quick operation reason",
       );
 
       expect(response).toEqual({
@@ -216,6 +218,7 @@ describe("quick-operations.service", () => {
           status: "READY_FOR_PICKUP",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(getOrderForBusinessMock).toHaveBeenCalledWith(
@@ -268,6 +271,7 @@ describe("quick-operations.service", () => {
             status: "COMPLETED",
           },
           true,
+          "test quick operation reason",
         ),
       ).rejects.toMatchObject({
         message: "Order not found",
@@ -305,6 +309,7 @@ describe("quick-operations.service", () => {
             status: "COMPLETED",
           },
           true,
+          "test quick operation reason",
         ),
       ).rejects.toMatchObject({
         message: "Insufficient permissions to change order status",
@@ -332,6 +337,8 @@ describe("quick-operations.service", () => {
     });
 
     it("requires confirmation before executing the update", async () => {
+      hasPermissionMock.mockResolvedValue(true);
+
       await expect(
         executeQuickOperation(
           CONTEXT,
@@ -370,6 +377,7 @@ describe("quick-operations.service", () => {
           customerId: "22222222-2222-4222-8222-222222222222",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(transferOrderMock).toHaveBeenCalledWith(
@@ -397,6 +405,7 @@ describe("quick-operations.service", () => {
           operationName: "Transfer Invoice",
           orderNumber: "00042",
           customerId: "22222222-2222-4222-8222-222222222222",
+          reason: "test quick operation reason",
         },
       });
     });
@@ -626,6 +635,7 @@ describe("quick-operations.service", () => {
           targetCustomerId: result.targetCustomer.id,
         },
         true,
+        "test quick operation reason",
       );
 
       expect(transferCustomerMock).toHaveBeenCalledWith(
@@ -649,6 +659,7 @@ describe("quick-operations.service", () => {
         metadata: {
           operationCode: "TC",
           operationName: "Transfer Customer",
+          reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
           transferredOrderCount: 2,
           transferredOrderIds: [
@@ -719,6 +730,7 @@ describe("quick-operations.service", () => {
           targetCustomerId: result.targetCustomer.id,
         },
         true,
+        "test quick operation reason",
       );
 
       expect(mergeCustomerMock).toHaveBeenCalledWith(
@@ -742,6 +754,7 @@ describe("quick-operations.service", () => {
         metadata: {
           operationCode: "MA",
           operationName: "Merge Account",
+          reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
           mergedOrderCount: 2,
           mergedOrderIds: [
@@ -811,12 +824,14 @@ describe("quick-operations.service", () => {
           paymentId: "33333333-3333-4333-8333-333333333333",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(voidPaymentMock).toHaveBeenCalledWith(
         "33333333-3333-4333-8333-333333333333",
         "biz-A",
         "branch-A",
+        "test quick operation reason",
       );
 
       expect(response).toEqual({
@@ -833,6 +848,7 @@ describe("quick-operations.service", () => {
           branchId: "branch-A",
           metadata: expect.objectContaining({
             operationCode: "VO",
+            reason: "test quick operation reason",
             invoiceId: "44444444-4444-4444-8444-444444444444",
             amount: 5000,
             method: "TRANSFER",
@@ -874,6 +890,7 @@ describe("quick-operations.service", () => {
           note: "Customer refund",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(refundPaymentMock).toHaveBeenCalledWith({
@@ -897,6 +914,7 @@ describe("quick-operations.service", () => {
         metadata: {
           operationCode: "RF",
           operationName: "Refund",
+          reason: "test quick operation reason",
           originalPaymentId: PAYMENT_ID,
           invoiceId: INVOICE_ID,
           amount: 2000,
@@ -932,6 +950,7 @@ describe("quick-operations.service", () => {
           method: "CASH",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(refundPaymentMock).toHaveBeenCalledWith({
@@ -1079,6 +1098,7 @@ describe("quick-operations.service", () => {
           reference: "ISSUE-001",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(createInventoryMovementMock).toHaveBeenCalledWith(
@@ -1091,7 +1111,7 @@ describe("quick-operations.service", () => {
           quantity: 3,
           type: "ISSUE",
           createdById: "user-A",
-          reason: "Damaged supplies",
+          reason: "test quick operation reason",
           reference: "ISSUE-001",
         },
       );
@@ -1148,6 +1168,7 @@ describe("quick-operations.service", () => {
           quantity: 10,
         },
         true,
+        "test quick operation reason",
       );
 
       expect(createInventoryMovementMock).toHaveBeenCalledWith(
@@ -1160,6 +1181,7 @@ describe("quick-operations.service", () => {
           quantity: 10,
           type: "RECEIPT",
           createdById: "user-A",
+          reason: "test quick operation reason",
         },
       );
 
@@ -1209,6 +1231,7 @@ describe("quick-operations.service", () => {
           channel: "EMAIL",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(resendDigitalReceiptMock).toHaveBeenCalledWith({
@@ -1241,6 +1264,7 @@ describe("quick-operations.service", () => {
           channel: "WHATSAPP",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(resendDigitalReceiptMock).toHaveBeenCalledWith({
@@ -1267,6 +1291,7 @@ describe("quick-operations.service", () => {
           channel: "EMAIL",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(resendDigitalReceiptMock).toHaveBeenCalledWith(
@@ -1318,6 +1343,7 @@ describe("quick-operations.service", () => {
           channel: "EMAIL",
         },
         true,
+        "test quick operation reason",
       );
 
       expect(recordAuditEventMock).toHaveBeenCalledWith({
@@ -1687,6 +1713,7 @@ describe("quick-operations.service", () => {
           pendingOfflineOperationCount: 3,
         },
         true,
+        "test quick operation reason",
       );
 
       expect(response).toEqual({
@@ -1718,6 +1745,7 @@ describe("quick-operations.service", () => {
         metadata: {
           operationCode: "SOS",
           operationName: "Safe Stop / Safe Exit",
+          reason: "test quick operation reason",
           safeStop: true,
           offlineQueueReconciled: false,
           pendingOfflineOperationCount: 3,
@@ -1782,6 +1810,7 @@ describe("quick-operations.service", () => {
             pendingOfflineOperationCount: 0,
           },
           true,
+          "test quick operation reason",
         ),
       ).rejects.toMatchObject({
         message: "SOS does not accept business record input",
@@ -1798,6 +1827,7 @@ describe("quick-operations.service", () => {
           "SOS",
           {},
           true,
+          "test quick operation reason",
         ),
       ).rejects.toMatchObject({
         message: "SOS requires a valid pending offline operation count",
@@ -1816,6 +1846,7 @@ describe("quick-operations.service", () => {
             pendingOfflineOperationCount: -1,
           },
           true,
+          "test quick operation reason",
         ),
       ).rejects.toMatchObject({
         message: "SOS requires a valid pending offline operation count",

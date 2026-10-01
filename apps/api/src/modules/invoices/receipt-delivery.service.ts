@@ -5,6 +5,7 @@ import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.j
 import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
 import { sendReceiptEmail } from "./providers/resend.provider.js";
 import { sendWhatsAppReceipt } from "./providers/whatsapp.provider.js";
+import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 
 export type ReceiptDeliveryChannel = "EMAIL" | "WHATSAPP";
 
@@ -102,6 +103,8 @@ export async function resendDigitalReceipt(
   }
 
   try {
+    await assertWhatsAppMessagingEnabled();
+
     const image = await renderCustomerReceiptImage(receipt);
 
     const delivery = await sendWhatsAppReceipt({

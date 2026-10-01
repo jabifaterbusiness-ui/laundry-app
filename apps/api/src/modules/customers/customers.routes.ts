@@ -1,8 +1,23 @@
 import { Router } from "express";
-import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireBusinessContext,
+  requireSensitiveAuthorization,
+} from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
-import { changeStatus, create, getOne, list, update } from "./customers.controller.js";
+import {
+  changeStatus,
+  create,
+  getOne,
+  list,
+  update,
+} from "./customers.controller.js";
+import {
+  getAccount,
+  fundAccount,
+} from "./customer-account.controller.js";
 
 // Access is controlled by the individual permission assignments.
 // Business owners retain the platform-defined full-access behavior.
@@ -14,6 +29,21 @@ customersRouter.use(requireAuth, requireBusinessContext);
 
 customersRouter.post("/", requirePermission("customers.create"), asyncHandler(create));
 customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list));
+
+customersRouter.get(
+  "/:id/account",
+  requirePermission("customer_accounts.view"),
+  asyncHandler(getAccount),
+);
+
+customersRouter.post(
+  "/:id/account/fund",
+  requirePermission("customer_accounts.manage"),
+  asyncHandler(requireBranchContext),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(fundAccount),
+);
+
 customersRouter.get("/:id", requirePermission("customers.view"), asyncHandler(getOne));
 customersRouter.patch("/:id", requirePermission("customers.update"), asyncHandler(update));
 customersRouter.post("/:id/status", requirePermission("customers.change_status"), asyncHandler(changeStatus));

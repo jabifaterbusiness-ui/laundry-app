@@ -3939,3 +3939,37 @@ a {
     flex-direction: column;
   }
 }
+
+.sensitive-authorization-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 45%);
+}
+
+.sensitive-authorization-dialog {
+  width: min(100%, 28rem);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 25%);
+}
+
+.sensitive-authorization-dialog h2 {
+  margin-top: 0;
+}
+
+.sensitive-authorization-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0 1rem;
+}
+
+.sensitive-authorization-dialog > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

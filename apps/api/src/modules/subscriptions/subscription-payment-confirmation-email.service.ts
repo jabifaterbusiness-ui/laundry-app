@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
 import { renderSubscriptionPaymentConfirmationEmail } from "./templates/subscription-payment-confirmation-email.js";
+import { isAutomatedNotificationsEnabled } from "../platform/platform-controls.middleware.js";
 
 function sanitizeEmailError(error: unknown): string {
   const message =
@@ -54,6 +55,26 @@ export async function sendSubscriptionPaymentConfirmationEmail(
     throw new Error(
       "Subscription payment confirmation email requires a successful payment",
     );
+  }
+
+  if (!(await isAutomatedNotificationsEnabled())) {
+    await recordAuditEvent({
+      action: "subscription.payment.confirmation_email_skipped",
+      entityType: "SubscriptionPayment",
+      entityId: payment.id,
+      businessId: payment.businessId,
+      actorUserId: actorUserId ?? null,
+      correlationId: correlationId ?? null,
+      metadata: {
+        paymentReference: payment.paymentReference,
+        reason: "automated_notifications_disabled",
+      },
+    });
+
+    return {
+      sent: false,
+      skipped: true,
+    };
   }
 
   if (payment.confirmationEmailSentAt) {

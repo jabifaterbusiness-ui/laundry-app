@@ -7,6 +7,7 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { requireOfflineSyncEnabled } from "../platform/platform-controls.middleware.js";
 import { enqueue, getOne, list, replay } from "./sync.controller.js";
 
 const SYNC_ROLES = [
@@ -19,6 +20,7 @@ export const syncRouter = Router();
 
 syncRouter.use(
   requireAuth,
+  asyncHandler(requireOfflineSyncEnabled),
   requireBusinessContext,
   asyncHandler(requireBranchContext),
 );

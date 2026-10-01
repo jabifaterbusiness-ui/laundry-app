@@ -636,6 +636,69 @@ describe("OrdersPage quick customer switching", () => {
     expect(workspace?.activeOrder?.id).toBe(orderA.id);
   });
 
+  it("shows the offline-saved message when order creation is queued", async () => {
+    vi.mocked(createOrderWithOfflineQueue).mockResolvedValue({
+      queued: true,
+      operation: {
+        id: 1,
+        businessId: "business-a",
+        branchId: "branch-a",
+        actorUserId: "user-a",
+        clientOperationId: "client-operation-a",
+        operationType: "ORDER_CREATE",
+        payload: {
+          customerId: customerA.id,
+          items: [
+            {
+              serviceId: serviceA.id,
+              quantity: 1,
+              colors: [],
+            },
+          ],
+        },
+        status: "PENDING",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    } as never);
+
+    renderPage();
+
+    await screen.findByText("No orders found.");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^New order$/i,
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Customer"), {
+      target: { value: customerA.id },
+    });
+
+    const selects = screen.getAllByRole("combobox");
+
+    fireEvent.change(selects[3]!, {
+      target: { value: serviceA.id },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /create order/i,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("alert"),
+    ).toHaveTextContent(
+      "Order saved offline and will be synchronized when the connection is restored.",
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /new order/i }),
+    ).toBeInTheDocument();
+  });
+
   it("closes only the workspace and keeps the customer available", async () => {
     renderPage();
 

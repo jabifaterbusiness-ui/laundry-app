@@ -589,7 +589,8 @@ describe("Expenses routes - voiding", () => {
     const res = await request(app)
       .post(`/api/v1/expenses/${EXPENSE_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "Routine expense void test" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("VOID");
@@ -620,7 +621,8 @@ describe("Expenses routes - voiding", () => {
     const res = await request(app)
       .post(`/api/v1/expenses/${EXPENSE_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "Routine expense void test" });
 
     expect(res.status).toBe(400);
     expect(expenseUpdate).not.toHaveBeenCalled();

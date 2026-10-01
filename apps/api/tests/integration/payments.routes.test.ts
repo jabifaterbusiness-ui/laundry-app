@@ -4,6 +4,20 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        allowNewBusinessRegistration: true,
+        maintenanceMode: false,
+        whatsappMessagingEnabled: true,
+        automatedNotificationsEnabled: true,
+        offlineSyncEnabled: true,
+        version: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+      update: vi.fn(),
+    },
     subscription: {
       findUnique: vi.fn().mockResolvedValue({
         id: "sub-test",
@@ -27,6 +41,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     userBranch: {
       findUnique: vi.fn(),
+    },
+    sensitiveAuthorization: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
     },
     permission: {
       findUnique: vi.fn(),
@@ -54,6 +73,9 @@ const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
 const paymentCreate = vi.mocked(prisma.payment.create);
 const invoiceFindFirst = vi.mocked(prisma.invoice.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const sensitiveAuthorizationFindUnique = vi.mocked(
+  prisma.sensitiveAuthorization.findUnique,
+);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
@@ -111,6 +133,21 @@ function mockTransaction() {
   );
 }
 
+function allowSensitiveAuthorization(
+  userId: string,
+  businessId: string,
+) {
+  sensitiveAuthorizationFindUnique.mockResolvedValue({
+    id: "sensitive-auth-1",
+    tokenHash: "test-token-hash",
+    userId,
+    businessId,
+    expiresAt: new Date(Date.now() + 60_000),
+    revokedAt: null,
+    createdAt: new Date(),
+  } as never);
+}
+
 const paymentFixture = {
   id: PAYMENT_A,
   businessId: "biz-A",
@@ -141,6 +178,7 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  allowSensitiveAuthorization("user-1", "biz-A");
 });
 
 describe("Payments routes - authentication", () => {
@@ -200,9 +238,54 @@ describe("Payments routes - branch context", () => {
   });
 });
 
+describe("Payments routes - sensitive authorization", () => {
+  it("requires sensitive authorization before creating a payment", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    sensitiveAuthorizationFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post("/api/v1/payments")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        invoiceId: INVOICE_A,
+        amount: 4000,
+        method: "CASH",
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain(
+      "Sensitive authorization is required",
+    );
+    expect(invoiceFindFirst).not.toHaveBeenCalled();
+    expect(paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it("requires sensitive authorization before voiding a payment", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    sensitiveAuthorizationFindUnique.mockResolvedValue(null);
+
+    const res = await request(app)
+      .patch(`/api/v1/payments/${PAYMENT_A}/void`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({
+        reason: "Payment was posted in error",
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain(
+      "Sensitive authorization is required",
+    );
+    expect(paymentFindFirst).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("Payments routes - authorization", () => {
   it("STAFF can create a payment", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    allowSensitiveAuthorization("user-staff-a", "biz-A");
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindFirst.mockResolvedValue({
@@ -220,6 +303,7 @@ describe("Payments routes - authorization", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 4000,
@@ -245,6 +329,7 @@ describe("Payments routes - authorization", () => {
 
   it("BRANCH_MANAGER can create a payment", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    allowSensitiveAuthorization("user-mgr-a", "biz-A");
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     invoiceFindFirst.mockResolvedValue({
@@ -262,6 +347,7 @@ describe("Payments routes - authorization", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${MANAGER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 4000,
@@ -289,6 +375,7 @@ describe("Payments routes - authorization", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 4000,
@@ -322,6 +409,7 @@ describe("Payments routes - permission enforcement", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 4000,
@@ -375,6 +463,7 @@ describe("Payments routes - creation validation", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         amount: 5000,
         method: "CASH",
@@ -391,6 +480,7 @@ describe("Payments routes - creation validation", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: "not-a-uuid",
         amount: 5000,
@@ -408,6 +498,7 @@ describe("Payments routes - creation validation", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 0,
@@ -425,6 +516,7 @@ describe("Payments routes - creation validation", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 5000,
@@ -442,6 +534,7 @@ describe("Payments routes - creation validation", () => {
       .post("/api/v1/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         invoiceId: INVOICE_A,
         amount: 5000,
@@ -653,6 +746,7 @@ describe("Payment void route", () => {
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "Payment was posted in error and needs to be voided",
       });
@@ -681,6 +775,7 @@ describe("Payment void route", () => {
 
   it("BRANCH_MANAGER can void a posted payment", async () => {
     allowBranch("user-mgr-a", BRANCH_A, "biz-A");
+    allowSensitiveAuthorization("user-mgr-a", "biz-A");
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     paymentFindFirst.mockResolvedValue(paymentFixture as never);
@@ -696,6 +791,7 @@ describe("Payment void route", () => {
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${MANAGER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "Payment was posted in error and needs to be voided",
       });
@@ -707,6 +803,7 @@ describe("Payment void route", () => {
 
   it("STAFF can void a payment when payments.manage is allowed", async () => {
     allowBranch("user-staff-a", BRANCH_A, "biz-A");
+    allowSensitiveAuthorization("user-staff-a", "biz-A");
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     paymentFindFirst.mockResolvedValue(paymentFixture as never);
@@ -724,6 +821,7 @@ describe("Payment void route", () => {
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "Payment was posted in error and needs to be voided",
       });
@@ -736,6 +834,7 @@ describe("Payment void route", () => {
 
   it("cannot void a payment outside the authenticated business and branch", async () => {
     allowBranch("user-owner-b", BRANCH_B, "biz-B");
+    allowSensitiveAuthorization("user-owner-b", "biz-B");
 
     paymentFindFirst.mockResolvedValue(null);
 
@@ -743,6 +842,7 @@ describe("Payment void route", () => {
       .patch(`/api/v1/payments/${PAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_B}`)
       .set("X-Branch-Id", BRANCH_B)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "Payment was posted in error and needs to be voided",
       });

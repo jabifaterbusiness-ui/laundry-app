@@ -362,6 +362,7 @@ describe("Quick Operations routes - MU", () => {
           status: "READY_FOR_PICKUP",
         },
         confirmed: true,
+        reason: "Routine manual update test",
       });
 
     expect(res.status).toBe(200);
@@ -427,6 +428,7 @@ describe("Quick Operations routes - MU", () => {
   it("rejects an order outside the authenticated business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
+    orderFindFirst.mockReset();
     orderFindFirst.mockResolvedValue(null);
 
     const res = await request(app)
@@ -440,6 +442,7 @@ describe("Quick Operations routes - MU", () => {
           status: "COMPLETED",
         },
         confirmed: true,
+        reason: "Routine manual update isolation test",
       });
 
     expect(res.status).toBe(404);
@@ -580,6 +583,7 @@ describe("Quick Operations routes - TI", () => {
           customerId: CUSTOMER_B,
         },
         confirmed: true,
+        reason: "Routine invoice transfer test",
       });
 
     expect(res.status).toBe(200);
@@ -641,6 +645,7 @@ describe("Quick Operations routes - VO", () => {
           paymentId: PAYMENT_A,
         },
         confirmed: true,
+        reason: "Routine payment void test",
       });
 
     expect(res.status).toBe(200);
@@ -908,6 +913,7 @@ describe("Quick Operations routes - RF", () => {
           note: "Customer refund",
         },
         confirmed: true,
+        reason: "Routine refund test",
       });
 
     expect(res.status).toBe(200);
@@ -1084,6 +1090,7 @@ describe("Quick Operations routes - inventory", () => {
           quantity: 3,
         },
         confirmed: true,
+        reason: "Routine stock issue test",
       });
 
     expect(res.status).toBe(200);
@@ -1126,6 +1133,7 @@ describe("Quick Operations routes - SOS", () => {
           pendingOfflineOperationCount: 0,
         },
         confirmed: true,
+        reason: "Routine safe stop test",
       });
 
     expect(res.status).toBe(200);
@@ -1218,6 +1226,7 @@ describe("Quick Operations routes - SOS", () => {
           pendingOfflineOperationCount: 0,
         },
         confirmed: true,
+        reason: "Routine safe stop validation test",
       });
 
     expect(res.status).toBe(400);
@@ -1338,6 +1347,7 @@ describe("Quick Operations routes - SO", () => {
 
   it("returns 404 when the order is outside the authenticated business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockReset();
     orderFindFirst.mockResolvedValue(null);
 
     const res = await request(app)
@@ -1616,6 +1626,7 @@ describe("Quick Operations routes - TC", () => {
           targetCustomerId: CUSTOMER_B,
         },
         confirmed: true,
+        reason: "Routine customer transfer test",
       });
 
     expect(res.status).toBe(200);
@@ -1686,6 +1697,7 @@ describe("Quick Operations routes - TC", () => {
           targetCustomerId: CUSTOMER_B,
         },
         confirmed: true,
+        reason: "Routine customer transfer isolation test",
       });
 
     expect(res.status).toBe(404);
@@ -1806,6 +1818,7 @@ describe("Quick Operations routes - MA", () => {
           targetCustomerId: CUSTOMER_B,
         },
         confirmed: true,
+        reason: "Routine customer merge test",
       });
 
     expect(res.status).toBe(200);
@@ -1888,6 +1901,7 @@ describe("Quick Operations routes - MA", () => {
           targetCustomerId: CUSTOMER_B,
         },
         confirmed: true,
+        reason: "Routine customer merge isolation test",
       });
 
     expect(res.status).toBe(404);

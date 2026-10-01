@@ -28,13 +28,17 @@ import { AccountPage } from "./pages/account/AccountPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
+import { SensitiveAuthorizationManager } from "./components/auth/SensitiveAuthorizationManager.js";
+import { SensitiveAuthorizationProvider } from "./components/auth/SensitiveAuthorizationProvider.js";
 
 function AuthenticatedLayout() {
   return (
     <RequireAuth>
-      <OfflineSyncManager />
-      <OfflineSubscriptionPaymentManager />
-      <AppShell>
+      <SensitiveAuthorizationProvider>
+        <OfflineSyncManager />
+        <OfflineSubscriptionPaymentManager />
+        <SensitiveAuthorizationManager />
+        <AppShell>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/data-management" element={<DataManagementPage />} />
@@ -57,7 +61,8 @@ function AuthenticatedLayout() {
           <Route path="/branches" element={<BranchesPage />} />
           <Route path="/account" element={<AccountPage />} />
         </Routes>
-      </AppShell>
+        </AppShell>
+      </SensitiveAuthorizationProvider>
     </RequireAuth>
   );
 }

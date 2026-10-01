@@ -115,26 +115,29 @@ model Business {
   // -------------------------------------------------------------------
   // SUBSCRIPTION
   // -------------------------------------------------------------------
-  subscription    Subscription?
-  paymentIdentity BusinessPaymentIdentity?
+  subscription            Subscription?
+  paymentIdentity         BusinessPaymentIdentity?
+  sensitiveAuthorizations SensitiveAuthorization[]
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches              Branch[]
-  users                 User[]
-  auditLogs             AuditLog[]
-  customers             Customer[]              @relation("BusinessCustomers")
-  customerStatusHistory CustomerStatusHistory[] @relation("BusinessCustomerStatusHistory")
-  services              Service[]
-  orders                Order[]
-  invoices              Invoice[]
-  payments              Payment[]
-  payrollPayments       PayrollPayment[]
-  orderNumberSequence   OrderNumberSequence?
-  migrationJobs         MigrationJob[]
-  garments              Garment[]
+  branches                    Branch[]
+  users                       User[]
+  auditLogs                   AuditLog[]
+  customers                   Customer[]                   @relation("BusinessCustomers")
+  customerStatusHistory       CustomerStatusHistory[]      @relation("BusinessCustomerStatusHistory")
+  customerAccounts            CustomerAccount[]
+  customerAccountTransactions CustomerAccountTransaction[]
+  services                    Service[]
+  orders                      Order[]
+  invoices                    Invoice[]
+  payments                    Payment[]
+  payrollPayments             PayrollPayment[]
+  orderNumberSequence         OrderNumberSequence?
+  migrationJobs               MigrationJob[]
+  garments                    Garment[]
 
   payrollPeriods               PayrollPeriod[]
   payrollRecords               PayrollRecord[]
@@ -172,12 +175,13 @@ model Branch {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  userBranches UserBranch[]
-  auditLogs    AuditLog[]
-  orders       Order[]
-  invoices     Invoice[]
-  payments     Payment[]
-  garments     Garment[]
+  userBranches                UserBranch[]
+  auditLogs                   AuditLog[]
+  orders                      Order[]
+  invoices                    Invoice[]
+  payments                    Payment[]
+  customerAccountTransactions CustomerAccountTransaction[]
+  garments                    Garment[]
 
   payrollPeriods        PayrollPeriod[]
   payrollRecords        PayrollRecord[]
@@ -225,10 +229,11 @@ model User {
   // baked into a long-lived token).
   branches UserBranch[]
 
-  refreshTokens       RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  auditLogs           AuditLog[]
-  migrationJobs       MigrationJob[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  sensitiveAuthorizations SensitiveAuthorization[]
+  auditLogs               AuditLog[]
+  migrationJobs           MigrationJob[]
 
   payrollRecords        PayrollRecord[]
   payrollPayments       PayrollPayment[]
@@ -265,6 +270,26 @@ model User {
 // (LOCKED decision #3). A row here grants a user access to a branch;
 // it does NOT by itself mean that branch is "active" for any given
 // request - that's request-scoped context, not stored state.
+model SensitiveAuthorization {
+  id String @id @default(uuid())
+
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([businessId, expiresAt])
+  @@map("sensitive_authorizations")
+}
+
 model UserBranch {
   id        String   @id @default(uuid())
   userId    String
@@ -418,6 +443,7 @@ model Customer {
 
   orders        Order[]
   statusHistory CustomerStatusHistory[]
+  account       CustomerAccount?
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -711,9 +737,10 @@ model Invoice {
   // Agreement printed on the customer copy.
   customerAgreement String
 
-  items    InvoiceItem[]
-  payments Payment[]
-  history  InvoiceHistory[]
+  items                       InvoiceItem[]
+  payments                    Payment[]
+  customerAccountTransactions CustomerAccountTransaction[] @relation("CustomerAccountTransactionInvoice")
+  history                     InvoiceHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -783,6 +810,92 @@ model InvoiceItem {
 }
 
 // ---------------------------------------------------------------------
+// CUSTOMER ACCOUNT / WALLET MODULE
+// ---------------------------------------------------------------------
+//
+// Customer accounts are business-wide. A customer therefore has one
+// account across the organisation rather than a separate wallet per
+// branch.
+//
+// CustomerAccountTransaction is an append-only financial ledger entry.
+// The account balance will be calculated from these entries rather than
+// stored as a mutable balance field.
+//
+// CREDIT      = money placed on the customer's account (POA)
+// DEBIT       = money consumed from the customer's account
+// ADJUSTMENT  = explicitly authorised correction
+//
+// Each transaction records the branch where the operation occurred.
+
+enum CustomerAccountTransactionType {
+  CREDIT
+  DEBIT
+  ADJUSTMENT
+}
+
+model CustomerAccount {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  transactions CustomerAccountTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@map("customer_accounts")
+}
+
+model CustomerAccountTransaction {
+  id String @id @default(uuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  customerAccountId String
+  customerAccount   CustomerAccount @relation(fields: [customerAccountId], references: [id], onDelete: Restrict)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  type CustomerAccountTransactionType
+
+  // Always stored as a positive whole-naira amount.
+  // Direction is represented by type.
+  amount Int
+
+  // Optional invoice association for account-funded payments.
+  invoiceId String?
+  invoice   Invoice? @relation("CustomerAccountTransactionInvoice", fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  // Set when this ledger transaction creates a Pay from Account payment.
+  payment Payment? @relation("PaymentCustomerAccountTransaction")
+
+  // Optional link to an earlier ledger transaction for an authorised
+  // adjustment/reversal. The original transaction remains immutable.
+  referenceTransactionId String?
+  referenceTransaction   CustomerAccountTransaction?  @relation("CustomerAccountTransactionReference", fields: [referenceTransactionId], references: [id], onDelete: Restrict)
+  referencedBy           CustomerAccountTransaction[] @relation("CustomerAccountTransactionReference")
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, customerAccountId, createdAt])
+  @@index([businessId, branchId, createdAt])
+  @@index([customerAccountId, createdAt])
+  @@index([invoiceId])
+  @@index([referenceTransactionId])
+  @@map("customer_account_transactions")
+}
+
+// ---------------------------------------------------------------------
 // PAYMENTS MODULE
 // ---------------------------------------------------------------------
 
@@ -793,6 +906,7 @@ enum PaymentMethod {
   CASH
   TRANSFER
   POS
+  PAY_FROM_ACCOUNT
 }
 
 // A recorded payment can be voided without deleting its historical record.
@@ -840,6 +954,10 @@ model Payment {
 
   // Optional internal note about the payment.
   note String?
+
+  // Present when this payment was funded from the customer's account.
+  customerAccountTransactionId String?                     @unique
+  customerAccountTransaction   CustomerAccountTransaction? @relation("PaymentCustomerAccountTransaction", fields: [customerAccountTransactionId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

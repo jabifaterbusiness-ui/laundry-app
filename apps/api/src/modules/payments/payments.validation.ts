@@ -15,7 +15,7 @@ export const createPaymentSchema = z
       .number()
       .int()
       .positive("Payment amount must be a positive whole number"),
-    method: z.enum(["CASH", "TRANSFER", "POS"]),
+    method: z.enum(["CASH", "TRANSFER", "POS", "PAY_FROM_ACCOUNT"]),
     reference: z
       .string()
       .trim()

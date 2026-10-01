@@ -201,6 +201,11 @@ function renderSubscription() {
 beforeEach(() => {
   vi.clearAllMocks();
 
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+
   mockedGetSubscription.mockResolvedValue(subscription);
   mockedGetSubscriptionPrices.mockResolvedValue(prices);
   mockedGetSubscriptionPaymentOptions.mockResolvedValue(paymentOptions);
@@ -318,6 +323,14 @@ describe("SubscriptionPage", () => {
 
     fireEvent.change(methodSelect, {
       target: { value: "CARD" },
+    });
+
+    const offlineReason = screen.getByRole("textbox", {
+      name: "Reason for saving payment offline",
+    });
+
+    fireEvent.change(offlineReason, {
+      target: { value: "routine offline payment test" },
     });
 
     const offlineButton = await screen.findByRole("button", {

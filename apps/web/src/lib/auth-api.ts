@@ -31,3 +31,15 @@ export async function changePassword(
     body: JSON.stringify(input),
   });
 }
+
+
+export async function reauthorize(
+  password: string,
+  accessToken: string,
+): Promise<{ token: string; expiresAt: string }> {
+  return apiFetch<{ token: string; expiresAt: string }>("/auth/reauthorize", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ password }),
+  });
+}

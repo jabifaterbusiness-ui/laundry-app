@@ -11,9 +11,16 @@ interface AuthState {
   // requests that need branch context; the server re-validates it against
   // the database on every request rather than trusting this value.
   activeBranchId: string | null;
+  sensitiveAuthorization: string | null;
+  sensitiveAuthorizationExpiresAt: string | null;
   setSession: (session: { user: AuthenticatedUser; accessToken: string; refreshToken: string }) => void;
   setUser: (user: AuthenticatedUser) => void;
   setActiveBranch: (branchId: string | null) => void;
+  setSensitiveAuthorization: (authorization: {
+    token: string;
+    expiresAt: string;
+  }) => void;
+  clearSensitiveAuthorization: () => void;
   clearSession: () => void;
 }
 
@@ -25,6 +32,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   refreshToken: null,
   activeBranchId: null,
+  sensitiveAuthorization: null,
+  sensitiveAuthorizationExpiresAt: null,
   setUser: (user) => set({ user }),
   setSession: ({ user, accessToken, refreshToken }) =>
     set({
@@ -37,5 +46,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       activeBranchId: user.branches.length === 1 ? user.branches[0]?.id ?? null : null,
     }),
   setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
-  clearSession: () => set({ user: null, accessToken: null, refreshToken: null, activeBranchId: null }),
+  setSensitiveAuthorization: ({ token, expiresAt }) =>
+    set({
+      sensitiveAuthorization: token,
+      sensitiveAuthorizationExpiresAt: expiresAt,
+    }),
+  clearSensitiveAuthorization: () =>
+    set({
+      sensitiveAuthorization: null,
+      sensitiveAuthorizationExpiresAt: null,
+    }),
+  clearSession: () =>
+    set({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      activeBranchId: null,
+      sensitiveAuthorization: null,
+      sensitiveAuthorizationExpiresAt: null,
+    }),
 }));

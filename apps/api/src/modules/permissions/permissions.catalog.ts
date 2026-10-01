@@ -40,6 +40,8 @@ export const PERMISSIONS: PermissionDefinition[] = [
 
   { code: "payments.view", module: "payments", action: "view", description: "View payments" },
   { code: "payments.manage", module: "payments", action: "manage", description: "Manage payments" },
+  { code: "customer_accounts.view", module: "customer_accounts", action: "view", description: "View customer account balances and history" },
+  { code: "customer_accounts.manage", module: "customer_accounts", action: "manage", description: "Fund, debit and manage customer accounts" },
 
   { code: "inventory.view", module: "inventory", action: "view", description: "View inventory" },
   { code: "inventory.manage", module: "inventory", action: "manage", description: "Manage inventory" },

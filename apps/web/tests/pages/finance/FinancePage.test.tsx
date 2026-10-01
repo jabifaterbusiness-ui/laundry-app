@@ -374,6 +374,9 @@ describe("FinancePage", () => {
     const confirmSpy = vi
       .spyOn(window, "confirm")
       .mockReturnValue(true);
+    const promptSpy = vi
+      .spyOn(window, "prompt")
+      .mockReturnValue("routine test void");
 
     renderPage([
       "reports.view",
@@ -388,14 +391,17 @@ describe("FinancePage", () => {
     );
 
     await waitFor(() => {
+      expect(promptSpy).toHaveBeenCalled();
       expect(mockedFinanceApi.voidExpense).toHaveBeenCalledWith(
         "expense-1",
+        "routine test void",
         { accessToken: "token" },
         "branch-1",
       );
     });
 
     confirmSpy.mockRestore();
+    promptSpy.mockRestore();
   });
 
   it("renders financial statement delivery settings and recipients", async () => {

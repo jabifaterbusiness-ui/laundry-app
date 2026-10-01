@@ -27,10 +27,11 @@ interface RequestOptions extends RequestInit {
   // memberships - see state/auth-store.ts). Sent as X-Branch-Id; the
   // server re-validates it against the database rather than trusting it.
   branchId?: string | null;
+  sensitiveAuthorization?: string | null;
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { accessToken, branchId, headers, ...rest } = options;
+  const { accessToken, branchId, sensitiveAuthorization, headers, ...rest } = options;
 
   let res: Response;
 
@@ -41,6 +42,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
         "Content-Type": "application/json",
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(branchId ? { "X-Branch-Id": branchId } : {}),
+        ...(sensitiveAuthorization
+          ? { "X-Sensitive-Authorization": sensitiveAuthorization }
+          : {}),
         ...headers,
       },
     });

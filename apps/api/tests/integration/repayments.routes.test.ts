@@ -371,7 +371,8 @@ describe("Financial Repayments routes - authorization", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "test repayment void" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("VOID");
@@ -609,7 +610,8 @@ describe("Financial Repayments routes - void safety", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "test repayment already void" });
 
     expect(res.status).toBe(400);
     expect(repaymentUpdate).not.toHaveBeenCalled();
@@ -637,7 +639,8 @@ describe("Financial Repayments routes - void safety", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ reason: "test repayment historical void" });
 
     expect(res.status).toBe(200);
     expect(repaymentUpdate).toHaveBeenCalledWith({

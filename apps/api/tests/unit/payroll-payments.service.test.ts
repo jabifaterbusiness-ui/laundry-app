@@ -484,6 +484,7 @@ describe("payroll-payments.service", () => {
         "biz-A",
         "branch-A",
         "user-owner-a",
+        "test payroll payment void",
       );
 
       expect(result.payment.status).toBe("VOID");
@@ -526,6 +527,7 @@ describe("payroll-payments.service", () => {
           "biz-A",
           "branch-A",
           "user-owner-a",
+          "test payroll payment void",
         ),
       ).rejects.toMatchObject({
         message: "Payroll payment is already void",
@@ -544,6 +546,7 @@ describe("payroll-payments.service", () => {
           "biz-B",
           "branch-B",
           "user-owner-b",
+          "test payroll payment scope",
         ),
       ).rejects.toMatchObject({
         message: "Payroll payment not found",

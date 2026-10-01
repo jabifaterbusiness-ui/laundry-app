@@ -17,6 +17,14 @@ const prismaMock = vi.hoisted(() => ({
     findMany: vi.fn(),
     updateMany: vi.fn(),
   },
+  customerAccount: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  customerAccountTransaction: {
+    updateMany: vi.fn(),
+  },
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -44,6 +52,12 @@ const updateMany = vi.mocked(prisma.customer.updateMany);
 const transaction = vi.mocked(prisma.$transaction);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderUpdateMany = vi.mocked(prisma.order.updateMany);
+const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
+const customerAccountUpdate = vi.mocked(prisma.customerAccount.update);
+const customerAccountDelete = vi.mocked(prisma.customerAccount.delete);
+const customerAccountTransactionUpdateMany = vi.mocked(
+  prisma.customerAccountTransaction.updateMany,
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -422,6 +436,78 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
+  it("moves source account transactions onto an existing target account and removes only the empty source account", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account" } as never)
+      .mockResolvedValueOnce({ id: "target-account" } as never);
+    customerAccountTransactionUpdateMany.mockResolvedValue({ count: 2 });
+    customerAccountDelete.mockResolvedValue({ id: "source-account" } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(customerAccountTransactionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerAccountId: "source-account",
+      },
+      data: {
+        customerAccountId: "target-account",
+      },
+    });
+
+    expect(customerAccountDelete).toHaveBeenCalledWith({
+      where: {
+        id: "source-account",
+      },
+    });
+
+    expect(customerAccountUpdate).not.toHaveBeenCalled();
+  });
+
+  it("moves the source account itself when the target has no account", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account" } as never)
+      .mockResolvedValueOnce(null);
+    customerAccountUpdate.mockResolvedValue({
+      id: "source-account",
+      customerId: targetCustomer.id,
+    } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(customerAccountUpdate).toHaveBeenCalledWith({
+      where: {
+        id: "source-account",
+      },
+      data: {
+        customerId: targetCustomer.id,
+      },
+    });
+
+    expect(customerAccountTransactionUpdateMany).not.toHaveBeenCalled();
+    expect(customerAccountDelete).not.toHaveBeenCalled();
+  });
+
   it("deactivates the source instead of deleting or rewriting the target account", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
@@ -587,6 +673,76 @@ describe("transferCustomer - full account transfer", () => {
 
     expect(orderFindMany).not.toHaveBeenCalled();
     expect(orderUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("moves source account transactions onto an existing target account", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account" } as never)
+      .mockResolvedValueOnce({ id: "target-account" } as never);
+    customerAccountTransactionUpdateMany.mockResolvedValue({ count: 3 });
+    customerAccountDelete.mockResolvedValue({ id: "source-account" } as never);
+
+    await transferCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(customerAccountTransactionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerAccountId: "source-account",
+      },
+      data: {
+        customerAccountId: "target-account",
+      },
+    });
+
+    expect(customerAccountDelete).toHaveBeenCalledWith({
+      where: {
+        id: "source-account",
+      },
+    });
+
+    expect(customerAccountUpdate).not.toHaveBeenCalled();
+  });
+
+  it("moves the source account itself when the target has no account", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account" } as never)
+      .mockResolvedValueOnce(null);
+    customerAccountUpdate.mockResolvedValue({
+      id: "source-account",
+      customerId: targetCustomer.id,
+    } as never);
+
+    await transferCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      targetCustomer.id,
+    );
+
+    expect(customerAccountUpdate).toHaveBeenCalledWith({
+      where: {
+        id: "source-account",
+      },
+      data: {
+        customerId: targetCustomer.id,
+      },
+    });
+
+    expect(customerAccountTransactionUpdateMany).not.toHaveBeenCalled();
+    expect(customerAccountDelete).not.toHaveBeenCalled();
   });
 
   it("keeps the source customer record intact", async () => {

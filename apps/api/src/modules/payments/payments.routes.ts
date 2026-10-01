@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   requireAuth,
   requireBusinessContext,
+  requireSensitiveAuthorization,
 } from "../auth/auth.middleware.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
@@ -25,6 +26,7 @@ paymentsRouter.use(
 paymentsRouter.post(
   "/",
   requirePermission("payments.manage"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(create),
 );
 
@@ -43,6 +45,7 @@ paymentsRouter.get(
 paymentsRouter.patch(
   "/:id/void",
   requirePermission("payments.manage"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(voidPaymentController),
 );
 
