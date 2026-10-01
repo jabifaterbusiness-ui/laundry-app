@@ -115,16 +115,20 @@ a {
 }
 
 .topbar-search {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   max-width: 650px;
 }
 
 .topbar-search > * {
   width: 100%;
+  min-width: 0;
 }
 
 .topbar-user {
   margin-left: auto;
+  min-width: 0;
+  flex: 0 1 auto;
 
   display: flex;
   align-items: center;
@@ -634,6 +638,22 @@ a {
 
   .topbar-search {
     max-width: none;
+    flex-basis: 0;
+  }
+
+  .topbar-user {
+    gap: 6px;
+  }
+
+  .app-mode-switch {
+    gap: 3px;
+    padding: 4px 5px;
+    margin-bottom: 0;
+  }
+
+  .app-mode-option {
+    padding: 5px 6px;
+    font-size: 11px;
   }
 
   .user-details {
@@ -667,10 +687,26 @@ a {
 
   .topbar-search {
     min-width: 0;
+    flex: 1 1 auto;
   }
 
   .topbar-user {
-    gap: 5px;
+    gap: 3px;
+    flex: 0 1 auto;
+  }
+
+  .app-mode-switch {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .app-mode-label {
+    display: none;
+  }
+
+  .app-mode-option {
+    padding: 5px 5px;
+    font-size: 10px;
   }
 
   .logout-button {
