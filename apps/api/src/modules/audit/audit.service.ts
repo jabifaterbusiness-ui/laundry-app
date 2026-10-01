@@ -58,6 +58,7 @@ export type SuspiciousActivityRecord = {
   entityType: string;
   entityId: string | null;
   actorUserId: string | null;
+  actorName: string | null;
   metadata: unknown;
   correlationId: string | null;
 };
@@ -68,7 +69,7 @@ export async function listSuspiciousActivity(
 ): Promise<SuspiciousActivityRecord[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
 
-  return prisma.auditLog.findMany({
+  const records = await prisma.auditLog.findMany({
     where: {
       businessId,
       action: {
@@ -86,10 +87,20 @@ export async function listSuspiciousActivity(
       entityType: true,
       entityId: true,
       actorUserId: true,
+      actor: {
+        select: {
+          fullName: true,
+        },
+      },
       metadata: true,
       correlationId: true,
     },
   });
+
+  return records.map(({ actor, ...record }) => ({
+    ...record,
+    actorName: actor?.fullName ?? null,
+  }));
 }
 
 export { SUSPICIOUS_ACTIVITY_ACTIONS };

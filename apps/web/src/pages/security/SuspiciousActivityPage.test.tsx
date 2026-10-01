@@ -95,6 +95,37 @@ describe("SuspiciousActivityPage", () => {
     expect(mockedListSuspiciousActivity).not.toHaveBeenCalled();
   });
 
+  it("displays the actor name instead of the actor user ID", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "actor-name-event",
+        timestamp: "2026-09-25T06:30:00.000Z",
+        action: "quick_operation.executed",
+        entityType: "Invoice",
+        entityId: "invoice-123",
+        actorUserId: "30cd9cc7-2c18-48e5-b364-77336f0f8940",
+        actorName: "Jane Manager",
+        metadata: {
+          operationName: "Resend Receipt",
+        },
+        correlationId: "corr-actor-name",
+      },
+    ]);
+
+    renderPage();
+
+    const eventButton = await screen.findByRole("button", {
+      name: /resend receipt/i,
+    });
+
+    fireEvent.click(eventButton);
+
+    expect(screen.getByText("Jane Manager")).toBeInTheDocument();
+    expect(
+      screen.queryByText("30cd9cc7-2c18-48e5-b364-77336f0f8940"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows separate event buttons and does not display records before selection", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([
       {
@@ -104,6 +135,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Payment",
         entityId: "payment-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Duplicate payment" },
         correlationId: "corr-1",
       },
@@ -114,6 +146,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "UserPermission",
         entityId: "permission-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Temporary management access" },
         correlationId: null,
       },
@@ -147,6 +180,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Customer",
         entityId: "customer-123",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -157,6 +191,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Order",
         entityId: "order-123",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -167,6 +202,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Invoice",
         entityId: "invoice-123",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -177,6 +213,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Payment",
         entityId: "payment-123",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -224,6 +261,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "MigrationJob",
         entityId: "migration-job-123",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -257,6 +295,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "User",
         entityId: "user-1",
         actorUserId: "user-1",
+        actorName: "Jane Manager",
         metadata: {},
         correlationId: null,
       },
@@ -267,6 +306,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "UserPermission",
         entityId: "permission-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Temporary management access" },
         correlationId: null,
       },
@@ -277,6 +317,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Payment",
         entityId: "payment-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Duplicate payment" },
         correlationId: "corr-1",
       },
@@ -335,6 +376,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Invoice",
         entityId: "invoice-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Wrong price entered" },
         correlationId: null,
       },
@@ -345,6 +387,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Invoice",
         entityId: "invoice-2",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Wrong customer account" },
         correlationId: null,
       },
@@ -390,6 +433,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "UserPermission",
         entityId: "permission-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Management approval" },
         correlationId: null,
       },
@@ -400,6 +444,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "UserPermission",
         entityId: "permission-2",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: { reason: "Access removed after task completion" },
         correlationId: null,
       },
@@ -465,6 +510,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Order",
         entityId: "order-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {
           operationCode: "TI",
           operationName: "Transfer Invoice",
@@ -479,6 +525,7 @@ describe("SuspiciousActivityPage", () => {
         entityType: "Payment",
         entityId: "payment-1",
         actorUserId: "manager-1",
+        actorName: "Jane Manager",
         metadata: {
           operationCode: "RF",
           operationName: "Refund",

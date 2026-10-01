@@ -7,6 +7,7 @@ export type SuspiciousActivityRecord = {
   entityType: string;
   entityId: string | null;
   actorUserId: string | null;
+  actorName: string | null;
   metadata: unknown;
   correlationId: string | null;
 };

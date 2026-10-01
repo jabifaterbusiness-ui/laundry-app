@@ -805,7 +805,7 @@ export function SuspiciousActivityPage() {
 
                         <div>
                           <dt>Actor</dt>
-                          <dd>{activity.actorUserId ?? "System"}</dd>
+                          <dd>{activity.actorName ?? "System"}</dd>
                         </div>
 
                         <div>
