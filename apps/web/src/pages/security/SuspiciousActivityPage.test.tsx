@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { SuspiciousActivityPage } from "./SuspiciousActivityPage.js";
 import { listSuspiciousActivity } from "../../lib/audit-api.js";
 
@@ -35,6 +35,17 @@ vi.mock("../../state/auth-store.js", () => ({
 
 const mockedListSuspiciousActivity = vi.mocked(listSuspiciousActivity);
 
+function LocationProbe() {
+  const location = useLocation();
+
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+    </output>
+  );
+}
+
 function renderPage() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -48,6 +59,7 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <SuspiciousActivityPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -124,6 +136,116 @@ describe("SuspiciousActivityPage", () => {
     expect(
       screen.queryByText("Temporary management access"),
     ).not.toBeInTheDocument();
+  });
+
+  it("makes supported record IDs navigate to their exact record routes", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "customer-event",
+        timestamp: "2026-09-25T06:30:00.000Z",
+        action: "order.customer_transferred",
+        entityType: "Customer",
+        entityId: "customer-123",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+      {
+        id: "order-event",
+        timestamp: "2026-09-25T06:31:00.000Z",
+        action: "order.status_changed",
+        entityType: "Order",
+        entityId: "order-123",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+      {
+        id: "invoice-event",
+        timestamp: "2026-09-25T06:32:00.000Z",
+        action: "invoice.updated",
+        entityType: "Invoice",
+        entityId: "invoice-123",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+      {
+        id: "payment-event",
+        timestamp: "2026-09-25T06:33:00.000Z",
+        action: "payment.voided",
+        entityType: "Payment",
+        entityId: "payment-123",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+    ]);
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SuspiciousActivityPage />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const customerButton = await screen.findByRole("button", {
+      name: /Customer Transferred/i,
+    });
+
+    fireEvent.click(customerButton);
+
+    const customerId = screen.getByRole("button", {
+      name: "customer-123",
+    });
+    fireEvent.click(customerId);
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/customer-workstation?customerId=customer-123",
+    );
+  });
+
+  it("makes MigrationJob record IDs navigate to the Data Management job", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "migration-event",
+        timestamp: "2026-09-25T06:34:00.000Z",
+        action: "migration.analyzed",
+        entityType: "MigrationJob",
+        entityId: "migration-job-123",
+        actorUserId: "manager-1",
+        metadata: {},
+        correlationId: null,
+      },
+    ]);
+
+    renderPage();
+
+    const migrationEventButton = await screen.findByRole("button", {
+      name: /migration analyzed/i,
+    });
+
+    fireEvent.click(migrationEventButton);
+
+    const migrationJobId = screen.getByRole("button", {
+      name: "migration-job-123",
+    });
+
+    fireEvent.click(migrationJobId);
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/data-management?jobId=migration-job-123",
+    );
   });
 
   it("opens only the selected event and closes the previous event", async () => {

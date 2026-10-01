@@ -9,6 +9,7 @@ import type {
 import { ApiError } from "../../lib/api-client.js";
 import {
   createOrderWithOfflineQueue,
+  getOrder,
   listOrders,
   updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
@@ -84,8 +85,10 @@ export function OrdersPage() {
 
   const customerIdFromUrl = searchParams.get("customerId");
   const returnToFromUrl = searchParams.get("returnTo");
+  const orderIdFromUrl = searchParams.get("orderId");
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
+  const openedOrderFromUrlRef = useRef<string | null>(null);
 
   const activeWorkspace =
     workspaces.find(
@@ -334,6 +337,30 @@ export function OrdersPage() {
   });
 
   const customers = customersQuery.data?.data ?? [];
+
+  const orderFromUrlQuery = useQuery({
+    queryKey: ["order", orderIdFromUrl, activeBranchId],
+    queryFn: () => getOrder(orderIdFromUrl!, { accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && orderIdFromUrl),
+  });
+
+  useEffect(() => {
+    if (
+      !orderIdFromUrl ||
+      openedOrderFromUrlRef.current === orderIdFromUrl
+    ) {
+      return;
+    }
+
+    const order = orderFromUrlQuery.data;
+    if (!order) {
+      return;
+    }
+
+    openedOrderFromUrlRef.current = orderIdFromUrl;
+    setSelectedOrder(order);
+  }, [orderIdFromUrl, orderFromUrlQuery.data]);
+
   useEffect(() => {
     if (
       !customerIdFromUrl ||

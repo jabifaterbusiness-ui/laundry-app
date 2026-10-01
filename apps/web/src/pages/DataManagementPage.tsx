@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../lib/api-client.js";
-import { analyzeMigration, exportBackup, importMigrationJob, restoreBackup, type MigrationAnalysisResponse } from "../lib/data-management-api.js";
+import { analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup, type MigrationAnalysisResponse } from "../lib/data-management-api.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
+import { useSearchParams } from "react-router-dom";
 
 type SaveFilePickerOptions = {
   suggestedName?: string;
@@ -70,6 +71,8 @@ async function saveBackupBlob(blob: Blob) {
 }
 
 export function DataManagementPage() {
+  const [searchParams] = useSearchParams();
+  const jobIdFromUrl = searchParams.get("jobId");
   const accessToken = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
   const securityRole = user?.securityRole;
@@ -84,6 +87,61 @@ export function DataManagementPage() {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!jobIdFromUrl || !accessToken) {
+      return;
+    }
+
+    const jobId = jobIdFromUrl;
+    let cancelled = false;
+
+    async function loadMigrationJob() {
+      setBusy(true);
+      setMessage(null);
+
+      try {
+        const job = await getMigrationJob(jobId, { accessToken });
+        if (cancelled) {
+          return;
+        }
+
+        if (!job.summary) {
+          setMessage("This migration job has no saved analysis summary.");
+          return;
+        }
+
+        setAnalysis({
+          job: {
+            id: job.id,
+            status: job.status,
+            sourceType: job.sourceType,
+            sourceName: job.sourceName,
+          },
+          summary: job.summary,
+        });
+        setCustomerMapping(job.summary.customerMapping);
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(
+            error instanceof ApiError
+              ? error.message
+              : "Could not load the migration job.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      }
+    }
+
+    void loadMigrationJob();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, jobIdFromUrl]);
 
   const canManage =
     hasPermission(user, "migrations.view") &&
@@ -173,7 +231,7 @@ export function DataManagementPage() {
         <input type="file" accept=".zip,.dbf,.csv,.json,.xlsx,.xls" onChange={(e) => setMigrationFile(e.target.files?.[0] ?? null)} />
         <button type="button" disabled={!migrationFile || busy} onClick={handleAnalyze}>Analyze backup</button>
 
-        {analysis && (
+        {analysis?.summary && (
           <div>
             <h3>Migration preview</h3>
             <p>{analysis.summary.records} records found across {analysis.summary.files} files and {analysis.summary.tables} tables.</p>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   useMutation,
   useQuery,
@@ -7,6 +8,7 @@ import {
 import { ApiError } from "../../lib/api-client.js";
 import {
   createPayment,
+  getPayment,
   getInvoicePaymentSummary,
   listPayments,
   voidPayment,
@@ -33,6 +35,8 @@ function statusLabel(value: string) {
 }
 
 export function PaymentsPage() {
+  const [searchParams] = useSearchParams();
+  const paymentIdFromUrl = searchParams.get("paymentId");
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
@@ -112,6 +116,20 @@ export function PaymentsPage() {
       accessToken && activeBranchId && formOpen && invoiceId,
     ),
   });
+
+  const paymentFromUrlQuery = useQuery({
+    queryKey: ["payment", paymentIdFromUrl, activeBranchId],
+    queryFn: () =>
+      getPayment(paymentIdFromUrl!, { accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && paymentIdFromUrl),
+  });
+
+  useEffect(() => {
+    const payment = paymentFromUrlQuery.data;
+    if (payment && selectedInvoiceId !== payment.invoiceId) {
+      setSelectedInvoiceId(payment.invoiceId);
+    }
+  }, [paymentFromUrlQuery.data, selectedInvoiceId]);
 
   const summaryQuery = useQuery({
     queryKey: [

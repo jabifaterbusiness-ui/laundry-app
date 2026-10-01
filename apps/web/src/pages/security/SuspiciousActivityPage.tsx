@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { hasPermission } from "../../lib/permissions.js";
 import { listSuspiciousActivity } from "../../lib/audit-api.js";
 import {
@@ -418,6 +419,7 @@ function getCategoryLabel(category: string) {
 }
 
 export function SuspiciousActivityPage() {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
@@ -810,9 +812,69 @@ export function SuspiciousActivityPage() {
                           <dt>Record</dt>
                           <dd>
                             {activity.entityType}
-                            {activity.entityId
-                              ? ` · ${activity.entityId}`
-                              : ""}
+                            {activity.entityId ? (
+                              <>
+                                {" · "}
+                                {activity.entityType.toLowerCase() === "customer" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/customer-workstation?customerId=${encodeURIComponent(activity.entityId!)}`,
+                                      )
+                                    }
+                                  >
+                                    {activity.entityId}
+                                  </button>
+                                ) : activity.entityType.toLowerCase() === "order" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/orders?orderId=${encodeURIComponent(activity.entityId!)}`,
+                                      )
+                                    }
+                                  >
+                                    {activity.entityId}
+                                  </button>
+                                ) : activity.entityType.toLowerCase() === "invoice" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/invoices?invoiceId=${encodeURIComponent(activity.entityId!)}`,
+                                      )
+                                    }
+                                  >
+                                    {activity.entityId}
+                                  </button>
+                                ) : activity.entityType.toLowerCase() === "payment" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/payments?paymentId=${encodeURIComponent(activity.entityId!)}`,
+                                      )
+                                    }
+                                  >
+                                    {activity.entityId}
+                                  </button>
+                                ) : activity.entityType.toLowerCase() === "migrationjob" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/data-management?jobId=${encodeURIComponent(activity.entityId!)}`,
+                                      )
+                                    }
+                                  >
+                                    {activity.entityId}
+                                  </button>
+                                ) : (
+                                  activity.entityId
+                                )}
+                              </>
+                            ) : null}
                           </dd>
                         </div>
 

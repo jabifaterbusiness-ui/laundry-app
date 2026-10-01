@@ -50,6 +50,29 @@ export async function analyzeMigration(file: File, auth: { accessToken: string |
   return res.json() as Promise<MigrationAnalysisResponse>;
 }
 
+export type MigrationJobResponse = {
+  id: string;
+  sourceType: string;
+  sourceName: string;
+  status: string;
+  summary: MigrationSummary | null;
+  files: unknown[];
+  issues: unknown[];
+};
+
+export async function getMigrationJob(
+  jobId: string,
+  auth: { accessToken: string | null },
+): Promise<MigrationJobResponse> {
+  return apiFetch<MigrationJobResponse>(
+    `/migrations/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "GET",
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
 export async function importMigrationJob(jobId: string, duplicatePolicy: "skip" | "merge" | "create", mapping: MigrationSummary["customerMapping"], auth: { accessToken: string | null }) {
   return apiFetch<{ imported: { customersCreated: number; customersMerged: number; customersSkipped: number; invalidRows: number } }>(`/migrations/jobs/${jobId}/import`, {
     method: "POST",

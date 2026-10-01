@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
 import type { InvoiceStatus } from "@laundry-app/shared";
@@ -36,6 +37,8 @@ function statusLabel(status: InvoiceStatus) {
 }
 
 export function InvoicesPage() {
+  const [searchParams] = useSearchParams();
+  const invoiceIdFromUrl = searchParams.get("invoiceId");
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
@@ -120,6 +123,12 @@ export function InvoicesPage() {
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
+
+  useEffect(() => {
+    if (invoiceIdFromUrl && selectedInvoiceId !== invoiceIdFromUrl) {
+      setSelectedInvoiceId(invoiceIdFromUrl);
+    }
+  }, [invoiceIdFromUrl, selectedInvoiceId]);
 
   const customersQuery = useQuery({
     queryKey: ["invoice-transfer-customers", customerSearch],
