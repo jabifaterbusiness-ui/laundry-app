@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { InvoicesPage } from "../../../src/pages/invoices/InvoicesPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as invoicesApi from "../../../src/lib/invoices-api.js";
@@ -46,9 +47,11 @@ function renderPage(
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <InvoicesPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <InvoicesPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

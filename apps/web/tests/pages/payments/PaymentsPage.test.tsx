@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { within,  render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { PaymentsPage } from "../../../src/pages/payments/PaymentsPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as paymentsApi from "../../../src/lib/payments-api.js";
@@ -45,9 +46,11 @@ function renderPage(
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <PaymentsPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <PaymentsPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

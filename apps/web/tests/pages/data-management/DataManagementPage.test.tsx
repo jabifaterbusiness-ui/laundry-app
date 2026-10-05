@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 const mockUser = vi.hoisted(() => ({
   current: null as any,
@@ -45,7 +46,7 @@ describe("DataManagementPage authorization", () => {
   it("allows a Business Owner with a custom visible job title", () => {
     mockUser.current = businessUser({ role: "Manager" });
 
-    render(<DataManagementPage />);
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
     expect(
       screen.getByRole("heading", { name: /backup & data migration/i }),
@@ -67,7 +68,7 @@ describe("DataManagementPage authorization", () => {
       permissions: ["migrations.view", "migrations.manage"],
     });
 
-    render(<DataManagementPage />);
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
     expect(
       screen.getByText(/you do not have permission to manage business data migration/i),
@@ -81,7 +82,7 @@ describe("DataManagementPage authorization", () => {
       permissions: ["migrations.view"],
     });
 
-    render(<DataManagementPage />);
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
     expect(
       screen.getByRole("heading", { name: /backup & data migration/i }),

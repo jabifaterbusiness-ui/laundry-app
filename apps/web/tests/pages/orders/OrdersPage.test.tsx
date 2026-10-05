@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { Customer, Order } from "@laundry-app/shared";
@@ -254,8 +260,18 @@ describe("OrdersPage colour selector", () => {
       }),
     );
 
-    fireEvent.change(screen.getByLabelText("Customer"), {
-      target: { value: customerA.id },
+    await screen.findByRole("heading", {
+      name: /find customer/i,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: new RegExp(`^${customerA.name}(?:\\s|$)`, "i"),
+      }),
+    );
+
+    await screen.findByRole("heading", {
+      name: /new order/i,
     });
 
     const serviceSelect = screen.getAllByRole("combobox").find(
@@ -389,6 +405,41 @@ describe("OrdersPage colour selector", () => {
 });
 
 describe("OrdersPage quick customer switching", () => {
+  async function selectCustomerFromPicker(customer: Customer) {
+    const pickerHeading = await screen.findByRole("heading", {
+      name: /find customer/i,
+    });
+
+    const picker = pickerHeading.closest("section");
+
+    if (!picker) {
+      throw new Error("Customer picker section not found");
+    }
+
+    const button = within(picker).getByRole("button", {
+      name: new RegExp(`^${customer.name}(?:\\s|$)`, "i"),
+    });
+
+    fireEvent.click(button);
+
+    await screen.findByRole("heading", {
+      name: /new order/i,
+    });
+  }
+
+  async function openNewOrderForCustomer(customer: Customer) {
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^New order$/i,
+      }),
+    );
+
+    await screen.findByRole("heading", {
+      name: /find customer/i,
+    });
+
+    await selectCustomerFromPicker(customer);
+  }
 
   it("opens a non-active customer from the customer details Add New Order flow", async () => {
     const dormantCustomer: Customer = {
@@ -413,8 +464,11 @@ describe("OrdersPage quick customer switching", () => {
       await screen.findByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
 
-    const customerSelect = screen.getByLabelText("Customer") as HTMLSelectElement;
-    expect(customerSelect.value).toBe(dormantCustomer.id);
+    expect(
+      screen.getByRole("button", {
+        name: /Jane Doe — New order/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("opens three customer workspaces", async () => {
@@ -422,25 +476,21 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
+    await openNewOrderForCustomer(customerA);
+
     fireEvent.click(
       screen.getByRole("button", {
-        name: /^New order$/i,
+        name: /change customer/i,
       }),
     );
+    await selectCustomerFromPicker(customerB);
 
-    const customerSelect = screen.getByLabelText("Customer");
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerA.id },
-    });
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerB.id },
-    });
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerC.id },
-    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /change customer/i,
+      }),
+    );
+    await selectCustomerFromPicker(customerC);
 
     const state = useOrderWorkspaceStore.getState();
 
@@ -457,17 +507,7 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /^New order$/i,
-      }),
-    );
-
-    const customerSelect = screen.getByLabelText("Customer");
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerA.id },
-    });
+    await openNewOrderForCustomer(customerA);
 
     fireEvent.change(
       screen.getByLabelText(/garment \/ customer note/i),
@@ -482,17 +522,23 @@ describe("OrdersPage quick customer switching", () => {
       target: { value: "2" },
     });
 
-    fireEvent.change(customerSelect, {
-      target: { value: customerB.id },
-    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /change customer/i,
+      }),
+    );
+    await selectCustomerFromPicker(customerB);
 
     expect(
       screen.getByLabelText(/garment \/ customer note/i),
     ).toHaveValue("");
 
-    fireEvent.change(customerSelect, {
-      target: { value: customerA.id },
-    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /change customer/i,
+      }),
+    );
+    await selectCustomerFromPicker(customerA);
 
     expect(
       screen.getByLabelText(/garment \/ customer note/i),
@@ -506,21 +552,14 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
+    await openNewOrderForCustomer(customerA);
+
     fireEvent.click(
       screen.getByRole("button", {
-        name: /^New order$/i,
+        name: /change customer/i,
       }),
     );
-
-    const customerSelect = screen.getByLabelText("Customer");
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerA.id },
-    });
-
-    fireEvent.change(customerSelect, {
-      target: { value: customerB.id },
-    });
+    await selectCustomerFromPicker(customerB);
 
     expect(
       screen.getByText(/John Doe — New order/i),
@@ -532,9 +571,11 @@ describe("OrdersPage quick customer switching", () => {
       }),
     );
 
-    expect(screen.getByLabelText("Customer")).toHaveValue(
-      customerA.id,
-    );
+    expect(
+      screen.getByRole("button", {
+        name: /Jane Doe — New order/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("attaches an existing order to the correct customer workspace", async () => {
@@ -550,11 +591,13 @@ describe("OrdersPage quick customer switching", () => {
 
     renderPage();
 
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "00001",
-      }),
-    );
+    const orderButtons = await screen.findAllByRole("button", {
+      name: "00001",
+    });
+
+    expect(orderButtons.length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(orderButtons[0]!);
 
     await waitFor(() => {
       const workspace =
@@ -566,7 +609,7 @@ describe("OrdersPage quick customer switching", () => {
     });
   });
 
-  it("opens a new order form without requiring an active customer workspace", async () => {
+  it("opens the customer finder before creating a new order", async () => {
     renderPage();
 
     await screen.findByText("No orders found.");
@@ -577,12 +620,21 @@ describe("OrdersPage quick customer switching", () => {
       }),
     );
 
-    expect(screen.getByRole("heading", { name: /new order/i }))
-      .toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: /find customer/i,
+      }),
+    ).toBeInTheDocument();
 
-    expect(screen.getByLabelText("Customer")).toHaveValue("");
+    expect(
+      screen.queryByRole("heading", {
+        name: /^new order$/i,
+      }),
+    ).not.toBeInTheDocument();
 
-    expect(vi.mocked(createOrderWithOfflineQueue)).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(createOrderWithOfflineQueue),
+    ).not.toHaveBeenCalled();
   });
 
   it("keeps the customer workspace after creating an order", async () => {
@@ -595,15 +647,7 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /^New order$/i,
-      }),
-    );
-
-    fireEvent.change(screen.getByLabelText("Customer"), {
-      target: { value: customerA.id },
-    });
+    await openNewOrderForCustomer(customerA);
 
     fireEvent.change(
       screen.getByLabelText(/garment \/ customer note/i),
@@ -612,9 +656,17 @@ describe("OrdersPage quick customer switching", () => {
       },
     );
 
-    const selects = screen.getAllByRole("combobox");
+    const serviceSelect = screen
+      .getAllByRole("combobox")
+      .find((select) =>
+        Array.from((select as HTMLSelectElement).options).some(
+          (option) => option.value === serviceA.id,
+        ),
+      );
 
-    fireEvent.change(selects[3]!, {
+    expect(serviceSelect).toBeDefined();
+
+    fireEvent.change(serviceSelect!, {
       target: { value: serviceA.id },
     });
 
@@ -666,19 +718,19 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /^New order$/i,
-      }),
-    );
+    await openNewOrderForCustomer(customerA);
 
-    fireEvent.change(screen.getByLabelText("Customer"), {
-      target: { value: customerA.id },
-    });
+    const serviceSelect = screen
+      .getAllByRole("combobox")
+      .find((select) =>
+        Array.from((select as HTMLSelectElement).options).some(
+          (option) => option.value === serviceA.id,
+        ),
+      );
 
-    const selects = screen.getAllByRole("combobox");
+    expect(serviceSelect).toBeDefined();
 
-    fireEvent.change(selects[3]!, {
+    fireEvent.change(serviceSelect!, {
       target: { value: serviceA.id },
     });
 
@@ -704,15 +756,7 @@ describe("OrdersPage quick customer switching", () => {
 
     await screen.findByText("No orders found.");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /^New order$/i,
-      }),
-    );
-
-    fireEvent.change(screen.getByLabelText("Customer"), {
-      target: { value: customerA.id },
-    });
+    await openNewOrderForCustomer(customerA);
 
     expect(
       screen.getByText(/Jane Doe — New order/i),
@@ -729,8 +773,8 @@ describe("OrdersPage quick customer switching", () => {
     ).toHaveLength(0);
 
     expect(
-      screen.getByRole("option", {
-        name: /Jane Doe/i,
+      screen.getByRole("button", {
+        name: /^\+ Add customer$/i,
       }),
     ).toBeInTheDocument();
   });

@@ -129,6 +129,8 @@ export function OrdersPage() {
   const [customerId, setCustomerId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [openColorSelector, setOpenColorSelector] = useState<number | null>(
     null,
@@ -162,12 +164,13 @@ export function OrdersPage() {
   });
 
   const customersQuery = useQuery({
-    queryKey: ["customers", "order-selector"],
+    queryKey: ["customers", "order-selector", customerSearch],
     queryFn: () =>
       listCustomers(
         {
           page: 1,
-          pageSize: 100,
+          pageSize: customerSearch.trim() ? 25 : 100,
+          search: customerSearch.trim() || undefined,
           status: "active",
         },
         { accessToken },
@@ -427,15 +430,66 @@ export function OrdersPage() {
   function openCreate() {
     setSelectedOrder(null);
     setFormError(null);
-    setFormOpen(true);
+
+    if (activeWorkspace) {
+      updateWorkspace(activeWorkspace.id, {
+        activeOrder: null,
+      });
+      setFormOpen(true);
+      setCustomerPickerOpen(false);
+      return;
+    }
+
+    setCustomerSearch("");
+    setCustomerPickerOpen(true);
+    setFormOpen(false);
   }
 
   function openCustomerWorkspace(customer: Customer) {
     const workspaceId = openWorkspace(customer);
     switchWorkspace(workspaceId);
+    updateWorkspace(workspaceId, {
+      activeOrder: null,
+      draft: {
+        customerId: customer.id,
+        lines: [{ serviceId: "", quantity: 1, colors: [] }],
+        garmentNote: "",
+        internalNote: "",
+        expectedReadyAt: "",
+      },
+    });
     setSelectedOrder(null);
     setFormError(null);
+    setCustomerPickerOpen(false);
     setFormOpen(true);
+  }
+
+  function selectCustomerForNewOrder(customer: Customer) {
+    const existingWorkspace = workspaces.find(
+      (workspace) => workspace.customer.id === customer.id,
+    );
+
+    const workspaceId = openWorkspace(customer);
+    switchWorkspace(workspaceId);
+
+    if (!existingWorkspace) {
+      updateWorkspace(workspaceId, {
+        activeOrder: null,
+        draft: {
+          customerId: customer.id,
+          lines: [{ serviceId: "", quantity: 1, colors: [] }],
+          garmentNote: "",
+          internalNote: "",
+          expectedReadyAt: "",
+        },
+      });
+    } else {
+      setSelectedOrder(existingWorkspace.activeOrder);
+    }
+
+    setFormError(null);
+    setCustomerPickerOpen(false);
+    setFormOpen(!existingWorkspace?.activeOrder);
   }
 
   function addLine() {
@@ -558,6 +612,83 @@ export function OrdersPage() {
     createMutation.mutate();
   }
 
+  function renderOrderTable(sectionOrders: Order[]) {
+    if (sectionOrders.length === 0) {
+      return <p>No orders in this section.</p>;
+    }
+
+    return (
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th>Total</th>
+            <th>Expected Ready</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sectionOrders.map((order) => {
+            const customer = customers.find(
+              (item) => item.id === order.customerId,
+            );
+
+            return (
+              <tr key={order.id}>
+                <td>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedOrder(order);
+
+                      const customer = customers.find(
+                        (item) => item.id === order.customerId,
+                      );
+
+                      if (customer) {
+                        const workspaceId = openWorkspace(
+                          customer,
+                          { order },
+                        );
+                        switchWorkspace(workspaceId);
+                        updateWorkspace(workspaceId, {
+                          activeOrder: order,
+                        });
+                      }
+                    }}
+                  >
+                    {order.orderNumber}
+                  </button>
+                </td>
+                <td>{customer?.name ?? order.customerId}</td>
+                <td>{statusLabel(order.status)}</td>
+                <td>{formatMoney(order.orderTotal)}</td>
+                <td>{formatDate(order.expectedReadyAt)}</td>
+                <td>{formatDate(order.createdAt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  const outstandingOrders = orders.filter(
+    (order) =>
+      order.status === "RECEIVED" ||
+      order.status === "IN_PROGRESS",
+  );
+
+  const readyOrders = orders.filter(
+    (order) =>
+      order.status === "READY_FOR_PICKUP" ||
+      order.status === "COMPLETED",
+  );
+
+  const allOrders = orders;
+
   return (
     <main>
       <h1>Orders</h1>
@@ -566,13 +697,11 @@ export function OrdersPage() {
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         onOpenCustomer={() => {
-          if (customers.length === 0) {
-            setFormError("No active customers are available.");
-            return;
-          }
-
+          setSelectedOrder(null);
           setFormError(null);
-          setFormOpen(true);
+          setCustomerSearch("");
+          setFormOpen(false);
+          setCustomerPickerOpen(true);
         }}
         onSwitch={(workspaceId) => {
           switchWorkspace(workspaceId);
@@ -653,61 +782,29 @@ export function OrdersPage() {
         <p>No orders found.</p>
       )}
 
-      {orders.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Status</th>
-              <th>Total</th>
-              <th>Expected Ready</th>
-              <th>Created</th>
-            </tr>
-          </thead>
+      {ordersQuery.isSuccess && (
+        <>
+          <section aria-labelledby="outstanding-orders-heading">
+            <h2 id="outstanding-orders-heading">
+              Outstanding / Unpicked Orders
+            </h2>
+            {renderOrderTable(outstandingOrders)}
+          </section>
 
-          <tbody>
-            {orders.map((order) => {
-              const customer = customers.find(
-                (item) => item.id === order.customerId,
-              );
+          <section aria-labelledby="ready-orders-heading">
+            <h2 id="ready-orders-heading">
+              Ready for Pickup / Completed
+            </h2>
+            {renderOrderTable(readyOrders)}
+          </section>
 
-              return (
-                <tr key={order.id}>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedOrder(order);
-
-                        const customer = customers.find(
-                          (item) => item.id === order.customerId,
-                        );
-
-                        if (customer) {
-                          const workspaceId = openWorkspace(
-                            customer,
-                            { order },
-                          );
-                          switchWorkspace(workspaceId);
-                        }
-                      }}
-                    >
-                      {order.orderNumber}
-                    </button>
-                  </td>
-                  <td>
-                    {customer?.name ?? order.customerId}
-                  </td>
-                  <td>{statusLabel(order.status)}</td>
-                  <td>{formatMoney(order.orderTotal)}</td>
-                  <td>{formatDate(order.expectedReadyAt)}</td>
-                  <td>{formatDate(order.createdAt)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+          <section aria-labelledby="all-orders-heading">
+            <h2 id="all-orders-heading">
+              All Orders
+            </h2>
+            {renderOrderTable(allOrders)}
+          </section>
+        </>
       )}
 
       {pagination && pagination.totalPages > 1 && (
@@ -734,36 +831,102 @@ export function OrdersPage() {
         </div>
       )}
 
+      {customerPickerOpen && (
+        <section aria-labelledby="customer-picker-heading">
+          <h2 id="customer-picker-heading">Find Customer</h2>
+
+          <input
+            type="search"
+            autoFocus
+            placeholder="Name, phone, email, order number or invoice number"
+            value={customerSearch}
+            onChange={(event) => setCustomerSearch(event.target.value)}
+          />
+
+          {customersQuery.isLoading && <p>Searching customers...</p>}
+
+          {customersQuery.isError && (
+            <p role="alert">
+              {customersQuery.error instanceof ApiError
+                ? customersQuery.error.message
+                : "Failed to search customers."}
+            </p>
+          )}
+
+          {customersQuery.isSuccess && customers.length > 0 && (
+            <div>
+              {customers.map((customer) => (
+                <button
+                  key={customer.id}
+                  type="button"
+                  onClick={() => selectCustomerForNewOrder(customer)}
+                >
+                  {customer.name}
+                  {customer.phone ? ` — ${customer.phone}` : ""}
+                  {customer.email ? ` — ${customer.email}` : ""}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {customersQuery.isSuccess &&
+            customers.length === 0 &&
+            customerSearch.trim() && (
+              <div>
+                <p>No matching customer found.</p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/customers")}
+                >
+                  Add New Customer
+                </button>
+              </div>
+            )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setCustomerPickerOpen(false);
+              setCustomerSearch("");
+              if (activeWorkspace) {
+                setFormOpen(true);
+              }
+            }}
+          >
+            Cancel
+          </button>
+        </section>
+      )}
+
       {formOpen && (
         <section>
           <h2>New order</h2>
 
           <form onSubmit={submitOrder}>
             <div>
-              <label>
-                Customer
-                <select
-                  value={formCustomerId}
-                  onChange={(event) => {
-                    const customer = customers.find(
-                      (item) => item.id === event.target.value,
-                    );
-
-                    if (!customer) {
-                      return;
-                    }
-
-                    openCustomerWorkspace(customer);
+              <div>
+                <strong>Customer</strong>
+                {activeWorkspace?.customer ? (
+                  <p>
+                    {activeWorkspace.customer.name}
+                    {activeWorkspace.customer.phone
+                      ? ` — ${activeWorkspace.customer.phone}`
+                      : ""}
+                  </p>
+                ) : (
+                  <p>No customer selected.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerSearch("");
+                    setFormOpen(false);
+                    setCustomerPickerOpen(true);
                   }}
                 >
-                  <option value="">Select customer</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} — {customer.phone}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  Change customer
+                </button>
+              </div>
             </div>
 
             <h3>Items</h3>
