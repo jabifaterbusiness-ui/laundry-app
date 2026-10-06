@@ -10,10 +10,15 @@ import { ApiError } from "../../lib/api-client.js";
 import {
   createOrderWithOfflineQueue,
   getOrder,
+  listAllOrders,
   listOrders,
   updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
-import { getCustomer, listCustomers } from "../../lib/customers-api.js";
+import {
+  createCustomerWithOfflineQueue,
+  getCustomer,
+  listCustomers,
+} from "../../lib/customers-api.js";
 import { listServices, type Service } from "../../lib/services-api.js";
 import {
   createColor,
@@ -23,7 +28,8 @@ import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
-import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
+import { OrderManagement } from "./OrderManagement.js";
+import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
 
 const PAGE_SIZE = 25;
 
@@ -125,11 +131,21 @@ export function OrdersPage() {
   const canManageColors = hasPermission(user, "colors.manage");
 
   const [page, setPage] = useState(1);
+  const [openFolder, setOpenFolder] = useState<
+    | "received"
+    | "outstanding"
+    | "ready"
+    | "cancelled"
+    | "all"
+    | null
+  >(null);
   const [status, setStatus] = useState<OrderStatus | "">("");
   const [customerId, setCustomerId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [openColorSelector, setOpenColorSelector] = useState<number | null>(
@@ -612,12 +628,95 @@ export function OrdersPage() {
     createMutation.mutate();
   }
 
+  async function openOrderManagement(order: Order) {
+    setSelectedOrder(order);
+
+    const customer =
+      customers.find((item) => item.id === order.customerId) ??
+      (await getCustomer(order.customerId, { accessToken }).catch(() => null));
+
+    if (!customer) {
+      setFormError("Unable to load the customer for this order.");
+      return;
+    }
+
+    const workspaceId = openWorkspace(customer, { order });
+    switchWorkspace(workspaceId);
+    updateWorkspace(workspaceId, {
+      activeOrder: order,
+    });
+    setFormOpen(false);
+    setCustomerPickerOpen(false);
+    setFormError(null);
+  }
+
+  function startNewOrderForCustomer(customer: Customer) {
+    const workspaceId = openWorkspace(customer);
+
+    switchWorkspace(workspaceId);
+
+    updateWorkspace(workspaceId, {
+      activeOrder: selectedOrder,
+      draft: {
+        customerId: customer.id,
+        lines: [{ serviceId: "", quantity: 1, colors: [] }],
+        garmentNote: "",
+        internalNote: "",
+        expectedReadyAt: "",
+      },
+    });
+
+    setFormError(null);
+    setCustomerPickerOpen(false);
+    setFormOpen(true);
+  }
+
+  function closeOrderManagement() {
+    setFormOpen(false);
+    setCustomerPickerOpen(false);
+    setFormError(null);
+
+    if (activeWorkspaceId) {
+      updateWorkspace(activeWorkspaceId, {
+        activeOrder: selectedOrder,
+      });
+    }
+  }
+
   function renderOrderTable(sectionOrders: Order[]) {
     if (sectionOrders.length === 0) {
       return <p>No orders in this section.</p>;
     }
 
-    return (
+
+  async function handleCreateCustomer(
+    input: Parameters<typeof createCustomerWithOfflineQueue>[0],
+  ) {
+    const result = await createCustomerWithOfflineQueue(
+      input,
+      { accessToken },
+      {
+        businessId: user?.businessId ?? "",
+        branchId: activeBranchId ?? "",
+        actorUserId: user?.id ?? "",
+      },
+    );
+
+    if (result.queued || !result.customer) {
+      setNewCustomerOpen(false);
+      setCustomerCreateMessage(
+        "Customer creation was saved offline. Reconnect and synchronize before creating the order.",
+      );
+      return;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["customers"] });
+    setNewCustomerOpen(false);
+    setCustomerCreateMessage(null);
+    openCustomerWorkspace(result.customer);
+  }
+
+  return (
       <table>
         <thead>
           <tr>
@@ -640,24 +739,7 @@ export function OrdersPage() {
                 <td>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedOrder(order);
-
-                      const customer = customers.find(
-                        (item) => item.id === order.customerId,
-                      );
-
-                      if (customer) {
-                        const workspaceId = openWorkspace(
-                          customer,
-                          { order },
-                        );
-                        switchWorkspace(workspaceId);
-                        updateWorkspace(workspaceId, {
-                          activeOrder: order,
-                        });
-                      }
-                    }}
+                    onClick={() => openOrderManagement(order)}
                   >
                     {order.orderNumber}
                   </button>
@@ -675,233 +757,51 @@ export function OrdersPage() {
     );
   }
 
-  const outstandingOrders = orders.filter(
+  const allOrdersQuery = useQuery({
+    queryKey: ["orders", "all-orders", activeBranchId],
+    queryFn: () =>
+      listAllOrders({}, { accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId),
+  });
+
+  const allOrders = allOrdersQuery.data ?? [];
+
+  const receivedOrders = allOrders.filter(
+    (order) => order.status === "RECEIVED",
+  );
+
+  const outstandingOrders = allOrders.filter(
     (order) =>
       order.status === "RECEIVED" ||
       order.status === "IN_PROGRESS",
   );
 
-  const readyOrders = orders.filter(
+  const readyOrders = allOrders.filter(
     (order) =>
       order.status === "READY_FOR_PICKUP" ||
       order.status === "COMPLETED",
   );
 
-  const allOrders = orders;
+  const cancelledOrders = allOrders.filter(
+    (order) => order.status === "CANCELLED",
+  );
 
-  return (
-    <main>
-      <h1>Orders</h1>
+  const visibleFolderOrders =
+    openFolder === "received"
+      ? receivedOrders
+      : openFolder === "outstanding"
+        ? outstandingOrders
+        : openFolder === "ready"
+          ? readyOrders
+          : openFolder === "cancelled"
+            ? cancelledOrders
+            : openFolder === "all"
+              ? allOrders
+              : [];
 
-      <OrderWorkspaceSwitcher
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        onOpenCustomer={() => {
-          setSelectedOrder(null);
-          setFormError(null);
-          setCustomerSearch("");
-          setFormOpen(false);
-          setCustomerPickerOpen(true);
-        }}
-        onSwitch={(workspaceId) => {
-          switchWorkspace(workspaceId);
+    const newOrderContent = formOpen ? (
 
-          const workspace = workspaces.find(
-            (item) => item.id === workspaceId,
-          );
-
-          setSelectedOrder(workspace?.activeOrder ?? null);
-          setFormOpen(!workspace?.activeOrder);
-          setFormError(null);
-        }}
-        onClose={(workspaceId) => {
-          const closingActive =
-            workspaceId === activeWorkspaceId;
-
-          closeWorkspace(workspaceId);
-
-          if (closingActive) {
-            setSelectedOrder(null);
-            setFormOpen(false);
-            setFormError(null);
-          }
-        }}
-      />
-
-      <div>
-        <select
-          aria-label="Filter by status"
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value as OrderStatus | "");
-            setPage(1);
-          }}
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((item) => (
-            <option key={item} value={item}>
-              {statusLabel(item)}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Filter by customer"
-          value={customerId}
-          onChange={(event) => {
-            setCustomerId(event.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All customers</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name} — {customer.phone}
-            </option>
-          ))}
-        </select>
-
-        {canCreateOrder ? (
-          <button type="button" onClick={openCreate}>
-            New order
-          </button>
-        ) : null}
-      </div>
-
-      {ordersQuery.isLoading && <p>Loading orders...</p>}
-
-      {ordersQuery.isError && (
-        <p role="alert">
-          {ordersQuery.error instanceof ApiError
-            ? ordersQuery.error.message
-            : "Failed to load orders. Please try again."}
-        </p>
-      )}
-
-      {ordersQuery.isSuccess && orders.length === 0 && (
-        <p>No orders found.</p>
-      )}
-
-      {ordersQuery.isSuccess && (
-        <>
-          <section aria-labelledby="outstanding-orders-heading">
-            <h2 id="outstanding-orders-heading">
-              Outstanding / Unpicked Orders
-            </h2>
-            {renderOrderTable(outstandingOrders)}
-          </section>
-
-          <section aria-labelledby="ready-orders-heading">
-            <h2 id="ready-orders-heading">
-              Ready for Pickup / Completed
-            </h2>
-            {renderOrderTable(readyOrders)}
-          </section>
-
-          <section aria-labelledby="all-orders-heading">
-            <h2 id="all-orders-heading">
-              All Orders
-            </h2>
-            {renderOrderTable(allOrders)}
-          </section>
-        </>
-      )}
-
-      {pagination && pagination.totalPages > 1 && (
-        <div>
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((current) => current - 1)}
-          >
-            Previous
-          </button>
-
-          <span>
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-
-          <button
-            type="button"
-            disabled={page >= pagination.totalPages}
-            onClick={() => setPage((current) => current + 1)}
-          >
-            Next
-          </button>
-        </div>
-      )}
-
-      {customerPickerOpen && (
-        <section aria-labelledby="customer-picker-heading">
-          <h2 id="customer-picker-heading">Find Customer</h2>
-
-          <input
-            type="search"
-            autoFocus
-            placeholder="Name, phone, email, order number or invoice number"
-            value={customerSearch}
-            onChange={(event) => setCustomerSearch(event.target.value)}
-          />
-
-          {customersQuery.isLoading && <p>Searching customers...</p>}
-
-          {customersQuery.isError && (
-            <p role="alert">
-              {customersQuery.error instanceof ApiError
-                ? customersQuery.error.message
-                : "Failed to search customers."}
-            </p>
-          )}
-
-          {customersQuery.isSuccess && customers.length > 0 && (
-            <div>
-              {customers.map((customer) => (
-                <button
-                  key={customer.id}
-                  type="button"
-                  onClick={() => selectCustomerForNewOrder(customer)}
-                >
-                  {customer.name}
-                  {customer.phone ? ` — ${customer.phone}` : ""}
-                  {customer.email ? ` — ${customer.email}` : ""}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {customersQuery.isSuccess &&
-            customers.length === 0 &&
-            customerSearch.trim() && (
-              <div>
-                <p>No matching customer found.</p>
-                <button
-                  type="button"
-                  onClick={() => navigate("/customers")}
-                >
-                  Add New Customer
-                </button>
-              </div>
-            )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setCustomerPickerOpen(false);
-              setCustomerSearch("");
-              if (activeWorkspace) {
-                setFormOpen(true);
-              }
-            }}
-          >
-            Cancel
-          </button>
-        </section>
-      )}
-
-      {formOpen && (
         <section>
-          <h2>New order</h2>
-
           <form onSubmit={submitOrder}>
             <div>
               <div>
@@ -1323,101 +1223,203 @@ export function OrdersPage() {
             </button>
           </form>
         </section>
+  ) : null;
+
+  return (
+    <main>
+      <h1>Orders</h1>
+
+      {canCreateOrder ? (
+        <div>
+          <button type="button" onClick={openCreate}>
+            New Order
+          </button>
+        </div>
+      ) : null}
+
+      {ordersQuery.isLoading && <p>Loading orders...</p>}
+
+      {ordersQuery.isError && (
+        <p role="alert">
+          {ordersQuery.error instanceof ApiError
+            ? ordersQuery.error.message
+            : "Failed to load orders. Please try again."}
+        </p>
       )}
 
-      {selectedOrder && (
-        <section>
-          <h2>Order {selectedOrder.orderNumber}</h2>
+      {ordersQuery.isSuccess && orders.length === 0 && (
+        <p>No orders found.</p>
+      )}
 
-          <p>
-            Status: {statusLabel(selectedOrder.status)}
-          </p>
+      {ordersQuery.isSuccess && (
+        <section aria-label="Order folders">
+          {[
+            {
+              id: "received" as const,
+              title: "Received",
+              count: receivedOrders.length,
+            },
+            {
+              id: "outstanding" as const,
+              title: "Outstanding / Unpicked Orders",
+              count: outstandingOrders.length,
+            },
+            {
+              id: "ready" as const,
+              title: "Ready for Pickup / Completed",
+              count: readyOrders.length,
+            },
+            {
+              id: "cancelled" as const,
+              title: "Cancelled",
+              count: cancelledOrders.length,
+            },
+            {
+              id: "all" as const,
+              title: "All Orders",
+              count: allOrders.length,
+            },
+          ].map((folder) => {
+            const isOpen = openFolder === folder.id;
 
-          <p>
-            Total: {formatMoney(selectedOrder.orderTotal)}
-          </p>
-
-          <p>
-            Expected Ready:{" "}
-            {formatDate(selectedOrder.expectedReadyAt)}
-          </p>
-
-          <table>
-            <thead>
-              <tr>
-                <th>QTY</th>
-                <th>Item</th>
-                <th>PCS</th>
-                <th>Unit Price</th>
-                <th>Total Price</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {selectedOrder.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.quantity}</td>
-                  <td>{item.serviceName}</td>
-                  <td>{item.totalPieces}</td>
-                  <td>{formatMoney(item.unitPrice)}</td>
-                  <td>{formatMoney(item.lineTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {selectedOrder.garmentNote && (
-            <p>
-              <strong>Garment Note:</strong>{" "}
-              {selectedOrder.garmentNote}
-            </p>
-          )}
-
-          {canUpdateStatus && (
-            <label>
-              Update status
-              <select
-                value={selectedOrder.status}
-                disabled={statusMutation.isPending}
-                onChange={(event) =>
-                  statusMutation.mutate({
-                    id: selectedOrder.id,
-                    status: event.target.value as OrderStatus,
-                  })
-                }
+            return (
+              <section
+                key={folder.id}
+                aria-labelledby={`${folder.id}-folder-heading`}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                  marginBottom: 10,
+                  overflow: "hidden",
+                }}
               >
-                {STATUSES.map((item) => (
-                  <option key={item} value={item}>
-                    {statusLabel(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => {
+                    setOpenFolder(isOpen ? null : folder.id);
+                    setPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    border: 0,
+                    background: "#fff",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span id={`${folder.id}-folder-heading`}>
+                    <strong>{folder.title}</strong>
+                    <span style={{ marginLeft: 8 }}>
+                      ({folder.count})
+                    </span>
+                  </span>
+                  <span aria-hidden="true">
+                    {isOpen ? "▾" : "▸"}
+                  </span>
+                </button>
 
-          {canUpdateStatus && selectedOrder.internalNote && (
-            <p>
-              <strong>Internal Note:</strong>{" "}
-              {selectedOrder.internalNote}
+                {isOpen && (
+                  <div style={{ padding: 16 }}>
+                    {renderOrderTable(visibleFolderOrders)}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </section>
+      )}
+
+
+
+      {customerPickerOpen && (
+        <section aria-labelledby="customer-picker-heading">
+          <h2 id="customer-picker-heading">Find Customer</h2>
+
+          <input
+            type="search"
+            autoFocus
+            placeholder="Name, phone, email, order number or invoice number"
+            value={customerSearch}
+            onChange={(event) => setCustomerSearch(event.target.value)}
+          />
+
+          {customersQuery.isLoading && <p>Searching customers...</p>}
+
+          {customersQuery.isError && (
+            <p role="alert">
+              {customersQuery.error instanceof ApiError
+                ? customersQuery.error.message
+                : "Failed to search customers."}
             </p>
           )}
+
+          {customersQuery.isSuccess && customers.length > 0 && (
+            <div>
+              {customers.map((customer) => (
+                <button
+                  key={customer.id}
+                  type="button"
+                  onClick={() => selectCustomerForNewOrder(customer)}
+                >
+                  {customer.name}
+                  {customer.phone ? ` — ${customer.phone}` : ""}
+                  {customer.email ? ` — ${customer.email}` : ""}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {customersQuery.isSuccess &&
+            customers.length === 0 &&
+            customerSearch.trim() && (
+              <div>
+                <p>No matching customer found.</p>
+                {hasPermission(user, "customers.create") ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerCreateMessage(null);
+                      setNewCustomerOpen(true);
+                    }}
+                  >
+                    Add New Customer
+                  </button>
+                ) : null}
+              </div>
+            )}
 
           <button
             type="button"
             onClick={() => {
-              setSelectedOrder(null);
-
-              if (activeWorkspaceId) {
-                updateWorkspace(activeWorkspaceId, {
-                  activeOrder: null,
-                });
+              setCustomerPickerOpen(false);
+              setCustomerSearch("");
+              if (activeWorkspace) {
+                setFormOpen(true);
               }
             }}
           >
-            Close
+            Cancel
           </button>
         </section>
       )}
+
+      {activeWorkspace?.customer &&
+        (selectedOrder || formOpen) && (
+          <OrderManagement
+            order={selectedOrder}
+            customer={activeWorkspace.customer}
+            mode={formOpen ? "new" : "view"}
+            newOrderContent={newOrderContent}
+            onBack={closeOrderManagement}
+            onNewOrder={startNewOrderForCustomer}
+            onSelectOrder={openOrderManagement}
+          />
+        )}
     </main>
   );
 }

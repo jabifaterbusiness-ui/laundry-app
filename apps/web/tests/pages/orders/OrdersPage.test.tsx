@@ -129,11 +129,13 @@ const orderA: Order = {
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
   listOrders: vi.fn(),
+  listAllOrders: vi.fn(),
   createOrderWithOfflineQueue: vi.fn(),
   updateOrderStatusWithOfflineQueue: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
+  createCustomerWithOfflineQueue: vi.fn(),
   getCustomer: vi.fn(),
   listCustomers: vi.fn(),
 }));
@@ -149,9 +151,14 @@ vi.mock("../../../src/lib/colors-api.js", () => ({
 
 import {
   createOrderWithOfflineQueue,
+  listAllOrders,
   listOrders,
 } from "../../../src/lib/orders-api.js";
-import { getCustomer, listCustomers } from "../../../src/lib/customers-api.js";
+import {
+  createCustomerWithOfflineQueue,
+  getCustomer,
+  listCustomers,
+} from "../../../src/lib/customers-api.js";
 import { listServices } from "../../../src/lib/services-api.js";
 import {
   createColor,
@@ -217,6 +224,12 @@ beforeEach(() => {
     },
   });
 
+  vi.mocked(createCustomerWithOfflineQueue).mockResolvedValue({
+    queued: false,
+    customer: customerA,
+  });
+
+
   vi.mocked(listServices).mockResolvedValue({
     data: [serviceA, serviceB],
     pagination: {
@@ -246,6 +259,9 @@ beforeEach(() => {
       totalPages: 1,
     },
   });
+
+  vi.mocked(listAllOrders).mockResolvedValue([]);
+
 });
 
 describe("OrdersPage colour selector", () => {
@@ -465,8 +481,16 @@ describe("OrdersPage quick customer switching", () => {
     ).toBeInTheDocument();
 
     expect(
+      screen.getByRole("heading", {
+        name: /new order/i,
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+
+    expect(
       screen.getByRole("button", {
-        name: /Jane Doe — New order/i,
+        name: /change customer/i,
       }),
     ).toBeInTheDocument();
   });
@@ -547,38 +571,37 @@ describe("OrdersPage quick customer switching", () => {
     expect(screen.getByRole("spinbutton")).toHaveValue(2);
   });
 
-  it("switches between visible customer workspaces", async () => {
+  it("keeps one central Order Management workspace when changing customers", async () => {
     renderPage();
 
     await screen.findByText("No orders found.");
 
     await openNewOrderForCustomer(customerA);
 
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /new order/i }),
+    ).toBeInTheDocument();
+
     fireEvent.click(
       screen.getByRole("button", {
         name: /change customer/i,
       }),
     );
+
     await selectCustomerFromPicker(customerB);
 
+    expect(screen.getByText("John Doe")).toBeInTheDocument();
     expect(
-      screen.getByText(/John Doe — New order/i),
+      screen.getByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /Jane Doe — New order/i,
-      }),
-    );
-
     expect(
-      screen.getByRole("button", {
-        name: /Jane Doe — New order/i,
-      }),
-    ).toBeInTheDocument();
+      screen.queryByText(/Jane Doe — New order/i),
+    ).not.toBeInTheDocument();
   });
 
-  it("attaches an existing order to the correct customer workspace", async () => {
+  it("opens an existing order in Order Management from its folder", async () => {
     vi.mocked(listOrders).mockResolvedValue({
       data: [orderA],
       pagination: {
@@ -589,24 +612,41 @@ describe("OrdersPage quick customer switching", () => {
       },
     });
 
+    vi.mocked(listAllOrders).mockResolvedValue([orderA]);
+
     renderPage();
 
-    const orderButtons = await screen.findAllByRole("button", {
+    const allOrdersFolder = await screen.findByRole("button", {
+      name: /all orders/i,
+    });
+
+    fireEvent.click(allOrdersFolder);
+
+    const orderButton = await screen.findByRole("button", {
       name: "00001",
     });
 
-    expect(orderButtons.length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(orderButton);
 
-    fireEvent.click(orderButtons[0]!);
+    expect(
+      await screen.findByRole("heading", {
+        name: /00001/i,
+      }),
+    ).toBeInTheDocument();
 
-    await waitFor(() => {
-      const workspace =
-        useOrderWorkspaceStore.getState().workspaces.find(
-          (item) => item.customer.id === customerA.id,
-        );
-
-      expect(workspace?.activeOrder?.id).toBe(orderA.id);
+    const orderManagement = screen.getByRole("region", {
+      name: "Order Management",
     });
+
+    expect(
+      within(orderManagement).getByText("Jane Doe"),
+    ).toBeInTheDocument();
+
+    expect(
+      within(orderManagement).getByRole("button", {
+        name: /^New order$/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("opens the customer finder before creating a new order", async () => {
@@ -751,31 +791,69 @@ describe("OrdersPage quick customer switching", () => {
     ).toBeInTheDocument();
   });
 
-  it("closes only the workspace and keeps the customer available", async () => {
+  it("uses ESC to return from New Order to Order Management", async () => {
+    vi.mocked(listOrders).mockResolvedValue({
+      data: [orderA],
+      pagination: {
+        page: 1,
+        pageSize: 25,
+        total: 1,
+        totalPages: 1,
+      },
+    });
+
+    vi.mocked(listAllOrders).mockResolvedValue([orderA]);
+
     renderPage();
 
-    await screen.findByText("No orders found.");
+    const allOrdersFolder = await screen.findByRole("button", {
+      name: /all orders/i,
+    });
 
-    await openNewOrderForCustomer(customerA);
+    fireEvent.click(allOrdersFolder);
 
-    expect(
-      screen.getByText(/Jane Doe — New order/i),
-    ).toBeInTheDocument();
+    const orderButton = await screen.findByRole("button", {
+      name: "00001",
+    });
+
+    fireEvent.click(orderButton);
+
+    await screen.findByRole("heading", {
+      name: /00001/i,
+    });
+
+    const orderManagement = screen.getByRole("region", {
+      name: "Order Management",
+    });
 
     fireEvent.click(
-      screen.getByRole("button", {
-        name: /close jane doe workspace/i,
+      within(orderManagement).getByRole("button", {
+        name: /^New order$/i,
       }),
     );
 
     expect(
-      useOrderWorkspaceStore.getState().workspaces,
-    ).toHaveLength(0);
+      await screen.findByRole("heading", {
+        name: /^New order$/i,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(window, {
+      key: "Escape",
+    });
 
     expect(
-      screen.getByRole("button", {
-        name: /^\+ Add customer$/i,
+      await screen.findByRole("heading", {
+        name: /00001/i,
       }),
+    ).toBeInTheDocument();
+
+    const orderManagementAfterEsc = screen.getByRole("region", {
+      name: "Order Management",
+    });
+
+    expect(
+      within(orderManagementAfterEsc).getByText("Jane Doe"),
     ).toBeInTheDocument();
   });
 });

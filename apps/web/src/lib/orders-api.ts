@@ -66,6 +66,38 @@ export async function listOrders(
   });
 }
 
+export async function listAllOrders(
+  params: Omit<ListOrdersParams, "page">,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<Order[]> {
+  const first = await listOrders(
+    { ...params, page: 1, pageSize: 100 },
+    auth,
+    branchId,
+  );
+
+  const pages = Array.from(
+    { length: Math.max(0, first.pagination.totalPages - 1) },
+    (_, index) => index + 2,
+  );
+
+  const rest = await Promise.all(
+    pages.map((page) =>
+      listOrders(
+        { ...params, page, pageSize: 100 },
+        auth,
+        branchId,
+      ),
+    ),
+  );
+
+  return [
+    ...first.data,
+    ...rest.flatMap((result) => result.data),
+  ];
+}
+
 export async function getOrder(
   id: string,
   auth: { accessToken: string | null },
