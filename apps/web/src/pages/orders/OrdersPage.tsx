@@ -101,6 +101,25 @@ export function OrdersPage() {
       (workspace) => workspace.id === activeWorkspaceId,
     ) ?? null;
 
+  // Keep page-level UI state synchronized with the selected
+  // customer workspace. Workspace mode, rather than activeOrder
+  // being null, determines whether this workspace is in New Order
+  // or Order Management mode.
+  useEffect(() => {
+    if (!activeWorkspace) {
+      setSelectedOrder(null);
+      setFormOpen(false);
+      return;
+    }
+
+    setSelectedOrder(activeWorkspace.activeOrder ?? null);
+    setFormOpen(activeWorkspace.mode === "new");
+  }, [
+    activeWorkspaceId,
+    activeWorkspace?.activeOrder?.id,
+    activeWorkspace?.mode,
+  ]);
+
   useEffect(() => {
     if (!user?.businessId || !activeBranchId) {
       return;
@@ -299,6 +318,7 @@ export function OrdersPage() {
       if (activeWorkspaceId) {
         updateWorkspace(activeWorkspaceId, {
           activeOrder: order,
+          mode: "view",
           draft: {
             lines: [{ serviceId: "", quantity: 1, colors: [] }],
             garmentNote: "",
@@ -449,7 +469,7 @@ export function OrdersPage() {
 
     if (activeWorkspace) {
       updateWorkspace(activeWorkspace.id, {
-        activeOrder: null,
+        mode: "new",
       });
       setFormOpen(true);
       setCustomerPickerOpen(false);
@@ -473,12 +493,12 @@ export function OrdersPage() {
       setSelectedOrder(existingWorkspace.activeOrder);
       setFormError(null);
       setCustomerPickerOpen(false);
-      setFormOpen(!existingWorkspace.activeOrder);
+      setFormOpen(existingWorkspace.mode === "new");
       return;
     }
 
     updateWorkspace(workspaceId, {
-      activeOrder: null,
+      mode: "new",
       draft: {
         customerId: customer.id,
         lines: [{ serviceId: "", quantity: 1, colors: [] }],
@@ -503,7 +523,7 @@ export function OrdersPage() {
 
     if (!existingWorkspace) {
       updateWorkspace(workspaceId, {
-        activeOrder: null,
+        mode: "new",
         draft: {
           customerId: customer.id,
           lines: [{ serviceId: "", quantity: 1, colors: [] }],
@@ -514,11 +534,14 @@ export function OrdersPage() {
       });
     } else {
       setSelectedOrder(existingWorkspace.activeOrder);
+      updateWorkspace(workspaceId, {
+        mode: "new",
+      });
     }
 
     setFormError(null);
     setCustomerPickerOpen(false);
-    setFormOpen(!existingWorkspace?.activeOrder);
+    setFormOpen(true);
   }
 
   function addLine() {
@@ -657,6 +680,7 @@ export function OrdersPage() {
     switchWorkspace(workspaceId);
     updateWorkspace(workspaceId, {
       activeOrder: order,
+      mode: "view",
     });
     setFormOpen(false);
     setCustomerPickerOpen(false);
@@ -669,7 +693,7 @@ export function OrdersPage() {
     switchWorkspace(workspaceId);
 
     updateWorkspace(workspaceId, {
-      activeOrder: null,
+      mode: "new",
       draft: {
         customerId: customer.id,
         lines: [{ serviceId: "", quantity: 1, colors: [] }],
@@ -691,7 +715,7 @@ export function OrdersPage() {
 
     if (activeWorkspaceId) {
       updateWorkspace(activeWorkspaceId, {
-        activeOrder: selectedOrder,
+        mode: "view",
       });
     }
   }

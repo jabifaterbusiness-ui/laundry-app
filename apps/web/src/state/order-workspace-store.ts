@@ -13,10 +13,13 @@ export interface OrderWorkspaceDraft {
   expectedReadyAt: string;
 }
 
+export type OrderWorkspaceMode = "view" | "new";
+
 export interface OrderWorkspace {
   id: string;
   customer: Customer;
   activeOrder: Order | null;
+  mode: OrderWorkspaceMode;
   draft: OrderWorkspaceDraft;
   updatedAt: number;
 }
@@ -39,7 +42,7 @@ interface OrderWorkspaceState {
   updateWorkspace: (
     workspaceId: string,
     update: Partial<
-      Pick<OrderWorkspace, "customer" | "activeOrder">
+      Pick<OrderWorkspace, "customer" | "activeOrder" | "mode">
     > & {
       draft?: Partial<OrderWorkspaceDraft>;
     },
@@ -87,6 +90,7 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
           id: workspaceId,
           customer,
           activeOrder: options?.order ?? null,
+          mode: options?.order ? "view" : "new",
           draft: {
             ...DEFAULT_DRAFT,
             customerId: customer.id,
@@ -188,6 +192,12 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
       set({
         workspaces: workspaces.map((workspace) => ({
           ...workspace,
+          mode:
+            workspace.mode === "new" || workspace.mode === "view"
+              ? workspace.mode
+              : workspace.activeOrder
+                ? "view"
+                : "new",
           draft: {
             ...workspace.draft,
             lines: workspace.draft.lines.map((line) => ({
