@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
-import { apiFetch } from "../../lib/api-client.js";
+import { apiFetch, apiFetchBlob } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 export function BusinessSettingsPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const logoObjectUrlRef = useRef<string | null>(null);
 
   const [branding, setBranding] = useState<Awaited<ReturnType<typeof getBusinessBranding>> | null>(null);
   const [primary, setPrimary] = useState("#1f7a4d");
@@ -18,6 +19,8 @@ export function BusinessSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [logoReloadKey, setLogoReloadKey] = useState(0);
 
   async function load() {
     if (!accessToken) return;
@@ -36,6 +39,59 @@ export function BusinessSettingsPage() {
       setMessage(error instanceof Error ? error.message : "Unable to load business settings.");
     });
   }, [accessToken, activeBranchId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLogo() {
+      if (!accessToken || !branding?.logoUrl) {
+        if (logoObjectUrlRef.current) {
+          URL.revokeObjectURL(logoObjectUrlRef.current);
+          logoObjectUrlRef.current = null;
+        }
+        setLogoSrc(null);
+        return;
+      }
+
+      try {
+        const blob = await apiFetchBlob("/businesses/logo", {
+          accessToken,
+          branchId: activeBranchId,
+        });
+
+        if (!active) return;
+
+        const nextUrl = URL.createObjectURL(blob);
+
+        if (logoObjectUrlRef.current) {
+          URL.revokeObjectURL(logoObjectUrlRef.current);
+        }
+
+        logoObjectUrlRef.current = nextUrl;
+        setLogoSrc(nextUrl);
+      } catch {
+        if (active) {
+          setLogoSrc(null);
+        }
+      }
+    }
+
+    void loadLogo();
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, activeBranchId, branding?.logoUrl, logoReloadKey]);
+
+  useEffect(
+    () => () => {
+      if (logoObjectUrlRef.current) {
+        URL.revokeObjectURL(logoObjectUrlRef.current);
+        logoObjectUrlRef.current = null;
+      }
+    },
+    [],
+  );
 
   async function save() {
     if (!accessToken) return;
@@ -133,6 +189,7 @@ export function BusinessSettingsPage() {
         body: file,
       });
       setBranding(result);
+      setLogoReloadKey((value) => value + 1);
       setMessage("Business logo uploaded successfully.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to upload logo.");
@@ -152,6 +209,7 @@ export function BusinessSettingsPage() {
         branchId: activeBranchId,
       });
       setBranding(result);
+      setLogoReloadKey((value) => value + 1);
       setMessage("Business logo removed.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to remove logo.");
@@ -189,11 +247,13 @@ export function BusinessSettingsPage() {
             PNG, JPG/JPEG, or WebP • Minimum 200 × 200 px • Recommended 500 × 500 px
             • Maximum 5 MB • Square (1:1) recommended
           </p>
-          {branding.logoUrl ? (
+          {branding.logoUrl && logoSrc ? (
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <img src={branding.logoUrl} alt={`${branding.name} logo`} style={{ maxWidth: 180, maxHeight: 100, objectFit: "contain" }} />
+              <img src={logoSrc} alt={`${branding.name} logo`} style={{ maxWidth: 180, maxHeight: 100, objectFit: "contain" }} />
               <button type="button" onClick={() => void removeLogo()} disabled={uploading}>Remove logo</button>
             </div>
+          ) : branding.logoUrl ? (
+            <p>Loading business logo…</p>
           ) : <p>No business logo uploaded.</p>}
           <input
             ref={fileRef}

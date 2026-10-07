@@ -71,3 +71,56 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   return res.json() as Promise<T>;
 }
+
+export async function apiFetchBlob(
+  path: string,
+  options: RequestInit & {
+    accessToken?: string | null;
+    branchId?: string | null;
+    sensitiveAuthorization?: string | null;
+  } = {},
+): Promise<Blob> {
+  const {
+    accessToken,
+    branchId,
+    sensitiveAuthorization,
+    headers,
+    ...rest
+  } = options;
+
+  let res: Response;
+
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...rest,
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
+        ...(sensitiveAuthorization
+          ? { "X-Sensitive-Authorization": sensitiveAuthorization }
+          : {}),
+        ...headers,
+      },
+    });
+  } catch (error) {
+    if (error instanceof NetworkError) {
+      throw error;
+    }
+
+    throw new NetworkError(
+      error instanceof Error && error.message
+        ? error.message
+        : "Unable to reach the server",
+    );
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(
+      body?.error?.message ?? `Request failed with status ${res.status}`,
+      res.status,
+    );
+  }
+
+  return res.blob();
+}

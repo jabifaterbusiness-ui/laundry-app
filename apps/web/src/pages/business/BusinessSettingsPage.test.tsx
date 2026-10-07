@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BusinessSettingsPage } from "./BusinessSettingsPage.js";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
-import { apiFetch } from "../../lib/api-client.js";
+import { apiFetch, apiFetchBlob } from "../../lib/api-client.js";
 
 vi.mock("../../lib/businesses-api.js", () => ({
   getBusinessBranding: vi.fn(),
@@ -10,6 +10,7 @@ vi.mock("../../lib/businesses-api.js", () => ({
 
 vi.mock("../../lib/api-client.js", () => ({
   apiFetch: vi.fn(),
+  apiFetchBlob: vi.fn(),
 }));
 
 vi.mock("../../state/auth-store.js", () => ({
@@ -22,6 +23,7 @@ vi.mock("../../state/auth-store.js", () => ({
 
 const mockedGetBranding = vi.mocked(getBusinessBranding);
 const mockedApiFetch = vi.mocked(apiFetch);
+const mockedApiFetchBlob = vi.mocked(apiFetchBlob);
 
 const branding = {
   id: "business-1",
@@ -43,6 +45,9 @@ describe("BusinessSettingsPage", () => {
     vi.clearAllMocks();
     mockedGetBranding.mockResolvedValue(branding);
     mockedApiFetch.mockResolvedValue(branding);
+    mockedApiFetchBlob.mockResolvedValue(
+      new Blob(["logo"], { type: "image/png" }),
+    );
   });
 
   it("loads business branding settings", async () => {
@@ -125,6 +130,35 @@ describe("BusinessSettingsPage", () => {
         }),
       );
     });
+  });
+
+  it("loads an existing business logo through authenticated blob fetch", async () => {
+    const brandingWithLogo = {
+      ...branding,
+      logoUrl: "http://localhost:4000/api/v1/businesses/logo",
+    };
+
+    mockedGetBranding.mockResolvedValue(brandingWithLogo);
+
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:business-logo"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(<BusinessSettingsPage />);
+
+    expect(
+      await screen.findByAltText("LaundryAngel Demo logo"),
+    ).toHaveAttribute("src", "blob:business-logo");
+
+    expect(mockedApiFetchBlob).toHaveBeenCalledWith(
+      "/businesses/logo",
+      {
+        accessToken: "token",
+        branchId: "branch-1",
+      },
+    );
   });
 
   it("rejects unsupported logo formats before upload", async () => {
