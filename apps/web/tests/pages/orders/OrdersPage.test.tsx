@@ -571,7 +571,7 @@ describe("OrdersPage quick customer switching", () => {
     expect(screen.getByRole("spinbutton")).toHaveValue(2);
   });
 
-  it("keeps one central Order Management workspace when changing customers", async () => {
+  it("keeps separate visible customer workspaces when changing customers", async () => {
     renderPage();
 
     await screen.findByText("No orders found.");
@@ -596,9 +596,38 @@ describe("OrdersPage quick customer switching", () => {
       screen.getByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
 
+    const janeWorkspace = screen.getByRole("button", {
+      name: /Jane Doe — New order/i,
+    });
+
+    const johnWorkspace = screen.getByRole("button", {
+      name: /John Doe — New order/i,
+    });
+
+    expect(janeWorkspace).toBeInTheDocument();
+    expect(johnWorkspace).toBeInTheDocument();
+
+    expect(johnWorkspace).toHaveAttribute("aria-pressed", "true");
+    expect(janeWorkspace).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(janeWorkspace);
+
     expect(
-      screen.queryByText(/Jane Doe — New order/i),
-    ).not.toBeInTheDocument();
+      screen.getByRole("heading", { name: /new order/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: /Jane Doe — New order/i,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    expect(
+      screen.getByRole("button", {
+        name: /John Doe — New order/i,
+      }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("opens an existing order in Order Management from its folder", async () => {

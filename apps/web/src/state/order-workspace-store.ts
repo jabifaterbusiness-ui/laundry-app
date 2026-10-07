@@ -169,6 +169,9 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
             ...(update.activeOrder !== undefined
               ? { activeOrder: update.activeOrder }
               : {}),
+            ...(update.mode
+              ? { mode: update.mode }
+              : {}),
             ...(update.draft
               ? {
                   draft: {

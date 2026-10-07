@@ -29,6 +29,7 @@ import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { OrderManagement } from "./OrderManagement.js";
+import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
 
 const PAGE_SIZE = 25;
@@ -1265,6 +1266,25 @@ export function OrdersPage() {
   return (
     <main>
       <h1>Orders</h1>
+
+      {workspaces.length > 0 && (
+        <OrderWorkspaceSwitcher
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          onOpenCustomer={() => {
+            setCustomerSearch("");
+            setCustomerPickerOpen(true);
+          }}
+          onSwitch={(workspaceId) => {
+            switchWorkspace(workspaceId);
+            setCustomerPickerOpen(false);
+            setFormError(null);
+          }}
+          onClose={(workspaceId) => {
+            closeWorkspace(workspaceId);
+          }}
+        />
+      )}
 
       {canCreateOrder ? (
         <div>
