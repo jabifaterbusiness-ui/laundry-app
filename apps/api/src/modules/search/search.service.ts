@@ -162,7 +162,7 @@ export async function globalSearch(
       id: order.id,
       title: `Order #${order.orderNumber}`,
       subtitle: `${order.customer.name} · ${order.status}`,
-      href: `/orders`,
+      href: `/orders?orderId=${encodeURIComponent(order.id)}`,
     })),
 
     ...invoices.map((invoice) => ({

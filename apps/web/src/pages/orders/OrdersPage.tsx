@@ -462,8 +462,21 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer) {
+    const existingWorkspace = workspaces.find(
+      (workspace) => workspace.customer.id === customer.id,
+    );
+
     const workspaceId = openWorkspace(customer);
     switchWorkspace(workspaceId);
+
+    if (existingWorkspace) {
+      setSelectedOrder(existingWorkspace.activeOrder);
+      setFormError(null);
+      setCustomerPickerOpen(false);
+      setFormOpen(!existingWorkspace.activeOrder);
+      return;
+    }
+
     updateWorkspace(workspaceId, {
       activeOrder: null,
       draft: {

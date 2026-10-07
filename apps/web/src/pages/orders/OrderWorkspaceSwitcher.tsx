@@ -8,6 +8,15 @@ interface OrderWorkspaceSwitcherProps {
   onClose: (workspaceId: string) => void;
 }
 
+const WORKSPACE_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#9333ea",
+  "#ea580c",
+  "#0891b2",
+  "#db2777",
+];
+
 export function OrderWorkspaceSwitcher({
   workspaces,
   activeWorkspaceId,
@@ -23,15 +32,38 @@ export function OrderWorkspaceSwitcher({
       </div>
 
       <div>
-        {workspaces.map((workspace) => {
+        {workspaces.map((workspace, index) => {
           const isActive = workspace.id === activeWorkspaceId;
+          const color = WORKSPACE_COLORS[index % WORKSPACE_COLORS.length];
 
           return (
-            <div key={workspace.id}>
+            <div
+              key={workspace.id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                marginRight: 8,
+                marginBottom: 8,
+                borderRadius: 8,
+                border: `2px solid ${color}`,
+                background: isActive ? color : "transparent",
+                boxShadow: isActive
+                  ? `0 0 0 2px ${color}33`
+                  : "none",
+              }}
+            >
               <button
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => onSwitch(workspace.id)}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: isActive ? "#fff" : color,
+                  fontWeight: isActive ? 700 : 600,
+                  padding: "8px 10px",
+                  cursor: "pointer",
+                }}
               >
                 {workspace.customer.name}
                 {workspace.activeOrder
@@ -43,6 +75,15 @@ export function OrderWorkspaceSwitcher({
                 type="button"
                 aria-label={`Close ${workspace.customer.name} workspace`}
                 onClick={() => onClose(workspace.id)}
+                style={{
+                  border: 0,
+                  borderLeft: `1px solid ${isActive ? "#ffffff66" : `${color}55`}`,
+                  background: "transparent",
+                  color: isActive ? "#fff" : color,
+                  fontWeight: 700,
+                  padding: "8px 9px",
+                  cursor: "pointer",
+                }}
               >
                 ×
               </button>

@@ -94,7 +94,7 @@ describe("globalSearch", () => {
         id: "order-1",
         title: "Order #00001",
         subtitle: "John Doe · RECEIVED",
-        href: "/orders",
+        href: "/orders?orderId=order-1",
       },
       {
         type: "INVOICE",
