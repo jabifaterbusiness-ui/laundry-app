@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
@@ -73,6 +74,7 @@ function OrderManagementContent({
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const [layer, setLayer] = useState<
@@ -417,6 +419,32 @@ function OrderManagementContent({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (
+        mode === "view" &&
+        order &&
+        invoiceQuery.data &&
+        canViewInvoices &&
+        event.key === "F1"
+      ) {
+        event.preventDefault();
+
+        if (event.ctrlKey && event.shiftKey) {
+          window.dispatchEvent(
+            new CustomEvent("quick-operation:open", {
+              detail: {
+                code: "RS",
+                recordId: invoiceQuery.data.id,
+              },
+            }),
+          );
+          return;
+        }
+
+        setPrintMode(event.ctrlKey ? "company" : "customer");
+        setPrintInvoiceId(invoiceQuery.data.id);
+        return;
+      }
+
       if (event.key !== "Escape") return;
       event.preventDefault();
       requestBack();
@@ -544,8 +572,41 @@ function OrderManagementContent({
         >
           New Order
         </button>
-        <button type="button" onClick={beginEdit}>
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() =>
+            navigate(
+              `/invoices?invoiceId=${encodeURIComponent(
+                invoiceQuery.data!.id,
+              )}&action=edit`,
+            )
+          }
+        >
           Edit
+        </button>
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() =>
+            navigate(
+              `/invoices?invoiceId=${encodeURIComponent(
+                invoiceQuery.data!.id,
+              )}&action=transfer`,
+            )
+          }
+        >
+          Transfer Invoice
         </button>
         <button type="button" onClick={() => setLayer("history")}>
           History
@@ -575,9 +636,49 @@ function OrderManagementContent({
             !invoiceQuery.data ||
             !canViewInvoices
           }
-          onClick={() => setLayer("print")}
+          onClick={() => {
+            setPrintMode("customer");
+            setPrintInvoiceId(invoiceQuery.data!.id);
+          }}
         >
-          Print
+          Print Customer Copy (F1)
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() => {
+            setPrintMode("company");
+            setPrintInvoiceId(invoiceQuery.data!.id);
+          }}
+        >
+          Print Company Copy (Ctrl+F1)
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() => {
+            const event = new CustomEvent("quick-operation:open", {
+              detail: {
+                code: "RS",
+                recordId: invoiceQuery.data!.id,
+              },
+            });
+            window.dispatchEvent(event);
+          }}
+        >
+          Digital Receipt (Ctrl+Shift+F1)
         </button>
         <button
           type="button"
@@ -622,6 +723,22 @@ function OrderManagementContent({
             <div>{formatMoney(order!.orderTotal)}</div>
           </div>
           <div>
+            <strong>Paid</strong>
+            <div>
+              {paymentSummaryQuery.data
+                ? formatMoney(paymentSummaryQuery.data.amountPaid)
+                : "Loading..."}
+            </div>
+          </div>
+          <div>
+            <strong>Balance</strong>
+            <div>
+              {paymentSummaryQuery.data
+                ? formatMoney(paymentSummaryQuery.data.balance)
+                : "Loading..."}
+            </div>
+          </div>
+          <div>
             <strong>Expected Ready</strong>
             <div>{formatDate(order!.expectedReadyAt)}</div>
           </div>
@@ -630,6 +747,33 @@ function OrderManagementContent({
             <div>{formatDate(order!.createdAt)}</div>
           </div>
         </div>
+
+        {paymentSummaryQuery.data?.payments?.length ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              border: "1px solid #ddd",
+              borderRadius: 8,
+            }}
+          >
+            <strong>Payments</strong>
+            {paymentSummaryQuery.data.payments.map((payment) => (
+              <div
+                key={payment.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginTop: 6,
+                }}
+              >
+                <span>{payment.method.replaceAll("_", " ")}</span>
+                <strong>{formatMoney(payment.amount)}</strong>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <table style={{ width: "100%", marginTop: 16 }}>
           <thead>
@@ -656,57 +800,6 @@ function OrderManagementContent({
       </section>
 
       )}
-
-      <section style={{ marginTop: 20 }}>
-        <h3>Customer Order History</h3>
-
-        <div
-          style={{
-            maxHeight: 240,
-            overflowY: "auto",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-          }}
-        >
-          {historyQuery.isLoading && <p>Loading history...</p>}
-
-          {historyQuery.isError && (
-            <p role="alert">Unable to load customer order history.</p>
-          )}
-
-          {!historyQuery.isLoading && history.length === 0 && (
-            <p>No previous orders found.</p>
-          )}
-
-          {history.map((historyOrder) => (
-            <button
-              key={historyOrder.id}
-              type="button"
-              onClick={() => onSelectOrder(historyOrder)}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                width: "100%",
-                padding: 10,
-                border: 0,
-                borderBottom: "1px solid #eee",
-                background:
-                  mode === "view" && historyOrder.id === order?.id
-                    ? "#f3f3f3"
-                    : "#fff",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <span>
-                #{historyOrder.orderNumber} ·{" "}
-                {statusLabel(historyOrder.status)}
-              </span>
-              <span>{formatMoney(historyOrder.orderTotal)}</span>
-            </button>
-          ))}
-        </div>
-      </section>
 
       {error && (
         <p role="alert" style={{ marginTop: 12 }}>
@@ -1107,7 +1200,84 @@ function OrderManagementContent({
           {layer === "more" && (
             <>
               <h3>More</h3>
-              <p>Additional order actions will appear here.</p>
+              {!invoiceQuery.data ? (
+                <p>No invoice is available for this order.</p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={!canViewInvoices}
+                    onClick={() =>
+                      navigate(
+                        `/invoices?invoiceId=${encodeURIComponent(
+                          invoiceQuery.data!.id,
+                        )}&action=void`,
+                      )
+                    }
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 8,
+                      border: "1px solid #dc2626",
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Void Invoice
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canViewInvoices}
+                    onClick={() =>
+                      navigate(
+                        `/invoices?invoiceId=${encodeURIComponent(
+                          invoiceQuery.data!.id,
+                        )}&action=delete`,
+                      )
+                    }
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 8,
+                      border: "1px solid #b91c1c",
+                      background: "#fecaca",
+                      color: "#7f1d1d",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Delete Invoice
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canViewInvoices}
+                    onClick={() =>
+                      navigate(
+                        `/invoices?invoiceId=${encodeURIComponent(
+                          invoiceQuery.data!.id,
+                        )}&action=history`,
+                      )
+                    }
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 8,
+                      border: "1px solid #2563eb",
+                      background: "#dbeafe",
+                      color: "#1e3a8a",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Edited History
+                  </button>
+
+                </div>
+              )}
             </>
           )}
         </div>

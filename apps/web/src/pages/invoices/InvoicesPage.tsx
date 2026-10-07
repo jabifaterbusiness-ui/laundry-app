@@ -37,8 +37,9 @@ function statusLabel(status: InvoiceStatus) {
 }
 
 export function InvoicesPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const invoiceIdFromUrl = searchParams.get("invoiceId");
+  const invoiceActionFromUrl = searchParams.get("action");
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
@@ -212,6 +213,46 @@ export function InvoicesPage() {
     setConfirmed(false);
     setCorrectionMode(mode);
   }
+
+  useEffect(() => {
+    if (
+      !selectedInvoice ||
+      selectedInvoiceId !== invoiceIdFromUrl ||
+      !invoiceActionFromUrl ||
+      !canManageInvoices ||
+      correctionMode
+    ) {
+      return;
+    }
+
+    if (invoiceActionFromUrl === "edit") {
+      startEdit();
+    } else if (invoiceActionFromUrl === "transfer") {
+      startTransfer();
+    } else if (invoiceActionFromUrl === "void") {
+      startDestructiveCorrection("void");
+    } else if (invoiceActionFromUrl === "delete") {
+      startDestructiveCorrection("delete");
+    } else if (invoiceActionFromUrl === "history") {
+      setCorrectionError(null);
+      setCorrectionMode("history");
+    } else {
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    setSearchParams(next, { replace: true });
+  }, [
+    selectedInvoice,
+    selectedInvoiceId,
+    invoiceIdFromUrl,
+    invoiceActionFromUrl,
+    canManageInvoices,
+    correctionMode,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const correctionMutation = useMutation({
     mutationFn: async () => {
@@ -679,7 +720,7 @@ export function InvoicesPage() {
                 type="button"
                 onClick={() => setCorrectionMode("history")}
               >
-                Correction History
+                Edited History
               </button>
             ) : null}
 
@@ -918,13 +959,13 @@ export function InvoicesPage() {
           correctionMode === "delete" ? (
             <p role="alert">
               {correctionMode === "delete"
-                ? "Delete removes this invoice from active use. Its invoice number and correction history are retained."
+                ? "Delete removes this invoice from active use. Its invoice number and edited history are retained."
                 : "Voiding marks this invoice as void. The invoice history is retained."}
             </p>
           ) : null}
 
           <label>
-            Reason for this correction
+            Reason for this edit
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
@@ -952,7 +993,7 @@ export function InvoicesPage() {
               disabled={correctionMutation.isPending}
             />
             <span>
-              I confirm that I want to perform this invoice correction.
+              I confirm that I want to perform this invoice edit.
             </span>
           </label>
 
@@ -980,7 +1021,7 @@ export function InvoicesPage() {
             >
               {correctionMutation.isPending
                 ? "Saving..."
-                : "Confirm Correction"}
+                : "Confirm Edit"}
             </button>
 
             <button
@@ -997,7 +1038,7 @@ export function InvoicesPage() {
       {selectedInvoice && correctionMode === "history" ? (
         <section
           role="dialog"
-          aria-label={`Invoice correction history ${selectedInvoice.invoiceNumber}`}
+          aria-label={`Invoice edited history ${selectedInvoice.invoiceNumber}`}
           style={{
             marginTop: 20,
             padding: 20,
@@ -1006,7 +1047,7 @@ export function InvoicesPage() {
           }}
         >
           <h3>
-            Correction History — {selectedInvoice.invoiceNumber}
+            Edited History — {selectedInvoice.invoiceNumber}
           </h3>
 
           <p>
@@ -1015,17 +1056,17 @@ export function InvoicesPage() {
           </p>
 
           {historyQuery.isLoading ? (
-            <p>Loading correction history...</p>
+            <p>Loading edited history...</p>
           ) : null}
 
           {historyQuery.isError ? (
             <p role="alert">
-              Unable to load invoice correction history.
+              Unable to load invoice edited history.
             </p>
           ) : null}
 
           {historyQuery.data?.length === 0 ? (
-            <p>No correction history exists for this invoice.</p>
+            <p>No edited history exists for this invoice.</p>
           ) : null}
 
           {historyQuery.data && historyQuery.data.length > 0 ? (

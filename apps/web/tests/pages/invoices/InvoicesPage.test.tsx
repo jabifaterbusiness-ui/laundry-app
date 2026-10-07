@@ -269,7 +269,7 @@ describe("InvoicesPage invoice correction workflow", () => {
     await selectInvoice();
 
     expect(
-      screen.getByRole("button", { name: "Correction History" }),
+      screen.getByRole("button", { name: "Edited History" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Edit Invoice" }),
@@ -294,26 +294,26 @@ describe("InvoicesPage invoice correction workflow", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     ).toBeDisabled();
 
     fireEvent.change(
-      screen.getByLabelText("Reason for this correction"),
+      screen.getByLabelText("Reason for this edit"),
       { target: { value: "Entered on the wrong account." } },
     );
 
     expect(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     ).toBeDisabled();
 
     fireEvent.click(
       screen.getByLabelText(
-        "I confirm that I want to perform this invoice correction.",
+        "I confirm that I want to perform this invoice edit.",
       ),
     );
 
     expect(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     ).toBeEnabled();
   });
 
@@ -334,18 +334,18 @@ describe("InvoicesPage invoice correction workflow", () => {
     });
 
     fireEvent.change(
-      screen.getByLabelText("Reason for this correction"),
+      screen.getByLabelText("Reason for this edit"),
       { target: { value: "Entered on the wrong item." } },
     );
 
     fireEvent.click(
       screen.getByLabelText(
-        "I confirm that I want to perform this invoice correction.",
+        "I confirm that I want to perform this invoice edit.",
       ),
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     );
 
     await waitFor(() => {
@@ -406,7 +406,7 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(targetCustomerSelect).toHaveValue("customer-2");
 
     const reasonInput = within(transferDialog).getByLabelText(
-      "Reason for this correction",
+      "Reason for this edit",
     );
 
     await user.clear(reasonInput);
@@ -424,7 +424,7 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(confirmationCheckbox).toBeChecked();
 
     const confirmButton = within(transferDialog).getByRole("button", {
-      name: "Confirm Correction",
+      name: "Confirm Edit",
     });
 
     expect(confirmButton).not.toBeDisabled();
@@ -454,18 +454,18 @@ describe("InvoicesPage invoice correction workflow", () => {
     );
 
     fireEvent.change(
-      screen.getByLabelText("Reason for this correction"),
+      screen.getByLabelText("Reason for this edit"),
       { target: { value: "Duplicate invoice." } },
     );
 
     fireEvent.click(
       screen.getByLabelText(
-        "I confirm that I want to perform this invoice correction.",
+        "I confirm that I want to perform this invoice edit.",
       ),
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     );
 
     await waitFor(() => {
@@ -496,18 +496,18 @@ describe("InvoicesPage invoice correction workflow", () => {
     ).toBeInTheDocument();
 
     fireEvent.change(
-      screen.getByLabelText("Reason for this correction"),
+      screen.getByLabelText("Reason for this edit"),
       { target: { value: "Invoice was created in error." } },
     );
 
     fireEvent.click(
       screen.getByLabelText(
-        "I confirm that I want to perform this invoice correction.",
+        "I confirm that I want to perform this invoice edit.",
       ),
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Confirm Correction" }),
+      screen.getByRole("button", { name: "Confirm Edit" }),
     );
 
     await waitFor(() => {
@@ -528,11 +528,11 @@ describe("InvoicesPage invoice correction workflow", () => {
     await selectInvoice();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Correction History" }),
+      screen.getByRole("button", { name: "Edited History" }),
     );
 
     expect(
-      await screen.findByText("Correction History — INV-00001"),
+      await screen.findByText("Edited History — INV-00001"),
     ).toBeInTheDocument();
 
     expect(
