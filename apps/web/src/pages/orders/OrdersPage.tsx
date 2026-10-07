@@ -1267,25 +1267,6 @@ export function OrdersPage() {
     <main>
       <h1>Orders</h1>
 
-      {workspaces.length > 0 && (
-        <OrderWorkspaceSwitcher
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          onOpenCustomer={() => {
-            setCustomerSearch("");
-            setCustomerPickerOpen(true);
-          }}
-          onSwitch={(workspaceId) => {
-            switchWorkspace(workspaceId);
-            setCustomerPickerOpen(false);
-            setFormError(null);
-          }}
-          onClose={(workspaceId) => {
-            closeWorkspace(workspaceId);
-          }}
-        />
-      )}
-
       {canCreateOrder ? (
         <div>
           <button type="button" onClick={openCreate}>
@@ -1390,6 +1371,26 @@ export function OrdersPage() {
           })}
         </section>
       )}
+
+      {workspaces.length > 0 && (
+        <OrderWorkspaceSwitcher
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          onOpenCustomer={() => {
+            setCustomerSearch("");
+            setCustomerPickerOpen(true);
+          }}
+          onSwitch={(workspaceId) => {
+            switchWorkspace(workspaceId);
+            setCustomerPickerOpen(false);
+            setFormError(null);
+          }}
+          onClose={(workspaceId) => {
+            closeWorkspace(workspaceId);
+          }}
+        />
+      )}
+
 
 
 
