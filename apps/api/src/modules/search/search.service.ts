@@ -154,7 +154,7 @@ export async function globalSearch(
       id: customer.id,
       title: customer.name,
       subtitle: customer.phone,
-      href: `/customers`,
+      href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
     })),
 
     ...orders.map((order) => ({

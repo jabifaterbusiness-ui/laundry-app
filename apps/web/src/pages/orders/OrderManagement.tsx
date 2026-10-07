@@ -62,6 +62,7 @@ interface OrderManagementProps {
   mode: "view" | "new";
   newOrderContent?: ReactNode;
   onBack: () => void;
+  onSwitchCustomer: () => void;
   onNewOrder: (customer: Customer) => void;
   onSelectOrder: (order: Order) => void;
 }
@@ -72,6 +73,7 @@ function OrderManagementContent({
   mode,
   newOrderContent,
   onBack,
+  onSwitchCustomer,
   onNewOrder,
   onSelectOrder,
 }: OrderManagementProps) {
@@ -859,7 +861,7 @@ function OrderManagementContent({
           Status
         </button>
 
-        <button type="button" onClick={onBack}>
+        <button type="button" onClick={onSwitchCustomer}>
           Switch Customer
         </button>
         <button type="button" onClick={() => setLayer("more")}>

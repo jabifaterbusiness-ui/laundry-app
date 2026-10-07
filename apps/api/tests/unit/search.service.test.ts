@@ -87,7 +87,7 @@ describe("globalSearch", () => {
         id: "customer-1",
         title: "John Doe",
         subtitle: "08012345678",
-        href: "/customers",
+        href: "/orders?customerId=customer-1",
       },
       {
         type: "ORDER",

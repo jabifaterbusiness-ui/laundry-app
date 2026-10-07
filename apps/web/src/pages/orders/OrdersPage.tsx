@@ -1416,6 +1416,10 @@ export function OrdersPage() {
             mode={formOpen ? "new" : "view"}
             newOrderContent={newOrderContent}
             onBack={closeOrderManagement}
+            onSwitchCustomer={() => {
+              setCustomerSearch("");
+              setCustomerPickerOpen(true);
+            }}
             onNewOrder={startNewOrderForCustomer}
             onSelectOrder={openOrderManagement}
           />
