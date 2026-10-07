@@ -4,6 +4,24 @@ import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import { getCustomer, updateCustomer } from "../../lib/customers-api.js";
 import {
+  getCompanyReceipt,
+  getCustomerReceipt,
+  getInvoiceByOrder,
+} from "../../lib/invoices-api.js";
+import { getBusinessBranding } from "../../lib/businesses-api.js";
+import { getCustomerAccount } from "../../lib/customer-account-api.js";
+import {
+  createPayment,
+  getInvoicePaymentSummary,
+  type PaymentMethod,
+} from "../../lib/payments-api.js";
+import {
+  SensitiveAuthorizationProvider,
+  useSensitiveAuthorization,
+} from "../../components/auth/SensitiveAuthorizationProvider.js";
+import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
+import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
+import {
   getOrder,
   listAllOrders,
   updateOrderStatusWithOfflineQueue,
@@ -42,7 +60,7 @@ interface OrderManagementProps {
   onSelectOrder: (order: Order) => void;
 }
 
-export function OrderManagement({
+function OrderManagementContent({
   order,
   customer,
   mode,
@@ -55,9 +73,10 @@ export function OrderManagement({
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const [layer, setLayer] = useState<
-    "none" | "edit" | "history" | "notes" | "payment" | "status" | "more"
+    "none" | "edit" | "history" | "notes" | "payment" | "print" | "status" | "more"
   >("none");
   const [dirty, setDirty] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -67,8 +86,23 @@ export function OrderManagement({
   const [notes, setNotes] = useState(customer.notes ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("CASH");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const [printInvoiceId, setPrintInvoiceId] = useState<string | null>(null);
+  const [printMode, setPrintMode] =
+    useState<"customer" | "company" | null>(null);
+
   const canUpdateCustomer = hasPermission(user, "customers.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
+  const canViewPayments = hasPermission(user, "payments.view");
+  const canManagePayments = hasPermission(user, "payments.manage");
+  const canViewAccount = hasPermission(user, "customer_accounts.view");
+  const canViewInvoices = hasPermission(user, "invoices.view");
 
   const customerQuery = useQuery({
     queryKey: ["customer", customer.id, "order-management"],
@@ -78,6 +112,207 @@ export function OrderManagement({
   });
 
   const currentCustomer = customerQuery.data ?? customer;
+
+  const invoiceQuery = useQuery({
+    queryKey: ["order-management", "invoice", order?.id, activeBranchId],
+    queryFn: () =>
+      getInvoiceByOrder(order!.id, { accessToken }, activeBranchId),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        mode === "view" &&
+        order?.id &&
+        canViewInvoices,
+    ),
+  });
+
+  const paymentSummaryQuery = useQuery({
+    queryKey: [
+      "order-management",
+      "invoice-payment-summary",
+      invoiceQuery.data?.id,
+      activeBranchId,
+    ],
+    queryFn: () =>
+      getInvoicePaymentSummary(
+        invoiceQuery.data!.id,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        invoiceQuery.data?.id &&
+        canViewPayments,
+    ),
+  });
+
+  const accountQuery = useQuery({
+    queryKey: ["order-management", "customer-account", currentCustomer.id],
+    queryFn: () =>
+      getCustomerAccount(currentCustomer.id, { accessToken }),
+    enabled: Boolean(
+      accessToken &&
+        currentCustomer.id &&
+        canViewAccount &&
+        paymentMethod === "PAY_FROM_ACCOUNT",
+    ),
+  });
+
+  const brandingQuery = useQuery({
+    queryKey: ["order-management", "business-branding", activeBranchId],
+    queryFn: () => getBusinessBranding({ accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && printInvoiceId),
+  });
+
+  const customerReceiptQuery = useQuery({
+    queryKey: [
+      "order-management",
+      "invoice-receipt",
+      "customer",
+      printInvoiceId,
+      activeBranchId,
+    ],
+    queryFn: () =>
+      getCustomerReceipt(
+        printInvoiceId!,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        printInvoiceId &&
+        printMode === "customer",
+    ),
+  });
+
+  const companyReceiptQuery = useQuery({
+    queryKey: [
+      "order-management",
+      "invoice-receipt",
+      "company",
+      printInvoiceId,
+      activeBranchId,
+    ],
+    queryFn: () =>
+      getCompanyReceipt(
+        printInvoiceId!,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        printInvoiceId &&
+        printMode === "company",
+    ),
+  });
+
+  const paymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoiceQuery.data) {
+        throw new Error("No invoice is available for this order.");
+      }
+
+      if (!canManagePayments) {
+        throw new Error("You do not have permission to manage payments.");
+      }
+
+      const amount = Number(paymentAmount);
+
+      if (!Number.isInteger(amount) || amount <= 0) {
+        throw new Error("Enter a valid whole-number payment amount.");
+      }
+
+      const summary = paymentSummaryQuery.data;
+
+      if (!summary) {
+        throw new Error("Payment balance is not available.");
+      }
+
+      if (amount > summary.balance) {
+        throw new Error(
+          `Payment cannot exceed the outstanding balance of ${formatMoney(summary.balance)}.`,
+        );
+      }
+
+      if (
+        paymentMethod === "PAY_FROM_ACCOUNT" &&
+        !canViewAccount
+      ) {
+        throw new Error(
+          "You do not have permission to use Pay from Account.",
+        );
+      }
+
+      if (
+        paymentMethod === "PAY_FROM_ACCOUNT" &&
+        (!accountQuery.data ||
+          amount > accountQuery.data.balance)
+      ) {
+        throw new Error(
+          "The customer's account balance is insufficient for this payment.",
+        );
+      }
+
+      const authorization = await requestSensitiveAuthorization();
+
+      if (!authorization) {
+        throw new Error(
+          "Payment authorization was cancelled or not provided.",
+        );
+      }
+
+      return createPayment(
+        {
+          invoiceId: invoiceQuery.data.id,
+          amount,
+          method: paymentMethod,
+          reference: paymentReference.trim() || undefined,
+          note: paymentNote.trim() || undefined,
+        },
+        {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        },
+        activeBranchId,
+      );
+    },
+    onSuccess: () => {
+      setPaymentAmount("");
+      setPaymentReference("");
+      setPaymentNote("");
+      setPaymentMethod("CASH");
+      setPaymentError(null);
+      setLayer("none");
+
+      queryClient.invalidateQueries({
+        queryKey: [
+          "order-management",
+          "invoice-payment-summary",
+          invoiceQuery.data?.id,
+        ],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["order-management", "customer-account"],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["customer-workstation", "invoice-payment-summaries"],
+      });
+    },
+    onError: (err) => {
+      setPaymentError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Unable to record payment.",
+      );
+    },
+  });
 
   const historyQuery = useQuery({
     queryKey: ["orders", "customer-history", customer.id, activeBranchId],
@@ -200,6 +435,47 @@ export function OrderManagement({
     setLayer("edit");
   }
 
+  useEffect(() => {
+    if (!printInvoiceId || !printMode) return;
+
+    const ready =
+      printMode === "customer"
+        ? customerReceiptQuery.data
+        : companyReceiptQuery.data;
+
+    if (!ready) return;
+
+    const className =
+      printMode === "customer"
+        ? "printing-customer"
+        : "printing-company";
+
+    document.body.classList.add(className);
+
+    const cleanup = () => {
+      document.body.classList.remove(className);
+      setPrintInvoiceId(null);
+      setPrintMode(null);
+    };
+
+    window.addEventListener("afterprint", cleanup);
+
+    const timer = window.setTimeout(() => {
+      window.print();
+    }, 50);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", cleanup);
+      document.body.classList.remove(className);
+    };
+  }, [
+    printInvoiceId,
+    printMode,
+    customerReceiptQuery.data,
+    companyReceiptQuery.data,
+  ]);
+
   return (
     <section
       aria-label="Order Management"
@@ -281,10 +557,26 @@ export function OrderManagement({
         <button type="button" onClick={beginEdit}>
           Customer
         </button>
-        <button type="button" onClick={() => setLayer("payment")}>
-          Payment
+        <button
+          type="button"
+          disabled={mode !== "view" || !order}
+          onClick={() => {
+            setPaymentError(null);
+            setLayer("payment");
+          }}
+        >
+          Pay
         </button>
-        <button type="button" onClick={() => window.print()}>
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() => setLayer("print")}
+        >
           Print
         </button>
         <button
@@ -577,7 +869,238 @@ export function OrderManagement({
           {layer === "payment" && (
             <>
               <h3>Payment</h3>
-              <p>Payment actions will use the existing invoice/account workflow.</p>
+
+              {!canViewPayments ? (
+                <p>You do not have permission to view payment information.</p>
+              ) : !invoiceQuery.data ? (
+                <>
+                  <p>
+                    No invoice is currently available for this order.
+                  </p>
+                  {invoiceQuery.isError && (
+                    <p role="alert">
+                      Unable to load the invoice for this order.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p>
+                    <strong>Invoice:</strong>{" "}
+                    {invoiceQuery.data.invoiceNumber}
+                  </p>
+
+                  {paymentSummaryQuery.isLoading ? (
+                    <p>Loading payment balance...</p>
+                  ) : paymentSummaryQuery.isError ? (
+                    <p role="alert">
+                      Unable to load the payment balance.
+                    </p>
+                  ) : paymentSummaryQuery.data ? (
+                    <>
+                      <p>
+                        <strong>Total:</strong>{" "}
+                        {formatMoney(
+                          paymentSummaryQuery.data.totalAmount,
+                        )}
+                      </p>
+                      <p>
+                        <strong>Paid:</strong>{" "}
+                        {formatMoney(
+                          paymentSummaryQuery.data.amountPaid,
+                        )}
+                      </p>
+                      <p>
+                        <strong>Balance:</strong>{" "}
+                        {formatMoney(
+                          paymentSummaryQuery.data.balance,
+                        )}
+                      </p>
+
+                      {paymentSummaryQuery.data.balance <= 0 ? (
+                        <p>
+                          This invoice is already fully paid.
+                        </p>
+                      ) : (
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            setPaymentError(null);
+                            paymentMutation.mutate();
+                          }}
+                          style={{
+                            display: "grid",
+                            gap: 12,
+                            maxWidth: 520,
+                            marginTop: 16,
+                          }}
+                        >
+                          <label>
+                            Amount
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={paymentAmount}
+                              onChange={(event) =>
+                                setPaymentAmount(event.target.value)
+                              }
+                              placeholder="Enter amount"
+                            />
+                          </label>
+
+                          <label>
+                            Payment Method
+                            <select
+                              value={paymentMethod}
+                              onChange={(event) => {
+                                setPaymentMethod(
+                                  event.target.value as PaymentMethod,
+                                );
+                                setPaymentError(null);
+                              }}
+                            >
+                              <option value="CASH">Cash</option>
+                              <option value="TRANSFER">
+                                Transfer
+                              </option>
+                              <option value="POS">POS</option>
+                              {canViewAccount && (
+                                <option value="PAY_FROM_ACCOUNT">
+                                  Pay from Account
+                                </option>
+                              )}
+                            </select>
+                          </label>
+
+                          {paymentMethod === "PAY_FROM_ACCOUNT" && (
+                            <div
+                              style={{
+                                padding: 12,
+                                border: "1px solid #ddd",
+                                borderRadius: 8,
+                              }}
+                            >
+                              {accountQuery.isLoading ? (
+                                <p>Loading account balance...</p>
+                              ) : accountQuery.data ? (
+                                <p style={{ margin: 0 }}>
+                                  <strong>Account balance:</strong>{" "}
+                                  {formatMoney(
+                                    accountQuery.data.balance,
+                                  )}
+                                </p>
+                              ) : (
+                                <p style={{ margin: 0 }}>
+                                  Unable to load the customer's account.
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          <label>
+                            Reference
+                            <input
+                              value={paymentReference}
+                              onChange={(event) =>
+                                setPaymentReference(event.target.value)
+                              }
+                              placeholder="Optional reference"
+                              maxLength={200}
+                            />
+                          </label>
+
+                          <label>
+                            Note
+                            <textarea
+                              value={paymentNote}
+                              onChange={(event) =>
+                                setPaymentNote(event.target.value)
+                              }
+                              placeholder="Optional note"
+                              maxLength={1000}
+                            />
+                          </label>
+
+                          {paymentError && (
+                            <p role="alert">{paymentError}</p>
+                          )}
+
+                          {!canManagePayments && (
+                            <p>
+                              You do not have permission to record
+                              payments.
+                            </p>
+                          )}
+
+                          <button
+                            type="submit"
+                            disabled={
+                              paymentMutation.isPending ||
+                              !canManagePayments
+                            }
+                          >
+                            {paymentMutation.isPending
+                              ? "Processing..."
+                              : "Make Payment"}
+                          </button>
+                        </form>
+                      )}
+                    </>
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+
+          {layer === "print" && (
+            <>
+              <h3>Print Receipt</h3>
+
+              {!invoiceQuery.data ? (
+                <p>
+                  No invoice is available for this order.
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Choose the receipt copy you want to print.
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={Boolean(printInvoiceId)}
+                    onClick={() => {
+                      setLayer("none");
+                      setPrintMode("customer");
+                      setPrintInvoiceId(invoiceQuery.data!.id);
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Print Customer Copy
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={Boolean(printInvoiceId)}
+                    onClick={() => {
+                      setLayer("none");
+                      setPrintMode("company");
+                      setPrintInvoiceId(invoiceQuery.data!.id);
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                    }}
+                  >
+                    Print Company Copy
+                  </button>
+                </>
+              )}
             </>
           )}
 
@@ -589,6 +1112,26 @@ export function OrderManagement({
           )}
         </div>
       )}
+
+      <div className="invoice-print-area" aria-hidden="true">
+        <div className="invoice-print-customer">
+          {customerReceiptQuery.data && (
+            <CustomerReceipt
+              receipt={customerReceiptQuery.data}
+              branding={brandingQuery.data}
+            />
+          )}
+        </div>
+
+        <div className="invoice-print-company">
+          {companyReceiptQuery.data && (
+            <CompanyReceipt
+              receipt={companyReceiptQuery.data}
+              branding={brandingQuery.data}
+            />
+          )}
+        </div>
+      </div>
 
       {warningOpen && (
         <div
@@ -640,5 +1183,13 @@ export function OrderManagement({
         </div>
       )}
     </section>
+  );
+}
+
+export function OrderManagement(props: OrderManagementProps) {
+  return (
+    <SensitiveAuthorizationProvider>
+      <OrderManagementContent {...props} />
+    </SensitiveAuthorizationProvider>
   );
 }
