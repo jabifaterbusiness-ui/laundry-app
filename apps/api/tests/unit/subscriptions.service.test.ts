@@ -148,7 +148,7 @@ describe("subscription service", () => {
       plan: "MONTHLY",
       status: "ACTIVE",
       startsAt: new Date("2026-09-01T00:00:00.000Z"),
-      endsAt: new Date("2026-10-01T00:00:00.000Z"),
+      endsAt: new Date("2026-11-01T00:00:00.000Z"),
     };
 
     findUnique.mockResolvedValue(existing as never);
@@ -164,8 +164,8 @@ describe("subscription service", () => {
         update: expect.objectContaining({
           plan: "YEARLY",
           status: "ACTIVE",
-          startsAt: new Date("2026-10-01T00:00:00.000Z"),
-          endsAt: new Date("2027-10-01T00:00:00.000Z"),
+          startsAt: new Date("2026-11-01T00:00:00.000Z"),
+          endsAt: new Date("2027-11-01T00:00:00.000Z"),
         }),
       }),
     );

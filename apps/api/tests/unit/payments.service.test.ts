@@ -13,6 +13,9 @@ const { prismaMock } = vi.hoisted(() => ({
     invoice: {
       findFirst: vi.fn(),
     },
+    auditLog: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -40,6 +43,7 @@ function mockTransaction() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.auditLog.findMany.mockResolvedValue([]);
   mockTransaction();
 });
 

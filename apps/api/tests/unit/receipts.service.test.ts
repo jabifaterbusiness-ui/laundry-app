@@ -97,6 +97,7 @@ describe("getCustomerReceipt", () => {
 
     expect(result).toEqual({
       receiptType: "CUSTOMER",
+      businessId: "biz-A",
       invoiceNumber: "00042",
       orderNumber: "00017",
       companyName: "Clean Laundry",
@@ -118,6 +119,7 @@ describe("getCustomerReceipt", () => {
           id: "item-1",
           quantity: 2,
           itemName: "Shirt",
+          colors: undefined,
           totalPieces: 2,
           unitPrice: 4500,
           totalPrice: 9000,
@@ -126,6 +128,7 @@ describe("getCustomerReceipt", () => {
           id: "item-2",
           quantity: 1,
           itemName: "Complete Agbada",
+          colors: undefined,
           totalPieces: 3,
           unitPrice: 4500,
           totalPrice: 4500,

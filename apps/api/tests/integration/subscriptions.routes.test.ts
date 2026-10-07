@@ -5,6 +5,21 @@ import { prisma } from "../../src/lib/prisma.js";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        allowNewBusinessRegistration: true,
+        maintenanceMode: false,
+        whatsappMessagingEnabled: true,
+        automatedNotificationsEnabled: true,
+        offlineSyncEnabled: true,
+        version: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    },
+
+
     subscription: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -31,6 +46,7 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     next();
   },
   requireBusinessContext: (_req: any, _res: any, next: any) => next(),
+  requireSensitiveAuthorization: (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = createApp();
@@ -55,7 +71,7 @@ describe("subscriptions routes", () => {
       plan: "MONTHLY",
       status: "ACTIVE",
       startsAt: new Date("2026-09-01T00:00:00.000Z"),
-      endsAt: new Date("2026-10-01T00:00:00.000Z"),
+      endsAt: new Date("2026-12-01T00:00:00.000Z"),
     };
 
     findUnique.mockResolvedValue(subscription as never);

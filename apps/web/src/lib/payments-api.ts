@@ -23,6 +23,8 @@ export interface Payment {
   note?: string | null;
   status: PaymentStatus;
   createdAt: string;
+  authorizedByUserId?: string | null;
+  authorizedByName?: string | null;
   invoice?: PaymentInvoiceSummary;
 }
 

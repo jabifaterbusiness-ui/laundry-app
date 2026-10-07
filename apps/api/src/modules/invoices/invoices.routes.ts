@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   requireAuth,
   requireBusinessContext,
+  requireSensitiveAuthorization,
 } from "../auth/auth.middleware.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
@@ -69,12 +70,14 @@ invoicesRouter.patch(
 invoicesRouter.post(
   "/:id/void",
   requirePermission("invoices.manage"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(voidInvoice),
 );
 
 invoicesRouter.delete(
   "/:id",
   requirePermission("invoices.manage"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(deleteInvoice),
 );
 

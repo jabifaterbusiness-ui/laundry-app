@@ -483,6 +483,44 @@ export async function getInvoicePaymentSummary(
 
   const balance = Math.max(0, invoice.totalAmount - amountPaid);
 
+  const paymentIds = invoice.payments.map((payment) => payment.id);
+
+  const paymentAuditLogs = paymentIds.length
+    ? await prisma.auditLog.findMany({
+        where: {
+          businessId,
+          branchId,
+          action: "payment.created",
+          entityType: "Payment",
+          entityId: {
+            in: paymentIds,
+          },
+        },
+        orderBy: {
+          timestamp: "asc",
+        },
+        select: {
+          entityId: true,
+          actorUserId: true,
+          actor: {
+            select: {
+              fullName: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const paymentAuthorizationById = new Map(
+    paymentAuditLogs.map((audit) => [
+      audit.entityId,
+      {
+        actorUserId: audit.actorUserId,
+        actorName: audit.actor?.fullName ?? null,
+      },
+    ]),
+  );
+
   return {
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
@@ -495,6 +533,14 @@ export async function getInvoicePaymentSummary(
         : amountPaid > 0
           ? "PARTIALLY_PAID"
           : "UNPAID",
-    payments: invoice.payments,
+    payments: invoice.payments.map((payment) => {
+      const authorization = paymentAuthorizationById.get(payment.id);
+
+      return {
+        ...payment,
+        authorizedByUserId: authorization?.actorUserId ?? null,
+        authorizedByName: authorization?.actorName ?? null,
+      };
+    }),
   };
 }

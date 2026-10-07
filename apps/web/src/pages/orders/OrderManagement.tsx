@@ -5,9 +5,13 @@ import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import { getCustomer, updateCustomer } from "../../lib/customers-api.js";
 import {
+  deleteInvoice,
   getCompanyReceipt,
   getCustomerReceipt,
   getInvoiceByOrder,
+  getInvoiceHistory,
+  voidInvoice,
+  type InvoiceHistoryEntry,
 } from "../../lib/invoices-api.js";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
 import { getCustomerAccount } from "../../lib/customer-account-api.js";
@@ -29,6 +33,7 @@ import {
 } from "../../lib/orders-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 
 const STATUSES: OrderStatus[] = [
   "RECEIVED",
@@ -70,15 +75,25 @@ function OrderManagementContent({
   onNewOrder,
   onSelectOrder,
 }: OrderManagementProps) {
+  const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const [layer, setLayer] = useState<
-    "none" | "edit" | "history" | "notes" | "payment" | "print" | "status" | "more"
+    | "none"
+    | "edit"
+    | "history"
+    | "notes"
+    | "payment"
+    | "print"
+    | "status"
+    | "more"
+    | "invoice-void"
+    | "invoice-delete"
+    | "invoice-history"
   >("none");
   const [dirty, setDirty] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -98,6 +113,13 @@ function OrderManagementContent({
   const [printInvoiceId, setPrintInvoiceId] = useState<string | null>(null);
   const [printMode, setPrintMode] =
     useState<"customer" | "company" | null>(null);
+
+  const [invoiceCorrectionReason, setInvoiceCorrectionReason] = useState("");
+  const [invoiceCorrectionConfirmed, setInvoiceCorrectionConfirmed] =
+    useState(false);
+  const [invoiceCorrectionError, setInvoiceCorrectionError] = useState<
+    string | null
+  >(null);
 
   const canUpdateCustomer = hasPermission(user, "customers.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
@@ -146,6 +168,28 @@ function OrderManagementContent({
         activeBranchId &&
         invoiceQuery.data?.id &&
         canViewPayments,
+    ),
+  });
+
+  const invoiceHistoryQuery = useQuery<InvoiceHistoryEntry[]>({
+    queryKey: [
+      "order-management",
+      "invoice-history",
+      invoiceQuery.data?.id,
+      activeBranchId,
+    ],
+    queryFn: () =>
+      getInvoiceHistory(
+        invoiceQuery.data!.id,
+        { accessToken },
+        activeBranchId,
+      ),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        invoiceQuery.data?.id &&
+        canViewInvoices &&
+        layer === "invoice-history",
     ),
   });
 
@@ -209,6 +253,108 @@ function OrderManagementContent({
         printInvoiceId &&
         printMode === "company",
     ),
+  });
+
+  const invoiceCorrectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoiceQuery.data) {
+        throw new Error("No invoice is available for this order.");
+      }
+
+      if (!hasPermission(user, "invoices.manage")) {
+        throw new Error(
+          "You do not have permission to perform invoice corrections.",
+        );
+      }
+
+      const reason = invoiceCorrectionReason.trim();
+
+      if (!reason) {
+        throw new Error("Enter a reason for this invoice correction.");
+      }
+
+      if (!invoiceCorrectionConfirmed) {
+        throw new Error(
+          "Confirm that you want to perform this invoice correction.",
+        );
+      }
+
+      const authorization = await requestSensitiveAuthorization();
+
+      if (!authorization) {
+        throw new Error(
+          "Invoice correction authorization was cancelled or not provided.",
+        );
+      }
+
+      if (layer === "invoice-void") {
+        return voidInvoice(
+          invoiceQuery.data.id,
+          {
+            reason,
+            confirmed: true,
+          },
+          {
+            accessToken,
+            sensitiveAuthorization: authorization,
+          },
+          activeBranchId,
+        );
+      }
+
+      if (layer === "invoice-delete") {
+        return deleteInvoice(
+          invoiceQuery.data.id,
+          {
+            reason,
+            confirmed: true,
+          },
+          {
+            accessToken,
+            sensitiveAuthorization: authorization,
+          },
+          activeBranchId,
+        );
+      }
+
+      throw new Error("Choose an invoice correction.");
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["order-management", "invoice", order?.id, activeBranchId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "order-management",
+            "invoice-payment-summary",
+            invoiceQuery.data?.id,
+            activeBranchId,
+          ],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "order-management",
+            "invoice-history",
+            invoiceQuery.data?.id,
+            activeBranchId,
+          ],
+        }),
+      ]);
+
+      setInvoiceCorrectionReason("");
+      setInvoiceCorrectionConfirmed(false);
+      setInvoiceCorrectionError(null);
+      setLayer("none");
+    },
+    onError: (err: unknown) => {
+      setInvoiceCorrectionError(
+        err instanceof Error
+          ? err.message
+          : "Unable to complete the invoice correction.",
+      );
+    },
   });
 
   const paymentMutation = useMutation({
@@ -403,6 +549,43 @@ function OrderManagementContent({
     );
   }, [historyQuery.data]);
 
+  function openDigitalReceipt() {
+    if (!invoiceQuery.data || !canViewInvoices) return;
+
+    const operation = QUICK_OPERATIONS.find(
+      (item) => item.code === "RS",
+    );
+
+    if (!operation) {
+      setError("Digital receipt operation is unavailable.");
+      return;
+    }
+
+    setLayer("none");
+
+    window.dispatchEvent(
+      new CustomEvent("quick-operation:open", {
+        detail: {
+          ...operation,
+          recordId: invoiceQuery.data.id,
+        },
+      }),
+    );
+  }
+
+  function startInvoiceCorrection(
+    correction: "invoice-void" | "invoice-delete",
+  ) {
+    if (!invoiceQuery.data || !hasPermission(user, "invoices.manage")) {
+      return;
+    }
+
+    setInvoiceCorrectionReason("");
+    setInvoiceCorrectionConfirmed(false);
+    setInvoiceCorrectionError(null);
+    setLayer(correction);
+  }
+
   function requestBack() {
     if (dirty) {
       setWarningOpen(true);
@@ -429,17 +612,11 @@ function OrderManagementContent({
         event.preventDefault();
 
         if (event.ctrlKey && event.shiftKey) {
-          window.dispatchEvent(
-            new CustomEvent("quick-operation:open", {
-              detail: {
-                code: "RS",
-                recordId: invoiceQuery.data.id,
-              },
-            }),
-          );
+          openDigitalReceipt();
           return;
         }
 
+        setLayer("none");
         setPrintMode(event.ctrlKey ? "company" : "customer");
         setPrintInvoiceId(invoiceQuery.data.id);
         return;
@@ -669,13 +846,7 @@ function OrderManagementContent({
             !canViewInvoices
           }
           onClick={() => {
-            const event = new CustomEvent("quick-operation:open", {
-              detail: {
-                code: "RS",
-                recordId: invoiceQuery.data!.id,
-              },
-            });
-            window.dispatchEvent(event);
+            openDigitalReceipt();
           }}
         >
           Digital Receipt (Ctrl+Shift+F1)
@@ -689,10 +860,7 @@ function OrderManagementContent({
         </button>
 
         <button type="button" onClick={onBack}>
-          Switch
-        </button>
-        <button type="button" onClick={() => setLayer("notes")}>
-          Invoice
+          Switch Customer
         </button>
         <button type="button" onClick={() => setLayer("more")}>
           More
@@ -714,30 +882,76 @@ function OrderManagementContent({
             gap: 12,
           }}
         >
-          <div>
-            <strong>Status</strong>
-            <div>{statusLabel(order!.status)}</div>
-          </div>
-          <div>
-            <strong>Total</strong>
-            <div>{formatMoney(order!.orderTotal)}</div>
-          </div>
-          <div>
-            <strong>Paid</strong>
-            <div>
-              {paymentSummaryQuery.data
+          {[
+            {
+              label: "Status",
+              value: statusLabel(order!.status),
+              border: "#2563eb",
+              background: "#eff6ff",
+              labelColor: "#1d4ed8",
+              valueColor: "#1e40af",
+            },
+            {
+              label: "Total",
+              value: formatMoney(order!.orderTotal),
+              border: "#7c3aed",
+              background: "#f5f3ff",
+              labelColor: "#6d28d9",
+              valueColor: "#5b21b6",
+            },
+            {
+              label: "Paid",
+              value: paymentSummaryQuery.data
                 ? formatMoney(paymentSummaryQuery.data.amountPaid)
-                : "Loading..."}
-            </div>
-          </div>
-          <div>
-            <strong>Balance</strong>
-            <div>
-              {paymentSummaryQuery.data
+                : "Loading...",
+              border: "#16a34a",
+              background: "#f0fdf4",
+              labelColor: "#15803d",
+              valueColor: "#166534",
+            },
+            {
+              label: "Balance",
+              value: paymentSummaryQuery.data
                 ? formatMoney(paymentSummaryQuery.data.balance)
-                : "Loading..."}
+                : "Loading...",
+              border: "#ea580c",
+              background: "#fff7ed",
+              labelColor: "#c2410c",
+              valueColor: "#9a3412",
+            },
+          ].map((summary) => (
+            <div
+              key={summary.label}
+              style={{
+                padding: 14,
+                border: `1px solid ${summary.border}`,
+                borderRadius: 10,
+                background: summary.background,
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  color: summary.labelColor,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                  letterSpacing: ".04em",
+                }}
+              >
+                {summary.label}
+              </strong>
+              <div
+                style={{
+                  marginTop: 5,
+                  color: summary.valueColor,
+                  fontSize: 20,
+                  fontWeight: 800,
+                }}
+              >
+                {summary.value}
+              </div>
             </div>
-          </div>
+          ))}
           <div>
             <strong>Expected Ready</strong>
             <div>{formatDate(order!.expectedReadyAt)}</div>
@@ -757,19 +971,43 @@ function OrderManagementContent({
               borderRadius: 8,
             }}
           >
-            <strong>Payments</strong>
+            <strong>Payment History</strong>
             {paymentSummaryQuery.data.payments.map((payment) => (
               <div
                 key={payment.id}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  marginTop: 6,
+                  marginTop: 10,
+                  padding: 10,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  background: "#fafafa",
                 }}
               >
-                <span>{payment.method.replaceAll("_", " ")}</span>
-                <strong>{formatMoney(payment.amount)}</strong>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 6,
+                  }}
+                >
+                  <span>
+                    <strong>Amount:</strong> {formatMoney(payment.amount)}
+                  </span>
+                  <span>
+                    <strong>Method:</strong>{" "}
+                    {payment.method.replaceAll("_", " ")}
+                  </span>
+                  <span>
+                    <strong>Authorized by:</strong>{" "}
+                    {payment.authorizedByName ||
+                      payment.authorizedByUserId ||
+                      "Unknown user"}
+                  </span>
+                  <span>
+                    <strong>Date/Time:</strong>{" "}
+                    {formatDate(payment.createdAt)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -894,6 +1132,108 @@ function OrderManagementContent({
                       : "Save Changes"}
                   </button>
                 </form>
+              )}
+            </>
+          )}
+
+          {(layer === "invoice-void" || layer === "invoice-delete") && (
+            <>
+              <h3>
+                {layer === "invoice-void" ? "Void Invoice" : "Delete Invoice"}
+              </h3>
+              <p>
+                {layer === "invoice-void"
+                  ? "Voiding marks this invoice as void. The invoice history is retained."
+                  : "Deleting removes this invoice from active records. The invoice history is retained."}
+              </p>
+
+              <label style={{ display: "block", marginTop: 12 }}>
+                Reason for this edit
+                <textarea
+                  value={invoiceCorrectionReason}
+                  onChange={(event) => {
+                    setInvoiceCorrectionReason(event.target.value);
+                    setInvoiceCorrectionError(null);
+                  }}
+                  maxLength={1000}
+                  rows={4}
+                  style={{ display: "block", width: "100%", marginTop: 6 }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 12,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={invoiceCorrectionConfirmed}
+                  onChange={(event) =>
+                    setInvoiceCorrectionConfirmed(event.target.checked)
+                  }
+                />
+                I confirm that I want to perform this invoice correction.
+              </label>
+
+              {invoiceCorrectionError && (
+                <p role="alert">{invoiceCorrectionError}</p>
+              )}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button
+                  type="button"
+                  disabled={invoiceCorrectionMutation.isPending}
+                  onClick={() => invoiceCorrectionMutation.mutate()}
+                >
+                  {invoiceCorrectionMutation.isPending
+                    ? "Processing..."
+                    : "Confirm Edit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayer("more")}
+                  disabled={invoiceCorrectionMutation.isPending}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+
+          {layer === "invoice-history" && (
+            <>
+              <h3>Edited History</h3>
+              {invoiceHistoryQuery.isLoading ? (
+                <p>Loading edited history...</p>
+              ) : invoiceHistoryQuery.isError ? (
+                <p role="alert">Unable to load edited history.</p>
+              ) : invoiceHistoryQuery.data?.length ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {invoiceHistoryQuery.data.map((entry) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        padding: 12,
+                        border: "1px solid #ddd",
+                        borderRadius: 8,
+                      }}
+                    >
+                      <strong>{entry.action}</strong>
+                      <div>Version: {entry.version}</div>
+                      <div>Reason: {entry.reason}</div>
+                      <div>
+                        Date/Time: {formatDate(entry.createdAt)}
+                      </div>
+                      <div>Authorized by: {entry.actorUserId}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No edited history is available for this invoice.</p>
               )}
             </>
           )}
@@ -1212,14 +1552,8 @@ function OrderManagementContent({
                 >
                   <button
                     type="button"
-                    disabled={!canViewInvoices}
-                    onClick={() =>
-                      navigate(
-                        `/invoices?invoiceId=${encodeURIComponent(
-                          invoiceQuery.data!.id,
-                        )}&action=void`,
-                      )
-                    }
+                    disabled={!hasPermission(user, "invoices.manage")}
+                    onClick={() => startInvoiceCorrection("invoice-void")}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
@@ -1234,14 +1568,8 @@ function OrderManagementContent({
 
                   <button
                     type="button"
-                    disabled={!canViewInvoices}
-                    onClick={() =>
-                      navigate(
-                        `/invoices?invoiceId=${encodeURIComponent(
-                          invoiceQuery.data!.id,
-                        )}&action=delete`,
-                      )
-                    }
+                    disabled={!hasPermission(user, "invoices.manage")}
+                    onClick={() => startInvoiceCorrection("invoice-delete")}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
@@ -1257,13 +1585,7 @@ function OrderManagementContent({
                   <button
                     type="button"
                     disabled={!canViewInvoices}
-                    onClick={() =>
-                      navigate(
-                        `/invoices?invoiceId=${encodeURIComponent(
-                          invoiceQuery.data!.id,
-                        )}&action=history`,
-                      )
-                    }
+                    onClick={() => setLayer("invoice-history")}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,

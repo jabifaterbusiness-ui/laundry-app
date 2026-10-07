@@ -4,6 +4,19 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        allowNewBusinessRegistration: true,
+        maintenanceMode: false,
+        whatsappMessagingEnabled: true,
+        automatedNotificationsEnabled: true,
+        offlineSyncEnabled: true,
+        version: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    },
     subscription: {
       findUnique: vi.fn().mockResolvedValue({
         id: "sub-test",
@@ -26,6 +39,14 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    customerAccount: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    customerAccountTransaction: {
       updateMany: vi.fn(),
     },
     payment: {
@@ -87,6 +108,12 @@ const orderUpdate = vi.mocked(prisma.order.update);
 const orderUpdateMany = vi.mocked(prisma.order.updateMany);
 const customerFindFirst = vi.mocked(prisma.customer.findFirst);
 const customerUpdateMany = vi.mocked(prisma.customer.updateMany);
+const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
+const customerAccountUpdate = vi.mocked(prisma.customerAccount.update);
+const customerAccountDelete = vi.mocked(prisma.customerAccount.delete);
+const customerAccountTransactionUpdateMany = vi.mocked(
+  prisma.customerAccountTransaction.updateMany,
+);
 const paymentFindFirst = vi.mocked(prisma.payment.findFirst);
 const paymentFindMany = vi.mocked(prisma.payment.findMany);
 const paymentCreate = vi.mocked(prisma.payment.create);

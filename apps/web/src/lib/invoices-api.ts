@@ -195,12 +195,16 @@ export async function voidInvoice(
     reason: string;
     confirmed: true;
   },
-  auth: { accessToken: string | null },
+  auth: {
+    accessToken: string | null;
+    sensitiveAuthorization?: string | null;
+  },
   branchId?: string | null,
 ): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}/void`, {
     method: "POST",
     accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
     branchId,
     body: JSON.stringify(input),
   });
@@ -212,12 +216,16 @@ export async function deleteInvoice(
     reason: string;
     confirmed: true;
   },
-  auth: { accessToken: string | null },
+  auth: {
+    accessToken: string | null;
+    sensitiveAuthorization?: string | null;
+  },
   branchId?: string | null,
 ): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`, {
     method: "DELETE",
     accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
     branchId,
     body: JSON.stringify(input),
   });

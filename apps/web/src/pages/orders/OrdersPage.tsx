@@ -656,7 +656,7 @@ export function OrdersPage() {
     switchWorkspace(workspaceId);
 
     updateWorkspace(workspaceId, {
-      activeOrder: selectedOrder,
+      activeOrder: null,
       draft: {
         customerId: customer.id,
         lines: [{ serviceId: "", quantity: 1, colors: [] }],

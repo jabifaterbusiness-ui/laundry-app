@@ -18,6 +18,19 @@ const {
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000001",
+        allowNewBusinessRegistration: true,
+        maintenanceMode: false,
+        whatsappMessagingEnabled: true,
+        automatedNotificationsEnabled: true,
+        offlineSyncEnabled: true,
+        version: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    },
     customer: {
       findFirst: customerFindFirstMock,
     },

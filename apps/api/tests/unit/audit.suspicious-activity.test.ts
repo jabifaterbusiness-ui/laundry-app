@@ -31,6 +31,7 @@ describe("listSuspiciousActivity", () => {
         entityType: "Payment",
         entityId: "payment-1",
         actorUserId: "user-1",
+        actorName: null,
         metadata: { reason: "test" },
         correlationId: "corr-1",
       },
@@ -118,6 +119,11 @@ describe("listSuspiciousActivity", () => {
       entityType: true,
       entityId: true,
       actorUserId: true,
+      actor: {
+        select: {
+          fullName: true,
+        },
+      },
       metadata: true,
       correlationId: true,
     });

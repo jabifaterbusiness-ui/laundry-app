@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    platformConfig: {
+      upsert: vi.fn().mockResolvedValue({id: "00000000-0000-4000-8000-000000000001", allowNewBusinessRegistration: true, maintenanceMode: false, whatsappMessagingEnabled: true, automatedNotificationsEnabled: true, offlineSyncEnabled: true, version: 1, createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-01T00:00:00.000Z")}),
+    },
     subscription: {
       findUnique: vi.fn().mockResolvedValue({
         id: "sub-test",
@@ -40,6 +43,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    sensitiveAuthorization: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
     permission: {
       findUnique: vi.fn(),
     },
@@ -73,6 +81,7 @@ const orderFindFirst = vi.mocked(prisma.order.findFirst);
 const orderUpdate = vi.mocked(prisma.order.update);
 const customerFindFirst = vi.mocked(prisma.customer.findFirst);
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const sensitiveAuthorizationFindUnique = vi.mocked(prisma.sensitiveAuthorization.findUnique);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
@@ -109,6 +118,18 @@ const INVOICE_A = "88888888-8888-8888-8888-888888888888";
 const CUSTOMER_A = "11111111-1111-1111-1111-111111111111";
 
 const app = createApp();
+
+function allowSensitiveAuthorization(userId: string, businessId: string) {
+  sensitiveAuthorizationFindUnique.mockResolvedValue({
+    id: "sensitive-auth-1",
+    tokenHash: "test-token-hash",
+    userId,
+    businessId,
+    expiresAt: new Date(Date.now() + 60_000),
+    revokedAt: null,
+    createdAt: new Date(),
+  } as never);
+}
 
 function allowBranch(
   userId: string,
@@ -828,6 +849,7 @@ describe("Invoices routes - creation security", () => {
 describe("Invoices routes - controlled correction workflow", () => {
   beforeEach(() => {
     allowBranch("user-1", BRANCH_A, "biz-A");
+    allowSensitiveAuthorization("user-1", "biz-A");
 
     invoiceFindFirst.mockResolvedValue(
       correctionInvoiceFixture as never,
@@ -1063,6 +1085,7 @@ describe("Invoices routes - controlled correction workflow", () => {
       .post(`/api/v1/invoices/${INVOICE_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "The invoice was issued in error.",
         confirmed: true,
@@ -1097,6 +1120,7 @@ describe("Invoices routes - controlled correction workflow", () => {
       .delete(`/api/v1/invoices/${INVOICE_A}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "The invoice was created against the wrong transaction.",
         confirmed: true,
@@ -1132,6 +1156,7 @@ describe("Invoices routes - controlled correction workflow", () => {
       .delete(`/api/v1/invoices/${INVOICE_A}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token")
       .send({
         reason: "",
         confirmed: false,

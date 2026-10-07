@@ -634,6 +634,11 @@ describe("Platform Owner routes - revenue analytics", () => {
             refunds: 10000,
             net: 50000,
           },
+          PAY_FROM_ACCOUNT: {
+            payments: 0,
+            refunds: 0,
+            net: 0,
+          },
         },
       }),
     );
