@@ -11,7 +11,7 @@ vi.mock("../lib/reports-api.js", () => ({
 
 vi.mock("../state/auth-store.js", () => ({
   useAuthStore: (selector: (state: {
-    user: { fullName: string; role: string; permissions: string[] };
+    user: { fullName: string; role: string; securityRole: string; permissions: string[] };
     accessToken: string;
     activeBranchId: string;
   }) => unknown) =>
@@ -26,7 +26,8 @@ const mockedGetDashboardReport = vi.mocked(getDashboardReport);
 
 const mockUser = {
   fullName: "Jane Manager",
-  role: "BRANCH_MANAGER",
+  role: "Branch Manager",
+  securityRole: "BRANCH_MANAGER",
   permissions: [
     "reports.view",
     "orders.view",
