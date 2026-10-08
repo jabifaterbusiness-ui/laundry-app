@@ -51,6 +51,7 @@ export function DashboardPage() {
   const canViewInvoices = hasPermission(user, "invoices.view");
   const canViewPayments = hasPermission(user, "payments.view");
   const canViewInventory = hasPermission(user, "inventory.view");
+  const canManageSubscription = user?.role === "BUSINESS_OWNER";
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
@@ -332,6 +333,18 @@ export function DashboardPage() {
             </div>
 
             <div className="dashboard-workspace-grid">
+              {canManageSubscription ? (
+                <Link className="dashboard-workspace-card" to="/subscription">
+                  <span className="dashboard-workspace-icon">◉</span>
+                  <div>
+                    <strong>Subscription</strong>
+                    <span>
+                      Manage your Laundry Angel subscription and payment.
+                    </span>
+                    <b>Open subscription →</b>
+                  </div>
+                </Link>
+              ) : null}
               {canViewOrders ? (
                 <Link className="dashboard-workspace-card" to="/orders">
                   <span className="dashboard-workspace-icon">▣</span>

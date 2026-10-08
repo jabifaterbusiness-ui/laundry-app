@@ -16,21 +16,23 @@ vi.mock("../state/auth-store.js", () => ({
     activeBranchId: string;
   }) => unknown) =>
     selector({
-      user: {
-        fullName: "Jane Manager",
-        role: "BRANCH_MANAGER",
-        permissions: [
-          "reports.view",
-          "orders.view",
-          "orders.create",
-        ],
-      },
+      user: mockUser,
       accessToken: "token",
       activeBranchId: "branch-1",
     }),
 }));
 
 const mockedGetDashboardReport = vi.mocked(getDashboardReport);
+
+const mockUser = {
+  fullName: "Jane Manager",
+  role: "BRANCH_MANAGER",
+  permissions: [
+    "reports.view",
+    "orders.view",
+    "orders.create",
+  ],
+};
 
 const report = {
   period: {
@@ -193,6 +195,28 @@ describe("DashboardPage", () => {
     expect(
       screen.getByRole("link", { name: "View inventory" }),
     ).toHaveAttribute("href", "/inventory");
+  });
+
+  it("shows Subscription only to the Business Owner", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+
+    renderDashboard();
+
+    await screen.findByText("120");
+
+    expect(
+      screen.queryByRole("link", { name: /Subscription.*Open subscription/i }),
+    ).not.toBeInTheDocument();
+
+    mockUser.role = "BUSINESS_OWNER";
+
+    renderDashboard();
+
+    const subscriptionLink = await screen.findByRole("link", {
+      name: /Subscription.*Open subscription/i,
+    });
+
+    expect(subscriptionLink).toHaveAttribute("href", "/subscription");
   });
 
   it("renders permission-aware workspace cards", async () => {
