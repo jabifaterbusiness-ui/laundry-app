@@ -47,7 +47,7 @@ describe("loans.service", () => {
       prismaMock.user.findFirst.mockResolvedValue({
         id: "employee-A",
         fullName: "Employee A",
-        role: "STAFF",
+        role: "Laundry Supervisor",
       });
 
       prismaMock.branch.findFirst.mockResolvedValue({
@@ -82,9 +82,6 @@ describe("loans.service", () => {
           id: "employee-A",
           businessId: "biz-A",
           isActive: true,
-          role: {
-            in: ["BUSINESS_OWNER", "BRANCH_MANAGER", "STAFF"],
-          },
         },
         select: {
           id: true,

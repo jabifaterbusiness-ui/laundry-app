@@ -1,14 +1,8 @@
-import { IOUStatus, Role } from "@prisma/client";
+import { IOUStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-
-const EMPLOYEE_ROLES: Role[] = [
-  Role.BUSINESS_OWNER,
-  Role.BRANCH_MANAGER,
-  Role.STAFF,
-];
 
 type CreateIOUArgs = {
   businessId: string;
@@ -44,7 +38,6 @@ export async function createIOU({
       id: employeeId,
       businessId,
       isActive: true,
-      role: { in: EMPLOYEE_ROLES },
     },
     select: {
       id: true,

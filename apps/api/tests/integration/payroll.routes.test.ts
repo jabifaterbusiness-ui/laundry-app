@@ -926,7 +926,7 @@ describe("Payroll generation routes", () => {
       {
         id: EMPLOYEE_A,
         fullName: "John Employee",
-        role: "STAFF",
+        role: "Accountant",
       },
     ] as never);
 

@@ -826,9 +826,6 @@ describe("payroll.service", () => {
         where: {
           businessId: "business-1",
           isActive: true,
-          role: {
-            in: ["BUSINESS_OWNER", "BRANCH_MANAGER", "STAFF"],
-          },
           branches: {
             some: {
               branchId: "branch-1",

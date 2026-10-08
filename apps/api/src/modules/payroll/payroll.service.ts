@@ -1,14 +1,8 @@
-import { PayrollPeriodStatus, Role } from "@prisma/client";
+import { PayrollPeriodStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
-
-const EMPLOYEE_ROLES: Role[] = [
-  Role.BUSINESS_OWNER,
-  Role.BRANCH_MANAGER,
-  Role.STAFF,
-];
 
 type CreatePayrollPeriodArgs = {
   businessId: string;
@@ -315,9 +309,6 @@ export async function generatePayroll({
     where: {
       businessId,
       isActive: true,
-      role: {
-        in: EMPLOYEE_ROLES,
-      },
       branches: {
         some: {
           branchId,

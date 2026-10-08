@@ -103,9 +103,6 @@ export async function createRepayment({
       id: employeeId,
       businessId,
       isActive: true,
-      role: {
-        in: ["BUSINESS_OWNER", "BRANCH_MANAGER", "STAFF"],
-      },
     },
     select: {
       id: true,

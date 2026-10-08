@@ -64,6 +64,7 @@ describe("repayments.service", () => {
       prismaMock.user.findFirst.mockResolvedValue({
         id: "employee-A",
         fullName: "Employee A",
+        role: "Laundry Supervisor",
       });
 
       prismaMock.branch.findFirst.mockResolvedValue({

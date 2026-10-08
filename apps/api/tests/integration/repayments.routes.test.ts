@@ -145,7 +145,7 @@ function allowBranch(
 const employeeFixture = {
   id: EMPLOYEE_A,
   fullName: "John Employee",
-  role: "STAFF",
+  role: "Accountant",
   businessId: "biz-A",
   isActive: true,
 };

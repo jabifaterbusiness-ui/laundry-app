@@ -1,14 +1,8 @@
-import { LoanStatus, Role } from "@prisma/client";
+import { LoanStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import type { CreateLoanInput } from "./loans.validation.js";
-
-const EMPLOYEE_ROLES: Role[] = [
-  Role.BUSINESS_OWNER,
-  Role.BRANCH_MANAGER,
-  Role.STAFF,
-];
 
 type CreateLoanArgs = CreateLoanInput & {
   businessId: string;
@@ -44,9 +38,6 @@ export async function createLoan({
       id: employeeId,
       businessId,
       isActive: true,
-      role: {
-        in: EMPLOYEE_ROLES,
-      },
     },
     select: {
       id: true,
