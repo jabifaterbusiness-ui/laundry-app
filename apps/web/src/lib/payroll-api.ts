@@ -116,7 +116,7 @@ export function createPayrollPeriod(
   auth: AuthOptions,
   branchId: string | null,
 ) {
-  return apiFetch<PayrollPeriod>("/payroll", {
+  return apiFetch<PayrollPeriod>("/payroll/periods", {
     method: "POST",
     headers: headers(branchId),
     body: JSON.stringify(input),
@@ -129,7 +129,7 @@ export function listPayrollPeriods(
   auth: AuthOptions,
   branchId: string | null,
 ) {
-  return apiFetch<PayrollPeriod[]>("/payroll", {
+  return apiFetch<PayrollPeriod[]>("/payroll/periods", {
     headers: headers(branchId),
     accessToken: auth.accessToken,
   });
@@ -140,7 +140,7 @@ export function getPayrollPeriod(
   auth: AuthOptions,
   branchId: string | null,
 ) {
-  return apiFetch<PayrollPeriod>(`/payroll/${periodId}`, {
+  return apiFetch<PayrollPeriod>(`/payroll/periods/${periodId}`, {
     headers: headers(branchId),
     accessToken: auth.accessToken,
   });
@@ -151,7 +151,7 @@ export function getPayrollStatus(
   auth: AuthOptions,
   branchId: string | null,
 ) {
-  return apiFetch<PayrollStatusResponse>(`/payroll/${periodId}/status`, {
+  return apiFetch<PayrollStatusResponse>(`/payroll/periods/${periodId}/status`, {
     headers: headers(branchId),
     accessToken: auth.accessToken,
   });
@@ -162,7 +162,7 @@ export function generatePayroll(
   auth: AuthOptions,
   branchId: string | null,
 ) {
-  return apiFetch<PayrollStatusResponse>(`/payroll/${periodId}/generate`, {
+  return apiFetch<PayrollStatusResponse>(`/payroll/periods/${periodId}/generate`, {
     method: "POST",
     headers: headers(branchId),
     accessToken: auth.accessToken,
@@ -195,7 +195,7 @@ export function finalizePayroll(
     payrollPeriodId: string;
     status: PayrollPeriodStatus;
     recordCount: number;
-  }>(`/payroll/${periodId}/finalize`, {
+  }>(`/payroll/periods/${periodId}/finalize`, {
     method: "POST",
     headers: headers(branchId),
     accessToken: auth.accessToken,
