@@ -346,6 +346,13 @@ export function AppShell({ children }: PropsWithChildren) {
                 }
 
                 if (
+                  item.href === "/inventory" &&
+                  !hasPermission(user, "inventory.view")
+                ) {
+                  return null;
+                }
+
+                if (
                   isSuspiciousActivityRoute &&
                   !hasPermission(user, "security.suspicious_activity.view")
                 ) {
