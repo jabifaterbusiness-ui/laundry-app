@@ -11,14 +11,35 @@ interface NavItem {
   label: string;
   href: string;
   icon: string;
+  permission?: string;
 }
 
 const OPERATIONS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: "⌂" },
-  { label: "Customers", href: "/customers", icon: "♙" },
-  { label: "Orders", href: "/orders", icon: "▣" },
-  { label: "Invoices & Receipts", href: "/invoices", icon: "▤" },
-  { label: "Payments", href: "/payments", icon: "₦" },
+  {
+    label: "Customers",
+    href: "/customers",
+    icon: "♙",
+    permission: "customers.view",
+  },
+  {
+    label: "Orders",
+    href: "/orders",
+    icon: "▣",
+    permission: "orders.view",
+  },
+  {
+    label: "Invoices & Receipts",
+    href: "/invoices",
+    icon: "▤",
+    permission: "invoices.view",
+  },
+  {
+    label: "Payments",
+    href: "/payments",
+    icon: "₦",
+    permission: "payments.view",
+  },
 ];
 
 const MANAGEMENT: NavItem[] = [
@@ -295,6 +316,13 @@ export function AppShell({ children }: PropsWithChildren) {
 
               {OPERATIONS.map((item) => {
                 const active = isActive(item.href);
+
+                if (
+                  item.permission &&
+                  !hasPermission(user, item.permission)
+                ) {
+                  return null;
+                }
 
                 return (
                   <Link

@@ -14,6 +14,13 @@ beforeEach(() => {
       role: "STAFF",
       businessId: "business-1",
       branches: [{ id: "branch-1", name: "Main Branch" }],
+      permissions: [
+        "customers.view",
+        "orders.view",
+        "invoices.view",
+        "payments.view",
+        "services.view",
+      ],
     },
     accessToken: "test-token",
     refreshToken: "refresh-token",
