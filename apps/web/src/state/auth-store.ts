@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { AuthenticatedUser } from "@laundry-app/shared";
 
 interface AuthState {
@@ -27,42 +28,62 @@ interface AuthState {
 // NOTE: in-memory only for now. Persisting tokens (and how - httpOnly
 // cookie vs storage) is a security decision that belongs to the auth
 // module implementation phase, not the foundation phase.
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  activeBranchId: null,
-  sensitiveAuthorization: null,
-  sensitiveAuthorizationExpiresAt: null,
-  setUser: (user) => set({ user }),
-  setSession: ({ user, accessToken, refreshToken }) =>
-    set({
-      user,
-      accessToken,
-      refreshToken,
-      // Auto-select when the user has exactly one branch; otherwise the
-      // UI must prompt them to choose (not modeled here - foundation
-      // phase only establishes the state shape).
-      activeBranchId: user.branches.length === 1 ? user.branches[0]?.id ?? null : null,
-    }),
-  setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
-  setSensitiveAuthorization: ({ token, expiresAt }) =>
-    set({
-      sensitiveAuthorization: token,
-      sensitiveAuthorizationExpiresAt: expiresAt,
-    }),
-  clearSensitiveAuthorization: () =>
-    set({
-      sensitiveAuthorization: null,
-      sensitiveAuthorizationExpiresAt: null,
-    }),
-  clearSession: () =>
-    set({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
       user: null,
       accessToken: null,
       refreshToken: null,
       activeBranchId: null,
       sensitiveAuthorization: null,
       sensitiveAuthorizationExpiresAt: null,
+
+      setUser: (user) => set({ user }),
+
+      setSession: ({ user, accessToken, refreshToken }) =>
+        set({
+          user,
+          accessToken,
+          refreshToken,
+          activeBranchId:
+            user.branches.length === 1 ? user.branches[0]?.id ?? null : null,
+        }),
+
+      setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
+
+      setSensitiveAuthorization: ({ token, expiresAt }) =>
+        set({
+          sensitiveAuthorization: token,
+          sensitiveAuthorizationExpiresAt: expiresAt,
+        }),
+
+      clearSensitiveAuthorization: () =>
+        set({
+          sensitiveAuthorization: null,
+          sensitiveAuthorizationExpiresAt: null,
+        }),
+
+      clearSession: () =>
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          activeBranchId: null,
+          sensitiveAuthorization: null,
+          sensitiveAuthorizationExpiresAt: null,
+        }),
     }),
-}));
+    {
+      name: "laundryangel-auth-session",
+      storage: createJSONStorage(() => localStorage),
+
+      // Never persist the sensitive reauthorization token.
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        activeBranchId: state.activeBranchId,
+      }),
+    },
+  ),
+);

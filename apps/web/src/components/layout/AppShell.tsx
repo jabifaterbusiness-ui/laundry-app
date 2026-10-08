@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren } from "react";
+import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
@@ -153,12 +153,48 @@ export function AppShell({ children }: PropsWithChildren) {
       ? location.pathname === "/"
       : location.pathname.startsWith(href);
 
+  const accountMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const accountActionsMenuRef = useRef<HTMLDetailsElement | null>(null);
+
+  useEffect(() => {
+    function handleOutsidePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(target)
+      ) {
+        accountMenuRef.current.removeAttribute("open");
+      }
+
+      if (
+        accountActionsMenuRef.current &&
+        !accountActionsMenuRef.current.contains(target)
+      ) {
+        accountActionsMenuRef.current.removeAttribute("open");
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    };
+  }, []);
+
+  function closeAccountMenus() {
+    accountMenuRef.current?.removeAttribute("open");
+    accountActionsMenuRef.current?.removeAttribute("open");
+  }
+
   function logout() {
+    closeAccountMenus();
     clearSession();
     navigate("/login", { replace: true });
   }
 
   function closeMobileNav() {
+    closeAccountMenus();
     setMobileNavOpen(false);
   }
 
@@ -228,7 +264,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </button>
             </div>
 
-            <details className="account-menu">
+            <details ref={accountMenuRef} className="account-menu">
               <summary className="account-trigger" aria-label="Open account details">
                 <span className="user-avatar">
                   {(user?.fullName?.charAt(0) ?? "U").toUpperCase()}
@@ -289,10 +325,13 @@ export function AppShell({ children }: PropsWithChildren) {
               </div>
             </details>
 
-            <details className="topbar-actions-menu">
+            <details ref={accountActionsMenuRef} className="topbar-actions-menu">
               <summary
                 className="topbar-actions-trigger"
                 aria-label="Open account actions"
+                onClick={() => {
+                  accountMenuRef.current?.removeAttribute("open");
+                }}
               >
                 ⋮
               </summary>
