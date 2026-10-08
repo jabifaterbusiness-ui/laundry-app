@@ -1,6 +1,18 @@
 import type { AuthenticatedUser } from "@laundry-app/shared";
 import { apiFetch } from "./api-client.js";
 
+export async function refreshSession(
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  return apiFetch<{ accessToken: string; refreshToken: string }>(
+    "/auth/refresh",
+    {
+      method: "POST",
+      body: JSON.stringify({ refreshToken }),
+    },
+  );
+}
+
 export async function getCurrentUser(
   accessToken: string | null,
 ): Promise<AuthenticatedUser> {
