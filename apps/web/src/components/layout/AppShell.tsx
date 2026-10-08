@@ -474,7 +474,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
-              {user?.role === "BUSINESS_OWNER" ? (
+              {user?.securityRole === "BUSINESS_OWNER" ? (
                 <Link
                   to="/subscription"
                   className={`nav-item ${
@@ -501,28 +501,6 @@ export function AppShell({ children }: PropsWithChildren) {
                     ◆
                   </span>
                   <span>Platform Control Center</span>
-                </Link>
-              ) : null}
-
-              {hasPermission(user, "branches.view") ? (
-                <Link
-                  to="/branches"
-                  className={`nav-item ${isActive("/branches") ? "active" : ""}`}
-                  onClick={closeMobileNav}
-                >
-                  <span className="nav-icon" aria-hidden="true">⌘</span>
-                  <span>Branches</span>
-                </Link>
-              ) : null}
-
-              {hasPermission(user, "business.view") ? (
-                <Link
-                  to="/business/settings"
-                  className={`nav-item ${isActive("/business/settings") ? "active" : ""}`}
-                  onClick={closeMobileNav}
-                >
-                  <span className="nav-icon" aria-hidden="true">◆</span>
-                  <span>Business Settings</span>
                 </Link>
               ) : null}
 

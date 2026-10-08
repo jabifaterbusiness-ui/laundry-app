@@ -83,7 +83,7 @@ export function SubscriptionPage() {
     OfflineSubscriptionPaymentQueueEntry[]
   >([]);
 
-  const isOwner = user?.role === "BUSINESS_OWNER";
+  const isOwner = user?.securityRole === "BUSINESS_OWNER";
 
   const subscriptionQuery = useQuery({
     queryKey: ["subscription"],

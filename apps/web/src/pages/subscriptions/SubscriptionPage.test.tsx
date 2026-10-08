@@ -45,6 +45,7 @@ vi.mock("../../state/auth-store.js", () => ({
       businessId: string;
       fullName: string;
       role: string;
+      securityRole: string;
     };
     accessToken: string;
   }) => unknown) =>
@@ -53,7 +54,8 @@ vi.mock("../../state/auth-store.js", () => ({
         id: "owner-1",
         businessId: "business-1",
         fullName: "Jane Owner",
-        role: "BUSINESS_OWNER",
+        role: "Business Owner",
+        securityRole: "BUSINESS_OWNER",
       },
       accessToken: "token",
     }),

@@ -208,7 +208,7 @@ describe("DashboardPage", () => {
       screen.queryByRole("link", { name: /Subscription.*Open subscription/i }),
     ).not.toBeInTheDocument();
 
-    mockUser.role = "BUSINESS_OWNER";
+    mockUser.securityRole = "BUSINESS_OWNER";
 
     renderDashboard();
 

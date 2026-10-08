@@ -51,7 +51,7 @@ export function DashboardPage() {
   const canViewInvoices = hasPermission(user, "invoices.view");
   const canViewPayments = hasPermission(user, "payments.view");
   const canViewInventory = hasPermission(user, "inventory.view");
-  const canManageSubscription = user?.role === "BUSINESS_OWNER";
+  const canManageSubscription = user?.securityRole === "BUSINESS_OWNER";
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
