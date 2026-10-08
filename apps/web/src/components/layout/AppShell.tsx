@@ -43,17 +43,53 @@ const OPERATIONS: NavItem[] = [
 ];
 
 const MANAGEMENT: NavItem[] = [
-  { label: "Services & Price List", href: "/services", icon: "◈" },
-  { label: "Colour Catalogue", href: "/colors", icon: "●" },
-  { label: "Inventory", href: "/inventory", icon: "□" },
-  { label: "Users", href: "/users", icon: "♟" },
-  { label: "Permissions", href: "/permissions", icon: "⚙" },
-  { label: "Branches", href: "/branches", icon: "⌘" },
-  { label: "Business Settings", href: "/business/settings", icon: "◆" },
+  {
+    label: "Services & Price List",
+    href: "/services",
+    icon: "◈",
+    permission: "services.view",
+  },
+  {
+    label: "Colour Catalogue",
+    href: "/colors",
+    icon: "●",
+    permission: "colors.view",
+  },
+  {
+    label: "Inventory",
+    href: "/inventory",
+    icon: "□",
+    permission: "inventory.view",
+  },
+  {
+    label: "Users",
+    href: "/users",
+    icon: "♟",
+    permission: "users.view",
+  },
+  {
+    label: "Permissions",
+    href: "/permissions",
+    icon: "⚙",
+    permission: "users.manage_permissions",
+  },
+  {
+    label: "Branches",
+    href: "/branches",
+    icon: "⌘",
+    permission: "branches.view",
+  },
+  {
+    label: "Business Settings",
+    href: "/business/settings",
+    icon: "◆",
+    permission: "business.view",
+  },
   {
     label: "Suspicious / Unusual Activity",
     href: "/security/suspicious-activity",
     icon: "⚠",
+    permission: "security.suspicious_activity.view",
   },
 ];
 
@@ -346,43 +382,9 @@ export function AppShell({ children }: PropsWithChildren) {
 
               {MANAGEMENT.map((item) => {
                 const active = isActive(item.href);
-                const isBusinessUserManagement =
-                  item.href === "/users";
-                const isPermissionsRoute = item.href === "/permissions";
-                const isSuspiciousActivityRoute =
-                  item.href === "/security/suspicious-activity";
-
                 if (
-                  isBusinessUserManagement &&
-                  !hasPermission(user, "users.view")
-                ) {
-                  return null;
-                }
-
-                if (
-                  isPermissionsRoute &&
-                  !hasPermission(user, "users.manage_permissions")
-                ) {
-                  return null;
-                }
-
-                if (
-                  item.href === "/colors" &&
-                  !hasPermission(user, "colors.view")
-                ) {
-                  return null;
-                }
-
-                if (
-                  item.href === "/inventory" &&
-                  !hasPermission(user, "inventory.view")
-                ) {
-                  return null;
-                }
-
-                if (
-                  isSuspiciousActivityRoute &&
-                  !hasPermission(user, "security.suspicious_activity.view")
+                  item.permission &&
+                  !hasPermission(user, item.permission)
                 ) {
                   return null;
                 }
