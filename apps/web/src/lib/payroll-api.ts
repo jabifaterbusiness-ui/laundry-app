@@ -1,5 +1,11 @@
 import { apiFetch } from "./api-client.js";
 
+export type PayrollApprovalStatus =
+  | "NOT_SUBMITTED"
+  | "PENDING"
+  | "APPROVED"
+  | "DECLINED";
+
 export type PayrollPeriodStatus =
   | "OPEN"
   | "PROCESSING"
@@ -21,6 +27,12 @@ export interface PayrollPeriod {
   periodStart: string;
   periodEnd: string;
   status: PayrollPeriodStatus;
+  approvalStatus?: PayrollApprovalStatus;
+  approvalSubmittedAt?: string | null;
+  approvalSubmittedById?: string | null;
+  approvalDecidedAt?: string | null;
+  approvalDecidedById?: string | null;
+  approvalReason?: string | null;
 }
 
 export interface PayrollEmployee {
@@ -186,6 +198,47 @@ export function processPayrollDeductions(
   );
 }
 
+export function submitPayrollForApproval(
+  periodId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<PayrollPeriod>(`/payroll/periods/${periodId}/submit`, {
+    method: "POST",
+    headers: headers(branchId),
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+  });
+}
+
+export function approvePayroll(
+  periodId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<PayrollPeriod>(`/payroll/periods/${periodId}/approve`, {
+    method: "POST",
+    headers: headers(branchId),
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+  });
+}
+
+export function declinePayroll(
+  periodId: string,
+  reason: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<PayrollPeriod>(`/payroll/periods/${periodId}/decline`, {
+    method: "POST",
+    headers: headers(branchId),
+    body: JSON.stringify({ reason }),
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+  });
+}
+
 export function finalizePayroll(
   periodId: string,
   auth: AuthOptions,
@@ -277,6 +330,59 @@ export function voidPayrollPayment(
     method: "POST",
     headers: headers(branchId),
     body: JSON.stringify({ reason }),
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+  });
+}
+
+export interface EmployeeCompensation {
+  id: string;
+  businessId: string;
+  employeeId: string;
+  basicSalary: number;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employee: PayrollEmployee;
+}
+
+export interface CreateCompensationInput {
+  employeeId: string;
+  basicSalary: number;
+  effectiveFrom: string;
+}
+
+export function listCompensation(
+  params: {
+    employeeId?: string;
+  },
+  auth: AuthOptions,
+) {
+  const query = new URLSearchParams();
+
+  if (params.employeeId) {
+    query.set("employeeId", params.employeeId);
+  }
+
+  const suffix = query.toString() ? `?${query}` : "";
+
+  return apiFetch<EmployeeCompensation[]>(
+    `/payroll/compensation${suffix}`,
+    {
+      headers: {},
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
+export function createCompensation(
+  input: CreateCompensationInput,
+  auth: AuthOptions,
+) {
+  return apiFetch<EmployeeCompensation>("/payroll/compensation", {
+    method: "POST",
+    body: JSON.stringify(input),
     accessToken: auth.accessToken,
     sensitiveAuthorization: auth.sensitiveAuthorization,
   });

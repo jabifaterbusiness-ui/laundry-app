@@ -752,6 +752,7 @@ describe("Payroll finalization routes", () => {
   const processingPeriodFixture = {
     ...periodFixture,
     status: "PROCESSING",
+      approvalStatus: "APPROVED",
   };
 
   const validPayrollRecord = {
@@ -830,6 +831,7 @@ describe("Payroll finalization routes", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         status: "PROCESSING",
+      approvalStatus: "APPROVED",
       },
       data: {
         status: "FINALIZED",
@@ -841,6 +843,7 @@ describe("Payroll finalization routes", () => {
     mockFinalizeTransaction({
       ...periodFixture,
       status: "OPEN",
+        approvalStatus: "APPROVED",
     });
 
     const res = await request(app)

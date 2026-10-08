@@ -1,19 +1,25 @@
 import { Router } from "express";
 
-import { requireAuth } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireSensitiveAuthorization,
+} from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 
 import {
+  approvePayrollController,
   createPayrollPeriodController,
+  declinePayrollController,
   finalizePayrollController,
   generatePayrollController,
   getPayrollPeriodController,
   getPayrollStatusController,
   listPayrollPeriodsController,
   processPayrollDeductionsController,
+  submitPayrollForApprovalController,
 } from "./payroll.controller.js";
 
 import {
@@ -57,6 +63,27 @@ router.post(
   "/periods/:id/generate",
   asyncHandler(requirePermission("payroll.manage")),
   asyncHandler(generatePayrollController),
+);
+
+router.post(
+  "/periods/:id/submit",
+  asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(submitPayrollForApprovalController),
+);
+
+router.post(
+  "/periods/:id/approve",
+  asyncHandler(requirePermission("payroll.approve")),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(approvePayrollController),
+);
+
+router.post(
+  "/periods/:id/decline",
+  asyncHandler(requirePermission("payroll.approve")),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(declinePayrollController),
 );
 
 router.post(

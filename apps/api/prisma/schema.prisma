@@ -1261,6 +1261,13 @@ enum PayrollPeriodStatus {
   VOID
 }
 
+enum PayrollApprovalStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  DECLINED
+}
+
 enum IOUStatus {
   PENDING
   APPROVED
@@ -1405,6 +1412,13 @@ model PayrollPeriod {
 
   status PayrollPeriodStatus @default(OPEN)
 
+  approvalStatus PayrollApprovalStatus @default(NOT_SUBMITTED)
+  approvalSubmittedAt DateTime?
+  approvalSubmittedById String?
+  approvalDecidedAt DateTime?
+  approvalDecidedById String?
+  approvalReason String?
+
   payrollRecords PayrollRecord[]
 
   createdAt DateTime @default(now())
@@ -1413,6 +1427,7 @@ model PayrollPeriod {
   @@unique([businessId, branchId, periodStart, periodEnd])
   @@index([businessId, periodStart, periodEnd])
   @@index([businessId, branchId, status])
+  @@index([businessId, branchId, approvalStatus])
   @@map("payroll_periods")
 }
 

@@ -4,6 +4,8 @@ import { ApiError } from "../../lib/api-client.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
+import { PayrollCompensationSection } from "./PayrollCompensationSection.js";
+import { PayrollApprovalSection } from "./PayrollApprovalSection.js";
 import {
   createPayrollPayment,
   createPayrollPeriod,
@@ -208,6 +210,17 @@ export function PayrollPage() {
 
       {error && <p role="alert">{error}</p>}
 
+      <PayrollCompensationSection
+        accessToken={accessToken}
+        branchId={activeBranchId}
+      />
+
+      <PayrollApprovalSection
+        accessToken={accessToken}
+        branchId={activeBranchId}
+        selectedPeriodId={selectedPeriodId}
+      />
+
       <section>
         <h2>Create Payroll Period</h2>
         {canManage ? (
@@ -315,21 +328,30 @@ export function PayrollPage() {
 
                 {period.status === "PROCESSING" && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => actionMutation.mutate("deductions")}
-                      disabled={actionMutation.isPending}
-                    >
-                      Process Deductions
-                    </button>
+                    {period.approvalStatus !== "PENDING" &&
+                      period.approvalStatus !== "APPROVED" && (
+                        <button
+                          type="button"
+                          onClick={() => actionMutation.mutate("deductions")}
+                          disabled={actionMutation.isPending}
+                        >
+                          Process Deductions
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => actionMutation.mutate("finalize")}
-                      disabled={actionMutation.isPending}
-                    >
-                      Finalize Payroll
-                    </button>
+                    {period.approvalStatus === "APPROVED" ? (
+                      <button
+                        type="button"
+                        onClick={() => actionMutation.mutate("finalize")}
+                        disabled={actionMutation.isPending}
+                      >
+                        Finalize Payroll
+                      </button>
+                    ) : (
+                      <span>
+                        Finalization is locked until payroll is approved.
+                      </span>
+                    )}
                   </>
                 )}
               </div>

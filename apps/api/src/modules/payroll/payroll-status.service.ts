@@ -93,6 +93,12 @@ export async function getPayrollStatus({
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
       status: period.status,
+      approvalStatus: period.approvalStatus,
+      approvalSubmittedAt: period.approvalSubmittedAt,
+      approvalSubmittedById: period.approvalSubmittedById,
+      approvalDecidedAt: period.approvalDecidedAt,
+      approvalDecidedById: period.approvalDecidedById,
+      approvalReason: period.approvalReason,
     },
     summary: {
       employeeCount: records.length,

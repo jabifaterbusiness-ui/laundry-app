@@ -1,4 +1,4 @@
-import { IOUStatus, LoanStatus, PayrollDeductionType } from "@prisma/client";
+import { IOUStatus, LoanStatus, PayrollApprovalStatus, PayrollDeductionType } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -43,6 +43,16 @@ export async function processPayrollDeductions({
   if (period.status !== "PROCESSING") {
     throw new AppError(
       "Payroll deductions can only be processed for a processing payroll period",
+      400,
+    );
+  }
+
+  if (
+    period.approvalStatus === PayrollApprovalStatus.PENDING ||
+    period.approvalStatus === PayrollApprovalStatus.APPROVED
+  ) {
+    throw new AppError(
+      "Payroll deductions cannot be changed while approval is pending or approved",
       400,
     );
   }

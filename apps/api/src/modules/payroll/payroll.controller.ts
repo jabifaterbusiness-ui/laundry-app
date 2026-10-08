@@ -1,13 +1,17 @@
 import type { Request, Response } from "express";
 
 import { AppError } from "../../middleware/error-handler.js";
+import { requireReason } from "../../lib/reason.js";
 
 import {
+  approvePayroll,
   createPayrollPeriod,
+  declinePayroll,
   finalizePayroll,
   generatePayroll,
   getPayrollPeriod,
   listPayrollPeriods,
+  submitPayrollForApproval,
 } from "./payroll.service.js";
 
 import { processPayrollDeductions } from "./payroll-deductions.service.js";
@@ -78,6 +82,49 @@ export async function getPayrollPeriodController(
     businessId: businessId(req),
     branchId: branchId(req),
     id: req.params.id!,
+  });
+
+  res.json(result);
+}
+
+export async function submitPayrollForApprovalController(
+  req: Request,
+  res: Response,
+) {
+  const result = await submitPayrollForApproval({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    payrollPeriodId: req.params.id!,
+    actorUserId: req.user!.id,
+  });
+
+  res.json(result);
+}
+
+export async function approvePayrollController(
+  req: Request,
+  res: Response,
+) {
+  const result = await approvePayroll({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    payrollPeriodId: req.params.id!,
+    actorUserId: req.user!.id,
+  });
+
+  res.json(result);
+}
+
+export async function declinePayrollController(
+  req: Request,
+  res: Response,
+) {
+  const result = await declinePayroll({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    payrollPeriodId: req.params.id!,
+    actorUserId: req.user!.id,
+    reason: requireReason(req.body?.reason),
   });
 
   res.json(result);

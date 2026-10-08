@@ -1,4 +1,4 @@
-import { PayrollPeriodStatus } from "@prisma/client";
+import { PayrollApprovalStatus, PayrollPeriodStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -25,6 +25,336 @@ type FinalizePayrollArgs = {
   payrollPeriodId: string;
   actorUserId: string;
 };
+type SubmitPayrollForApprovalArgs = {
+  businessId: string;
+  branchId: string;
+  payrollPeriodId: string;
+  actorUserId: string;
+};
+
+type ApprovePayrollArgs = {
+  businessId: string;
+  branchId: string;
+  payrollPeriodId: string;
+  actorUserId: string;
+};
+
+type DeclinePayrollArgs = {
+  businessId: string;
+  branchId: string;
+  payrollPeriodId: string;
+  actorUserId: string;
+  reason: string;
+};
+
+
+export async function submitPayrollForApproval({
+  businessId,
+  branchId,
+  payrollPeriodId,
+  actorUserId,
+}: SubmitPayrollForApprovalArgs) {
+  const result = await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+      },
+    });
+
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
+
+    if (period.status !== PayrollPeriodStatus.PROCESSING) {
+      throw new AppError(
+        "Only a processing payroll period can be submitted for approval",
+        400,
+      );
+    }
+
+    if (
+      period.approvalStatus !== PayrollApprovalStatus.NOT_SUBMITTED &&
+      period.approvalStatus !== PayrollApprovalStatus.DECLINED
+    ) {
+      throw new AppError(
+        "Payroll period is not eligible for approval submission",
+        400,
+      );
+    }
+
+    const existingRecord = await tx.payrollRecord.findFirst({
+      where: {
+        businessId,
+        branchId,
+        payrollPeriodId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existingRecord) {
+      throw new AppError(
+        "Payroll records must exist before submitting for approval",
+        400,
+      );
+    }
+
+    const updated = await tx.payrollPeriod.updateMany({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+        status: PayrollPeriodStatus.PROCESSING,
+        approvalStatus: {
+          in: [
+            PayrollApprovalStatus.NOT_SUBMITTED,
+            PayrollApprovalStatus.DECLINED,
+          ],
+        },
+      },
+      data: {
+        approvalStatus: PayrollApprovalStatus.PENDING,
+        approvalSubmittedAt: new Date(),
+        approvalSubmittedById: actorUserId,
+        approvalDecidedAt: null,
+        approvalDecidedById: null,
+        approvalReason: null,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError(
+        "Payroll approval submission could not be completed because its state changed",
+        409,
+      );
+    }
+
+    return tx.payrollPeriod.findFirst({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+      },
+    });
+  });
+
+  if (!result) {
+    throw new AppError("Payroll period not found", 404);
+  }
+
+  await recordAuditEvent({
+    businessId,
+    branchId,
+    actorUserId,
+    action: "payroll_period.submitted_for_approval",
+    entityType: "PAYROLL_PERIOD",
+    entityId: result.id,
+    metadata: {
+      payrollPeriodId: result.id,
+      approvalStatus: result.approvalStatus,
+      submittedAt: result.approvalSubmittedAt?.toISOString() ?? null,
+    },
+  });
+
+  return result;
+}
+
+export async function approvePayroll({
+  businessId,
+  branchId,
+  payrollPeriodId,
+  actorUserId,
+}: ApprovePayrollArgs) {
+  const result = await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+      },
+    });
+
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
+
+    if (period.status !== PayrollPeriodStatus.PROCESSING) {
+      throw new AppError(
+        "Only a processing payroll period can be approved",
+        400,
+      );
+    }
+
+    if (period.approvalStatus !== PayrollApprovalStatus.PENDING) {
+      throw new AppError(
+        "Only a pending payroll approval can be approved",
+        400,
+      );
+    }
+
+    if (period.approvalSubmittedById === actorUserId) {
+      throw new AppError(
+        "The person who submitted the payroll cannot approve the same payroll",
+        403,
+      );
+    }
+
+    const updated = await tx.payrollPeriod.updateMany({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+        status: PayrollPeriodStatus.PROCESSING,
+        approvalStatus: PayrollApprovalStatus.PENDING,
+      },
+      data: {
+        approvalStatus: PayrollApprovalStatus.APPROVED,
+        approvalDecidedAt: new Date(),
+        approvalDecidedById: actorUserId,
+        approvalReason: null,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError(
+        "Payroll approval could not be completed because its state changed",
+        409,
+      );
+    }
+
+    return tx.payrollPeriod.findFirst({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+      },
+    });
+  });
+
+  if (!result) {
+    throw new AppError("Payroll period not found", 404);
+  }
+
+  await recordAuditEvent({
+    businessId,
+    branchId,
+    actorUserId,
+    action: "payroll_period.approved",
+    entityType: "PAYROLL_PERIOD",
+    entityId: result.id,
+    metadata: {
+      payrollPeriodId: result.id,
+      approvalStatus: result.approvalStatus,
+      submittedById: result.approvalSubmittedById,
+    },
+  });
+
+  return result;
+}
+
+export async function declinePayroll({
+  businessId,
+  branchId,
+  payrollPeriodId,
+  actorUserId,
+  reason,
+}: DeclinePayrollArgs) {
+  const cleanReason = reason.trim();
+
+  if (!cleanReason) {
+    throw new AppError("A decline reason is required", 400);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+      },
+    });
+
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
+
+    if (period.status !== PayrollPeriodStatus.PROCESSING) {
+      throw new AppError(
+        "Only a processing payroll period can be declined",
+        400,
+      );
+    }
+
+    if (period.approvalStatus !== PayrollApprovalStatus.PENDING) {
+      throw new AppError(
+        "Only a pending payroll approval can be declined",
+        400,
+      );
+    }
+
+    if (period.approvalSubmittedById === actorUserId) {
+      throw new AppError(
+        "The person who submitted the payroll cannot decide the same payroll",
+        403,
+      );
+    }
+
+    const updated = await tx.payrollPeriod.updateMany({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+        status: PayrollPeriodStatus.PROCESSING,
+        approvalStatus: PayrollApprovalStatus.PENDING,
+      },
+      data: {
+        approvalStatus: PayrollApprovalStatus.DECLINED,
+        approvalDecidedAt: new Date(),
+        approvalDecidedById: actorUserId,
+        approvalReason: cleanReason,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError(
+        "Payroll decline could not be completed because its state changed",
+        409,
+      );
+    }
+
+    return tx.payrollPeriod.findFirst({
+      where: {
+        id: period.id,
+        businessId,
+        branchId,
+      },
+    });
+  });
+
+  if (!result) {
+    throw new AppError("Payroll period not found", 404);
+  }
+
+  await recordAuditEvent({
+    businessId,
+    branchId,
+    actorUserId,
+    action: "payroll_period.declined",
+    entityType: "PAYROLL_PERIOD",
+    entityId: result.id,
+    metadata: {
+      payrollPeriodId: result.id,
+      approvalStatus: result.approvalStatus,
+      reason: cleanReason,
+      submittedById: result.approvalSubmittedById,
+    },
+  });
+
+  return result;
+}
 
 export async function finalizePayroll({
   businessId,
@@ -48,6 +378,13 @@ export async function finalizePayroll({
     if (period.status !== PayrollPeriodStatus.PROCESSING) {
       throw new AppError(
         "Only a processing payroll period can be finalized",
+        400,
+      );
+    }
+
+    if (period.approvalStatus !== PayrollApprovalStatus.APPROVED) {
+      throw new AppError(
+        "Payroll period must be approved before finalization",
         400,
       );
     }
@@ -105,6 +442,7 @@ export async function finalizePayroll({
         businessId,
         branchId,
         status: PayrollPeriodStatus.PROCESSING,
+        approvalStatus: PayrollApprovalStatus.APPROVED,
       },
       data: {
         status: PayrollPeriodStatus.FINALIZED,

@@ -300,6 +300,7 @@ describe("payroll.service", () => {
       periodStart: new Date("2026-08-01T00:00:00.000Z"),
       periodEnd: new Date("2026-08-31T23:59:59.999Z"),
       status: "PROCESSING",
+      approvalStatus: "APPROVED",
     };
 
     const validRecord = {
@@ -387,6 +388,7 @@ describe("payroll.service", () => {
           businessId: "business-1",
           branchId: "branch-1",
           status: "PROCESSING",
+          approvalStatus: "APPROVED",
         },
         data: {
           status: "FINALIZED",
