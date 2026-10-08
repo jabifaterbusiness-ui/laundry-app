@@ -91,6 +91,12 @@ const MANAGEMENT: NavItem[] = [
     icon: "⚠",
     permission: "security.suspicious_activity.view",
   },
+  {
+    label: "Payroll",
+    href: "/payroll",
+    icon: "₦",
+    permission: "payroll.view",
+  },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {

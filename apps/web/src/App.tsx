@@ -20,6 +20,7 @@ import { UsersPage } from "./pages/users/UsersPage.js";
 import { PermissionsPage } from "./pages/users/PermissionsPage.js";
 import { ReportsPage } from "./pages/reports/ReportsPage.js";
 import { FinancePage } from "./pages/finance/FinancePage.js";
+import { PayrollPage } from "./pages/payroll/PayrollPage.js";
 import { SubscriptionPage } from "./pages/subscriptions/SubscriptionPage.js";
 import { PlatformOwnerPage } from "./pages/platform/PlatformOwnerPage.js";
 import { SuspiciousActivityPage } from "./pages/security/SuspiciousActivityPage.js";
@@ -56,6 +57,7 @@ function AuthenticatedLayout() {
           <Route path="/permissions" element={<PermissionsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/finance" element={<FinancePage />} />
+          <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/platform" element={<PlatformOwnerPage />} />
           <Route path="/security/suspicious-activity" element={<SuspiciousActivityPage />} />
