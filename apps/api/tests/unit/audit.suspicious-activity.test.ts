@@ -83,6 +83,7 @@ describe("listSuspiciousActivity", () => {
       "invoice.deleted",
       "invoice.transferred",
       "invoice.voided",
+      "order.invoice_edited",
       "order.customer_transferred",
       "payment.voided",
       "inventory.stock_adjusted",

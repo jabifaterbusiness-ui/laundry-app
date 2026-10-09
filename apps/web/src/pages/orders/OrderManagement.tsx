@@ -1227,8 +1227,17 @@ function OrderManagementContent({
                       <div>
                         Date/Time: {formatDate(entry.createdAt)}
                       </div>
-                      <div>Authorized by: {entry.actorUserId}</div>
-                    </div>
+                      <div>Authorized by: {entry.actorUserId}</div>                       <details>                         <summary>View Snapshot — Version {entry.version}</summary>                         <pre
+                          style={{
+                            marginTop: 12,
+                            padding: 12,
+                            overflowX: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            background: "#f7f7f7",
+                            borderRadius: 6,
+                          }}                         >
+                          {JSON.stringify(entry.snapshot, null, 2)}                         </pre>                       </details>                     </div>
                   ))}
                 </div>
               ) : (

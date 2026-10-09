@@ -26,6 +26,7 @@ const SUSPICIOUS_ACTIVITY_ACTIONS = [
   "invoice.deleted",
   "invoice.transferred",
   "invoice.voided",
+  "order.invoice_edited",
 
   // Customer / order transfer
   "order.customer_transferred",
