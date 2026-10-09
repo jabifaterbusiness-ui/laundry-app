@@ -381,6 +381,22 @@ describe("SuspiciousActivityPage", () => {
         correlationId: null,
       },
       {
+        id: "order-invoice-edit-1",
+        timestamp: "2026-09-25T06:30:30.000Z",
+        action: "order.invoice_edited",
+        entityType: "Order",
+        entityId: "order-3",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          reason: "Corrected invoice service details",
+          invoiceNumber: "INV-1003",
+          orderNumber: "ORD-1003",
+          historyId: "history-3",
+        },
+        correlationId: null,
+      },
+      {
         id: "invoice-transfer-1",
         timestamp: "2026-09-25T06:31:00.000Z",
         action: "invoice.transferred",
@@ -403,6 +419,10 @@ describe("SuspiciousActivityPage", () => {
 
     expect(
       screen.getByText("Wrong price entered"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Corrected invoice service details"),
     ).toBeInTheDocument();
 
     expect(

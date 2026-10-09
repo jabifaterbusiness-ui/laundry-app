@@ -122,7 +122,7 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
   {
     id: "invoice-updated",
     label: "Invoice Updated",
-    actions: ["invoice.updated"],
+    actions: ["invoice.updated", "order.invoice_edited"],
     risk: "High",
     description: "Controlled invoice corrections.",
   },
