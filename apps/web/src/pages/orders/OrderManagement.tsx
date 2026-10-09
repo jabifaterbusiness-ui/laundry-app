@@ -59,12 +59,13 @@ function statusLabel(status: OrderStatus) {
 interface OrderManagementProps {
   order: Order | null;
   customer: Customer;
-  mode: "view" | "new";
+  mode: "view" | "new" | "edit";
   newOrderContent?: ReactNode;
   onBack: () => void;
   onSwitchCustomer: () => void;
   onNewOrder: (customer: Customer) => void;
   onSelectOrder: (order: Order) => void;
+  onEditOrder: (order: Order) => void;
 }
 
 function OrderManagementContent({
@@ -76,6 +77,7 @@ function OrderManagementContent({
   onSwitchCustomer,
   onNewOrder,
   onSelectOrder,
+  onEditOrder,
 }: OrderManagementProps) {
   const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -706,7 +708,11 @@ function OrderManagementContent({
         <div>
           <p style={{ margin: 0, fontSize: 13 }}>ORDER MANAGEMENT</p>
           <h2 style={{ margin: "4px 0 8px" }}>
-            {mode === "new" ? "New Order" : `#${order!.orderNumber}`}
+            {mode === "new"
+              ? "New Order"
+              : mode === "edit"
+                ? "Edit Invoice"
+                : `#${order!.orderNumber}`}
           </h2>
           <strong>{currentCustomer.name}</strong>
           <div>
@@ -746,28 +752,19 @@ function OrderManagementContent({
       >
         <button
           type="button"
-          disabled={mode === "new"}
+          disabled={mode !== "view"}
           onClick={() => onNewOrder(currentCustomer)}
         >
           New Order
         </button>
         <button
           type="button"
-          disabled={
-            mode !== "view" ||
-            !order ||
-            !invoiceQuery.data ||
-            !canViewInvoices
-          }
-          onClick={() =>
-            navigate(
-              `/invoices?invoiceId=${encodeURIComponent(
-                invoiceQuery.data!.id,
-              )}&action=edit`,
-            )
-          }
+          disabled={mode !== "view" || !order || !hasPermission(user, "orders.update")}
+          onClick={() => {
+            if (order) onEditOrder(order);
+          }}
         >
-          Edit
+          Edit Invoice
         </button>
         <button
           type="button"
@@ -869,7 +866,7 @@ function OrderManagementContent({
         </button>
       </div>
 
-      {mode === "new" ? (
+      {mode === "new" || mode === "edit" ? (
         <section style={{ marginTop: 20 }}>
           {newOrderContent}
         </section>

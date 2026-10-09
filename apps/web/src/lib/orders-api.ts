@@ -17,6 +17,21 @@ export interface ListOrdersParams {
   customerId?: string;
 }
 
+export interface EditOrderInput {
+  reason: string;
+  confirmed: true;
+  items: Array<{
+    id?: string;
+    serviceId: string;
+    quantity: number;
+    colors: string[];
+  }>;
+  garmentNote?: string | null;
+  internalNote?: string | null;
+  expectedReadyAt?: string | null;
+  customerAgreement?: string;
+}
+
 export interface OfflineOrderSyncContext {
   businessId: string;
   branchId: string;
@@ -106,6 +121,22 @@ export async function getOrder(
   return apiFetch<Order>(`/orders/${id}`, {
     accessToken: auth.accessToken,
     branchId,
+  });
+}
+
+export async function updateOrder(
+  id: string,
+  input: EditOrderInput,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+  sensitiveAuthorization?: string | null,
+): Promise<Order> {
+  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    accessToken: auth.accessToken,
+    branchId,
+    sensitiveAuthorization,
+    body: JSON.stringify(input),
   });
 }
 

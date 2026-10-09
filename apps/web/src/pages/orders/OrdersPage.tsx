@@ -12,8 +12,11 @@ import {
   getOrder,
   listAllOrders,
   listOrders,
+  updateOrder,
   updateOrderStatusWithOfflineQueue,
+  type EditOrderInput,
 } from "../../lib/orders-api.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 import {
   createCustomerWithOfflineQueue,
   getCustomer,
@@ -43,6 +46,7 @@ const STATUSES: OrderStatus[] = [
 ];
 
 interface OrderLine {
+  id?: string;
   serviceId: string;
   quantity: number;
   colors: string[];
@@ -67,6 +71,7 @@ export function OrdersPage() {
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -114,7 +119,9 @@ export function OrdersPage() {
     }
 
     setSelectedOrder(activeWorkspace.activeOrder ?? null);
-    setFormOpen(activeWorkspace.mode === "new");
+    setFormOpen(
+      activeWorkspace.mode === "new" || activeWorkspace.mode === "edit",
+    );
   }, [
     activeWorkspaceId,
     activeWorkspace?.activeOrder?.id,
@@ -147,6 +154,7 @@ export function OrdersPage() {
 
 
   const canCreateOrder = hasPermission(user, "orders.create");
+  const canUpdateOrder = hasPermission(user, "orders.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
   const canManageColors = hasPermission(user, "colors.manage");
 
@@ -168,6 +176,8 @@ export function OrdersPage() {
   const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [editReason, setEditReason] = useState("");
+  const [editConfirmed, setEditConfirmed] = useState(false);
   const [openColorSelector, setOpenColorSelector] = useState<number | null>(
     null,
   );
@@ -350,6 +360,89 @@ export function OrdersPage() {
     },
   });
 
+  const editMutation = useMutation({
+    mutationKey: ["orders", "edit-invoice"],
+    mutationFn: async () => {
+      const order = activeWorkspace?.activeOrder ?? selectedOrder;
+
+      if (!order || order.id !== selectedOrder?.id) {
+        throw new Error("Reopen the existing order before editing its invoice.");
+      }
+
+      if (!canUpdateOrder) {
+        throw new Error("You do not have permission to edit orders.");
+      }
+
+      if (!editReason.trim()) {
+        throw new Error("Enter a reason for this invoice correction.");
+      }
+
+      if (!editConfirmed) {
+        throw new Error("Confirm that the customer has agreed to these changes.");
+      }
+
+      const authorization = await requestSensitiveAuthorization();
+      if (!authorization) {
+        throw new Error("Sensitive authorization is required to edit this invoice.");
+      }
+
+      const input: EditOrderInput = {
+        reason: editReason.trim(),
+        confirmed: true,
+        items: lines.map((line) => ({
+          ...(line.id ? { id: line.id } : {}),
+          serviceId: line.serviceId,
+          quantity: line.quantity,
+          colors: line.colors ?? [],
+        })),
+        garmentNote: garmentNote.trim() || null,
+        internalNote: internalNote.trim() || null,
+        expectedReadyAt: expectedReadyAt
+          ? new Date(expectedReadyAt).toISOString()
+          : null,
+      };
+
+      return updateOrder(
+        order.id,
+        input,
+        { accessToken },
+        activeBranchId,
+        authorization,
+      );
+    },
+    onSuccess: (order) => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-management"] });
+
+      if (activeWorkspaceId) {
+        updateWorkspace(activeWorkspaceId, {
+          activeOrder: order,
+          mode: "view",
+          draft: {
+            customerId: order.customerId,
+            lines: [{ serviceId: "", quantity: 1, colors: [] }],
+            garmentNote: "",
+            internalNote: "",
+            expectedReadyAt: "",
+          },
+        });
+      }
+
+      setSelectedOrder(order);
+      setFormOpen(false);
+      setFormError(null);
+      setEditReason("");
+      setEditConfirmed(false);
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save invoice changes. Please try again.",
+      );
+    },
+  });
+
   const statusMutation = useMutation({
     mutationKey: ["orders"],
     mutationFn: (input: { id: string; status: OrderStatus }) =>
@@ -460,8 +553,13 @@ export function OrdersPage() {
   }, 0);
 
   function closeForm() {
+    if (activeWorkspace?.mode === "edit" && activeWorkspaceId) {
+      updateWorkspace(activeWorkspaceId, { mode: "view" });
+    }
     setFormOpen(false);
     setFormError(null);
+    setEditReason("");
+    setEditConfirmed(false);
   }
 
   function openCreate() {
@@ -662,6 +760,23 @@ export function OrdersPage() {
       return;
     }
 
+    if (activeWorkspace?.mode === "edit") {
+      if (!selectedOrder || selectedOrder.id !== activeWorkspace.activeOrder?.id) {
+        setFormError("The selected invoice changed. Reopen it before saving.");
+        return;
+      }
+      if (!editReason.trim()) {
+        setFormError("Enter a reason for this invoice correction.");
+        return;
+      }
+      if (!editConfirmed) {
+        setFormError("Confirm that the customer has agreed to these changes.");
+        return;
+      }
+      editMutation.mutate();
+      return;
+    }
+
     createMutation.mutate();
   }
 
@@ -686,6 +801,59 @@ export function OrdersPage() {
     setFormOpen(false);
     setCustomerPickerOpen(false);
     setFormError(null);
+  }
+
+  async function startEditInvoice(order: Order) {
+    if (!canUpdateOrder) {
+      setFormError("You do not have permission to edit orders.");
+      return;
+    }
+
+    const customer =
+      (activeWorkspace?.customer.id === order.customerId
+        ? activeWorkspace.customer
+        : customers.find((item) => item.id === order.customerId)) ??
+      (await getCustomer(order.customerId, { accessToken }).catch(() => null));
+
+    if (!customer) {
+      setFormError("Unable to load the customer for this invoice.");
+      return;
+    }
+
+    const workspaceId = openWorkspace(customer, { order });
+    switchWorkspace(workspaceId);
+    updateWorkspace(workspaceId, {
+      activeOrder: order,
+      mode: "edit",
+      draft: {
+        customerId: order.customerId,
+        lines: order.items.map((item) => ({
+          id: item.id,
+          serviceId: item.serviceId,
+          quantity: item.quantity,
+          colors: [...(item.colors ?? [])],
+        })),
+        garmentNote: order.garmentNote ?? "",
+        internalNote: order.internalNote ?? "",
+        expectedReadyAt: order.expectedReadyAt
+          ? (() => {
+              const date = new Date(order.expectedReadyAt!);
+              return Number.isNaN(date.getTime())
+                ? ""
+                : new Date(
+                    date.getTime() - date.getTimezoneOffset() * 60000,
+                  ).toISOString().slice(0, 16);
+            })()
+          : "",
+      },
+    });
+
+    setSelectedOrder(order);
+    setEditReason("");
+    setEditConfirmed(false);
+    setFormError(null);
+    setFormOpen(true);
+    setCustomerPickerOpen(false);
   }
 
   function startNewOrderForCustomer(customer: Customer) {
@@ -856,6 +1024,7 @@ export function OrdersPage() {
                 )}
                 <button
                   type="button"
+                  disabled={activeWorkspace?.mode === "edit"}
                   onClick={() => {
                     setCustomerSearch("");
                     setFormOpen(false);
@@ -1245,15 +1414,41 @@ export function OrdersPage() {
               </label>
             </div>
 
+            {activeWorkspace?.mode === "edit" && (
+              <section aria-label="Invoice correction confirmation">
+                <label>
+                  Reason for correction
+                  <textarea
+                    value={editReason}
+                    onChange={(event) => setEditReason(event.target.value)}
+                    maxLength={1000}
+                    required
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={editConfirmed}
+                    onChange={(event) => setEditConfirmed(event.target.checked)}
+                  />
+                  Customer has agreed to these invoice changes
+                </label>
+              </section>
+            )}
+
             {formError && <p role="alert">{formError}</p>}
 
             <button
               type="submit"
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || editMutation.isPending}
             >
-              {createMutation.isPending
-                ? "Creating..."
-                : "Create order"}
+              {editMutation.isPending
+                ? "Saving changes..."
+                : createMutation.isPending
+                  ? "Creating..."
+                  : activeWorkspace?.mode === "edit"
+                    ? "Save Invoice Changes"
+                    : "Create order"}
             </button>
 
             <button type="button" onClick={closeForm}>
@@ -1471,7 +1666,7 @@ export function OrdersPage() {
           <OrderManagement
             order={selectedOrder}
             customer={activeWorkspace.customer}
-            mode={formOpen ? "new" : "view"}
+            mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
             onBack={closeOrderManagement}
             onSwitchCustomer={() => {
@@ -1480,6 +1675,7 @@ export function OrdersPage() {
             }}
             onNewOrder={startNewOrderForCustomer}
             onSelectOrder={openOrderManagement}
+            onEditOrder={startEditInvoice}
           />
         )}
     </main>

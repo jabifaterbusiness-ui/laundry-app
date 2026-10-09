@@ -4,6 +4,7 @@ import type { Customer, Order } from "@laundry-app/shared";
 export interface OrderWorkspaceDraft {
   customerId: string;
   lines: Array<{
+    id?: string;
     serviceId: string;
     quantity: number;
     colors: string[];
@@ -13,7 +14,7 @@ export interface OrderWorkspaceDraft {
   expectedReadyAt: string;
 }
 
-export type OrderWorkspaceMode = "view" | "new";
+export type OrderWorkspaceMode = "view" | "new" | "edit";
 
 export interface OrderWorkspace {
   id: string;

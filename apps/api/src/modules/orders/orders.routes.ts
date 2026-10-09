@@ -6,8 +6,10 @@ import {
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
+import { requireSensitiveAuthorization } from "../auth/auth.middleware.js";
 import {
   create,
+  editInvoice,
   getOne,
   list,
   transfer,
@@ -55,6 +57,12 @@ ordersRouter.patch(
   asyncHandler(transfer),
 );
 
+ordersRouter.patch(
+  "/:id",
+  requirePermission("orders.update"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(editInvoice),
+);
 
 ordersRouter.patch(
   "/:id/status",

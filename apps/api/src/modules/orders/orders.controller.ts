@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import {
   createOrderSchema,
+  editOrderSchema,
   listOrdersQuerySchema,
   orderIdParamSchema,
   transferOrderSchema,
@@ -15,6 +16,7 @@ import {
   transferOrder,
   updateOrderStatus,
 } from "./orders.service.js";
+import { editOrderWithCorrection } from "./order-corrections.service.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -189,4 +191,60 @@ export async function updateStatus(req: Request, res: Response) {
   });
 
   res.status(200).json(order);
+}
+
+export async function editInvoice(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = orderIdParamSchema.parse(req.params);
+  const input = editOrderSchema.parse(req.body);
+
+  const result = await editOrderWithCorrection({
+    orderId: id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    input: {
+      reason: input.reason,
+      confirmed: input.confirmed,
+      items: input.items.map((item) => ({
+        serviceId: item.serviceId,
+        quantity: item.quantity,
+        colors: item.colors,
+        ...(item.id !== undefined ? { id: item.id } : {}),
+      })),
+      ...(input.garmentNote !== undefined && {
+        garmentNote: input.garmentNote,
+      }),
+      ...(input.internalNote !== undefined && {
+        internalNote: input.internalNote,
+      }),
+      ...(input.expectedReadyAt !== undefined && {
+        expectedReadyAt: input.expectedReadyAt,
+      }),
+      ...(input.customerAgreement !== undefined && {
+        customerAgreement: input.customerAgreement,
+      }),
+    },
+  });
+
+  await recordAuditEvent({
+    action: "order.invoice_edited",
+    entityType: "Order",
+    entityId: result.order.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      orderNumber: result.order.orderNumber,
+      invoiceNumber: result.invoice.invoiceNumber,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+    },
+  });
+
+  res.status(200).json(result.order);
 }

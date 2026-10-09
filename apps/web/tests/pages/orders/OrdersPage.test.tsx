@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { Customer, Order } from "@laundry-app/shared";
+import { SensitiveAuthorizationProvider } from "../../../src/components/auth/SensitiveAuthorizationProvider.js";
 import { OrdersPage } from "../../../src/pages/orders/OrdersPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../../src/state/order-workspace-store.js";
@@ -177,7 +178,9 @@ function renderPage(initialEntries: string[] = ["/orders"]) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries}>
-        <OrdersPage />
+        <SensitiveAuthorizationProvider>
+          <OrdersPage />
+        </SensitiveAuthorizationProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
