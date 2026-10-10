@@ -604,6 +604,195 @@ describe("SuspiciousActivityPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders invoice correction snapshots, service lines, changes, and collapsed technical data", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "invoice-snapshot-test",
+        timestamp: "2026-10-01T10:00:00.000Z",
+        action: "order.invoice_edited",
+        entityType: "Order",
+        entityId: "order-snapshot-test",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          orderNumber: "ORD-TEST-100",
+          invoiceNumber: "INV-TEST-100",
+          reason: "Corrected service quantity",
+          before: {
+            orderNumber: "ORD-TEST-100",
+            status: "IN_PROGRESS",
+            orderTotal: 2000,
+            items: [
+              {
+                id: "old-line",
+                serviceName: "Wash and Fold",
+                quantity: 1,
+                totalPieces: 5,
+                colors: ["White", "Blue"],
+                unitPrice: 2000,
+                lineTotal: 2000,
+              },
+            ],
+            invoice: {
+              invoiceNumber: "INV-TEST-100",
+              totalAmount: 2000,
+              customerName: "Test Customer",
+              items: [
+                {
+                  id: "old-invoice-line",
+                  itemName: "Wash and Fold",
+                  quantity: 1,
+                  totalPieces: 5,
+                  colors: ["White", "Blue"],
+                  unitPrice: 2000,
+                  totalPrice: 2000,
+                },
+              ],
+            },
+          },
+          after: {
+            orderNumber: "ORD-TEST-100",
+            status: "READY_FOR_PICKUP",
+            orderTotal: 4000,
+            items: [
+              {
+                id: "new-line",
+                serviceName: "Wash and Fold",
+                quantity: 2,
+                totalPieces: 10,
+                colors: ["White", "Blue"],
+                unitPrice: 2000,
+                lineTotal: 4000,
+              },
+            ],
+            invoice: {
+              invoiceNumber: "INV-TEST-100",
+              totalAmount: 4000,
+              customerName: "Test Customer",
+              items: [
+                {
+                  id: "new-invoice-line",
+                  itemName: "Wash and Fold",
+                  quantity: 2,
+                  totalPieces: 10,
+                  colors: ["White", "Blue"],
+                  unitPrice: 2000,
+                  totalPrice: 4000,
+                },
+              ],
+            },
+          },
+          historyId: "history-snapshot-test",
+        },
+        correlationId: null,
+      },
+    ]);
+
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /invoice updated/i,
+      }),
+    );
+
+    expect(screen.getByText("Corrected service quantity")).toBeInTheDocument();
+    expect(screen.getByText("Before the change")).toBeInTheDocument();
+    expect(screen.getByText("After the change")).toBeInTheDocument();
+    expect(screen.getAllByText("Wash and Fold").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Test Customer").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("White, Blue").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Quantity").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Order total").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recorded change")).toBeInTheDocument();
+
+    const technicalDetails = screen.getByText(
+      "Technical details (raw event data)",
+    ).closest("details");
+
+    expect(technicalDetails).not.toBeNull();
+    expect(technicalDetails).not.toHaveAttribute("open");
+  });
+
+  it("renders status-only changes and handles missing or unexpected metadata safely", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "status-change-test",
+        timestamp: "2026-10-01T11:00:00.000Z",
+        action: "quick_operation.executed",
+        entityType: "Order",
+        entityId: "order-status-test",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          operationName: "Manual Update",
+          orderNumber: "ORD-STATUS-1",
+          beforeStatus: "IN_PROGRESS",
+          afterStatus: "READY_FOR_PICKUP",
+          reason: "Order is ready",
+          extraContext: {
+            source: "test",
+            flags: ["checked", "approved"],
+          },
+        },
+        correlationId: null,
+      },
+      {
+        id: "missing-metadata-test",
+        timestamp: "2026-10-01T11:01:00.000Z",
+        action: "user.login",
+        entityType: "User",
+        entityId: null,
+        actorUserId: null,
+        actorName: null,
+        metadata: null,
+        correlationId: null,
+      },
+      {
+        id: "unexpected-metadata-test",
+        timestamp: "2026-10-01T11:02:00.000Z",
+        action: "user.password_reset_completed",
+        entityType: "User",
+        entityId: null,
+        actorUserId: null,
+        actorName: null,
+        metadata: ["unexpected", 12, true],
+        correlationId: null,
+      },
+    ]);
+
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /manual update/i,
+      }),
+    );
+
+    expect(screen.getByText("ORD-STATUS-1")).toBeInTheDocument();
+    expect(screen.getAllByText("IN_PROGRESS").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("READY_FOR_PICKUP").length).toBeGreaterThan(0);
+    expect(screen.getByText("Order is ready")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /login history/i,
+      }),
+    );
+
+    expect(
+      screen.getByText("No additional event details were recorded."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /password reset completed/i,
+      }),
+    );
+
+    expect(screen.getByText("unexpected, 12, Yes")).toBeInTheDocument();
+  });
+
   it("shows an empty state", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
 

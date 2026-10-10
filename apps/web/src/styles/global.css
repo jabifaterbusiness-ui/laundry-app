@@ -4049,3 +4049,207 @@ a {
   background: #eef2f7;
   font-weight: 700;
 }
+
+/* Suspicious Activity — readable event detail and audit comparison */
+.suspicious-activity-detail-section {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.suspicious-activity-detail-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--la-border);
+  border-radius: 12px;
+}
+
+.suspicious-activity-detail-fields > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--la-border);
+}
+
+.suspicious-activity-detail-fields > div:nth-child(odd) {
+  border-right: 1px solid var(--la-border);
+}
+
+.suspicious-activity-detail-fields dt {
+  margin: 0 0 5px;
+  color: var(--la-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.suspicious-activity-detail-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--la-text, inherit);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.suspicious-activity-detail-subsection,
+.suspicious-activity-detail-snapshot {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--la-border);
+  border-radius: 14px;
+  background: var(--surface, transparent);
+}
+
+.suspicious-activity-detail-subsection h4,
+.suspicious-activity-detail-snapshot h3,
+.suspicious-activity-detail-snapshot h4 {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.suspicious-activity-detail-snapshot > h3 {
+  font-size: 16px;
+}
+
+.suspicious-activity-detail-snapshot > h4,
+.suspicious-activity-detail-subsection > h4 {
+  font-size: 13px;
+}
+
+.suspicious-activity-detail-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.suspicious-activity-detail-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+}
+
+.suspicious-activity-detail-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.suspicious-activity-detail-table th,
+.suspicious-activity-detail-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--la-border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.suspicious-activity-detail-table th {
+  background: var(--surface, #f7f8fa);
+  color: var(--la-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.suspicious-activity-detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.suspicious-activity-detail-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.suspicious-activity-change-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suspicious-activity-change-list > li {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.suspicious-activity-change-list > li > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.suspicious-activity-detail-hint {
+  margin: 0;
+  color: var(--la-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.suspicious-activity-technical-details {
+  min-width: 0;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.suspicious-activity-technical-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.suspicious-activity-technical-details pre {
+  max-width: 100%;
+  margin: 12px 0 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface, #f7f8fa);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 820px) {
+  .suspicious-activity-detail-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .suspicious-activity-detail-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .suspicious-activity-detail-fields > div:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .suspicious-activity-detail-subsection,
+  .suspicious-activity-detail-snapshot {
+    padding: 12px;
+  }
+
+  .suspicious-activity-change-list > li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

@@ -332,6 +332,433 @@ function formatMetadata(metadata: unknown) {
   }
 }
 
+type AuditRecord = Record<string, unknown>;
+
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  action: "Action",
+  actionType: "Action type",
+  actorName: "Actor",
+  actorUserId: "Actor user ID",
+  afterStatus: "Status after",
+  approvalStatus: "Approval status",
+  balance: "Balance",
+  branchId: "Branch ID",
+  businessId: "Business ID",
+  cancelledAt: "Cancelled at",
+  colors: "Colours",
+  companyAddress: "Company address",
+  companyEmail: "Company email",
+  companyName: "Company name",
+  companyPhone: "Company phone",
+  companyWebsite: "Company website",
+  completedAt: "Completed at",
+  createdAt: "Created at",
+  customerAgreement: "Customer agreement",
+  customerId: "Customer ID",
+  customerName: "Customer",
+  expectedReadyAt: "Expected ready at",
+  garmentNote: "Garment notes",
+  historyId: "History record ID",
+  internalNote: "Internal notes",
+  invoiceNumber: "Invoice number",
+  itemName: "Item / service",
+  lineTotal: "Line total",
+  newCustomerId: "New customer ID",
+  notes: "Notes",
+  operationCode: "Operation code",
+  operationName: "Operation",
+  orderNumber: "Order number",
+  orderTotal: "Order total",
+  paidAmount: "Amount paid",
+  paymentId: "Payment ID",
+  piecesPerUnit: "Pieces per unit",
+  previousCustomerId: "Previous customer ID",
+  quantity: "Quantity",
+  reason: "Reason",
+  reference: "Reference",
+  resultingQuantity: "Resulting quantity",
+  status: "Status",
+  submittedById: "Submitted by user ID",
+  totalAmount: "Invoice total",
+  totalPieces: "Total pieces",
+  totalPrice: "Line total",
+  unitPrice: "Unit price",
+  updatedAt: "Last updated",
+};
+
+const AUDIT_TECHNICAL_KEYS = new Set([
+  "id",
+  "businessId",
+  "branchId",
+  "historyId",
+  "correlationId",
+  "logoUrl",
+  "receiptPrimaryColor",
+  "receiptAccentColor",
+  "receiptBackgroundColor",
+  "receiptTextColor",
+  "receiptHeaderStyle",
+]);
+
+const AUDIT_MONEY_KEYS = new Set([
+  "amount",
+  "balance",
+  "lineTotal",
+  "orderTotal",
+  "paidAmount",
+  "totalAmount",
+  "totalPrice",
+  "unitPrice",
+  "subtotal",
+  "discountAmount",
+  "outstandingBalance",
+]);
+
+function asAuditRecord(value: unknown): AuditRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as AuditRecord;
+}
+
+function auditFieldLabel(key: string): string {
+  if (AUDIT_FIELD_LABELS[key]) return AUDIT_FIELD_LABELS[key];
+
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_.-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+function formatAuditValue(value: unknown, key = ""): string {
+  if (value === null || value === undefined || value === "") {
+    return "Not recorded";
+  }
+
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+
+  if (typeof value === "number") {
+    if (AUDIT_MONEY_KEYS.has(key)) {
+      return `₦${value.toLocaleString("en-NG")}`;
+    }
+    return value.toLocaleString("en-NG");
+  }
+
+  if (typeof value === "string") {
+    if (/(At|Date|Timestamp)$/.test(key) && value.trim()) {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleString();
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.every((entry) => entry === null || ["string", "number", "boolean"].includes(typeof entry))) {
+      return value.map((entry) => formatAuditValue(entry)).join(", ") || "None";
+    }
+    return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  }
+
+  return "Structured details available";
+}
+
+function auditScalarFields(
+  record: AuditRecord,
+  excluded: Set<string> = new Set(),
+) {
+  return Object.entries(record).filter(([key, value]) =>
+    !excluded.has(key)
+    && !AUDIT_TECHNICAL_KEYS.has(key)
+    && value !== undefined
+    && value !== null
+    && (["string", "number", "boolean"].includes(typeof value)
+      || (Array.isArray(value)
+        && value.every((entry) => entry === null
+          || ["string", "number", "boolean"].includes(typeof entry)))),
+  );
+}
+
+function AuditFieldList({ data }: { data: AuditRecord }) {
+  const fields = auditScalarFields(data);
+
+  if (!fields.length) return null;
+
+  return (
+    <dl className="suspicious-activity-detail-fields">
+      {fields.map(([key, value]) => (
+        <div key={key}>
+          <dt>{auditFieldLabel(key)}</dt>
+          <dd>{formatAuditValue(value, key)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function AuditLineItems({
+  title,
+  items,
+}: {
+  title: string;
+  items: unknown;
+}) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const rows = items.flatMap((item, index) => {
+    const record = asAuditRecord(item);
+    return record ? [{ item: record, index }] : [];
+  });
+
+  if (!rows.length) {
+    return (
+      <section className="suspicious-activity-detail-subsection">
+        <h4>{title}</h4>
+        <p>{formatAuditValue(items)}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="suspicious-activity-detail-subsection">
+      <h4>{title}</h4>
+      <div className="suspicious-activity-detail-table-wrap">
+        <table className="suspicious-activity-detail-table">
+          <thead>
+            <tr>
+              <th>Item / service</th>
+              <th>Quantity</th>
+              <th>Pieces / unit</th>
+              <th>Total pieces</th>
+              <th>Colours</th>
+              <th>Unit price</th>
+              <th>Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, index }) => (
+              <tr key={String(item.id ?? index)}>
+                <td>{formatAuditValue(item.itemName ?? item.serviceName ?? item.name)}</td>
+                <td>{formatAuditValue(item.quantity, "quantity")}</td>
+                <td>{formatAuditValue(item.piecesPerUnit, "piecesPerUnit")}</td>
+                <td>{formatAuditValue(item.totalPieces, "totalPieces")}</td>
+                <td>{formatAuditValue(item.colors ?? item.colours)}</td>
+                <td>{formatAuditValue(item.unitPrice, "unitPrice")}</td>
+                <td>{formatAuditValue(item.totalPrice ?? item.lineTotal, "totalPrice")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function AuditSnapshot({
+  title,
+  snapshot,
+}: {
+  title: string;
+  snapshot: unknown;
+}) {
+  const record = asAuditRecord(snapshot);
+  if (!record) return null;
+
+  const invoice = asAuditRecord(record.invoice);
+  const orderItems = record.items;
+  const invoiceItems = invoice?.items;
+  const orderExcluded = new Set(["items", "garments", "invoice"]);
+  const invoiceExcluded = new Set(["items"]);
+
+  return (
+    <section className="suspicious-activity-detail-snapshot">
+      <h3>{title}</h3>
+      {invoice ? (
+        <>
+          <h4>Order context</h4>
+          <AuditFieldList data={Object.fromEntries(
+            Object.entries(record).filter(([key]) => !orderExcluded.has(key)),
+          )} />
+          <AuditLineItems title="Order service lines" items={orderItems} />
+          <AuditLineItems title="Invoice line items" items={invoiceItems} />
+          <h4>Invoice details</h4>
+          <AuditFieldList data={Object.fromEntries(
+            Object.entries(invoice).filter(([key]) => !invoiceExcluded.has(key)),
+          )} />
+        </>
+      ) : (
+        <>
+          <AuditFieldList data={Object.fromEntries(
+            Object.entries(record).filter(([key]) => key !== "items" && key !== "garments"),
+          )} />
+          <AuditLineItems title="Line items" items={orderItems} />
+          <AuditLineItems title="Invoice line items" items={invoiceItems} />
+        </>
+      )}
+    </section>
+  );
+}
+
+function collectAuditChanges(
+  before: unknown,
+  after: unknown,
+  path = "",
+  changes: Array<{ path: string; before: unknown; after: unknown }> = [],
+): Array<{ path: string; before: unknown; after: unknown }> {
+  if (changes.length >= 40) return changes;
+  if (Object.is(before, after)) return changes;
+
+  const beforeRecord = asAuditRecord(before);
+  const afterRecord = asAuditRecord(after);
+
+  if (beforeRecord || afterRecord) {
+    const left = beforeRecord ?? {};
+    const right = afterRecord ?? {};
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+
+    for (const key of keys) {
+      if (AUDIT_TECHNICAL_KEYS.has(key)) continue;
+      collectAuditChanges(
+        left[key],
+        right[key],
+        path ? `${path}.${key}` : key,
+        changes,
+      );
+      if (changes.length >= 40) break;
+    }
+    return changes;
+  }
+
+  if (Array.isArray(before) || Array.isArray(after)) {
+    const left = Array.isArray(before) ? before : [];
+    const right = Array.isArray(after) ? after : [];
+    const length = Math.max(left.length, right.length);
+
+    for (let index = 0; index < length; index += 1) {
+      collectAuditChanges(
+        left[index],
+        right[index],
+        `${path}[${index + 1}]`,
+        changes,
+      );
+      if (changes.length >= 40) break;
+    }
+    return changes;
+  }
+
+  changes.push({ path, before, after });
+  return changes;
+}
+
+function formatChangePath(path: string): string {
+  return path
+    .replace(/items\[(\d+)\]/g, "item $1")
+    .split(".")
+    .map((part) => auditFieldLabel(part))
+    .join(" · ");
+}
+
+function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
+  const record = asAuditRecord(metadata);
+
+  if (!record) {
+    return (
+      <section className="suspicious-activity-detail-section">
+        <h3>Event details</h3>
+        <p>{metadata === null || metadata === undefined
+          ? "No additional event details were recorded."
+          : formatAuditValue(metadata)}</p>
+        <details className="suspicious-activity-technical-details">
+          <summary>Technical details (raw event data)</summary>
+          <pre>{formatMetadata(metadata)}</pre>
+        </details>
+      </section>
+    );
+  }
+
+  const before = record.before ?? (
+    record.beforeStatus !== undefined ? { status: record.beforeStatus } : undefined
+  );
+  const after = record.after ?? (
+    record.afterStatus !== undefined ? { status: record.afterStatus } : undefined
+  );
+  const hasSnapshots = before !== undefined || after !== undefined;
+  const contextKeys = new Set([
+    "reason", "before", "after", "beforeStatus", "afterStatus",
+    "historyId", "correlationId", "businessId", "branchId",
+  ]);
+  const context = Object.fromEntries(
+    Object.entries(record).filter(([key]) => !contextKeys.has(key)),
+  );
+  const changes = hasSnapshots ? collectAuditChanges(before, after) : [];
+
+  return (
+    <section className="suspicious-activity-detail-section">
+      <h3>Event details</h3>
+
+      {Object.keys(context).length ? (
+        <>
+          <h4>Business context and recorded details</h4>
+          <AuditFieldList data={context} />
+          {Object.entries(context).filter(([, value]) => {
+            const item = asAuditRecord(value);
+            return item !== null;
+          }).map(([key, value]) => (
+            <section className="suspicious-activity-detail-subsection" key={key}>
+              <h4>{auditFieldLabel(key)}</h4>
+              <AuditFieldList data={asAuditRecord(value)!} />
+              {asAuditRecord(value)?.items !== undefined ? (
+                <AuditLineItems title="Line items" items={asAuditRecord(value)?.items} />
+              ) : null}
+            </section>
+          ))}
+        </>
+      ) : null}
+
+      {hasSnapshots ? (
+        <>
+          <h4>Recorded change</h4>
+          {changes.length ? (
+            <ul className="suspicious-activity-change-list">
+              {changes.map((change, index) => (
+                <li key={`${change.path}-${index}`}>
+                  <strong>{formatChangePath(change.path)}</strong>
+                  <span>
+                    <small>Before</small>
+                    <span>{formatAuditValue(change.before, change.path.split(".").pop())}</span>
+                  </span>
+                  <span>
+                    <small>After</small>
+                    <span>{formatAuditValue(change.after, change.path.split(".").pop())}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No field-level differences were detected in the available snapshots.</p>
+          )}
+          {changes.length >= 40 ? <p>Change list limited to the first 40 differences.</p> : null}
+          <div className="suspicious-activity-detail-snapshot-grid">
+            <AuditSnapshot title="Before the change" snapshot={before} />
+            <AuditSnapshot title="After the change" snapshot={after} />
+          </div>
+        </>
+      ) : (
+        <p className="suspicious-activity-detail-hint">
+          No before-and-after snapshot was recorded for this event. The available context above is shown as recorded.
+        </p>
+      )}
+
+      <details className="suspicious-activity-technical-details">
+        <summary>Technical details (raw event data)</summary>
+        <pre>{formatMetadata(metadata)}</pre>
+      </details>
+    </section>
+  );
+}
+
 function getReason(metadata: unknown) {
   if (!metadata || typeof metadata !== "object") {
     return null;
@@ -891,12 +1318,7 @@ export function SuspiciousActivityPage() {
                         ) : null}
                       </dl>
 
-                      <details>
-                        <summary>View full event details</summary>
-                        <pre>
-                          {formatMetadata(activity.metadata)}
-                        </pre>
-                      </details>
+                      <AuditMetadataDetails metadata={activity.metadata} />
                     </article>
                   ))}
                 </div>
