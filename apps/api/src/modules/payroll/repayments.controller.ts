@@ -12,6 +12,7 @@ import {
   createRepayment,
   getRepayment,
   listRepayments,
+  listRepaymentSources,
   voidRepayment,
 } from "./repayments.service.js";
 
@@ -117,6 +118,32 @@ export async function listRepaymentsController(
   });
 
   res.json(result);
+}
+
+export async function listRepaymentSourcesController(
+  req: Request,
+  res: Response,
+) {
+  const employeeId = req.query.employeeId;
+  const type = req.query.type;
+
+  if (
+    typeof employeeId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(employeeId) ||
+    typeof type !== "string" ||
+    !Object.values(FinancialRepaymentType).includes(type as FinancialRepaymentType)
+  ) {
+    throw new AppError("A valid employeeId and repayment type are required", 400);
+  }
+
+  const result = await listRepaymentSources({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    employeeId,
+    type: type as FinancialRepaymentType,
+  });
+
+  res.status(200).json(result);
 }
 
 export async function getRepaymentController(

@@ -128,6 +128,7 @@ export async function listBranchUsers(
         select: {
           id: true,
           email: true,
+          username: true,
           fullName: true,
           role: true,
           isActive: true,

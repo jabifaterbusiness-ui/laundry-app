@@ -26,3 +26,42 @@ export function requirePermission(permissionCode: string) {
       .catch(next);
   };
 }
+
+
+/**
+ * Allows access when the authenticated user has at least one of the
+ * explicitly listed permissions. This does not grant or persist permissions.
+ */
+export function requireAnyPermission(permissionCodes: string[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      next(new AppError("Authentication required", 401));
+      return;
+    }
+
+    if (permissionCodes.length === 0) {
+      next(new AppError("Insufficient permissions for this action", 403));
+      return;
+    }
+
+    void Promise.all(
+      permissionCodes.map((permissionCode) =>
+        hasPermission(
+          req.user!.id,
+          req.user!.businessId,
+          req.user!.securityRole,
+          permissionCode,
+        ),
+      ),
+    )
+      .then((results) => {
+        if (!results.some(Boolean)) {
+          next(new AppError("Insufficient permissions for this action", 403));
+          return;
+        }
+
+        next();
+      })
+      .catch(next);
+  };
+}

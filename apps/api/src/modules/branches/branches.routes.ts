@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
-import { requirePermission } from "../../middleware/permissions.js";
+import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import {
   list,
   get,
@@ -56,7 +56,15 @@ branchesRouter.patch(
 
 branchesRouter.get(
   "/:branchId/users",
-  requirePermission("branches.view"),
+  requireAnyPermission([
+    "branches.view",
+    "branches.manage_users",
+    "compensation.view",
+    "compensation.manage",
+    "ious.manage",
+    "loans.manage",
+    "repayments.manage",
+  ]),
   asyncHandler(users),
 );
 

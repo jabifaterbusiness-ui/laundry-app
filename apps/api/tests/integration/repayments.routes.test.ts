@@ -52,10 +52,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     iOU: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     loan: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     $transaction: vi.fn(),
@@ -84,8 +86,10 @@ const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const userFindFirst = vi.mocked(prisma.user.findFirst);
 const branchFindFirst = vi.mocked(prisma.branch.findFirst);
 const iouFindFirst = vi.mocked(prisma.iOU.findFirst);
+const iouFindMany = vi.mocked(prisma.iOU.findMany);
 const iouUpdate = vi.mocked(prisma.iOU.update);
 const loanFindFirst = vi.mocked(prisma.loan.findFirst);
+const loanFindMany = vi.mocked(prisma.loan.findMany);
 const loanUpdate = vi.mocked(prisma.loan.update);
 const repaymentFindFirst = vi.mocked(prisma.financialRepayment.findFirst);
 const repaymentFindMany = vi.mocked(prisma.financialRepayment.findMany);
@@ -665,5 +669,123 @@ describe("Financial Repayments routes - void safety", () => {
         status: "VOID",
       },
     });
+  });
+});
+
+describe("Financial Repayments routes - repayment sources", () => {
+  it("returns scoped IOU sources for an authorized manager", async () => {
+    allowBranch("user-owner-a", BRANCH_A, "biz-A");
+    iouFindMany.mockResolvedValue([
+      {
+        id: IOU_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 6000,
+        status: "PARTIALLY_DEDUCTED",
+      },
+    ] as never);
+
+    const res = await request(app)
+      .get("/api/v1/payroll/repayments/sources")
+      .query({ employeeId: EMPLOYEE_A, type: "IOU" })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: IOU_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 6000,
+        status: "PARTIALLY_DEDUCTED",
+        type: "IOU",
+      },
+    ]);
+    expect(iouFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          employeeId: EMPLOYEE_A,
+          outstandingAmount: { gt: 0 },
+        }),
+      }),
+    );
+    expect(loanFindMany).not.toHaveBeenCalled();
+  });
+
+  it("returns scoped loan sources", async () => {
+    allowBranch("user-owner-a", BRANCH_A, "biz-A");
+    loanFindMany.mockResolvedValue([
+      {
+        id: LOAN_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 25000,
+        status: "PARTIALLY_REPAID",
+      },
+    ] as never);
+
+    const res = await request(app)
+      .get("/api/v1/payroll/repayments/sources")
+      .query({ employeeId: EMPLOYEE_A, type: "LOAN" })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: LOAN_A,
+        employeeId: EMPLOYEE_A,
+        outstandingAmount: 25000,
+        status: "PARTIALLY_REPAID",
+        type: "LOAN",
+      },
+    ]);
+    expect(loanFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: BRANCH_A,
+          employeeId: EMPLOYEE_A,
+          outstandingAmount: { gt: 0 },
+        }),
+      }),
+    );
+    expect(iouFindMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid employee IDs and repayment types", async () => {
+    allowBranch("user-owner-a", BRANCH_A, "biz-A");
+
+    const invalidEmployee = await request(app)
+      .get("/api/v1/payroll/repayments/sources")
+      .query({ employeeId: "not-a-uuid", type: "IOU" })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(invalidEmployee.status).toBe(400);
+
+    const invalidType = await request(app)
+      .get("/api/v1/payroll/repayments/sources")
+      .query({ employeeId: EMPLOYEE_A, type: "OTHER" })
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(invalidType.status).toBe(400);
+    expect(iouFindMany).not.toHaveBeenCalled();
+    expect(loanFindMany).not.toHaveBeenCalled();
+  });
+
+  it("denies users without repayments.manage before querying sources", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
+
+    const res = await request(app)
+      .get("/api/v1/payroll/repayments/sources")
+      .query({ employeeId: EMPLOYEE_A, type: "IOU" })
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(iouFindMany).not.toHaveBeenCalled();
+    expect(loanFindMany).not.toHaveBeenCalled();
   });
 });

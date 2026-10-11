@@ -12,6 +12,7 @@ interface NavItem {
   href: string;
   icon: string;
   permission?: string;
+  permissionsAny?: string[];
 }
 
 const OPERATIONS: NavItem[] = [
@@ -96,6 +97,12 @@ const MANAGEMENT: NavItem[] = [
     href: "/payroll",
     icon: "₦",
     permission: "payroll.view",
+  },
+  {
+    label: "IOUs, Loans & Repayments",
+    href: "/payroll/financial",
+    icon: "₦",
+    permissionsAny: ["ious.view", "loans.view", "repayments.view"],
   },
 ];
 
@@ -399,8 +406,11 @@ export function AppShell({ children }: PropsWithChildren) {
                 const active = isActive(item.href);
 
                 if (
-                  item.permission &&
-                  !hasPermission(user, item.permission)
+                  (item.permission && !hasPermission(user, item.permission)) ||
+                  (item.permissionsAny &&
+                    !item.permissionsAny.some((permission) =>
+                      hasPermission(user, permission),
+                    ))
                 ) {
                   return null;
                 }
@@ -428,8 +438,11 @@ export function AppShell({ children }: PropsWithChildren) {
               {MANAGEMENT.map((item) => {
                 const active = isActive(item.href);
                 if (
-                  item.permission &&
-                  !hasPermission(user, item.permission)
+                  (item.permission && !hasPermission(user, item.permission)) ||
+                  (item.permissionsAny &&
+                    !item.permissionsAny.some((permission) =>
+                      hasPermission(user, permission),
+                    ))
                 ) {
                   return null;
                 }

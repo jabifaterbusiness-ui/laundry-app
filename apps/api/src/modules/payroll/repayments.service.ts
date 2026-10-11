@@ -287,6 +287,58 @@ export async function createRepayment({
   return result;
 }
 
+export async function listRepaymentSources({
+  businessId,
+  branchId,
+  employeeId,
+  type,
+}: {
+  businessId: string;
+  branchId: string;
+  employeeId: string;
+  type: FinancialRepaymentType;
+}) {
+  if (type === FinancialRepaymentType.IOU) {
+    const records = await prisma.iOU.findMany({
+      where: {
+        businessId,
+        branchId,
+        employeeId,
+        status: { in: REPAYABLE_IOU_STATUSES },
+        outstandingAmount: { gt: 0 },
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        outstandingAmount: true,
+        status: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return records.map((record) => ({ ...record, type: FinancialRepaymentType.IOU }));
+  }
+
+  const records = await prisma.loan.findMany({
+    where: {
+      businessId,
+      branchId,
+      employeeId,
+      status: { in: REPAYABLE_LOAN_STATUSES },
+      outstandingAmount: { gt: 0 },
+    },
+    select: {
+      id: true,
+      employeeId: true,
+      outstandingAmount: true,
+      status: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return records.map((record) => ({ ...record, type: FinancialRepaymentType.LOAN }));
+}
+
 export async function getRepayment({
   businessId,
   branchId,

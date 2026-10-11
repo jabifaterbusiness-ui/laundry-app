@@ -10,10 +10,12 @@ const { prismaMock, recordAuditEventMock } = vi.hoisted(() => ({
     },
     iOU: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     loan: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     financialRepayment: {
@@ -38,6 +40,7 @@ vi.mock("../../src/lib/audit.js", () => ({
 import {
   createRepayment,
   getRepayment,
+  listRepaymentSources,
   listRepayments,
   voidRepayment,
 } from "../../src/modules/payroll/repayments.service.js";
@@ -630,6 +633,89 @@ describe("repayments.service", () => {
           status: "VOID",
         },
       });
+    });
+  });
+
+
+  describe("listRepaymentSources", () => {
+    it("lists only repayable IOUs with outstanding balances in the requested scope", async () => {
+      const records = [
+        {
+          id: IOU_A,
+          employeeId: "employee-A",
+          outstandingAmount: 6000,
+          status: "PARTIALLY_DEDUCTED",
+        },
+      ];
+      prismaMock.iOU.findMany.mockResolvedValue(records as never);
+
+      const result = await listRepaymentSources({
+        businessId: "biz-A",
+        branchId: "branch-A",
+        employeeId: "employee-A",
+        type: "IOU",
+      });
+
+      expect(result).toEqual([
+        { ...records[0], type: "IOU" },
+      ]);
+      expect(prismaMock.iOU.findMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "biz-A",
+          branchId: "branch-A",
+          employeeId: "employee-A",
+          status: { in: ["APPROVED", "PARTIALLY_DEDUCTED"] },
+          outstandingAmount: { gt: 0 },
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          outstandingAmount: true,
+          status: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(prismaMock.loan.findMany).not.toHaveBeenCalled();
+    });
+
+    it("lists only repayable loans with outstanding balances in the requested scope", async () => {
+      const records = [
+        {
+          id: LOAN_A,
+          employeeId: "employee-A",
+          outstandingAmount: 25000,
+          status: "PARTIALLY_REPAID",
+        },
+      ];
+      prismaMock.loan.findMany.mockResolvedValue(records as never);
+
+      const result = await listRepaymentSources({
+        businessId: "biz-B",
+        branchId: "branch-B",
+        employeeId: "employee-B",
+        type: "LOAN",
+      });
+
+      expect(result).toEqual([
+        { ...records[0], type: "LOAN" },
+      ]);
+      expect(prismaMock.loan.findMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "biz-B",
+          branchId: "branch-B",
+          employeeId: "employee-B",
+          status: { in: ["APPROVED", "ACTIVE", "PARTIALLY_REPAID"] },
+          outstandingAmount: { gt: 0 },
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          outstandingAmount: true,
+          status: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(prismaMock.iOU.findMany).not.toHaveBeenCalled();
     });
   });
 });

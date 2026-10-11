@@ -1,3 +1,4 @@
+import { hasPermission } from "../permissions/permissions.service.js";
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -162,7 +163,28 @@ export async function users(req: Request, res: Response) {
     businessId,
   );
 
-  res.status(200).json(branchUsers);
+  const detailPermissions = await Promise.all(
+    ["branches.view", "branches.manage_users", "compensation.view"].map(
+      (permission) =>
+        hasPermission(
+          req.user!.id,
+          businessId,
+          req.user!.securityRole,
+          permission,
+        ),
+    ),
+  );
+  const canViewBranchDetails = detailPermissions.some(Boolean);
+
+  res.status(200).json(
+    canViewBranchDetails
+      ? branchUsers
+      : branchUsers.map(({ id, fullName, isActive }) => ({
+          id,
+          fullName,
+          isActive,
+        })),
+  );
 }
 
 export async function assignUser(req: Request, res: Response) {

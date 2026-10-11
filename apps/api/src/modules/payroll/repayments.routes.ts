@@ -4,6 +4,7 @@ import {
   createRepaymentController,
   getRepaymentController,
   listRepaymentsController,
+  listRepaymentSourcesController,
   voidRepaymentController,
 } from "./repayments.controller.js";
 
@@ -29,6 +30,12 @@ router.get(
   "/",
   requirePermission("repayments.view"),
   asyncHandler(listRepaymentsController),
+);
+
+router.get(
+  "/sources",
+  requirePermission("repayments.manage"),
+  asyncHandler(listRepaymentSourcesController),
 );
 
 router.get(
