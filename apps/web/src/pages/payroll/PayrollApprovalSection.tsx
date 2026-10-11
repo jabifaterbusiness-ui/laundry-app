@@ -7,6 +7,7 @@ import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthor
 import {
   approvePayroll,
   declinePayroll,
+  getPayrollStatus,
   listPayrollPeriods,
   submitPayrollForApproval,
   type PayrollPeriod,
@@ -17,6 +18,10 @@ type Props = {
   branchId: string | null;
   selectedPeriodId: string;
 };
+
+function money(value: number) {
+  return `₦${value.toLocaleString("en-NG")}`;
+}
 
 function date(value?: string | null) {
   if (!value) return "—";
@@ -53,6 +58,12 @@ export function PayrollApprovalSection({
     () => periods.find((item) => item.id === selectedPeriodId) ?? null,
     [periods, selectedPeriodId],
   );
+
+  const reviewQuery = useQuery({
+    queryKey: ["payroll", "status", selectedPeriodId, branchId],
+    queryFn: () => getPayrollStatus(selectedPeriodId, { accessToken }, branchId),
+    enabled: Boolean(accessToken && branchId && canApprove && selectedPeriodId),
+  });
 
   const pendingPeriods = useMemo(
     () => periods.filter((item) => item.approvalStatus === "PENDING"),
@@ -296,6 +307,62 @@ export function PayrollApprovalSection({
             </strong>
           </div>
         </div>
+
+        {canApprove && selectedPeriod && (
+          <section aria-label="Read-only employee payroll review" style={{ marginBottom: 24 }}>
+            <h3>Employee payroll review (read-only)</h3>
+            <p>Review each employee's earnings and deductions before making an approval decision. This section does not permit changes.</p>
+            {reviewQuery.isLoading && <p>Loading employee payroll review...</p>}
+            {reviewQuery.isError && (
+              <p role="alert">
+                {reviewQuery.error instanceof ApiError
+                  ? reviewQuery.error.message
+                  : "Unable to load employee payroll review."}
+              </p>
+            )}
+            {reviewQuery.data && (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Basic salary</th>
+                      <th>Allowances</th>
+                      <th>Bonuses</th>
+                      <th>Gross pay</th>
+                      <th>Deductions</th>
+                      <th>Net pay</th>
+                      <th>Deduction details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviewQuery.data.records.map((record) => (
+                      <tr key={record.payrollRecordId}>
+                        <td>{record.employee.fullName}</td>
+                        <td>{money(record.basicSalary)}</td>
+                        <td>{money(record.allowances)}</td>
+                        <td>{money(record.bonuses)}</td>
+                        <td>{money(record.grossPay)}</td>
+                        <td>{money(record.totalDeductions)}</td>
+                        <td>{money(record.netPay)}</td>
+                        <td>
+                          {record.deductions.length === 0
+                            ? "None"
+                            : record.deductions.map((deduction, index) => (
+                                <div key={deduction.id ?? `${deduction.type}-${index}`}>
+                                  {deduction.type.replaceAll("_", " ")}: {money(deduction.amount)}
+                                  {deduction.description ? ` — ${deduction.description}` : ""}
+                                </div>
+                              ))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
         {selectedPeriod?.approvalReason && (
           <div

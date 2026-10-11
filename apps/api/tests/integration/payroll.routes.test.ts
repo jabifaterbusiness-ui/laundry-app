@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 
+const { sensitiveAuthorizationMock } = vi.hoisted(() => ({
+  sensitiveAuthorizationMock: vi.fn(),
+}));
+
+vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
+  requireSensitiveAuthorization: sensitiveAuthorizationMock,
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     platformConfig: {
@@ -159,6 +167,9 @@ const periodFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sensitiveAuthorizationMock.mockResolvedValue({
+    id: "sensitive-auth-payroll-test",
+  });
   findUserOverride.mockResolvedValue(null);
 
   subscriptionFindUnique.mockResolvedValue({
@@ -206,7 +217,8 @@ describe("Payroll period routes - authentication", () => {
     const res = await request(app)
       .get("/api/v1/payroll/periods")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
   });
@@ -268,7 +280,8 @@ describe("Payroll period routes - authorization", () => {
     const res = await request(app)
       .get("/api/v1/payroll/periods")
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
   });
@@ -385,7 +398,8 @@ describe("Payroll period routes - creation and isolation", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${PERIOD_A}`)
       .set("Authorization", `Bearer ${OWNER_B}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
     expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
@@ -411,7 +425,8 @@ describe("Payroll period routes - creation and isolation", () => {
     const res = await request(app)
       .get("/api/v1/payroll/periods")
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -436,7 +451,8 @@ describe("Payroll period routes - creation and isolation", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${PERIOD_A}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(PERIOD_A);
@@ -495,6 +511,9 @@ describe("Payroll deduction routes", () => {
     ] as never);
 
     const tx = {
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(processingPeriodFixture),
+      },
       payrollDeduction: {
         findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn().mockResolvedValue({}),
@@ -528,6 +547,21 @@ describe("Payroll deduction routes", () => {
         update: vi.fn().mockResolvedValue({}),
       },
       payrollRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "record-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            payrollPeriodId: PERIOD_A,
+            employeeId: EMPLOYEE_A,
+            basicSalary: 100000,
+            allowances: 0,
+            bonuses: 0,
+            grossPay: 100000,
+            totalDeductions: 0,
+            netPay: 100000,
+          },
+        ]),
         update: vi.fn().mockResolvedValue({
           id: "record-a",
           businessId: "biz-A",
@@ -551,7 +585,8 @@ describe("Payroll deduction routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.payrollPeriodId).toBe(PERIOD_A);
@@ -610,13 +645,23 @@ describe("Payroll deduction routes", () => {
   it("rejects deduction processing for a non-processing period", async () => {
     payrollPeriodFindFirst.mockResolvedValue(periodFixture as never);
 
+    const tx = {
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(periodFixture),
+      },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
   });
 
   it("rejects deduction processing for a payroll period outside the branch scope", async () => {
@@ -637,7 +682,8 @@ describe("Payroll deduction routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
     expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
@@ -672,6 +718,9 @@ describe("Payroll deduction routes", () => {
     ] as never);
 
     const tx = {
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(processingPeriodFixture),
+      },
       payrollDeduction: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -714,6 +763,21 @@ describe("Payroll deduction routes", () => {
         update: vi.fn(),
       },
       payrollRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "record-a",
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            payrollPeriodId: PERIOD_A,
+            employeeId: EMPLOYEE_A,
+            basicSalary: 100000,
+            allowances: 0,
+            bonuses: 0,
+            grossPay: 100000,
+            totalDeductions: 30000,
+            netPay: 70000,
+          },
+        ]),
         update: vi.fn(),
       },
     };
@@ -725,7 +789,8 @@ describe("Payroll deduction routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/deductions/process`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(tx.payrollDeduction.create).not.toHaveBeenCalled();
@@ -737,13 +802,23 @@ describe("Payroll deduction routes", () => {
   it("does not process a payroll period from another business", async () => {
     payrollPeriodFindFirst.mockResolvedValue(null);
 
+    const tx = {
+      payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_B}/deductions/process`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(404);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
   });
 });
 
@@ -797,7 +872,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -849,7 +925,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
   });
@@ -860,7 +937,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
   });
@@ -876,7 +954,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
   });
@@ -897,7 +976,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -913,7 +993,8 @@ describe("Payroll finalization routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/finalize`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(409);
     expect(tx.payrollPeriod.updateMany).toHaveBeenCalled();
@@ -923,7 +1004,12 @@ describe("Payroll finalization routes", () => {
 
 describe("Payroll generation routes", () => {
   it("generates payroll records for an open period", async () => {
-    payrollPeriodFindFirst.mockResolvedValue(periodFixture as never);
+    payrollPeriodFindFirst
+      .mockResolvedValueOnce(periodFixture as never)
+      .mockResolvedValueOnce({
+        ...periodFixture,
+        status: "PROCESSING",
+      } as never);
 
     userFindMany.mockResolvedValue([
       {
@@ -958,8 +1044,16 @@ describe("Payroll generation routes", () => {
       netPay: 150000,
     };
 
+    payrollRecordFindMany
+      .mockReset()
+      .mockResolvedValueOnce([] as never);
+
     const tx = {
       payrollPeriod: {
+        findFirst: vi.fn().mockResolvedValue({
+          ...periodFixture,
+          status: "PROCESSING",
+        }),
         update: vi.fn().mockResolvedValue({
           ...periodFixture,
           status: "PROCESSING",
@@ -967,6 +1061,19 @@ describe("Payroll generation routes", () => {
       },
       payrollRecord: {
         create: vi.fn().mockResolvedValue(createdRecord),
+        findMany: vi.fn().mockResolvedValue([createdRecord]),
+      },
+      payrollDeduction: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+      },
+      iOU: {
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn(),
+      },
+      loan: {
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn(),
       },
     };
 
@@ -977,7 +1084,8 @@ describe("Payroll generation routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/generate`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.payrollPeriodId).toBe(PERIOD_A);
@@ -1017,7 +1125,8 @@ describe("Payroll generation routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/generate`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
     expect(userFindMany).not.toHaveBeenCalled();
@@ -1043,7 +1152,8 @@ describe("Payroll generation routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/generate`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
   });
@@ -1065,7 +1175,8 @@ describe("Payroll generation routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/periods/${PERIOD_A}/generate`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -1169,7 +1280,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .get("/api/v1/payroll/payments")
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
   });
@@ -1305,7 +1417,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
       .set("Authorization", `Bearer ${OWNER_B}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
     expect(payrollPaymentFindFirst).not.toHaveBeenCalled();
@@ -1340,7 +1453,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(PAYMENT_ID);
@@ -1352,7 +1466,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/payments/${PAYMENT_ID}`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(404);
   });
@@ -1375,7 +1490,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .get("/api/v1/payroll/payments")
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -1405,7 +1521,8 @@ describe("Payroll payment routes", () => {
         pageSize: 10,
       })
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
 
@@ -1516,7 +1633,8 @@ describe("Payroll payment routes", () => {
     const res = await request(app)
       .post(`/api/v1/payroll/payments/${PAYMENT_ID}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(422);
     expect(tx.payrollPayment.update).not.toHaveBeenCalled();
@@ -1576,7 +1694,8 @@ describe("Payroll status routes", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
       .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(200);
     expect(res.body.summary.employeeCount).toBe(1);
@@ -1595,7 +1714,8 @@ describe("Payroll status routes", () => {
   });  it("rejects an unauthenticated request", async () => {
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(401);
     expect(payrollPeriodFindFirst).not.toHaveBeenCalled();
@@ -1605,7 +1725,8 @@ describe("Payroll status routes", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .set("X-Branch-Id", BRANCH_A);
+      .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(403);
     expect(payrollPeriodFindFirst).not.toHaveBeenCalled();

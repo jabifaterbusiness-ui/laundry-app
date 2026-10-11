@@ -20,6 +20,8 @@ import {
   listPayrollPeriodsController,
   processPayrollDeductionsController,
   submitPayrollForApprovalController,
+  updatePayrollEarningsController,
+  createOtherPayrollDeductionController,
 } from "./payroll.controller.js";
 
 import {
@@ -62,6 +64,7 @@ router.get(
 router.post(
   "/periods/:id/generate",
   asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(generatePayrollController),
 );
 
@@ -89,13 +92,29 @@ router.post(
 router.post(
   "/periods/:id/finalize",
   asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(finalizePayrollController),
 );
 
 router.post(
   "/periods/:id/deductions/process",
   asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(processPayrollDeductionsController),
+);
+
+router.patch(
+  "/records/:recordId/earnings",
+  asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(updatePayrollEarningsController),
+);
+
+router.post(
+  "/records/:recordId/deductions",
+  asyncHandler(requirePermission("payroll.manage")),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(createOtherPayrollDeductionController),
 );
 
 router.post(

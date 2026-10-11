@@ -1,4 +1,4 @@
-import { IOUStatus, LoanStatus, PayrollApprovalStatus, PayrollDeductionType } from "@prisma/client";
+import { IOUStatus, LoanStatus, PayrollApprovalStatus, PayrollDeductionType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -28,54 +28,54 @@ export async function processPayrollDeductions({
   payrollPeriodId,
   actorUserId,
 }: ProcessPayrollDeductionsArgs) {
-  const period = await prisma.payrollPeriod.findFirst({
-    where: {
-      id: payrollPeriodId,
-      businessId,
-      branchId,
-    },
-  });
+  const runTransaction = () => prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
+      where: {
+        id: payrollPeriodId,
+        businessId,
+        branchId,
+      },
+    });
 
-  if (!period) {
-    throw new AppError("Payroll period not found", 404);
-  }
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
 
-  if (period.status !== "PROCESSING") {
-    throw new AppError(
-      "Payroll deductions can only be processed for a processing payroll period",
-      400,
-    );
-  }
+    if (period.status !== "PROCESSING") {
+      throw new AppError(
+        "Payroll deductions can only be processed for a processing payroll period",
+        400,
+      );
+    }
 
-  if (
-    period.approvalStatus === PayrollApprovalStatus.PENDING ||
-    period.approvalStatus === PayrollApprovalStatus.APPROVED
-  ) {
-    throw new AppError(
-      "Payroll deductions cannot be changed while approval is pending or approved",
-      400,
-    );
-  }
+    if (
+      period.approvalStatus === PayrollApprovalStatus.PENDING ||
+      period.approvalStatus === PayrollApprovalStatus.APPROVED
+    ) {
+      throw new AppError(
+        "Payroll deductions cannot be changed while approval is pending or approved",
+        400,
+      );
+    }
 
-  const payrollRecords = await prisma.payrollRecord.findMany({
-    where: {
-      businessId,
-      branchId,
-      payrollPeriodId,
-    },
-    orderBy: {
-      employeeId: "asc",
-    },
-  });
+    const payrollRecords = await tx.payrollRecord.findMany({
+      where: {
+        businessId,
+        branchId,
+        payrollPeriodId,
+      },
+      orderBy: {
+        employeeId: "asc",
+      },
+    });
 
-  if (payrollRecords.length === 0) {
-    throw new AppError(
-      "No payroll records exist for this payroll period",
-      400,
-    );
-  }
+    if (payrollRecords.length === 0) {
+      throw new AppError(
+        "No payroll records exist for this payroll period",
+        400,
+      );
+    }
 
-  const result = await prisma.$transaction(async (tx) => {
     const processedRecords = [];
 
     for (const payrollRecord of payrollRecords) {
@@ -275,7 +275,27 @@ export async function processPayrollDeductions({
     }
 
     return processedRecords;
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   });
+
+  const result = await (async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await runTransaction();
+      } catch (error) {
+        const retryable =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2034";
+
+        if (!retryable || attempt === 2) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error("Payroll deduction transaction exhausted retries");
+  })();
 
   await recordAuditEvent({
     businessId,

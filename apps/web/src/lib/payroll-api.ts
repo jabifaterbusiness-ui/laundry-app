@@ -83,6 +83,8 @@ export interface PayrollStatusResponse {
     paidCount: number;
     partiallyPaidCount: number;
     unpaidCount: number;
+    totalGrossPay: number;
+    totalDeductions: number;
     totalNetPay: number;
     totalPaid: number;
     totalBalance: number;
@@ -333,6 +335,53 @@ export function voidPayrollPayment(
     accessToken: auth.accessToken,
     sensitiveAuthorization: auth.sensitiveAuthorization,
   });
+}
+
+export interface UpdatePayrollEarningsInput {
+  basicSalary: number;
+  allowances: number;
+  bonuses: number;
+}
+
+export interface CreateOtherPayrollDeductionInput {
+  amount: number;
+  reason: string;
+}
+
+export function updatePayrollEarnings(
+  payrollRecordId: string,
+  input: UpdatePayrollEarningsInput,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<PayrollRecord>(
+    `/payroll/records/${payrollRecordId}/earnings`,
+    {
+      method: "PATCH",
+      headers: headers(branchId),
+      body: JSON.stringify(input),
+      accessToken: auth.accessToken,
+      sensitiveAuthorization: auth.sensitiveAuthorization,
+    },
+  );
+}
+
+export function createOtherPayrollDeduction(
+  payrollRecordId: string,
+  input: CreateOtherPayrollDeductionInput,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<unknown>(
+    `/payroll/records/${payrollRecordId}/deductions`,
+    {
+      method: "POST",
+      headers: headers(branchId),
+      body: JSON.stringify(input),
+      accessToken: auth.accessToken,
+      sensitiveAuthorization: auth.sensitiveAuthorization,
+    },
+  );
 }
 
 export interface EmployeeCompensation {

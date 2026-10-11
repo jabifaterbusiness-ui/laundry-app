@@ -81,6 +81,8 @@ export async function getPayrollStatus({
     };
   });
 
+  const totalGrossPay = records.reduce((sum, record) => sum + record.grossPay, 0);
+  const totalDeductions = records.reduce((sum, record) => sum + record.totalDeductions, 0);
   const totalNetPay = records.reduce((sum, record) => sum + record.netPay, 0);
   const totalPaid = records.reduce((sum, record) => sum + record.amountPaid, 0);
   const totalBalance = records.reduce((sum, record) => sum + record.balance, 0);
@@ -111,6 +113,8 @@ export async function getPayrollStatus({
       unpaidCount: records.filter(
         (record) => record.paymentStatus === "UNPAID",
       ).length,
+      totalGrossPay,
+      totalDeductions,
       totalNetPay,
       totalPaid,
       totalBalance,

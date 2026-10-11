@@ -8,6 +8,7 @@ import { PayrollCompensationSection } from "./PayrollCompensationSection.js";
 import { PayrollApprovalSection } from "./PayrollApprovalSection.js";
 import {
   createPayrollPayment,
+  createOtherPayrollDeduction,
   createPayrollPeriod,
   finalizePayroll,
   generatePayroll,
@@ -15,6 +16,7 @@ import {
   listPayrollPeriods,
   processPayrollDeductions,
   voidPayrollPayment,
+  updatePayrollEarnings,
   type PayrollPaymentMethod,
   type PayrollPeriodStatus,
 } from "../../lib/payroll-api.js";
@@ -53,6 +55,13 @@ export function PayrollPage() {
     useState<PayrollPaymentMethod>("CASH");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [editingRecordId, setEditingRecordId] = useState("");
+  const [earningsBasicSalary, setEarningsBasicSalary] = useState("");
+  const [earningsAllowances, setEarningsAllowances] = useState("");
+  const [earningsBonuses, setEarningsBonuses] = useState("");
+  const [deductionRecordId, setDeductionRecordId] = useState("");
+  const [otherDeductionAmount, setOtherDeductionAmount] = useState("");
+  const [otherDeductionReason, setOtherDeductionReason] = useState("");
   const [error, setError] = useState("");
 
   const periodsQuery = useQuery({
@@ -127,6 +136,75 @@ export function PayrollPage() {
     onSuccess: refresh,
     onError: (e) =>
       setError(e instanceof ApiError ? e.message : "Payroll action failed."),
+  });
+
+  const earningsMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingRecordId) throw new Error("Select a payroll record first.");
+      const values = [
+        earningsBasicSalary,
+        earningsAllowances,
+        earningsBonuses,
+      ];
+      if (values.some((value) => value.trim() === "" ||
+          !Number.isSafeInteger(Number(value)) || Number(value) < 0)) {
+        throw new Error("Salary, allowances and bonuses must be non-negative whole numbers.");
+      }
+
+      const authorization = await requestSensitiveAuthorization();
+      if (!authorization) throw new Error("Sensitive authorization was cancelled.");
+
+      return updatePayrollEarnings(
+        editingRecordId,
+        {
+          basicSalary: Number(earningsBasicSalary),
+          allowances: Number(earningsAllowances),
+          bonuses: Number(earningsBonuses),
+        },
+        { accessToken, sensitiveAuthorization: authorization },
+        activeBranchId,
+      );
+    },
+    onSuccess: async () => {
+      setEditingRecordId("");
+      setError("");
+      await refresh();
+    },
+    onError: (e) =>
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Unable to update earnings."),
+  });
+
+  const otherDeductionMutation = useMutation({
+    mutationFn: async () => {
+      const amount = Number(otherDeductionAmount);
+      const reason = otherDeductionReason.trim();
+      if (!deductionRecordId) throw new Error("Select a payroll record first.");
+      if (!Number.isSafeInteger(amount) || amount <= 0) {
+        throw new Error("Deduction amount must be a positive whole number.");
+      }
+      if (!reason || reason.length > 1000) {
+        throw new Error("Enter a deduction reason of 1–1000 characters.");
+      }
+
+      const authorization = await requestSensitiveAuthorization();
+      if (!authorization) throw new Error("Sensitive authorization was cancelled.");
+
+      return createOtherPayrollDeduction(
+        deductionRecordId,
+        { amount, reason },
+        { accessToken, sensitiveAuthorization: authorization },
+        activeBranchId,
+      );
+    },
+    onSuccess: async () => {
+      setDeductionRecordId("");
+      setOtherDeductionAmount("");
+      setOtherDeductionReason("");
+      setError("");
+      await refresh();
+    },
+    onError: (e) =>
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Unable to add deduction."),
   });
 
   const paymentMutation = useMutation({
@@ -307,6 +385,10 @@ export function PayrollPage() {
             <div>
               <strong>Employees:</strong> {summary.employeeCount}
               {" | "}
+              <strong>Gross pay:</strong> {money(summary.totalGrossPay)}
+              {" | "}
+              <strong>Total deductions:</strong> {money(summary.totalDeductions)}
+              {" | "}
               <strong>Net payroll:</strong> {money(summary.totalNetPay)}
               {" | "}
               <strong>Paid:</strong> {money(summary.totalPaid)}
@@ -374,6 +456,7 @@ export function PayrollPage() {
                     <th>Paid</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>Breakdown / Adjustments</th>
                     {canManage && <th>Payment</th>}
                     <th>History</th>
                   </tr>
@@ -388,6 +471,135 @@ export function PayrollPage() {
                       <td>{money(record.amountPaid)}</td>
                       <td>{money(record.balance)}</td>
                       <td>{label(record.paymentStatus)}</td>
+                      <td>
+                        <details>
+                          <summary>View breakdown</summary>
+                          <dl>
+                            <dt>Basic salary</dt>
+                            <dd>{money(record.basicSalary)}</dd>
+                            <dt>Allowances</dt>
+                            <dd>{money(record.allowances)}</dd>
+                            <dt>Bonuses</dt>
+                            <dd>{money(record.bonuses)}</dd>
+                            <dt>Gross pay</dt>
+                            <dd>{money(record.grossPay)}</dd>
+                            <dt>Total deductions</dt>
+                            <dd>{money(record.totalDeductions)}</dd>
+                            <dt>Net pay</dt>
+                            <dd>{money(record.netPay)}</dd>
+                          </dl>
+
+                          <h4>Deduction details</h4>
+                          {record.deductions.length === 0 ? (
+                            <p>No deductions recorded.</p>
+                          ) : (
+                            <ul>
+                              {record.deductions.map((deduction, index) => (
+                                <li key={deduction.id ?? `${deduction.type}-${index}`}>
+                                  {label(deduction.type)} — {money(deduction.amount)}
+                                  {deduction.description ? ` · ${deduction.description}` : ""}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          {canManage &&
+                            period.status === "PROCESSING" &&
+                            period.approvalStatus !== "PENDING" &&
+                            period.approvalStatus !== "APPROVED" &&
+                            record.amountPaid === 0 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingRecordId(record.payrollRecordId);
+                                    setEarningsBasicSalary(String(record.basicSalary));
+                                    setEarningsAllowances(String(record.allowances));
+                                    setEarningsBonuses(String(record.bonuses));
+                                    setDeductionRecordId("");
+                                  }}
+                                >
+                                  Edit earnings
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeductionRecordId(record.payrollRecordId);
+                                    setEditingRecordId("");
+                                    setOtherDeductionAmount("");
+                                    setOtherDeductionReason("");
+                                  }}
+                                >
+                                  Add other deduction
+                                </button>
+                              </>
+                            )}
+
+                          {editingRecordId === record.payrollRecordId && (
+                            <form
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                earningsMutation.mutate();
+                              }}
+                            >
+                              <h4>Edit earnings</h4>
+                              <label>
+                                Basic salary
+                                <input type="number" min="0" step="1" required
+                                  value={earningsBasicSalary}
+                                  onChange={(e) => setEarningsBasicSalary(e.target.value)} />
+                              </label>
+                              <label>
+                                Allowances
+                                <input type="number" min="0" step="1" required
+                                  value={earningsAllowances}
+                                  onChange={(e) => setEarningsAllowances(e.target.value)} />
+                              </label>
+                              <label>
+                                Bonuses
+                                <input type="number" min="0" step="1" required
+                                  value={earningsBonuses}
+                                  onChange={(e) => setEarningsBonuses(e.target.value)} />
+                              </label>
+                              <button type="submit" disabled={earningsMutation.isPending}>
+                                {earningsMutation.isPending ? "Saving..." : "Save earnings"}
+                              </button>
+                              <button type="button" onClick={() => setEditingRecordId("")}>
+                                Cancel
+                              </button>
+                            </form>
+                          )}
+
+                          {deductionRecordId === record.payrollRecordId && (
+                            <form
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                otherDeductionMutation.mutate();
+                              }}
+                            >
+                              <h4>Manual deduction</h4>
+                              <label>
+                                Amount
+                                <input type="number" min="1" step="1" required
+                                  value={otherDeductionAmount}
+                                  onChange={(e) => setOtherDeductionAmount(e.target.value)} />
+                              </label>
+                              <label>
+                                Reason
+                                <textarea required maxLength={1000}
+                                  value={otherDeductionReason}
+                                  onChange={(e) => setOtherDeductionReason(e.target.value)} />
+                              </label>
+                              <button type="submit" disabled={otherDeductionMutation.isPending}>
+                                {otherDeductionMutation.isPending ? "Saving..." : "Add deduction"}
+                              </button>
+                              <button type="button" onClick={() => setDeductionRecordId("")}>
+                                Cancel
+                              </button>
+                            </form>
+                          )}
+                        </details>
+                      </td>
 
                       {canManage && (
                         <td>

@@ -515,16 +515,17 @@ export function PayrollCompensationSection({
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                minWidth: "820px",
+                minWidth: "1050px",
               }}
             >
               <thead>
                 <tr>
                   {[
                     "Employee",
-                    "Job title",
-                    "Current salary",
-                    "Effective from",
+                    "Email",
+                    "Job Title",
+                    "Current Salary",
+                    "Effective From",
                     "History",
                     "Status",
                   ].map((heading) => (
@@ -559,15 +560,15 @@ export function PayrollCompensationSection({
                         }}
                       >
                         <strong>{employee.fullName}</strong>
-                        <div
-                          style={{
-                            ...mutedStyle,
-                            fontSize: "12px",
-                            marginTop: 3,
-                          }}
-                        >
-                          {employee.email}
-                        </div>
+                      </td>
+
+                      <td
+                        style={{
+                          padding: "14px 12px",
+                          borderBottom: "1px solid #f1f5f9",
+                        }}
+                      >
+                        {employee.email || "—"}
                       </td>
 
                       <td

@@ -13,3 +13,14 @@ export const createPayrollPeriodSchema = z
 export type CreatePayrollPeriodInput = z.infer<
   typeof createPayrollPeriodSchema
 >;
+
+export const updatePayrollEarningsSchema = z.object({
+  basicSalary: z.number().int().nonnegative(),
+  allowances: z.number().int().nonnegative(),
+  bonuses: z.number().int().nonnegative(),
+});
+
+export const createOtherPayrollDeductionSchema = z.object({
+  amount: z.number().int().positive(),
+  reason: z.string().trim().min(1).max(1000),
+});

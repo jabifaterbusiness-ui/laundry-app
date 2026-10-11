@@ -2,6 +2,7 @@ import {
   IOUStatus,
   LoanStatus,
   PayrollDeductionType,
+  Prisma,
 } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -97,6 +98,9 @@ describe("payroll deductions service", () => {
 
     mocks.transaction.mockImplementation(async (callback) =>
       callback({
+        payrollPeriod: {
+          findFirst: mocks.payrollPeriodFindFirst,
+        },
         payrollDeduction: {
           findMany: mocks.payrollDeductionFindMany,
           create: mocks.payrollDeductionCreate,
@@ -110,6 +114,7 @@ describe("payroll deductions service", () => {
           update: mocks.loanUpdate,
         },
         payrollRecord: {
+          findMany: mocks.payrollRecordFindMany,
           update: mocks.payrollRecordUpdate,
         },
       }),
@@ -393,7 +398,7 @@ describe("payroll deductions service", () => {
     });
 
     expect(mocks.payrollRecordFindMany).not.toHaveBeenCalled();
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
   it("rejects payroll deduction processing unless the period is PROCESSING", async () => {
@@ -435,7 +440,7 @@ describe("payroll deductions service", () => {
       message: "No payroll records exist for this payroll period",
     });
 
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
   it("audits successful payroll deduction processing", async () => {
@@ -459,4 +464,36 @@ describe("payroll deductions service", () => {
       },
     });
   });
+
+  it("retries a serialization conflict and audits only after a successful transaction", async () => {
+    mocks.transaction.mockImplementationOnce(async () => {
+      throw new Prisma.PrismaClientKnownRequestError(
+        "serialization conflict",
+        {
+          code: "P2034",
+          clientVersion: "test",
+        },
+      );
+    });
+
+    await processPayrollDeductions({
+      businessId: "business-1",
+      branchId: "branch-1",
+      payrollPeriodId: "period-1",
+      actorUserId: "manager-1",
+    });
+
+    expect(mocks.transaction).toHaveBeenCalledTimes(2);
+    expect(mocks.transaction.mock.calls[1]?.[1]).toEqual({
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "payroll_deductions.processed",
+        entityId: "period-1",
+      }),
+    );
+  });
+
 });
