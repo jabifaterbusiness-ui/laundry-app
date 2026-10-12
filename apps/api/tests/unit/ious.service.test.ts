@@ -398,6 +398,7 @@ describe("ious.service", () => {
         metadata: {
           employeeId: "employee-A",
           amount: 5000,
+          reason: null,
         },
       });
     });

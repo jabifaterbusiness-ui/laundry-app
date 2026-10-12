@@ -156,10 +156,11 @@ export function cancelIOU(
   id: string,
   branchId: string,
   auth: FinancialAuth,
+  reason: string,
 ) {
   return apiFetch<IOURecord>(
     `/payroll/ious/${id}/cancel`,
-    options(branchId, auth, "POST", {}),
+    options(branchId, auth, "POST", { reason }),
   );
 }
 
@@ -212,10 +213,11 @@ export function cancelLoan(
   id: string,
   branchId: string,
   auth: FinancialAuth,
+  reason: string,
 ) {
   return apiFetch<LoanRecord>(
     `/payroll/loans/${id}/cancel`,
-    options(branchId, auth, "POST", {}),
+    options(branchId, auth, "POST", { reason }),
   );
 }
 

@@ -24,6 +24,7 @@ type ListLoansArgs = {
 
 type ActorLoanArgs = ScopedLoanArgs & {
   actorUserId: string;
+  reason?: string;
 };
 
 export async function createLoan({
@@ -254,6 +255,7 @@ export async function cancelLoan({
   branchId,
   id,
   actorUserId,
+  reason,
 }: ActorLoanArgs) {
   const loan = await prisma.loan.findFirst({
     where: {
@@ -296,6 +298,7 @@ export async function cancelLoan({
     metadata: {
       employeeId: loan.employeeId,
       principalAmount: loan.principalAmount,
+      reason: reason ?? null,
     },
   });
 

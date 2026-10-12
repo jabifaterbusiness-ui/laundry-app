@@ -387,6 +387,7 @@ describe("loans.service", () => {
         metadata: {
           employeeId: "employee-A",
           principalAmount: 100000,
+          reason: null,
         },
       });
     });

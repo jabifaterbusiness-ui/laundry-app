@@ -24,6 +24,7 @@ type IOUActionArgs = {
   branchId: string;
   id: string;
   actorUserId: string;
+  reason?: string;
 };
 
 export async function createIOU({
@@ -254,6 +255,7 @@ export async function cancelIOU({
   branchId,
   id,
   actorUserId,
+  reason,
 }: IOUActionArgs) {
   const iou = await prisma.iOU.findFirst({
     where: {
@@ -294,6 +296,7 @@ export async function cancelIOU({
     metadata: {
       employeeId: updated.employeeId,
       amount: updated.amount,
+      reason: reason ?? null,
     },
   });
 

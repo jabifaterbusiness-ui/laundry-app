@@ -118,11 +118,20 @@ export async function rejectIOUController(req: Request, res: Response) {
 }
 
 export async function cancelIOUController(req: Request, res: Response) {
+  const parsed = rejectIOUSchema.safeParse(req.body ?? {});
+
+  if (!parsed.success) {
+    throw new AppError("Invalid cancellation data", 400);
+  }
+
   const result = await cancelIOU({
     businessId: businessId(req),
     branchId: branchId(req),
     id: req.params.id!,
     actorUserId: req.user!.id,
+    ...(parsed.data.reason !== undefined
+      ? { reason: parsed.data.reason }
+      : {}),
   });
 
   res.json(result);

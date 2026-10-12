@@ -298,8 +298,8 @@ export function PayrollFinancialPage() {
     await runAction(async (authorization) => {
       const actionAuth = { ...auth, sensitiveAuthorization: authorization };
       return kind === "iou"
-        ? cancelIOU(id, branchId!, actionAuth)
-        : cancelLoan(id, branchId!, actionAuth);
+        ? cancelIOU(id, branchId!, actionAuth, why)
+        : cancelLoan(id, branchId!, actionAuth, why);
     }, `${kind.toUpperCase()} cancelled.`);
   }
 
