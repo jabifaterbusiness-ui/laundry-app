@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -62,7 +63,11 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(body?.error?.message ?? `Request failed with status ${res.status}`, res.status);
+    throw new ApiError(
+      body?.error?.message ?? `Request failed with status ${res.status}`,
+      res.status,
+      body?.error?.details,
+    );
   }
 
   if (res.status === 204) {
@@ -119,6 +124,7 @@ export async function apiFetchBlob(
     throw new ApiError(
       body?.error?.message ?? `Request failed with status ${res.status}`,
       res.status,
+      body?.error?.details,
     );
   }
 

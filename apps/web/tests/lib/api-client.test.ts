@@ -57,6 +57,45 @@ describe("apiFetch network errors", () => {
   });
 });
 
+describe("apiFetch validation details", () => {
+  it("preserves server validation details on ApiError", async () => {
+    const originalFetch = globalThis.fetch;
+    const details = {
+      formErrors: [],
+      fieldErrors: {
+        items: ["At least one item is required"],
+      },
+    };
+
+    try {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "Validation failed",
+              details,
+            },
+          }),
+          {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+      await expect(apiFetch("/orders/order-1", { method: "PATCH" }))
+        .rejects.toMatchObject({
+          name: "ApiError",
+          status: 422,
+          message: "Validation failed",
+          details,
+        });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe("apiFetch sensitive authorization", () => {
   it("sends the sensitive authorization header when provided", async () => {
     const originalFetch = globalThis.fetch;

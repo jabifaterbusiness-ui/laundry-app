@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import "./PayrollFinancialPage.css";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -326,11 +327,11 @@ export function PayrollFinancialPage() {
   const currentSection = allowedSections.includes(section) ? section : allowedSections[0];
 
   return (
-    <main style={{ display: "grid", gap: 20, paddingBottom: 32 }}>
-      <header>
-        <p style={{ color: "#64748b", marginBottom: 4 }}>PAYROLL & STAFF FINANCE</p>
-        <h1 style={{ margin: "0 0 8px" }}>Staff Finance</h1>
-        <p style={{ color: "#64748b", margin: 0 }}>
+    <main className="payroll-financial">
+      <header className="payroll-financial__header">
+        <p className="payroll-financial__eyebrow">PAYROLL & STAFF FINANCE</p>
+        <h1>Staff Finance</h1>
+        <p className="payroll-financial__subtitle">
           Manage staff IOUs, loans and repayments for the selected branch.
         </p>
       </header>
@@ -339,24 +340,17 @@ export function PayrollFinancialPage() {
         <p role="alert">Select an active branch before managing staff finance.</p>
       ) : null}
 
-      {error ? <p role="alert" style={{ color: "#b91c1c" }}>{error}</p> : null}
-      {notice ? <p role="status" style={{ color: "#166534" }}>{notice}</p> : null}
+      {error ? <p className="payroll-financial__message payroll-financial__message--error" role="alert">{error}</p> : null}
+      {notice ? <p className="payroll-financial__message payroll-financial__message--success" role="status">{notice}</p> : null}
 
-      <nav aria-label="Staff finance sections" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <nav aria-label="Staff finance sections" className="payroll-financial__tabs">
         {allowedSections.map((item) => (
           <button
             key={item}
             type="button"
             aria-pressed={currentSection === item}
             onClick={() => setSection(item)}
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 9,
-              padding: "10px 16px",
-              background: currentSection === item ? "#0f172a" : "#fff",
-              color: currentSection === item ? "#fff" : "#0f172a",
-              cursor: "pointer",
-            }}
+            className={`payroll-financial__tab${currentSection === item ? " payroll-financial__tab--active" : ""}`}
           >
             {item === "ious" ? "IOUs" : item === "loans" ? "Loans" : "Repayments"}
           </button>
@@ -364,11 +358,11 @@ export function PayrollFinancialPage() {
       </nav>
 
       {currentSection === "ious" && canViewIOUs ? (
-        <section style={{ display: "grid", gap: 16 }}>
+        <section className="payroll-financial__section">
           {canManageIOUs ? (
-            <form onSubmit={submitIOU} style={panelStyle}>
+            <form onSubmit={submitIOU} className="payroll-financial__card payroll-financial__form-card">
               <h2>New IOU request</h2>
-              <div style={formGridStyle}>
+              <div className="payroll-financial__form-grid">
                 <label>Employee
                   <select required value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                     <option value="">Select employee</option>
@@ -378,21 +372,21 @@ export function PayrollFinancialPage() {
                 <label>Amount (₦)
                   <input required type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </label>
-                <label style={{ gridColumn: "1 / -1" }}>Reason
+                <label className="payroll-financial__field--full">Reason
                   <input maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
                 </label>
               </div>
-              <button disabled={busy || !branchId}>Create IOU</button>
+              <button className="payroll-financial__submit" type="submit" disabled={busy || !branchId}>{busy ? "Processing…" : "Create IOU"}</button>
             </form>
           ) : null}
 
-          <section style={panelStyle}>
+          <section className="payroll-financial__card payroll-financial__history-card">
             <h2>IOU requests</h2>
             {iousQuery.isLoading ? <p>Loading IOUs…</p> : null}
             {iousQuery.isError ? <p role="alert">Unable to load IOUs. Refresh and try again.</p> : null}
             {!iousQuery.isLoading && !ious.length ? <p>No IOU requests found for this branch.</p> : null}
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
+            <div className="payroll-financial__table-wrap">
+              <table className="payroll-financial__table">
                 <thead><tr><th>Employee</th><th>Amount</th><th>Outstanding</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                   {ious.map((item) => (
@@ -400,7 +394,7 @@ export function PayrollFinancialPage() {
                       <td>{item.employee?.fullName ?? employees.find((e) => e.id === item.employeeId)?.fullName ?? item.employeeId}</td>
                       <td>{money(item.amount)}</td><td>{money(item.outstandingAmount)}</td>
                       <td>{label(item.status)}</td><td>{date(item.createdAt)}</td>
-                      <td><div style={actionStyle}>
+                      <td><div className="payroll-financial__actions">
                         {canApproveIOUs && item.status === "PENDING" ? <>
                           <button disabled={busy} onClick={() => void approveOrReject("iou", item.id, "approve")}>Approve</button>
                           <button disabled={busy} onClick={() => void approveOrReject("iou", item.id, "reject")}>Reject</button>
@@ -418,11 +412,11 @@ export function PayrollFinancialPage() {
       ) : null}
 
       {currentSection === "loans" && canViewLoans ? (
-        <section style={{ display: "grid", gap: 16 }}>
+        <section className="payroll-financial__section">
           {canManageLoans ? (
-            <form onSubmit={submitLoan} style={panelStyle}>
+            <form onSubmit={submitLoan} className="payroll-financial__card payroll-financial__form-card">
               <h2>New loan request</h2>
-              <div style={formGridStyle}>
+              <div className="payroll-financial__form-grid">
                 <label>Employee
                   <select required value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                     <option value="">Select employee</option>
@@ -432,21 +426,21 @@ export function PayrollFinancialPage() {
                 <label>Principal amount (₦)
                   <input required type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </label>
-                <label style={{ gridColumn: "1 / -1" }}>Reason
+                <label className="payroll-financial__field--full">Reason
                   <input maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
                 </label>
               </div>
-              <button disabled={busy || !branchId}>Create loan</button>
+              <button className="payroll-financial__submit" type="submit" disabled={busy || !branchId}>{busy ? "Processing…" : "Create loan"}</button>
             </form>
           ) : null}
 
-          <section style={panelStyle}>
+          <section className="payroll-financial__card payroll-financial__history-card">
             <h2>Loan requests</h2>
             {loansQuery.isLoading ? <p>Loading loans…</p> : null}
             {loansQuery.isError ? <p role="alert">Unable to load loans. Refresh and try again.</p> : null}
             {!loansQuery.isLoading && !loans.length ? <p>No loan requests found for this branch.</p> : null}
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
+            <div className="payroll-financial__table-wrap">
+              <table className="payroll-financial__table">
                 <thead><tr><th>Employee</th><th>Principal</th><th>Outstanding</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                   {loans.map((item) => (
@@ -454,7 +448,7 @@ export function PayrollFinancialPage() {
                       <td>{item.employee?.fullName ?? employees.find((e) => e.id === item.employeeId)?.fullName ?? item.employeeId}</td>
                       <td>{money(item.principalAmount)}</td><td>{money(item.outstandingAmount)}</td>
                       <td>{label(item.status)}</td><td>{date(item.createdAt)}</td>
-                      <td><div style={actionStyle}>
+                      <td><div className="payroll-financial__actions">
                         {canApproveLoans && item.status === "PENDING" ? <>
                           <button disabled={busy} onClick={() => void approveOrReject("loan", item.id, "approve")}>Approve</button>
                           <button disabled={busy} onClick={() => void approveOrReject("loan", item.id, "reject")}>Reject</button>
@@ -472,11 +466,11 @@ export function PayrollFinancialPage() {
       ) : null}
 
       {currentSection === "repayments" && canViewRepayments ? (
-        <section style={{ display: "grid", gap: 16 }}>
+        <section className="payroll-financial__section">
           {canManageRepayments ? (
-            <form onSubmit={submitRepayment} style={panelStyle}>
+            <form onSubmit={submitRepayment} className="payroll-financial__card payroll-financial__form-card payroll-financial__repayment-form">
               <h2>Record repayment</h2>
-              <div style={formGridStyle}>
+              <div className="payroll-financial__form-grid">
                 <label>Employee
                   <select required value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setSourceId(""); }}>
                     <option value="">Select employee</option>
@@ -491,11 +485,15 @@ export function PayrollFinancialPage() {
                 <label>Outstanding source
                   <select required value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
                     <option value="">
-                      {repaymentSourcesQuery.isLoading
-                        ? "Loading outstanding sources…"
-                        : repaymentSources.length
-                          ? "Select source"
-                          : "No outstanding sources available"}
+                      {!employeeId
+                        ? "Select employee first"
+                        : repaymentSourcesQuery.isLoading
+                          ? "Loading outstanding sources…"
+                          : repaymentSourcesQuery.isError
+                            ? "Sources unavailable — retry"
+                            : repaymentSources.length
+                              ? "Select source"
+                              : "No eligible outstanding sources"}
                     </option>
                     {repaymentSources.map((source) => (
                       <option key={source.id} value={source.id}>
@@ -515,29 +513,35 @@ export function PayrollFinancialPage() {
                 <label>Reference
                   <input maxLength={200} value={reference} onChange={(e) => setReference(e.target.value)} />
                 </label>
-                <label style={{ gridColumn: "1 / -1" }}>Note
+                <label className="payroll-financial__field--full">Note
                   <input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
                 </label>
               </div>
               {repaymentSourcesQuery.isError ? (
                 <p role="alert">Unable to load outstanding sources. Refresh and try again.</p>
               ) : null}
+              {employeeId && repaymentSourcesQuery.isSuccess && repaymentSources.length === 0 ? (
+                <p role="status">
+                  Only approved loans and eligible IOUs with an outstanding balance can be repaid.
+                  Check the selected employee, branch, and request approval status.
+                </p>
+              ) : null}
               {selectedSource ? (
-                <p style={{ color: "#64748b" }}>
+                <p className="payroll-financial__balance">
                   Selected {selectedSource.type === "IOU" ? "IOU" : "loan"} outstanding: {money(selectedSource.outstandingAmount)}
                 </p>
               ) : null}
-              <button disabled={busy || !branchId}>Record repayment</button>
+              <div className="payroll-financial__form-footer"><button className="payroll-financial__submit" type="submit" disabled={busy || !branchId || !employeeId || !sourceId || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0}>{busy ? "Processing…" : "Record repayment"}</button></div>
             </form>
           ) : null}
 
-          <section style={panelStyle}>
+          <section className="payroll-financial__card payroll-financial__history-card">
             <h2>Repayment history</h2>
             {repaymentsQuery.isLoading ? <p>Loading repayments…</p> : null}
             {repaymentsQuery.isError ? <p role="alert">Unable to load repayments. Refresh and try again.</p> : null}
             {!repaymentsQuery.isLoading && !repayments.length ? <p>No repayments found for this branch.</p> : null}
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
+            <div className="payroll-financial__table-wrap">
+              <table className="payroll-financial__table">
                 <thead><tr><th>Employee</th><th>Type</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
                 <tbody>
                   {repayments.map((item) => (
@@ -558,30 +562,3 @@ export function PayrollFinancialPage() {
     </main>
   );
 }
-
-const panelStyle: React.CSSProperties = {
-  border: "1px solid #e2e8f0",
-  borderRadius: 14,
-  padding: 20,
-  background: "#fff",
-  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.05)",
-};
-
-const formGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-  gap: 14,
-  marginBottom: 16,
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  textAlign: "left",
-};
-
-const actionStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 6,
-};

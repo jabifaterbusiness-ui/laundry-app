@@ -436,8 +436,10 @@ export function OrdersPage() {
     },
     onError: (error) => {
       setFormError(
-        error instanceof Error
-          ? error.message
+        error instanceof ApiError && error.status === 422 && error.details
+          ? `${error.message}: ${JSON.stringify(error.details)}`
+          : error instanceof Error
+            ? error.message
           : "Unable to save invoice changes. Please try again.",
       );
     },
@@ -895,33 +897,6 @@ export function OrdersPage() {
     }
 
 
-  async function handleCreateCustomer(
-    input: Parameters<typeof createCustomerWithOfflineQueue>[0],
-  ) {
-    const result = await createCustomerWithOfflineQueue(
-      input,
-      { accessToken },
-      {
-        businessId: user?.businessId ?? "",
-        branchId: activeBranchId ?? "",
-        actorUserId: user?.id ?? "",
-      },
-    );
-
-    if (result.queued || !result.customer) {
-      setNewCustomerOpen(false);
-      setCustomerCreateMessage(
-        "Customer creation was saved offline. Reconnect and synchronize before creating the order.",
-      );
-      return;
-    }
-
-    await queryClient.invalidateQueries({ queryKey: ["customers"] });
-    setNewCustomerOpen(false);
-    setCustomerCreateMessage(null);
-    openCustomerWorkspace(result.customer);
-  }
-
   return (
       <table>
         <thead>
@@ -961,6 +936,33 @@ export function OrdersPage() {
         </tbody>
       </table>
     );
+  }
+
+  async function handleCreateCustomer(
+    input: Parameters<typeof createCustomerWithOfflineQueue>[0],
+  ) {
+    const result = await createCustomerWithOfflineQueue(
+      input,
+      { accessToken },
+      {
+        businessId: user?.businessId ?? "",
+        branchId: activeBranchId ?? "",
+        actorUserId: user?.id ?? "",
+      },
+    );
+
+    if (result.queued || !result.customer) {
+      setNewCustomerOpen(false);
+      setCustomerCreateMessage(
+        "Customer creation was saved offline. Reconnect and synchronize before creating the order.",
+      );
+      return;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["customers"] });
+    setNewCustomerOpen(false);
+    setCustomerCreateMessage(null);
+    selectCustomerForNewOrder(result.customer);
   }
 
   const allOrdersQuery = useQuery({
@@ -1678,6 +1680,14 @@ export function OrdersPage() {
             onEditOrder={startEditInvoice}
           />
         )}
+      {customerCreateMessage ? <p role="status">{customerCreateMessage}</p> : null}
+      {newCustomerOpen ? (
+        <CustomerFormDialog
+          customer={null}
+          onCancel={() => setNewCustomerOpen(false)}
+          onSubmit={handleCreateCustomer}
+        />
+      ) : null}
     </main>
   );
 }

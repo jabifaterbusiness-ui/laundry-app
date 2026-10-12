@@ -217,14 +217,22 @@
 /*
  * During normal screen use, the printable receipts stay out of the
  * visible page. The selected receipt is made printable by the body
- * class added by InvoicesPage.
+ * class added by the page that owns the print action.
+ *
+ * IMPORTANT:
+ * The print area is nested inside the application shell. Do not hide
+ * an ancestor of .invoice-print-area with display:none, otherwise the
+ * receipt itself disappears from the print tree.
  */
 body.printing-customer .invoice-print-area,
 body.printing-company .invoice-print-area {
-  position: static;
+  position: fixed;
+  inset: 0;
   left: auto;
+  top: 0;
   width: 100%;
   visibility: visible;
+  pointer-events: none;
 }
 
 body.printing-customer .invoice-print-company,
@@ -234,27 +242,31 @@ body.printing-company .invoice-print-customer {
 
 @media print {
   /*
-   * Remove the normal application UI while printing a receipt.
-   * The selected receipt is the only printable content.
+   * Keep the application tree mounted because the receipt is nested
+   * inside it. Hide normal UI with visibility instead of display:none.
+   * The selected receipt is then explicitly made visible.
    */
-  body.printing-customer > *:not(#root),
-  body.printing-company > *:not(#root) {
-    display: none !important;
-  }
-
-  body.printing-customer #root > *:not(.invoice-print-area),
-  body.printing-company #root > *:not(.invoice-print-area) {
-    display: none !important;
+  body.printing-customer #root *,
+  body.printing-company #root * {
+    visibility: hidden !important;
   }
 
   body.printing-customer .invoice-print-area,
   body.printing-company .invoice-print-area {
-    position: static !important;
+    position: fixed !important;
+    inset: 0 !important;
     display: block !important;
     visibility: visible !important;
     width: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-customer .invoice-print-area *,
+  body.printing-company .invoice-print-area * {
+    visibility: visible !important;
   }
 
   body.printing-customer .invoice-print-company,
@@ -265,11 +277,6 @@ body.printing-company .invoice-print-customer {
   body.printing-customer .invoice-print-customer,
   body.printing-company .invoice-print-company {
     display: block !important;
-    visibility: visible !important;
-  }
-
-  body.printing-customer .invoice-print-customer *,
-  body.printing-company .invoice-print-company * {
     visibility: visible !important;
   }
 

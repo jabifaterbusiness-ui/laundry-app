@@ -8,7 +8,10 @@ import {
   voidRepaymentController,
 } from "./repayments.controller.js";
 
-import { requireAuth } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireSensitiveAuthorization,
+} from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
@@ -23,6 +26,7 @@ router.use(asyncHandler(requireBranchContext));
 router.post(
   "/",
   requirePermission("repayments.manage"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(createRepaymentController),
 );
 
@@ -47,6 +51,7 @@ router.get(
 router.post(
   "/:id/void",
   requirePermission("repayments.void"),
+  asyncHandler(requireSensitiveAuthorization),
   asyncHandler(voidRepaymentController),
 );
 

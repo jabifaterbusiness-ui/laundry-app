@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
 import { Navigate } from "react-router-dom";
 import { ApiError } from "../lib/api-client.js";
 import { getCurrentUser, refreshSession } from "../lib/auth-api.js";
@@ -6,15 +6,8 @@ import { useAuthStore } from "../state/auth-store.js";
 
 export function RequireAuth({ children }: PropsWithChildren) {
   const [authReady, setAuthReady] = useState(false);
-  const bootstrapStarted = useRef(false);
 
   useEffect(() => {
-    if (bootstrapStarted.current) {
-      return;
-    }
-
-    bootstrapStarted.current = true;
-
     let cancelled = false;
 
     async function bootstrapAuthentication() {

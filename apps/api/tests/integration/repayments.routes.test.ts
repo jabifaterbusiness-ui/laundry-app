@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
@@ -70,6 +71,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: {
       findUnique: vi.fn(),
     },
+    sensitiveAuthorization: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -78,6 +84,9 @@ vi.mock("../../src/lib/audit.js", () => ({
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
+const sensitiveAuthorizationFindUnique = vi.mocked(
+  prisma.sensitiveAuthorization.findUnique,
+);
 import { recordAuditEvent } from "../../src/lib/audit.js";
 import { createApp } from "../../src/app.js";
 
@@ -120,6 +129,13 @@ const MANAGER_A = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-a");
 const STAFF_A = tokenFor("STAFF", "biz-A", "user-staff-a");
 const OWNER_B = tokenFor("BUSINESS_OWNER", "biz-B", "user-owner-b");
 const PLATFORM_ADMIN = tokenFor("PLATFORM_ADMIN", null, "user-admin");
+
+const OWNER_SENSITIVE_TOKEN = "repayment-sensitive-token-owner";
+const MANAGER_SENSITIVE_TOKEN = "repayment-sensitive-token-manager";
+
+function hashSensitiveToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 const BRANCH_A = "33333333-3333-3333-3333-333333333333";
 const BRANCH_B = "44444444-4444-4444-4444-444444444444";
@@ -211,6 +227,36 @@ beforeEach(() => {
     name: "Test Business",
     isActive: true,
   } as never);
+
+  sensitiveAuthorizationFindUnique.mockImplementation((async (args: any) => {
+    const tokenHash = args?.where?.tokenHash;
+    const records = [
+      {
+        token: OWNER_SENSITIVE_TOKEN,
+        userId: "user-owner-a",
+      },
+      {
+        token: MANAGER_SENSITIVE_TOKEN,
+        userId: "user-manager-a",
+      },
+    ];
+
+    const match = records.find(
+      (record) => hashSensitiveToken(record.token) === tokenHash,
+    );
+
+    if (!match) return null;
+
+    return {
+      id: `sensitive-auth-${match.userId}`,
+      tokenHash,
+      userId: match.userId,
+      businessId: "biz-A",
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      revokedAt: null,
+      createdAt: new Date(),
+    } as never;
+  }) as never);
 });
 
 describe("Financial Repayments routes - authentication", () => {
@@ -288,6 +334,7 @@ describe("Financial Repayments routes - authorization", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "IOU",
@@ -334,6 +381,7 @@ describe("Financial Repayments routes - authorization", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${MANAGER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", MANAGER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "IOU",
@@ -390,6 +438,7 @@ describe("Financial Repayments routes - authorization", () => {
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({ reason: "test repayment void" });
 
     expect(res.status).toBe(200);
@@ -415,6 +464,7 @@ describe("Financial Repayments routes - validation", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "IOU",
@@ -433,6 +483,7 @@ describe("Financial Repayments routes - validation", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "LOAN",
@@ -453,6 +504,7 @@ describe("Financial Repayments routes - validation", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "IOU",
@@ -478,6 +530,7 @@ describe("Financial Repayments routes - validation", () => {
       .post("/api/v1/payroll/repayments")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({
         employeeId: EMPLOYEE_A,
         type: "IOU",
@@ -629,6 +682,7 @@ describe("Financial Repayments routes - void safety", () => {
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({ reason: "test repayment already void" });
 
     expect(res.status).toBe(400);
@@ -658,6 +712,7 @@ describe("Financial Repayments routes - void safety", () => {
       .post(`/api/v1/payroll/repayments/${REPAYMENT_A}/void`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
+      .set("X-Sensitive-Authorization", OWNER_SENSITIVE_TOKEN)
       .send({ reason: "test repayment historical void" });
 
     expect(res.status).toBe(200);
