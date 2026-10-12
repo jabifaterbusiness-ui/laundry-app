@@ -6,6 +6,7 @@ import {
   type GlobalSearchResultType,
 } from "../../lib/search-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { hasPermission } from "../../lib/permissions.js";
 import {
   searchQuickOperations,
   type QuickOperationDefinition,
@@ -31,6 +32,7 @@ export function GlobalSearch() {
   const navigate = useNavigate();
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const user = useAuthStore((state) => state.user);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
@@ -106,12 +108,29 @@ export function GlobalSearch() {
 
       if (firstResult) {
         selectResult(firstResult);
+      } else if (!isLoading && !error && canCreateCustomer && groups.length === 0 && quickOperations.length === 0) {
+        addCustomerFromSearch();
       }
     }
   }
 
   const groups = groupResults(results);
   const quickOperations = searchQuickOperations(query);
+  const canCreateCustomer = hasPermission(user, "customers.create");
+
+  function addCustomerFromSearch() {
+    const trimmed = query.trim();
+    if (!trimmed || !canCreateCustomer) return;
+    const digits = trimmed.replace(/[^0-9]/g, "");
+    const phoneLike = digits.length >= 5 && /^[+0-9().\s-]+$/.test(trimmed);
+    const params = new URLSearchParams({ addCustomer: "1" });
+    if (phoneLike) params.set("customerPhone", trimmed);
+    setQuery("");
+    setResults([]);
+    setError(null);
+    setIsOpen(false);
+    navigate(`/orders?${params.toString()}`);
+  }
 
   function selectQuickOperation(operation: QuickOperationDefinition) {
     setQuery("");
@@ -176,7 +195,7 @@ export function GlobalSearch() {
             <div style={{ padding: 16 }}>Searching...</div>
           ) : error ? (
             <div style={{ padding: 16 }}>{error}</div>
-          ) : groups.length === 0 && quickOperations.length === 0 ? (
+          ) : groups.length === 0 && quickOperations.length === 0 && !canCreateCustomer ? (
             <div style={{ padding: 16 }}>No results found.</div>
           ) : (
             <>
@@ -227,6 +246,33 @@ export function GlobalSearch() {
                       </div>
                     </button>
                   ))}
+                </section>
+              ) : null}
+
+              {groups.length === 0 && quickOperations.length === 0 && canCreateCustomer ? (
+                <section style={{ padding: 14, borderTop: "1px solid #eee" }}>
+                  <div style={{ fontWeight: 600 }}>No matching customer, order, or invoice.</div>
+                  <button
+                    type="button"
+                    role="option"
+                    onClick={addCustomerFromSearch}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginTop: 8,
+                      textAlign: "left",
+                      border: "1px solid #ccc",
+                      borderRadius: 6,
+                      background: "#f8fafc",
+                      padding: "11px 14px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <strong>+ Add New Customer</strong>
+                    <div style={{ fontSize: 13, marginTop: 3 }}>
+                      Create a customer and continue to a new order
+                    </div>
+                  </button>
                 </section>
               ) : null}
 

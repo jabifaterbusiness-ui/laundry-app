@@ -173,8 +173,21 @@ export function OrdersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [initialCustomerPhone, setInitialCustomerPhone] = useState("");
   const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("addCustomer") !== "1") return;
+    if (!hasPermission(user, "customers.create")) {
+      navigate("/orders", { replace: true });
+      return;
+    }
+    setInitialCustomerPhone(searchParams.get("customerPhone") ?? "");
+    setCustomerPickerOpen(false);
+    setNewCustomerOpen(true);
+    navigate("/orders", { replace: true });
+  }, [searchParams, user, navigate]);
   const [formError, setFormError] = useState<string | null>(null);
   const [editReason, setEditReason] = useState("");
   const [editConfirmed, setEditConfirmed] = useState(false);
@@ -1684,6 +1697,7 @@ export function OrdersPage() {
       {newCustomerOpen ? (
         <CustomerFormDialog
           customer={null}
+          initialPhone={initialCustomerPhone}
           onCancel={() => setNewCustomerOpen(false)}
           onSubmit={handleCreateCustomer}
         />

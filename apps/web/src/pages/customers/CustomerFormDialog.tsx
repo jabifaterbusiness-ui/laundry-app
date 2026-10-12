@@ -7,11 +7,12 @@ interface Props {
   customer: Customer | null;
   onCancel: () => void;
   onSubmit: (input: CreateCustomerInput) => Promise<void>;
+  initialPhone?: string;
 }
 
-export function CustomerFormDialog({ customer, onCancel, onSubmit }: Props) {
+export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone }: Props) {
   const [name, setName] = useState(customer?.name ?? "");
-  const [phone, setPhone] = useState(customer?.phone ?? "");
+  const [phone, setPhone] = useState(customer?.phone ?? initialPhone ?? "");
   const [email, setEmail] = useState(customer?.email ?? "");
   const [address, setAddress] = useState(customer?.address ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
