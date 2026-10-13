@@ -19,6 +19,9 @@ export const config = {
   log: {
     level: env.LOG_LEVEL,
   },
+  backups: {
+    encryptionKey: env.BACKUP_ENCRYPTION_KEY,
+  },
   migrations: {
     storageDir: env.MIGRATION_STORAGE_DIR,
     storageKey: env.MIGRATION_STORAGE_KEY,

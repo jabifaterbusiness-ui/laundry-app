@@ -431,12 +431,11 @@ async function restoreChild(
   return "created";
 }
 
-export async function exportBusinessBackup(
-  businessId: string,
-  userId: string,
-  password: string,
-): Promise<Buffer> {
+import { encryptBackupData } from "./backup-crypto.service.js";
 
+async function buildBusinessBackupPayload(
+  businessId: string,
+): Promise<BackupPayload> {
   const [
     business,
     branches,
@@ -604,6 +603,15 @@ export async function exportBusinessBackup(
     ),
   };
 
+  return payload;
+}
+
+export async function exportBusinessBackup(
+  businessId: string,
+  userId: string,
+  password: string,
+): Promise<Buffer> {
+  const payload = await buildBusinessBackupPayload(businessId);
   const encrypted = encrypt(payload, password);
   const counts = countsFromPayload(payload);
 
@@ -621,6 +629,25 @@ export async function exportBusinessBackup(
   });
 
   return encrypted;
+}
+
+export async function createScheduledBackupArtifact(businessId: string) {
+  const payload = await buildBusinessBackupPayload(businessId);
+  const compressed = gzipSync(
+    Buffer.from(JSON.stringify(payload), "utf8"),
+    { level: 9 },
+  );
+  const encrypted = encryptBackupData(compressed, {
+    businessId,
+    purpose: "artifact",
+  });
+
+  return {
+    encrypted,
+    checksumSha256: createHash("sha256").update(encrypted).digest("hex"),
+    sizeBytes: encrypted.length,
+    counts: countsFromPayload(payload),
+  };
 }
 
 export async function restoreBusinessBackup(

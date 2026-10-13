@@ -159,6 +159,9 @@ model Business {
   subscriptionPaymentIntents   SubscriptionPaymentIntent[]
   subscriptionPayments         SubscriptionPayment[]
   paymentWebhookEvents         PaymentWebhookEvent[]
+  backupSettings               BackupSettings?
+  backupConnections            BackupCloudConnection[]
+  backupRuns                   BackupRun[]
 
   @@map("businesses")
 }
@@ -2198,4 +2201,104 @@ model FinancialStatementDelivery {
   @@index([statementId, status])
   @@index([recipientId, status])
   @@map("financial_statement_deliveries")
+}
+
+
+enum BackupScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum BackupCloudProvider {
+  GOOGLE_DRIVE
+  DROPBOX
+  ONEDRIVE
+  S3_COMPATIBLE
+}
+
+enum BackupConnectionStatus {
+  PENDING
+  CONNECTED
+  ERROR
+}
+
+enum BackupRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum BackupRunTrigger {
+  MANUAL
+  SCHEDULED
+}
+
+model BackupSettings {
+  id                     String                 @id @default(uuid())
+  businessId             String                 @unique
+  business               Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  enabled                Boolean                @default(false)
+  frequency              BackupScheduleFrequency @default(DAILY)
+  dayOfWeek              Int                    @default(1)
+  dayOfMonth             Int                    @default(1)
+  hour                   Int                    @default(2)
+  minute                 Int                    @default(0)
+  timezone               String                 @default("Africa/Lagos")
+  retentionCount         Int                    @default(7)
+  destinationConnectionId String?
+  destinationConnection  BackupCloudConnection? @relation("BackupDestination", fields: [businessId, destinationConnectionId], references: [businessId, id], onDelete: Restrict)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([enabled, frequency, hour, minute])
+  @@map("backup_settings")
+}
+
+model BackupCloudConnection {
+  id             String                @id @default(uuid())
+  businessId     String
+  business       Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  provider       BackupCloudProvider
+  displayName    String
+  config         Json?
+  credentialsCiphertext String
+  status         BackupConnectionStatus @default(PENDING)
+  verifiedAt     DateTime?
+  lastError      String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  selectedBySettings BackupSettings[]   @relation("BackupDestination")
+  runs           BackupRun[]
+
+  @@unique([businessId, id])
+  @@index([businessId, provider])
+  @@index([businessId, status])
+  @@map("backup_cloud_connections")
+}
+
+model BackupRun {
+  id           String          @id @default(uuid())
+  businessId   String
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connectionId String?
+  connection   BackupCloudConnection? @relation(fields: [businessId, connectionId], references: [businessId, id], onDelete: Restrict)
+  trigger      BackupRunTrigger
+  status       BackupRunStatus @default(PENDING)
+  storageKey   String?
+  checksumSha256 String?
+  sizeBytes    BigInt?
+  startedAt    DateTime        @default(now())
+  scheduledFor DateTime?
+  completedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([businessId, scheduledFor])
+  @@index([businessId, createdAt])
+  @@index([businessId, status, createdAt])
+  @@index([connectionId, status])
+  @@map("backup_runs")
 }

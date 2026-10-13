@@ -50,8 +50,27 @@ vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent: mocks.audit,
 }));
 
+const backupCryptoConfig = vi.hoisted(() => ({
+  encryptionKey: "0123456789abcdef".repeat(4),
+}));
+
+vi.mock("../../src/config/index.js", () => ({
+  config: {
+    log: { level: "silent" },
+    isProduction: true,
+    backups: {
+      get encryptionKey() {
+        return backupCryptoConfig.encryptionKey;
+      },
+    },
+  },
+}));
+
+import { gunzipSync } from "node:zlib";
+import { decryptBackupData } from "../../src/modules/migrations/backup-crypto.service.js";
 import {
   __backupTestHooks,
+  createScheduledBackupArtifact,
   exportBusinessBackup,
   restoreBusinessBackup,
 } from "../../src/modules/migrations/backup.service.js";
@@ -327,6 +346,43 @@ describe("#20 backup service", () => {
         action: "backup.exported",
         metadata: expect.objectContaining({ version: 2 }),
       }),
+    );
+  });
+
+
+  it("creates a separately encrypted scheduled artifact without a manual-export audit", async () => {
+    mocks.prisma.user.findMany.mockResolvedValue([
+      {
+        id: "user-1",
+        email: "owner@example.com",
+        username: "owner",
+        fullName: "Owner",
+        role: "Manager",
+        securityRole: "BUSINESS_OWNER",
+        passwordHash: "SECRET",
+        isActive: true,
+        deletedAt: null,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-02"),
+      },
+    ]);
+
+    const result = await createScheduledBackupArtifact(businessId);
+    const compressed = decryptBackupData(result.encrypted, {
+      businessId,
+      purpose: "artifact",
+    });
+    const payload = JSON.parse(gunzipSync(compressed).toString("utf8"));
+
+    expect(payload.format).toBe("laundry-business-backup");
+    expect(payload.version).toBe(2);
+    expect(payload.users[0]).not.toHaveProperty("passwordHash");
+    expect(payload.users[0]).not.toHaveProperty("securityRole");
+    expect(result.sizeBytes).toBe(result.encrypted.length);
+    expect(result.checksumSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.counts.users).toBe(1);
+    expect(mocks.audit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "backup.exported" }),
     );
   });
 

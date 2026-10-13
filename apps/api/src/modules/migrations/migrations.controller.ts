@@ -19,7 +19,7 @@ async function readRawBody(
   const declared = Number(req.headers["content-length"] ?? 0);
 
   if (declared > maxBytes) {
-    throw new AppError("Uploaded file is too large. Maximum size is 250 MiB.", 413);
+    throw new AppError(`Uploaded file is too large. Maximum size is ${(maxBytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MiB.`, 413);
   }
 
   const chunks: Buffer[] = [];
@@ -30,7 +30,7 @@ async function readRawBody(
     total += buffer.length;
 
     if (total > maxBytes) {
-      throw new AppError("Uploaded file is too large. Maximum size is 250 MiB.", 413);
+      throw new AppError(`Uploaded file is too large. Maximum size is ${(maxBytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MiB.`, 413);
     }
 
     chunks.push(buffer);
