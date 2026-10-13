@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import {
   createPaymentIntent,
   getPaymentIntent,
@@ -17,48 +17,48 @@ export const subscriptionsRouter = Router();
 
 subscriptionsRouter.use(requireAuth, requireBusinessContext);
 
-subscriptionsRouter.get("/", asyncHandler(getSubscription));
+subscriptionsRouter.get("/", asyncHandler(requirePermission("subscriptions.view")), asyncHandler(getSubscription));
 
 subscriptionsRouter.get(
   "/prices",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(getSubscriptionPrices),
 );
 
 subscriptionsRouter.get(
   "/payment-options",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(getPaymentOptions),
 );
 subscriptionsRouter.post(
   "/payment-intents",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(createPaymentIntent),
 );
 
 
 subscriptionsRouter.get(
   "/payment-intents/:intentId",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(getPaymentIntent),
 );
 
 subscriptionsRouter.post(
   "/payment-reconcile",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(reconcilePayment),
 );
 
 
 subscriptionsRouter.post(
   "/payment-initialize",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(initializePayment),
 );
 
 
 subscriptionsRouter.post(
   "/payment-verify",
-  requireRole("BUSINESS_OWNER"),
+  asyncHandler(requirePermission("subscriptions.manage")),
   asyncHandler(verifyPayment),
 );

@@ -46,6 +46,7 @@ vi.mock("../../state/auth-store.js", () => ({
       fullName: string;
       role: string;
       securityRole: string;
+      permissions: string[];
     };
     accessToken: string;
   }) => unknown) =>
@@ -56,6 +57,7 @@ vi.mock("../../state/auth-store.js", () => ({
         fullName: "Jane Owner",
         role: "Business Owner",
         securityRole: "BUSINESS_OWNER",
+        permissions: ["subscriptions.view", "subscriptions.manage"],
       },
       accessToken: "token",
     }),

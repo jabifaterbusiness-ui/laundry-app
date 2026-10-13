@@ -493,7 +493,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
-              {user?.securityRole === "BUSINESS_OWNER" ? (
+              {hasPermission(user, "subscriptions.view") ? (
                 <Link
                   to="/subscription"
                   className={`nav-item ${

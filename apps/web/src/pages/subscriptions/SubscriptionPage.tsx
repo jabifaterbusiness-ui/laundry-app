@@ -20,6 +20,7 @@ import {
   type OfflineSubscriptionPaymentQueueEntry,
 } from "../../lib/offline-subscription-payment-queue.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { hasPermission } from "../../lib/permissions.js";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -83,23 +84,24 @@ export function SubscriptionPage() {
     OfflineSubscriptionPaymentQueueEntry[]
   >([]);
 
-  const isOwner = user?.securityRole === "BUSINESS_OWNER";
+  const canViewSubscription = hasPermission(user, "subscriptions.view");
+  const canManageSubscription = hasPermission(user, "subscriptions.manage");
 
   const subscriptionQuery = useQuery({
     queryKey: ["subscription"],
-    enabled: Boolean(accessToken && isOwner),
+    enabled: Boolean(accessToken && canViewSubscription),
     queryFn: () => getSubscription(accessToken ?? ""),
   });
 
   const subscriptionPricesQuery = useQuery({
     queryKey: ["subscription-prices"],
-    enabled: Boolean(accessToken && isOwner),
+    enabled: Boolean(accessToken && canManageSubscription),
     queryFn: () => getSubscriptionPrices(accessToken ?? ""),
   });
 
   const paymentOptionsQuery = useQuery({
     queryKey: ["subscription-payment-options"],
-    enabled: Boolean(accessToken && isOwner),
+    enabled: Boolean(accessToken && canManageSubscription),
     queryFn: () => getSubscriptionPaymentOptions(accessToken ?? ""),
   });
 
@@ -300,7 +302,7 @@ export function SubscriptionPage() {
     const params = new URLSearchParams(window.location.search);
     const paymentIntentId = params.get("payment_intent");
 
-    if (!paymentIntentId || !accessToken || !isOwner) {
+    if (!paymentIntentId || !accessToken || !canManageSubscription) {
       return;
     }
 
@@ -314,7 +316,7 @@ export function SubscriptionPage() {
     }${window.location.hash}`;
 
     window.history.replaceState({}, "", cleanUrl);
-  }, [accessToken, isOwner]);
+  }, [accessToken, canManageSubscription]);
 
   const subscription = subscriptionQuery.data;
 
@@ -365,13 +367,13 @@ export function SubscriptionPage() {
     [subscription],
   );
 
-  if (!isOwner) {
+  if (!canViewSubscription) {
     return (
       <main className="subscription-page">
         <section className="subscription-feedback subscription-error" role="alert">
           <h1>Subscription</h1>
           <p>
-            Subscription management is available only to the business owner.
+            You do not have permission to view this business subscription.
           </p>
         </section>
       </main>

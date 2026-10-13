@@ -31,6 +31,13 @@ vi.mock("../../src/lib/prisma.js", () => ({
     subscriptionPlanPrice: {
       findMany: vi.fn(),
     },
+    permission: {
+      findUnique: vi.fn(),
+    },
+    userPermissionOverride: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+    },
   },
 }));
 
