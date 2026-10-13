@@ -63,6 +63,10 @@ export function RequireAuth({ children }: PropsWithChildren) {
 
         const currentState = useAuthStore.getState();
 
+        // Refresh the persisted user and permissions even when the access
+        // token remains valid. Permission changes must reach the sidebar.
+        currentState.setUser(user);
+
         if (
           initialActiveBranchId &&
           user.branches.some(
