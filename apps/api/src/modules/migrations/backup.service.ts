@@ -9,7 +9,6 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { requireReason } from "../../lib/reason.js";
 
 const MAGIC = Buffer.from("LAUNDRYBK");
 const VERSION = 2;
@@ -436,9 +435,7 @@ export async function exportBusinessBackup(
   businessId: string,
   userId: string,
   password: string,
-  rawReason?: unknown,
 ): Promise<Buffer> {
-  const reason = requireReason(rawReason);
 
   const [
     business,
@@ -620,7 +617,6 @@ export async function exportBusinessBackup(
       version: VERSION,
       sha256: createHash("sha256").update(encrypted).digest("hex"),
       ...counts,
-      reason,
     },
   });
 
@@ -632,9 +628,7 @@ export async function restoreBusinessBackup(
   userId: string,
   buffer: Buffer,
   password: string,
-  rawReason?: unknown,
 ): Promise<RestoreCounts> {
-  const reason = requireReason(rawReason);
   const payload = decrypt(buffer, password);
 
   if (payload.business.id !== businessId) {
@@ -1464,7 +1458,6 @@ export async function restoreBusinessBackup(
     metadata: {
       version: VERSION,
       ...result,
-      reason,
     },
   });
 

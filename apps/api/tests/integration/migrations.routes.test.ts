@@ -280,7 +280,6 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Backup-Reason", "Testing empty backup rejection")
       .set("Content-Type", "application/octet-stream")
       .send(Buffer.alloc(0));
 
@@ -299,7 +298,6 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Backup-Reason", "Testing oversized backup rejection")
       .set("Content-Type", "application/octet-stream")
       .send(oversized);
 
@@ -390,7 +388,6 @@ describe("Migrations routes - permission enforcement", () => {
       .set("Authorization", "Bearer test-token")
       .send({
         password: "secure-backup-password",
-        reason: "Creating a backup for authorized business data protection",
       });
 
     expect(response.status).toBe(403);
@@ -406,7 +403,6 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Backup-Reason", "Restoring authorized business data after verification")
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);
@@ -466,7 +462,6 @@ describe("Migrations routes - existing role boundaries", () => {
       .set("Authorization", "Bearer test-token")
       .send({
         password: "secure-backup-password",
-        reason: "Creating a backup for authorized business data protection",
       });
 
     expect(response.status).toBe(200);
@@ -493,7 +488,6 @@ describe("Migrations routes - existing role boundaries", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Backup-Reason", "Restoring authorized business data after verification")
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);

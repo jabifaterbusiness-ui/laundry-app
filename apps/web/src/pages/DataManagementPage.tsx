@@ -81,9 +81,7 @@ export function DataManagementPage() {
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
   const [customerMapping, setCustomerMapping] = useState<MigrationAnalysisResponse["summary"]["customerMapping"]>({});
   const [backupPassword, setBackupPassword] = useState("");
-  const [backupReason, setBackupReason] = useState("");
   const [restorePassword, setRestorePassword] = useState("");
-  const [restoreReason, setRestoreReason] = useState("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -174,47 +172,42 @@ export function DataManagementPage() {
   }
 
   async function handleExport() {
-    const normalizedReason = backupReason.trim();
-    if (!backupPassword || !normalizedReason) {
-      setMessage("A reason is required to export a backup.");
+    if (!backupPassword) {
+      setMessage("Enter the backup password.");
       return;
     }
 
-    setBusy(true); setMessage(null);
+    setBusy(true);
+    setMessage(null);
     try {
-      const blob = await exportBackup(
-        backupPassword,
-        normalizedReason,
-        { accessToken },
-      );
+      const blob = await exportBackup(backupPassword, { accessToken });
       await saveBackupBlob(blob);
       setMessage("Encrypted backup saved successfully.");
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Backup export failed.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleRestore() {
-    const normalizedReason = restoreReason.trim();
-    if (!restoreFile || !restorePassword || !normalizedReason) {
-      setMessage("A reason is required to restore a backup.");
+    if (!restoreFile || !restorePassword) {
+      setMessage("Choose a backup file and enter its password.");
       return;
     }
 
-    setBusy(true); setMessage(null);
+    setBusy(true);
+    setMessage(null);
     try {
-      const result = await restoreBackup(
-        restoreFile,
-        restorePassword,
-        normalizedReason,
-        { accessToken },
-      );
+      const result = await restoreBackup(restoreFile, restorePassword, { accessToken });
       setMessage(
-          `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
-        );
+        `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
+      );
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Restore failed.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!canManage) return <main><h1>Data Management</h1><p>You do not have permission to manage business data migration.</p></main>;
@@ -277,8 +270,7 @@ export function DataManagementPage() {
             <h2>Export encrypted backup</h2>
             <p>The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and keep it separately from the backup file.</p>
             <input type="password" placeholder="Backup password" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} />
-            <input type="text" placeholder="Reason for exporting backup" value={backupReason} onChange={(e) => setBackupReason(e.target.value)} />
-            <button type="button" disabled={busy || backupPassword.length < 12 || !backupReason.trim()} onClick={handleExport}>Download backup</button>
+            <button type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
           </section>
 
           <section>
@@ -286,8 +278,7 @@ export function DataManagementPage() {
             <p>Restore is merge-only: it never deletes current data, never overwrites passwords or security access, and restores the operational business dataset transactionally.</p>
             <input type="file" accept=".laundry-backup" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} />
             <input type="password" placeholder="Backup password" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
-            <input type="text" placeholder="Reason for restoring backup" value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
-            <button type="button" disabled={busy || !restoreFile || restorePassword.length < 12 || !restoreReason.trim()} onClick={handleRestore}>Restore backup</button>
+            <button type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
           </section>
         </>
       )}

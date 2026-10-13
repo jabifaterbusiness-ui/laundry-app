@@ -315,7 +315,6 @@ describe("#20 backup service", () => {
       businessId,
       userId,
       password,
-      "scheduled backup",
     );
 
     const payload = __backupTestHooks.decrypt(backup, password);
@@ -638,7 +637,6 @@ describe("#20 backup service", () => {
       userId,
       encrypted,
       password,
-      "restore functional test",
     );
 
     expect(result.created).toBeGreaterThan(0);
@@ -714,7 +712,6 @@ describe("#20 backup service", () => {
         actorUserId: userId,
         metadata: expect.objectContaining({
           version: 2,
-          reason: "restore functional test",
         }),
       }),
     );
@@ -769,7 +766,6 @@ describe("#20 backup service", () => {
         userId,
         encrypted,
         password,
-        "restore test",
       ),
     ).rejects.toThrow(/different business/i);
 
