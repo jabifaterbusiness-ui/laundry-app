@@ -4,12 +4,15 @@ import {
   analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup,
   listCloudBackupConnections, createCloudBackupConnection, verifyCloudBackupConnection,
   createCloudBackupRun, listCloudBackupRuns,
-  type CloudBackupConnection, type CloudBackupRun, type MigrationAnalysisResponse,
+  getCloudBackupSettings, saveCloudBackupSettings,
+  type CloudBackupConnection, type CloudBackupRun, type CloudBackupSettings,
+  type MigrationAnalysisResponse,
 } from "../lib/data-management-api.js";
 import { useSensitiveAuthorization } from "../components/auth/SensitiveAuthorizationProvider.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 import { useSearchParams } from "react-router-dom";
+import "./DataManagementPage.css";
 
 type SaveFilePickerOptions = {
   suggestedName?: string;
@@ -94,6 +97,7 @@ export function DataManagementPage() {
   const [busy, setBusy] = useState(false);
   const [cloudConnections, setCloudConnections] = useState<CloudBackupConnection[]>([]);
   const [cloudRuns, setCloudRuns] = useState<CloudBackupRun[]>([]);
+  const [cloudSettings, setCloudSettings] = useState<CloudBackupSettings | null>(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [cloudMessage, setCloudMessage] = useState<string | null>(null);
@@ -175,12 +179,14 @@ export function DataManagementPage() {
   async function refreshCloudData() {
     if (!accessToken) return;
     const auth = { accessToken };
-    const [connections, runs] = await Promise.all([
+    const [connections, runs, settings] = await Promise.all([
       listCloudBackupConnections(auth),
       listCloudBackupRuns(auth),
+      getCloudBackupSettings(auth),
     ]);
     setCloudConnections(connections);
     setCloudRuns(runs);
+    setCloudSettings(settings);
   }
 
   useEffect(() => {
@@ -189,10 +195,12 @@ export function DataManagementPage() {
     void Promise.all([
       listCloudBackupConnections({ accessToken }),
       listCloudBackupRuns({ accessToken }),
-    ]).then(([connections, runs]) => {
+      getCloudBackupSettings({ accessToken }),
+    ]).then(([connections, runs, settings]) => {
       if (cancelled) return;
       setCloudConnections(connections);
       setCloudRuns(runs);
+      setCloudSettings(settings);
     }).catch((error: unknown) => {
       if (!cancelled) setCloudError(error instanceof Error ? error.message : "Could not load cloud backups.");
     });
@@ -214,6 +222,49 @@ export function DataManagementPage() {
       setCloudMessage(success);
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : "Cloud backup action failed.");
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
+  async function handleCloudSettingsSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !cloudSettings) return;
+    const selectedDestination = cloudConnections.find(
+      (connection) => connection.id === cloudSettings.destinationConnectionId,
+    );
+    if (
+      cloudSettings.enabled &&
+      (!selectedDestination ||
+        selectedDestination.status !== "CONNECTED" ||
+        !selectedDestination.verifiedAt)
+    ) {
+      setCloudError("To enable automatic backups, select a connected and verified destination.");
+      return;
+    }
+
+    const authorization = await requestSensitiveAuthorization();
+    if (!authorization) {
+      setCloudError("Sensitive authorization was cancelled.");
+      return;
+    }
+    setCloudBusy(true);
+    setCloudError(null);
+    setCloudMessage(null);
+    try {
+      const saved = await saveCloudBackupSettings(
+        { accessToken, sensitiveAuthorization: authorization },
+        { ...cloudSettings, enabled: cloudSettings.enabled },
+      );
+      setCloudSettings(saved);
+      await refreshCloudData();
+      setCloudMessage(
+        saved.enabled
+          ? "Preferences saved with automatic backups enabled. Scheduled runs and retention cleanup require this backend version to be deployed to production."
+          : "Backup preferences saved. Automatic backups are disabled.",
+      );
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Could not save backup preferences.");
     } finally {
       setCloudBusy(false);
     }
@@ -305,7 +356,7 @@ export function DataManagementPage() {
   if (!canManage) return <main><h1>Data Management</h1><p>You do not have permission to manage business data migration.</p></main>;
 
   return (
-    <main>
+    <main className="data-management">
       <h1>Backup & Data Migration</h1>
       <p>Safely migrate data from previous laundry software or restore an encrypted Laundry App backup.</p>
       {message && <p role="status">{message}</p>}
@@ -379,7 +430,7 @@ export function DataManagementPage() {
         <section aria-labelledby="cloud-backup-heading">
           <h2 id="cloud-backup-heading">Cloud backup — S3-compatible storage</h2>
           <p>Cloud artifacts are encrypted on the server before upload. Credentials are not displayed again after submission.</p>
-          <p role="note">Automatic scheduling and retention cleanup are not active. Use “Run backup now” for a manual backup.</p>
+          <p role="note">Automatic scheduling and retention cleanup are implemented in this backend version but will run in production only after it is deployed. Scheduled cloud backups currently support verified S3-compatible destinations.</p>
           {cloudMessage && <p role="status">{cloudMessage}</p>}
           {cloudError && <p role="alert">{cloudError}</p>}
 
@@ -428,6 +479,80 @@ export function DataManagementPage() {
               }}>Run backup now</button>
             </article>
           ))}
+
+          <h3>Schedule and retention preferences</h3>
+          {!cloudSettings ? (
+            <p>Loading backup preferences…</p>
+          ) : (
+            <form onSubmit={handleCloudSettingsSave}>
+              <label className="data-management-schedule-toggle">
+                <input
+                  type="checkbox"
+                  checked={cloudSettings.enabled}
+                  disabled={!cloudConnections.some(
+                    (connection) =>
+                      connection.id === cloudSettings.destinationConnectionId &&
+                      connection.status === "CONNECTED" &&
+                      Boolean(connection.verifiedAt),
+                  )}
+                  onChange={(e) => setCloudSettings((current) => current ? { ...current, enabled: e.target.checked } : current)}
+                />
+                <span>
+                  <strong>Enable automatic backups</strong>
+                  <small>
+                    {cloudSettings.enabled
+                      ? "Enabled in these preferences. Production scheduling depends on deploying the updated backend."
+                      : "Choose a connected, verified destination below before enabling automatic backups."}
+                  </small>
+                </span>
+              </label>
+              <label>Frequency
+                <select value={cloudSettings.frequency} onChange={(e) => setCloudSettings((current) => current ? { ...current, frequency: e.target.value as CloudBackupSettings["frequency"] } : current)}>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </label>
+              {cloudSettings.frequency === "WEEKLY" && (
+                <label>Day of week
+                  <select value={cloudSettings.dayOfWeek} onChange={(e) => setCloudSettings((current) => current ? { ...current, dayOfWeek: Number(e.target.value) } : current)}>
+                    <option value={0}>Sunday</option><option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option><option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option><option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                  </select>
+                </label>
+              )}
+              {cloudSettings.frequency === "MONTHLY" && (
+                <label>Day of month
+                  <input type="number" min={1} max={31} value={cloudSettings.dayOfMonth} onChange={(e) => setCloudSettings((current) => current ? { ...current, dayOfMonth: Number(e.target.value) } : current)} required />
+                </label>
+              )}
+              <label>Time zone
+                <input value={cloudSettings.timezone} onChange={(e) => setCloudSettings((current) => current ? { ...current, timezone: e.target.value } : current)} placeholder="Africa/Lagos" required />
+              </label>
+              <div className="data-management-settings-grid">
+                <label>Hour (24-hour time)
+                  <input type="number" min={0} max={23} value={cloudSettings.hour} onChange={(e) => setCloudSettings((current) => current ? { ...current, hour: Number(e.target.value) } : current)} required />
+                </label>
+                <label>Minute
+                  <input type="number" min={0} max={59} value={cloudSettings.minute} onChange={(e) => setCloudSettings((current) => current ? { ...current, minute: Number(e.target.value) } : current)} required />
+                </label>
+              </div>
+              <label>Retention count (successful backups to keep)
+                <input type="number" min={1} max={365} value={cloudSettings.retentionCount} onChange={(e) => setCloudSettings((current) => current ? { ...current, retentionCount: Number(e.target.value) } : current)} required />
+              </label>
+              <label>Preferred destination
+                <select value={cloudSettings.destinationConnectionId ?? ""} onChange={(e) => setCloudSettings((current) => current ? { ...current, destinationConnectionId: e.target.value || null } : current)}>
+                  <option value="">No preferred destination</option>
+                  {cloudConnections.map((connection) => (
+                    <option key={connection.id} value={connection.id}>{connection.displayName} ({connection.status})</option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" disabled={cloudBusy || !accessToken}>Save preferences</button>
+            </form>
+          )}
 
           <h3>Recent cloud backup runs</h3>
           {cloudRuns.length === 0 ? <p>No cloud backup runs yet.</p> : (

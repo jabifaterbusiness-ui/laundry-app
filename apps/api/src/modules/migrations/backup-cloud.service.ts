@@ -161,13 +161,6 @@ export async function saveBackupSettings(input: {
   retentionCount: number;
   destinationConnectionId: string | null;
 }) {
-  if (input.enabled) {
-    throw new AppError(
-      "Scheduled cloud backups are not available yet. Disable scheduling and use manual backups.",
-      422,
-    );
-  }
-
   const integerRanges: Array<[string, number, number, number]> = [
     ["dayOfWeek", input.dayOfWeek, 0, 6],
     ["dayOfMonth", input.dayOfMonth, 1, 31],

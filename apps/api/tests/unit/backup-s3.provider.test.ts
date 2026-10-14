@@ -15,6 +15,7 @@ vi.mock("node:https", () => ({
 }));
 
 import {
+  deleteS3CompatibleArtifact,
   uploadS3CompatibleArtifact,
   verifyS3CompatibleBucket,
 } from "../../src/modules/migrations/backup-s3.provider.js";
@@ -130,6 +131,30 @@ describe("S3-compatible backup provider", () => {
 
     const req = mockHttpsRequest.mock.results[0]!.value;
     expect(req.write).toHaveBeenCalledWith(encrypted);
+  });
+
+  it("deletes a validated backup object with a signed DELETE request", async () => {
+    mockSuccessfulRequest(204);
+    const storageKey = "backups/123e4567-e89b-42d3-a456-426614174000.enc";
+
+    await expect(
+      deleteS3CompatibleArtifact({ config: storage, credentials, storageKey }),
+    ).resolves.toBeUndefined();
+
+    const options = mockHttpsRequest.mock.calls[0]![0];
+    expect(options.method).toBe("DELETE");
+    expect(options.path).toBe(`/${storage.bucket}/${storageKey}`);
+  });
+
+  it("rejects unsafe backup object keys before issuing DELETE", async () => {
+    await expect(
+      deleteS3CompatibleArtifact({
+        config: storage,
+        credentials,
+        storageKey: "../backup.enc",
+      }),
+    ).rejects.toThrow("object key");
+    expect(mockHttpsRequest).not.toHaveBeenCalled();
   });
 
   it("includes temporary session credentials in signed requests", async () => {

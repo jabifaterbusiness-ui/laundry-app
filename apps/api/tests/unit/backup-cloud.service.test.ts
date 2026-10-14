@@ -36,17 +36,25 @@ describe("saveBackupSettings", () => {
     vi.clearAllMocks();
   });
 
-  it("rejects enabling scheduling while the scheduler is unavailable", async () => {
-    await expect(
-      saveBackupSettings({ ...settings, enabled: true }),
-    ).rejects.toMatchObject({
-      statusCode: 422,
-      message:
-        "Scheduled cloud backups are not available yet. Disable scheduling and use manual backups.",
+  it("allows scheduling when the selected destination is verified", async () => {
+    findFirst.mockResolvedValueOnce({ id: "connection-1" });
+    upsert.mockResolvedValueOnce({ enabled: true });
+
+    await saveBackupSettings({
+      ...settings,
+      enabled: true,
+      destinationConnectionId: "connection-1",
     });
 
-    expect(upsert).not.toHaveBeenCalled();
-    expect(findFirst).not.toHaveBeenCalled();
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "connection-1",
+        businessId: "business-1",
+        status: "CONNECTED",
+        verifiedAt: { not: null },
+      }),
+    }));
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 
   it("allows disabled settings to be saved", async () => {

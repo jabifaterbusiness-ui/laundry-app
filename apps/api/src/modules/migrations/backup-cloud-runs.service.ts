@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { decryptBackupCredentials } from "./backup-crypto.service.js";
 import { createScheduledBackupArtifact } from "./backup.service.js";
 import {
+  deleteS3CompatibleArtifact,
   uploadS3CompatibleArtifact,
   verifyS3CompatibleBucket,
   type S3CompatibleConfig,
@@ -92,6 +93,7 @@ export async function verifyBackupCloudConnection(
 export async function createCloudBackupRun(
   businessId: string,
   connectionId: string,
+  options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date } = {},
 ) {
   const { connection, config, credentials } =
     await getS3Connection(businessId, connectionId);
@@ -110,8 +112,17 @@ export async function createCloudBackupRun(
     throw new AppError("Verify the cloud destination before creating a backup.", 422);
   }
 
+  const trigger = options.trigger ?? "MANUAL";
   const run = await prisma.backupRun.create({
-    data: { businessId, connectionId, trigger: "MANUAL", status: "PENDING" },
+    data: {
+      businessId,
+      connectionId,
+      trigger,
+      status: "PENDING",
+      ...(trigger === "SCHEDULED" && options.scheduledFor
+        ? { scheduledFor: options.scheduledFor }
+        : {}),
+    },
     select: { id: true },
   });
 
@@ -148,6 +159,15 @@ export async function createCloudBackupRun(
       },
     });
 
+    // Retention runs after the new backup is safely uploaded. A cleanup error
+    // must not turn a successfully stored backup into a failed backup run.
+    try {
+      await pruneCloudBackupRuns(businessId, connectionId);
+    } catch {
+      // Keep old objects and their database references if storage deletion fails.
+      // A later successful backup will retry retention.
+    }
+
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
   } catch {
     try {
@@ -168,6 +188,66 @@ export async function createCloudBackupRun(
       502,
     );
   }
+}
+
+/**
+ * Keeps the newest successful backups for the selected destination. Database
+ * history is retained; a storage key is cleared only after deletion succeeds.
+ */
+export async function pruneCloudBackupRuns(
+  businessId: string,
+  connectionId: string,
+) {
+  const settings = await prisma.backupSettings.findUnique({
+    where: { businessId },
+    select: { retentionCount: true, destinationConnectionId: true },
+  });
+
+  if (
+    !settings ||
+    settings.destinationConnectionId !== connectionId ||
+    !Number.isInteger(settings.retentionCount) ||
+    settings.retentionCount < 1
+  ) {
+    return { deleted: 0 };
+  }
+
+  const destination = await getS3Connection(businessId, connectionId);
+  const successfulRuns = await prisma.backupRun.findMany({
+    where: {
+      businessId,
+      connectionId,
+      status: "SUCCEEDED",
+      storageKey: { not: null },
+    },
+    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, storageKey: true },
+  });
+
+  let deleted = 0;
+  for (const run of successfulRuns.slice(settings.retentionCount)) {
+    if (!run.storageKey) continue;
+
+    await deleteS3CompatibleArtifact({
+      config: destination.config,
+      credentials: destination.credentials,
+      storageKey: run.storageKey,
+    });
+
+    await prisma.backupRun.updateMany({
+      where: {
+        id: run.id,
+        businessId,
+        connectionId,
+        status: "SUCCEEDED",
+        storageKey: run.storageKey,
+      },
+      data: { storageKey: null },
+    });
+    deleted += 1;
+  }
+
+  return { deleted };
 }
 
 export async function listCloudBackupRuns(businessId: string) {

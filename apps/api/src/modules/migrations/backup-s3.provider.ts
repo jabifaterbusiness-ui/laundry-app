@@ -205,7 +205,7 @@ function signingKey(
 }
 
 function createSignedHeaders(input: {
-  method: "HEAD" | "PUT";
+  method: "HEAD" | "PUT" | "DELETE";
   url: URL;
   config: S3CompatibleConfig;
   credentials: S3CompatibleCredentials;
@@ -282,7 +282,7 @@ function createSignedHeaders(input: {
 }
 
 async function request(
-  method: "HEAD" | "PUT",
+  method: "HEAD" | "PUT" | "DELETE",
   config: S3CompatibleConfig,
   credentials: S3CompatibleCredentials,
   key?: string,
@@ -373,6 +373,33 @@ export async function verifyS3CompatibleBucket(
  * Uploads already-encrypted backup bytes. This function does not encrypt
  * data itself and never includes credentials or signed headers in errors.
  */
+/**
+ * Deletes only internally generated encrypted backup objects. Arbitrary keys
+ * are rejected to prevent a caller from deleting unrelated bucket contents.
+ */
+export async function deleteS3CompatibleArtifact(input: {
+  config: S3CompatibleConfig;
+  credentials: S3CompatibleCredentials;
+  storageKey: string;
+}): Promise<void> {
+  if (!/^backups\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.enc$/i.test(input.storageKey)) {
+    fail("Invalid S3-compatible backup object key.");
+  }
+
+  const response = await request(
+    "DELETE",
+    input.config,
+    input.credentials,
+    input.storageKey,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `S3-compatible backup deletion failed (HTTP ${response.status}).`,
+    );
+  }
+}
+
 export async function uploadS3CompatibleArtifact(input: {
   config: S3CompatibleConfig;
   credentials: S3CompatibleCredentials;
