@@ -260,7 +260,7 @@ export function DataManagementPage() {
       await refreshCloudData();
       setCloudMessage(
         saved.enabled
-          ? "Preferences saved with automatic backups enabled. Scheduled runs and retention cleanup require this backend version to be deployed to production."
+          ? "Backup preferences saved. Automatic backups are enabled for the selected verified destination."
           : "Backup preferences saved. Automatic backups are disabled.",
       );
     } catch (error) {
@@ -430,7 +430,7 @@ export function DataManagementPage() {
         <section aria-labelledby="cloud-backup-heading">
           <h2 id="cloud-backup-heading">Cloud backup — S3-compatible storage</h2>
           <p>Cloud artifacts are encrypted on the server before upload. Credentials are not displayed again after submission.</p>
-          <p role="note">Automatic scheduling and retention cleanup are implemented in this backend version but will run in production only after it is deployed. Scheduled cloud backups currently support verified S3-compatible destinations.</p>
+          <p role="note">Scheduled backups use the configured timezone and run only when the API scheduler is running. Cloud destinations currently support verified S3-compatible storage.</p>
           {cloudMessage && <p role="status">{cloudMessage}</p>}
           {cloudError && <p role="alert">{cloudError}</p>}
 
@@ -460,7 +460,7 @@ export function DataManagementPage() {
           <h3>Destinations</h3>
           {cloudConnections.length === 0 && <p>No cloud destinations configured.</p>}
           {cloudConnections.map((connection) => (
-            <article key={connection.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, margin: "12px 0" }}>
+            <article key={connection.id} className="data-management-destination">
               <h4>{connection.displayName}</h4>
               <p>{connection.provider} · {connection.status}</p>
               {connection.verifiedAt && <p>Verified: {new Date(connection.verifiedAt).toLocaleString()}</p>}
@@ -501,7 +501,7 @@ export function DataManagementPage() {
                   <strong>Enable automatic backups</strong>
                   <small>
                     {cloudSettings.enabled
-                      ? "Enabled in these preferences. Production scheduling depends on deploying the updated backend."
+                      ? "Automatic backups are enabled. The scheduler checks the configured schedule while the API is running."
                       : "Choose a connected, verified destination below before enabling automatic backups."}
                   </small>
                 </span>
@@ -556,7 +556,7 @@ export function DataManagementPage() {
 
           <h3>Recent cloud backup runs</h3>
           {cloudRuns.length === 0 ? <p>No cloud backup runs yet.</p> : (
-            <div style={{ overflowX: "auto" }}>
+            <div className="data-management-table-wrap">
               <table>
                 <thead><tr><th>Created</th><th>Status</th><th>Size</th><th>Checksum</th><th>Details</th></tr></thead>
                 <tbody>{cloudRuns.map((run) => (

@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { decryptBackupCredentials } from "./backup-crypto.service.js";
 import { createScheduledBackupArtifact } from "./backup.service.js";
@@ -162,10 +163,20 @@ export async function createCloudBackupRun(
     // Retention runs after the new backup is safely uploaded. A cleanup error
     // must not turn a successfully stored backup into a failed backup run.
     try {
-      await pruneCloudBackupRuns(businessId, connectionId);
-    } catch {
-      // Keep old objects and their database references if storage deletion fails.
-      // A later successful backup will retry retention.
+      const retention = await pruneCloudBackupRuns(businessId, connectionId);
+      if (retention.deleted > 0) {
+        logger.info(
+          `Cloud backup retention completed for business ${businessId}: deleted=${retention.deleted}.`,
+        );
+      }
+    } catch (error) {
+      // Keep the successful backup successful and preserve references to old objects.
+      // The next successful backup on this destination will retry retention.
+      logger.error(
+        error instanceof Error
+          ? `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}: ${error.message}`
+          : `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}.`,
+      );
     }
 
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };

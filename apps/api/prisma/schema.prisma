@@ -2246,7 +2246,7 @@ model BackupSettings {
   hour                   Int                    @default(2)
   minute                 Int                    @default(0)
   timezone               String                 @default("Africa/Lagos")
-  retentionCount         Int                    @default(7)
+  retentionCount         Int                    @default(30)
   destinationConnectionId String?
   destinationConnection  BackupCloudConnection? @relation("BackupDestination", fields: [businessId, destinationConnectionId], references: [businessId, id], onDelete: Restrict)
   createdAt              DateTime               @default(now())
