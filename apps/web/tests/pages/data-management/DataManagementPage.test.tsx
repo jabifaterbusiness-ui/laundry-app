@@ -19,6 +19,17 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   exportBackup: vi.fn(),
   importMigrationJob: vi.fn(),
   restoreBackup: vi.fn(),
+  listCloudBackupConnections: vi.fn().mockResolvedValue([]),
+  createCloudBackupConnection: vi.fn(),
+  verifyCloudBackupConnection: vi.fn(),
+  createCloudBackupRun: vi.fn(),
+  listCloudBackupRuns: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
+  useSensitiveAuthorization: () => ({
+    requestSensitiveAuthorization: vi.fn().mockResolvedValue("test-authorization"),
+  }),
 }));
 
 import { DataManagementPage } from "../../../src/pages/DataManagementPage.js";

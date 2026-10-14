@@ -17,6 +17,14 @@ const {
   exportBusinessBackup,
   restoreBusinessBackup,
   recordAuditEvent,
+  listCloudConnectionsController,
+  createCloudConnectionController,
+  deleteCloudConnectionController,
+  getCloudBackupSettingsController,
+  saveCloudBackupSettingsController,
+  verifyCloudConnectionController,
+  createCloudBackupRunController,
+  listCloudBackupRunsController,
 } = vi.hoisted(() => ({
   verifyAccessToken: vi.fn(),
   findUser: vi.fn(),
@@ -30,6 +38,14 @@ const {
   exportBusinessBackup: vi.fn(),
   restoreBusinessBackup: vi.fn(),
   recordAuditEvent: vi.fn(),
+  listCloudConnectionsController: vi.fn((_req, res) => res.status(200).json([])),
+  createCloudConnectionController: vi.fn((_req, res) => res.status(201).json({ id: "connection-1" })),
+  deleteCloudConnectionController: vi.fn((_req, res) => res.status(204).end()),
+  getCloudBackupSettingsController: vi.fn((_req, res) => res.status(200).json({})),
+  saveCloudBackupSettingsController: vi.fn((_req, res) => res.status(200).json({})),
+  verifyCloudConnectionController: vi.fn((_req, res) => res.status(200).json({})),
+  createCloudBackupRunController: vi.fn((_req, res) => res.status(201).json({ id: "run-1" })),
+  listCloudBackupRunsController: vi.fn((_req, res) => res.status(200).json([])),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -60,6 +76,11 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     next();
   },
   requireBusinessContext: (
+    _req: express.Request,
+    _res: express.Response,
+    next: express.NextFunction,
+  ) => next(),
+  requireSensitiveAuthorization: (
     _req: express.Request,
     _res: express.Response,
     next: express.NextFunction,
@@ -121,6 +142,17 @@ vi.mock("../../src/modules/migrations/migration.service.js", () => ({
 vi.mock("../../src/modules/migrations/backup.service.js", () => ({
   exportBusinessBackup,
   restoreBusinessBackup,
+}));
+
+vi.mock("../../src/modules/migrations/backup-cloud.controller.js", () => ({
+  listCloudConnectionsController,
+  createCloudConnectionController,
+  deleteCloudConnectionController,
+  getCloudBackupSettingsController,
+  saveCloudBackupSettingsController,
+  verifyCloudConnectionController,
+  createCloudBackupRunController,
+  listCloudBackupRunsController,
 }));
 
 vi.mock("../../src/lib/audit.js", () => ({
@@ -479,6 +511,43 @@ describe("Migrations routes - existing role boundaries", () => {
 
     expect(response.status).toBe(403);
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a branch manager to list cloud backup connections", async () => {
+    authAs("BRANCH_MANAGER");
+
+    const response = await request(createApp())
+      .get("/api/v1/migrations/backup/cloud/connections")
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(403);
+    expect(listCloudConnectionsController).not.toHaveBeenCalled();
+  });
+
+  it("denies cloud connection creation when migrations.manage is explicitly denied", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockImplementation(async (
+      _userId: string,
+      _businessId: string,
+      _role: string,
+      permissionCode: string,
+    ) => permissionCode !== "migrations.manage");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/cloud/connections")
+      .set("Authorization", "Bearer test-token")
+      .send({
+        provider: "S3_COMPATIBLE",
+        displayName: "Test backup",
+        endpoint: "https://storage.example.com",
+        bucket: "backups",
+        region: "us-east-1",
+        accessKeyId: "test-access-key",
+        secretAccessKey: "test-secret-key",
+      });
+
+    expect(response.status).toBe(403);
+    expect(createCloudConnectionController).not.toHaveBeenCalled();
   });
 
   it("does not allow a branch manager to restore a backup", async () => {

@@ -153,3 +153,158 @@ export async function restoreBackup(
       skippedUsers: number;
     }>;
 }
+
+export type CloudBackupProvider =
+  | "GOOGLE_DRIVE"
+  | "DROPBOX"
+  | "ONEDRIVE"
+  | "S3_COMPATIBLE";
+
+export type CloudBackupConnection = {
+  id: string;
+  provider: CloudBackupProvider;
+  displayName: string;
+  config: Record<string, unknown> | null;
+  status: "PENDING" | "CONNECTED" | "ERROR";
+  verifiedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CloudBackupRun = {
+  id: string;
+  connectionId: string;
+  trigger: string;
+  status: string;
+  storageKey: string | null;
+  checksumSha256: string | null;
+  sizeBytes: string | null;
+  startedAt: string | null;
+  scheduledFor: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+};
+
+export type CloudBackupSettings = {
+  id: string;
+  enabled: boolean;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  dayOfWeek: number;
+  dayOfMonth: number;
+  hour: number;
+  minute: number;
+  timezone: string;
+  retentionCount: number;
+  destinationConnectionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CloudAuth = {
+  accessToken: string | null;
+  sensitiveAuthorization?: string | null;
+};
+
+function cloudRequestOptions(auth: CloudAuth, method = "GET", body?: unknown) {
+  return {
+    method,
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  };
+}
+
+export async function listCloudBackupConnections(
+  auth: CloudAuth,
+): Promise<CloudBackupConnection[]> {
+  const result = await apiFetch<{ connections: CloudBackupConnection[] }>(
+    "/migrations/backup/cloud/connections",
+    cloudRequestOptions(auth),
+  );
+  return result.connections;
+}
+
+export async function createCloudBackupConnection(
+  auth: CloudAuth,
+  input: {
+    provider: "S3_COMPATIBLE";
+    displayName: string;
+    config: { endpoint: string; region: string; bucket: string };
+    credentials: {
+      accessKeyId: string;
+      secretAccessKey: string;
+      sessionToken?: string;
+    };
+  },
+): Promise<CloudBackupConnection> {
+  const result = await apiFetch<{ connection: CloudBackupConnection }>(
+    "/migrations/backup/cloud/connections",
+    cloudRequestOptions(auth, "POST", input),
+  );
+  return result.connection;
+}
+
+export async function verifyCloudBackupConnection(
+  connectionId: string,
+  auth: CloudAuth,
+): Promise<CloudBackupConnection> {
+  const result = await apiFetch<{ connection: CloudBackupConnection }>(
+    `/migrations/backup/cloud/connections/${encodeURIComponent(connectionId)}/verify`,
+    cloudRequestOptions(auth, "POST", {}),
+  );
+  return result.connection;
+}
+
+export async function deleteCloudBackupConnection(
+  connectionId: string,
+  auth: CloudAuth,
+): Promise<void> {
+  await apiFetch<{ deleted: boolean }>(
+    `/migrations/backup/cloud/connections/${encodeURIComponent(connectionId)}`,
+    cloudRequestOptions(auth, "DELETE"),
+  );
+}
+
+export async function createCloudBackupRun(
+  connectionId: string,
+  auth: CloudAuth,
+): Promise<CloudBackupRun> {
+  const result = await apiFetch<{ run: CloudBackupRun }>(
+    "/migrations/backup/cloud/runs",
+    cloudRequestOptions(auth, "POST", { connectionId }),
+  );
+  return result.run;
+}
+
+export async function listCloudBackupRuns(
+  auth: CloudAuth,
+): Promise<CloudBackupRun[]> {
+  const result = await apiFetch<{ runs: CloudBackupRun[] }>(
+    "/migrations/backup/cloud/runs",
+    cloudRequestOptions(auth),
+  );
+  return result.runs;
+}
+
+export async function getCloudBackupSettings(
+  auth: CloudAuth,
+): Promise<CloudBackupSettings> {
+  const result = await apiFetch<{ settings: CloudBackupSettings }>(
+    "/migrations/backup/cloud/settings",
+    cloudRequestOptions(auth),
+  );
+  return result.settings;
+}
+
+export async function saveCloudBackupSettings(
+  auth: CloudAuth,
+  input: Omit<CloudBackupSettings, "id" | "createdAt" | "updatedAt">,
+): Promise<CloudBackupSettings> {
+  const result = await apiFetch<{ settings: CloudBackupSettings }>(
+    "/migrations/backup/cloud/settings",
+    cloudRequestOptions(auth, "PUT", input),
+  );
+  return result.settings;
+}

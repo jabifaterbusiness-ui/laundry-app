@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../lib/api-client.js";
-import { analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup, type MigrationAnalysisResponse } from "../lib/data-management-api.js";
+import {
+  analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup,
+  listCloudBackupConnections, createCloudBackupConnection, verifyCloudBackupConnection,
+  createCloudBackupRun, listCloudBackupRuns,
+  type CloudBackupConnection, type CloudBackupRun, type MigrationAnalysisResponse,
+} from "../lib/data-management-api.js";
+import { useSensitiveAuthorization } from "../components/auth/SensitiveAuthorizationProvider.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 import { useSearchParams } from "react-router-dom";
@@ -74,6 +80,7 @@ export function DataManagementPage() {
   const [searchParams] = useSearchParams();
   const jobIdFromUrl = searchParams.get("jobId");
   const accessToken = useAuthStore((s) => s.accessToken);
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const user = useAuthStore((s) => s.user);
   const securityRole = user?.securityRole;
   const [migrationFile, setMigrationFile] = useState<File | null>(null);
@@ -85,6 +92,18 @@ export function DataManagementPage() {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cloudConnections, setCloudConnections] = useState<CloudBackupConnection[]>([]);
+  const [cloudRuns, setCloudRuns] = useState<CloudBackupRun[]>([]);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [cloudMessage, setCloudMessage] = useState<string | null>(null);
+  const [cloudName, setCloudName] = useState("LaundryAngel backups");
+  const [cloudEndpoint, setCloudEndpoint] = useState("");
+  const [cloudRegion, setCloudRegion] = useState("us-east-1");
+  const [cloudBucket, setCloudBucket] = useState("");
+  const [cloudKey, setCloudKey] = useState("");
+  const [cloudSecret, setCloudSecret] = useState("");
+
 
   useEffect(() => {
     if (!jobIdFromUrl || !accessToken) {
@@ -147,6 +166,79 @@ export function DataManagementPage() {
   const canRestore =
     hasPermission(user, "migrations.manage") &&
     securityRole === "BUSINESS_OWNER";
+
+  const canManageCloud =
+    securityRole === "BUSINESS_OWNER" &&
+    hasPermission(user, "migrations.view") &&
+    hasPermission(user, "migrations.manage");
+
+  async function refreshCloudData() {
+    if (!accessToken) return;
+    const auth = { accessToken };
+    const [connections, runs] = await Promise.all([
+      listCloudBackupConnections(auth),
+      listCloudBackupRuns(auth),
+    ]);
+    setCloudConnections(connections);
+    setCloudRuns(runs);
+  }
+
+  useEffect(() => {
+    if (!canManageCloud || !accessToken) return;
+    let cancelled = false;
+    void Promise.all([
+      listCloudBackupConnections({ accessToken }),
+      listCloudBackupRuns({ accessToken }),
+    ]).then(([connections, runs]) => {
+      if (cancelled) return;
+      setCloudConnections(connections);
+      setCloudRuns(runs);
+    }).catch((error: unknown) => {
+      if (!cancelled) setCloudError(error instanceof Error ? error.message : "Could not load cloud backups.");
+    });
+    return () => { cancelled = true; };
+  }, [accessToken, canManageCloud]);
+
+  async function cloudAction(action: (authorization: string) => Promise<unknown>, success: string) {
+    const authorization = await requestSensitiveAuthorization();
+    if (!authorization) {
+      setCloudError("Sensitive authorization was cancelled.");
+      return;
+    }
+    setCloudBusy(true);
+    setCloudError(null);
+    setCloudMessage(null);
+    try {
+      await action(authorization);
+      await refreshCloudData();
+      setCloudMessage(success);
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Cloud backup action failed.");
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
+  async function handleCloudCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !cloudEndpoint.trim() || !cloudBucket.trim() || !cloudKey.trim() || !cloudSecret) {
+      setCloudError("Complete the endpoint, bucket, access key, and secret key.");
+      return;
+    }
+    await cloudAction(async (authorization) => {
+      await createCloudBackupConnection(
+        { accessToken, sensitiveAuthorization: authorization },
+        {
+          provider: "S3_COMPATIBLE",
+          displayName: cloudName.trim() || "S3 backup destination",
+          config: { endpoint: cloudEndpoint.trim(), region: cloudRegion.trim(), bucket: cloudBucket.trim() },
+          credentials: { accessKeyId: cloudKey.trim(), secretAccessKey: cloudSecret },
+        },
+      );
+      setCloudKey("");
+      setCloudSecret("");
+    }, "Destination saved. Verify it before running a backup.");
+  }
 
   async function handleAnalyze() {
     if (!migrationFile) return;
@@ -281,6 +373,80 @@ export function DataManagementPage() {
             <button type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
           </section>
         </>
+      )}
+
+      {canManageCloud && (
+        <section aria-labelledby="cloud-backup-heading">
+          <h2 id="cloud-backup-heading">Cloud backup — S3-compatible storage</h2>
+          <p>Cloud artifacts are encrypted on the server before upload. Credentials are not displayed again after submission.</p>
+          <p role="note">Automatic scheduling and retention cleanup are not active. Use “Run backup now” for a manual backup.</p>
+          {cloudMessage && <p role="status">{cloudMessage}</p>}
+          {cloudError && <p role="alert">{cloudError}</p>}
+
+          <form onSubmit={handleCloudCreate}>
+            <h3>Add destination</h3>
+            <label>Destination name
+              <input value={cloudName} onChange={(e) => setCloudName(e.target.value)} required />
+            </label>
+            <label>Endpoint URL
+              <input type="url" value={cloudEndpoint} onChange={(e) => setCloudEndpoint(e.target.value)} placeholder="https://storage.example.com" required />
+            </label>
+            <label>Region
+              <input value={cloudRegion} onChange={(e) => setCloudRegion(e.target.value)} required />
+            </label>
+            <label>Bucket
+              <input value={cloudBucket} onChange={(e) => setCloudBucket(e.target.value)} required />
+            </label>
+            <label>Access key ID
+              <input autoComplete="off" value={cloudKey} onChange={(e) => setCloudKey(e.target.value)} required />
+            </label>
+            <label>Secret access key
+              <input type="password" autoComplete="new-password" value={cloudSecret} onChange={(e) => setCloudSecret(e.target.value)} required />
+            </label>
+            <button type="submit" disabled={cloudBusy || !accessToken}>Save destination</button>
+          </form>
+
+          <h3>Destinations</h3>
+          {cloudConnections.length === 0 && <p>No cloud destinations configured.</p>}
+          {cloudConnections.map((connection) => (
+            <article key={connection.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, margin: "12px 0" }}>
+              <h4>{connection.displayName}</h4>
+              <p>{connection.provider} · {connection.status}</p>
+              {connection.verifiedAt && <p>Verified: {new Date(connection.verifiedAt).toLocaleString()}</p>}
+              {connection.lastError && <p role="alert">{connection.lastError}</p>}
+              <button type="button" disabled={cloudBusy || !accessToken} onClick={() => {
+                void cloudAction(
+                  (authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }),
+                  "Destination verification completed.",
+                );
+              }}>Verify destination</button>{" "}
+              <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => {
+                void cloudAction(
+                  (authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }),
+                  "Manual backup run completed.",
+                );
+              }}>Run backup now</button>
+            </article>
+          ))}
+
+          <h3>Recent cloud backup runs</h3>
+          {cloudRuns.length === 0 ? <p>No cloud backup runs yet.</p> : (
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead><tr><th>Created</th><th>Status</th><th>Size</th><th>Checksum</th><th>Details</th></tr></thead>
+                <tbody>{cloudRuns.map((run) => (
+                  <tr key={run.id}>
+                    <td>{new Date(run.createdAt).toLocaleString()}</td>
+                    <td>{run.status}</td>
+                    <td>{run.sizeBytes ? `${run.sizeBytes} bytes` : "—"}</td>
+                    <td>{run.checksumSha256 ?? "—"}</td>
+                    <td>{run.errorMessage ?? run.storageKey ?? "—"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </main>
   );
