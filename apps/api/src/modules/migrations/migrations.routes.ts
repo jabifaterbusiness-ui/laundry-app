@@ -17,6 +17,7 @@ import {
   verifyCloudConnectionController,
   createCloudBackupRunController,
   listCloudBackupRunsController,
+  startCloudOAuthController,
 } from "./backup-cloud.controller.js";
 
 const ADMIN_ROLES = ["BUSINESS_OWNER", "BRANCH_MANAGER"] as const;
@@ -30,6 +31,14 @@ migrationsRouter.get("/jobs/:id", requireRole(...ADMIN_ROLES), requirePermission
 migrationsRouter.post("/jobs/:id/import", requireRole(...ADMIN_ROLES), requirePermission("migrations.manage"), asyncHandler(importJob));
 migrationsRouter.post("/backup/export", requireRole(...OWNER_ONLY), requirePermission("migrations.view"), asyncHandler(exportBackup));
 migrationsRouter.post("/backup/restore", requireRole(...OWNER_ONLY), requirePermission("migrations.manage"), asyncHandler(restoreBackup));
+
+migrationsRouter.post(
+  "/backup/cloud/oauth/start",
+  requireRole(...OWNER_ONLY),
+  requirePermission("migrations.manage"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(startCloudOAuthController),
+);
 
 migrationsRouter.get(
   "/backup/cloud/connections",

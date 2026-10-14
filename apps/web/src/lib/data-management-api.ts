@@ -246,6 +246,19 @@ export async function createCloudBackupConnection(
   return result.connection;
 }
 
+export async function startCloudBackupOAuth(
+  auth: CloudAuth,
+  input: {
+    provider: Exclude<CloudBackupProvider, "S3_COMPATIBLE">;
+    displayName: string;
+  },
+): Promise<{ authorizationUrl: string }> {
+  return apiFetch<{ authorizationUrl: string }>(
+    "/migrations/backup/cloud/oauth/start",
+    cloudRequestOptions(auth, "POST", input),
+  );
+}
+
 export async function verifyCloudBackupConnection(
   connectionId: string,
   auth: CloudAuth,

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../lib/api-client.js";
 import {
   analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup,
-  listCloudBackupConnections, createCloudBackupConnection, verifyCloudBackupConnection,
-  createCloudBackupRun, listCloudBackupRuns,
+  listCloudBackupConnections, createCloudBackupConnection, startCloudBackupOAuth,
+  verifyCloudBackupConnection, createCloudBackupRun, listCloudBackupRuns,
   getCloudBackupSettings, saveCloudBackupSettings,
   type CloudBackupConnection, type CloudBackupRun, type CloudBackupSettings,
   type MigrationAnalysisResponse,
@@ -80,7 +80,7 @@ async function saveBackupBlob(blob: Blob) {
 }
 
 export function DataManagementPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const jobIdFromUrl = searchParams.get("jobId");
   const accessToken = useAuthStore((s) => s.accessToken);
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
@@ -206,6 +206,64 @@ export function DataManagementPage() {
     });
     return () => { cancelled = true; };
   }, [accessToken, canManageCloud]);
+
+  useEffect(() => {
+    const outcome = searchParams.get("cloudBackupOAuth");
+    if (!outcome || !canManageCloud) return;
+
+    const cleanedParams = new URLSearchParams(searchParams);
+    cleanedParams.delete("cloudBackupOAuth");
+    setSearchParams(cleanedParams, { replace: true });
+
+    if (outcome === "connected") {
+      setCloudError(null);
+      setCloudMessage("Cloud account connected. Verify the destination before running a backup.");
+      void refreshCloudData().catch((error: unknown) => {
+        setCloudError(error instanceof Error ? error.message : "Connected account, but could not refresh cloud backup data.");
+      });
+    } else {
+      setCloudError("Cloud account authorization failed or was cancelled. Check provider configuration and try again.");
+    }
+  }, [searchParams, setSearchParams, canManageCloud, accessToken]);
+
+  async function handleCloudOAuth(provider: "GOOGLE_DRIVE" | "DROPBOX" | "ONEDRIVE") {
+    if (!accessToken) return;
+
+    const authorization = await requestSensitiveAuthorization();
+    if (!authorization) {
+      setCloudError("Sensitive authorization was cancelled.");
+      return;
+    }
+
+    setCloudBusy(true);
+    setCloudError(null);
+    setCloudMessage(null);
+    try {
+      const result = await startCloudBackupOAuth(
+        { accessToken, sensitiveAuthorization: authorization },
+        {
+          provider,
+          displayName: cloudName.trim() || (
+            provider === "GOOGLE_DRIVE" ? "Google Drive backups" :
+            provider === "DROPBOX" ? "Dropbox backups" : "OneDrive backups"
+          ),
+        },
+      );
+      const authorizationUrl = new URL(result.authorizationUrl);
+      const allowedHosts = new Set([
+        "accounts.google.com",
+        "www.dropbox.com",
+        "login.microsoftonline.com",
+      ]);
+      if (authorizationUrl.protocol !== "https:" || !allowedHosts.has(authorizationUrl.hostname)) {
+        throw new Error("The server returned an unexpected OAuth authorization URL.");
+      }
+      window.location.assign(authorizationUrl.toString());
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Could not start cloud account authorization.");
+      setCloudBusy(false);
+    }
+  }
 
   async function cloudAction(action: (authorization: string) => Promise<unknown>, success: string) {
     const authorization = await requestSensitiveAuthorization();
@@ -428,11 +486,19 @@ export function DataManagementPage() {
 
       {canManageCloud && (
         <section aria-labelledby="cloud-backup-heading">
-          <h2 id="cloud-backup-heading">Cloud backup — S3-compatible storage</h2>
-          <p>Cloud artifacts are encrypted on the server before upload. Credentials are not displayed again after submission.</p>
-          <p role="note">Scheduled backups use the configured timezone and run only when the API scheduler is running. Cloud destinations currently support verified S3-compatible storage.</p>
+          <h2 id="cloud-backup-heading">Cloud backups</h2>
+          <p>Backup artifacts are encrypted on the server before upload. Provider credentials are not displayed again after submission.</p>
+          <p role="note">Scheduled backups use the configured timezone and run only while the API scheduler is running. Connect a provider, verify the destination, and then select it in the schedule preferences.</p>
           {cloudMessage && <p role="status">{cloudMessage}</p>}
           {cloudError && <p role="alert">{cloudError}</p>}
+
+          <section aria-labelledby="cloud-oauth-heading">
+            <h3 id="cloud-oauth-heading">Connect a cloud account</h3>
+            <p>Choose a provider to authorize LaundryAngel. You will be redirected to the provider to approve access.</p>
+            <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void handleCloudOAuth("GOOGLE_DRIVE")}>Connect Google Drive</button>{" "}
+            <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void handleCloudOAuth("DROPBOX")}>Connect Dropbox</button>{" "}
+            <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void handleCloudOAuth("ONEDRIVE")}>Connect OneDrive</button>
+          </section>
 
           <form onSubmit={handleCloudCreate}>
             <h3>Add destination</h3>

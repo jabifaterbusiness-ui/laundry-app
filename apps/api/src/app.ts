@@ -11,6 +11,7 @@ import { auditRouter } from "./modules/audit/audit.routes.js";
 import { businessesRouter } from "./modules/businesses/businesses.routes.js";
 import { customersRouter } from "./modules/customers/customers.routes.js";
 import { migrationsRouter } from "./modules/migrations/migrations.routes.js";
+import { cloudOAuthCallbackController } from "./modules/migrations/backup-cloud.controller.js";
 import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { garmentsRouter } from "./modules/garments/garments.routes.js";
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
@@ -77,6 +78,7 @@ export function createApp() {
   v1.use("/setup", setupRouter);
   v1.use("/business-registration", businessRegistrationRouter);
   v1.use("/subscriptions", subscriptionsRouter);
+  v1.get("/migrations/backup/cloud/oauth/callback", cloudOAuthCallbackController);
   v1.use("/migrations", migrationsRouter);
   v1.use("/whatsapp", whatsappRouter);
   // Platform Owner / Super-Admin routes intentionally bypass tenant context.

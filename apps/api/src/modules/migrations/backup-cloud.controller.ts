@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "../../middleware/error-handler.js";
+import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { beginCloudOAuth, completeCloudOAuth } from "./backup-cloud-oauth.service.js";
 import {
   createCloudBackupRun,
   listCloudBackupRuns,
@@ -169,4 +171,59 @@ export async function createCloudBackupRunController(req: Request, res: Response
 
 export async function listCloudBackupRunsController(req: Request, res: Response) {
   res.status(200).json({ runs: await listCloudBackupRuns(businessId(req)) });
+}
+
+
+const cloudOAuthStartSchema = z.object({
+  provider: z.enum(["GOOGLE_DRIVE", "DROPBOX", "ONEDRIVE"]),
+  displayName: z.string().trim().min(1).max(100),
+}).strict();
+
+export async function startCloudOAuthController(req: Request, res: Response) {
+  const input = cloudOAuthStartSchema.parse(req.body);
+  const result = await beginCloudOAuth({
+    businessId: businessId(req),
+    userId: req.user!.id,
+    provider: input.provider,
+    displayName: input.displayName,
+  });
+  res.status(200).json(result);
+}
+
+export async function cloudOAuthCallbackController(req: Request, res: Response) {
+  const webUrl = new URL(config.webAppUrl);
+  webUrl.pathname = "/data-management";
+  webUrl.search = "";
+  webUrl.hash = "";
+
+  try {
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const providerError = typeof req.query.error === "string" ? req.query.error : "";
+
+    if (providerError || !state || !code) {
+      webUrl.searchParams.set("cloudBackupOAuth", "failed");
+      res.redirect(303, webUrl.toString());
+      return;
+    }
+
+    const result = await completeCloudOAuth({ state, code });
+    await recordAuditEvent({
+      action: "backup.cloud_connection.oauth_connected",
+      entityType: "BackupCloudConnection",
+      entityId: result.connection.id,
+      businessId: result.businessId,
+      actorUserId: result.userId,
+      correlationId: req.correlationId ?? null,
+      metadata: {
+        provider: result.connection.provider,
+        status: result.connection.status,
+      },
+    });
+    webUrl.searchParams.set("cloudBackupOAuth", "connected");
+    res.redirect(303, webUrl.toString());
+  } catch {
+    webUrl.searchParams.set("cloudBackupOAuth", "failed");
+    res.redirect(303, webUrl.toString());
+  }
 }

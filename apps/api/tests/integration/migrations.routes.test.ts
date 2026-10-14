@@ -25,6 +25,7 @@ const {
   verifyCloudConnectionController,
   createCloudBackupRunController,
   listCloudBackupRunsController,
+  startCloudOAuthController,
 } = vi.hoisted(() => ({
   verifyAccessToken: vi.fn(),
   findUser: vi.fn(),
@@ -46,6 +47,7 @@ const {
   verifyCloudConnectionController: vi.fn((_req, res) => res.status(200).json({})),
   createCloudBackupRunController: vi.fn((_req, res) => res.status(201).json({ id: "run-1" })),
   listCloudBackupRunsController: vi.fn((_req, res) => res.status(200).json([])),
+  startCloudOAuthController: vi.fn((_req, res) => res.status(200).json({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" })),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -153,6 +155,7 @@ vi.mock("../../src/modules/migrations/backup-cloud.controller.js", () => ({
   verifyCloudConnectionController,
   createCloudBackupRunController,
   listCloudBackupRunsController,
+  startCloudOAuthController,
 }));
 
 vi.mock("../../src/lib/audit.js", () => ({

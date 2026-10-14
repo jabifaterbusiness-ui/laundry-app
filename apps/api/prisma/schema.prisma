@@ -2256,6 +2256,23 @@ model BackupSettings {
   @@map("backup_settings")
 }
 
+model BackupCloudOAuthState {
+  id                  String              @id @default(uuid())
+  businessId          String
+  userId              String
+  provider            BackupCloudProvider
+  displayName         String
+  stateHash           String              @unique
+  verifierCiphertext  String
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime            @default(now())
+
+  @@index([expiresAt])
+  @@index([businessId, createdAt])
+  @@map("backup_cloud_oauth_states")
+}
+
 model BackupCloudConnection {
   id             String                @id @default(uuid())
   businessId     String

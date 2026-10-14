@@ -10,6 +10,11 @@ import {
   type S3CompatibleConfig,
   type S3CompatibleCredentials,
 } from "./backup-s3.provider.js";
+import {
+  deleteOAuthCloudArtifact,
+  uploadOAuthCloudArtifact,
+  verifyOAuthCloudDestination,
+} from "./backup-cloud-oauth-provider.service.js";
 
 async function getS3Connection(businessId: string, connectionId: string) {
   const connection = await prisma.backupCloudConnection.findFirst({
@@ -56,15 +61,29 @@ export async function verifyBackupCloudConnection(
   businessId: string,
   connectionId: string,
 ) {
-  const { connection, config, credentials } =
-    await getS3Connection(businessId, connectionId);
+  const record = await prisma.backupCloudConnection.findFirst({
+    where: { businessId, id: connectionId },
+    select: { id: true, provider: true, credentialsCiphertext: true },
+  });
+
+  if (!record) throw new AppError("Cloud connection not found.", 404);
 
   try {
-    await verifyS3CompatibleBucket(config, credentials);
+    if (record.provider === "S3_COMPATIBLE") {
+      const destination = await getS3Connection(businessId, connectionId);
+      await verifyS3CompatibleBucket(destination.config, destination.credentials);
+    } else {
+      await verifyOAuthCloudDestination({
+        businessId,
+        connectionId,
+        provider: record.provider,
+        credentialsCiphertext: record.credentialsCiphertext,
+      });
+    }
   } catch {
     try {
       await prisma.backupCloudConnection.update({
-        where: { businessId_id: { businessId, id: connection.id } },
+        where: { businessId_id: { businessId, id: record.id } },
         data: {
           status: "ERROR",
           verifiedAt: null,
@@ -76,13 +95,13 @@ export async function verifyBackupCloudConnection(
     }
 
     throw new AppError(
-      "Cloud destination verification failed. Check the endpoint, bucket permissions, and credentials.",
+      "Cloud destination verification failed. Check the destination settings and authorization.",
       422,
     );
   }
 
   return prisma.backupCloudConnection.update({
-    where: { businessId_id: { businessId, id: connection.id } },
+    where: { businessId_id: { businessId, id: record.id } },
     data: { status: "CONNECTED", verifiedAt: new Date(), lastError: null },
     select: {
       id: true, provider: true, displayName: true, status: true,
@@ -96,8 +115,16 @@ export async function createCloudBackupRun(
   connectionId: string,
   options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date } = {},
 ) {
-  const { connection, config, credentials } =
-    await getS3Connection(businessId, connectionId);
+  const connection = await prisma.backupCloudConnection.findFirst({
+    where: { businessId, id: connectionId },
+    select: { id: true, provider: true, credentialsCiphertext: true },
+  });
+
+  if (!connection) throw new AppError("Cloud connection not found.", 404);
+
+  const s3Destination = connection.provider === "S3_COMPATIBLE"
+    ? await getS3Connection(businessId, connectionId)
+    : null;
 
   const verified = await prisma.backupCloudConnection.findFirst({
     where: {
@@ -127,6 +154,8 @@ export async function createCloudBackupRun(
     select: { id: true },
   });
 
+  let uploadedStorageKey: string | null = null;
+
   try {
     await prisma.backupRun.update({
       where: { id: run.id },
@@ -134,14 +163,28 @@ export async function createCloudBackupRun(
     });
 
     const artifact = await createScheduledBackupArtifact(businessId);
-    const storageKey = `backups/${run.id}.enc`;
+    let storageKey: string;
 
-    await uploadS3CompatibleArtifact({
-      config,
-      credentials,
-      storageKey,
-      encryptedArtifact: artifact.encrypted,
-    });
+    if (s3Destination) {
+      storageKey = `backups/${run.id}.enc`;
+      await uploadS3CompatibleArtifact({
+        config: s3Destination.config,
+        credentials: s3Destination.credentials,
+        storageKey,
+        encryptedArtifact: artifact.encrypted,
+      });
+    } else {
+      storageKey = await uploadOAuthCloudArtifact({
+        businessId,
+        connectionId,
+        provider: connection.provider,
+        credentialsCiphertext: connection.credentialsCiphertext,
+        runId: run.id,
+        encryptedArtifact: artifact.encrypted,
+      });
+    }
+
+    uploadedStorageKey = storageKey;
 
     const completed = await prisma.backupRun.update({
       where: { id: run.id },
@@ -182,6 +225,37 @@ export async function createCloudBackupRun(
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
   } catch {
     try {
+      // If upload succeeded but recording the run failed, avoid leaving an
+      // untracked remote artifact where its provider reference is available.
+      // Cleanup failure must not hide the original sanitized backup error.
+      try {
+        const candidateKey = uploadedStorageKey ?? (
+          await prisma.backupRun.findFirst({
+            where: { id: run.id, businessId, connectionId },
+            select: { storageKey: true },
+          })
+        )?.storageKey;
+        if (candidateKey) {
+          if (s3Destination) {
+            await deleteS3CompatibleArtifact({
+              config: s3Destination.config,
+              credentials: s3Destination.credentials,
+              storageKey: candidateKey,
+            });
+          } else {
+            await deleteOAuthCloudArtifact({
+              businessId,
+              connectionId,
+              provider: connection.provider,
+              credentialsCiphertext: connection.credentialsCiphertext,
+              storageKey: candidateKey,
+            });
+          }
+        }
+      } catch {
+        // Keep the sanitized backup failure; never clear an unconfirmed reference.
+      }
+
       await prisma.backupRun.update({
         where: { id: run.id },
         data: {
@@ -223,7 +297,17 @@ export async function pruneCloudBackupRuns(
     return { deleted: 0 };
   }
 
-  const destination = await getS3Connection(businessId, connectionId);
+  const destinationRecord = await prisma.backupCloudConnection.findFirst({
+    where: { businessId, id: connectionId },
+    select: { id: true, provider: true, credentialsCiphertext: true },
+  });
+
+  if (!destinationRecord) throw new AppError("Cloud connection not found.", 404);
+
+  const s3Destination = destinationRecord.provider === "S3_COMPATIBLE"
+    ? await getS3Connection(businessId, connectionId)
+    : null;
+
   const successfulRuns = await prisma.backupRun.findMany({
     where: {
       businessId,
@@ -239,11 +323,21 @@ export async function pruneCloudBackupRuns(
   for (const run of successfulRuns.slice(settings.retentionCount)) {
     if (!run.storageKey) continue;
 
-    await deleteS3CompatibleArtifact({
-      config: destination.config,
-      credentials: destination.credentials,
-      storageKey: run.storageKey,
-    });
+    if (s3Destination) {
+      await deleteS3CompatibleArtifact({
+        config: s3Destination.config,
+        credentials: s3Destination.credentials,
+        storageKey: run.storageKey,
+      });
+    } else {
+      await deleteOAuthCloudArtifact({
+        businessId,
+        connectionId,
+        provider: destinationRecord.provider,
+        credentialsCiphertext: destinationRecord.credentialsCiphertext,
+        storageKey: run.storageKey,
+      });
+    }
 
     await prisma.backupRun.updateMany({
       where: {

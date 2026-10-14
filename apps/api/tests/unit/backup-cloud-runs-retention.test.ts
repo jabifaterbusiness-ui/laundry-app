@@ -6,6 +6,7 @@ const {
   backupRunFindMany,
   backupRunUpdateMany,
   deleteArtifact,
+  deleteOAuthArtifact,
   loggerInfo,
   loggerError,
 } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const {
   backupRunFindMany: vi.fn(),
   backupRunUpdateMany: vi.fn(),
   deleteArtifact: vi.fn(),
+  deleteOAuthArtifact: vi.fn(),
   loggerInfo: vi.fn(),
   loggerError: vi.fn(),
 }));
@@ -46,6 +48,12 @@ vi.mock("../../src/modules/migrations/backup-s3.provider.js", () => ({
   verifyS3CompatibleBucket: vi.fn(),
 }));
 
+vi.mock("../../src/modules/migrations/backup-cloud-oauth-provider.service.js", () => ({
+  deleteOAuthCloudArtifact: deleteOAuthArtifact,
+  uploadOAuthCloudArtifact: vi.fn(),
+  verifyOAuthCloudDestination: vi.fn(),
+}));
+
 vi.mock("../../src/modules/migrations/backup.service.js", () => ({
   createScheduledBackupArtifact: vi.fn(),
 }));
@@ -75,6 +83,39 @@ describe("pruneCloudBackupRuns", () => {
     connectionFindFirst.mockResolvedValue(connection);
     backupRunUpdateMany.mockResolvedValue({ count: 1 });
     deleteArtifact.mockResolvedValue(undefined);
+    deleteOAuthArtifact.mockResolvedValue(undefined);
+  });
+
+  it("uses the OAuth provider adapter when pruning a Google Drive destination", async () => {
+    connectionFindFirst.mockResolvedValue({
+      ...connection,
+      provider: "GOOGLE_DRIVE",
+    });
+    backupRunFindMany.mockResolvedValue([
+      { id: "newest-1", storageKey: "google:newest-file-id" },
+      { id: "newest-2", storageKey: "google:second-file-id" },
+      { id: "oldest", storageKey: "google:oldest-file-id" },
+    ]);
+
+    await expect(
+      pruneCloudBackupRuns("business-1", "connection-1"),
+    ).resolves.toEqual({ deleted: 1 });
+
+    expect(deleteOAuthArtifact).toHaveBeenCalledTimes(1);
+    expect(deleteOAuthArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      businessId: "business-1",
+      connectionId: "connection-1",
+      provider: "GOOGLE_DRIVE",
+      storageKey: "google:oldest-file-id",
+    }));
+    expect(deleteArtifact).not.toHaveBeenCalled();
+    expect(backupRunUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "oldest",
+        storageKey: "google:oldest-file-id",
+      }),
+      data: { storageKey: null },
+    }));
   });
 
   it("does not prune when the connection is not the configured destination", async () => {

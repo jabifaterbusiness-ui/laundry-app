@@ -1,15 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const mockUser = vi.hoisted(() => ({
   current: null as any,
 }));
 
+const mockCloudOAuth = vi.hoisted(() => ({
+  accessToken: null as string | null,
+  start: vi.fn(),
+  requestSensitiveAuthorization: vi.fn().mockResolvedValue("test-authorization"),
+}));
+
 vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
-      accessToken: null,
+      accessToken: mockCloudOAuth.accessToken,
       user: mockUser.current,
     }),
 }));
@@ -21,14 +27,17 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   restoreBackup: vi.fn(),
   listCloudBackupConnections: vi.fn().mockResolvedValue([]),
   createCloudBackupConnection: vi.fn(),
+  startCloudBackupOAuth: mockCloudOAuth.start,
   verifyCloudBackupConnection: vi.fn(),
   createCloudBackupRun: vi.fn(),
   listCloudBackupRuns: vi.fn().mockResolvedValue([]),
+  getCloudBackupSettings: vi.fn().mockResolvedValue(null),
+  saveCloudBackupSettings: vi.fn(),
 }));
 
 vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
   useSensitiveAuthorization: () => ({
-    requestSensitiveAuthorization: vi.fn().mockResolvedValue("test-authorization"),
+    requestSensitiveAuthorization: mockCloudOAuth.requestSensitiveAuthorization,
   }),
 }));
 
@@ -52,6 +61,10 @@ function businessUser(overrides: Record<string, unknown> = {}) {
 describe("DataManagementPage authorization", () => {
   beforeEach(() => {
     mockUser.current = null;
+    mockCloudOAuth.accessToken = null;
+    mockCloudOAuth.start.mockReset();
+    mockCloudOAuth.requestSensitiveAuthorization.mockReset();
+    mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
   });
 
   it("allows a Business Owner with a custom visible job title", () => {
@@ -84,6 +97,51 @@ describe("DataManagementPage authorization", () => {
     expect(
       screen.getByText(/you do not have permission to manage business data migration/i),
     ).toBeInTheDocument();
+  });
+
+  it("requires sensitive authorization and rejects an unexpected OAuth redirect host", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    mockCloudOAuth.start.mockResolvedValue({
+      authorizationUrl: "https://untrusted.example/authorize",
+    });
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect Google Drive" }));
+
+    await waitFor(() => {
+      expect(mockCloudOAuth.start).toHaveBeenCalledWith(
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
+        {
+          provider: "GOOGLE_DRIVE",
+          displayName: "LaundryAngel backups",
+        },
+      );
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "The server returned an unexpected OAuth authorization URL.",
+      );
+    });
+
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a successful OAuth callback message and refreshes cloud data", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    render(
+      <MemoryRouter initialEntries={["/data-management?cloudBackupOAuth=connected"]}>
+        <DataManagementPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("status"),
+    ).toHaveTextContent(/cloud account connected/i);
   });
 
   it("allows a Branch Manager to manage migration but not backup restore", () => {
