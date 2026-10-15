@@ -4253,3 +4253,57 @@ a {
     gap: 6px;
   }
 }
+
+
+/* Cloud backup notifications persist across navigation in the application shell. */
+.cloud-backup-progress-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 24px 0;
+  padding: 16px 18px;
+  border: 1px solid #f0a4c5;
+  border-left: 5px solid #d63384;
+  border-radius: 12px;
+  background: #fff0f7;
+  color: #632344;
+  box-shadow: 0 5px 18px rgb(116 28 73 / 9%);
+}
+
+.cloud-backup-progress-banner__copy {
+  min-width: 0;
+}
+
+.cloud-backup-progress-banner__copy p {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.cloud-backup-progress-banner > button {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid #d63384;
+  border-radius: 8px;
+  background: #fff;
+  color: #8b1953;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cloud-backup-progress-banner--success {
+  border-left-color: #27845b;
+}
+
+.cloud-backup-progress-banner--error {
+  border-left-color: #bd2837;
+  background: #fff0f1;
+  color: #79202a;
+}
+
+@media (max-width: 560px) {
+  .cloud-backup-progress-banner {
+    margin: 12px;
+    padding: 12px;
+  }
+}

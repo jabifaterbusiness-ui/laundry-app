@@ -2,11 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import {
+  createCloudBackupRun,
   getCloudBackupSettings,
   listCloudBackupConnections,
+  listCloudBackupRuns,
   saveCloudBackupSettings,
   verifyCloudBackupConnection,
 } from "../../../src/lib/data-management-api.js";
+import { CLOUD_BACKUP_NOTIFICATION_EVENT } from "../../../src/lib/cloud-backup-notifications.js";
 
 const mockUser = vi.hoisted(() => ({
   current: null as any,
@@ -73,6 +76,115 @@ describe("DataManagementPage authorization", () => {
     mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
     vi.mocked(listCloudBackupConnections).mockReset().mockResolvedValue([]);
     vi.mocked(verifyCloudBackupConnection).mockReset();
+    vi.mocked(saveCloudBackupSettings).mockClear();
+  });
+
+  it("keeps settings-save success when refreshing cloud data fails", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    const settings = {
+      id: "settings-1",
+      enabled: false,
+      frequency: "DAILY" as const,
+      dayOfWeek: 0,
+      dayOfMonth: 1,
+      hour: 2,
+      minute: 0,
+      timezone: "Africa/Lagos",
+      retentionCount: 7,
+      destinationConnectionId: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+
+    vi.mocked(getCloudBackupSettings).mockResolvedValue(settings);
+    vi.mocked(saveCloudBackupSettings).mockResolvedValue(settings);
+    vi.mocked(listCloudBackupRuns)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("Backup list refresh failed."));
+
+    const notifications: CustomEvent[] = [];
+    const listener = (event: Event) => notifications.push(event as CustomEvent);
+    window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Save preferences" }));
+
+    expect(
+      await screen.findByText(/backup preferences saved\. automatic backups are disabled/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/latest backup list could not be refreshed/i)).toBeInTheDocument();
+    expect(saveCloudBackupSettings).toHaveBeenCalledTimes(1);
+
+    expect(notifications.some((event) =>
+      event.detail?.source === "settings" &&
+      event.detail?.status === "success"
+    )).toBe(true);
+
+    window.removeEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
+  });
+
+  it("publishes a persistent notification when a manual backup starts", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    const connection = {
+      id: "dropbox-1",
+      provider: "DROPBOX" as const,
+      displayName: "Dropbox backups",
+      config: null,
+      status: "CONNECTED" as const,
+      verifiedAt: "2026-10-14T10:00:00.000Z",
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+
+    const run = {
+      id: "run-manual-1",
+      connectionId: connection.id,
+      trigger: "MANUAL",
+      status: "RUNNING",
+      storageKey: null,
+      checksumSha256: null,
+      sizeBytes: null,
+      startedAt: "2026-10-15T10:00:00.000Z",
+      scheduledFor: null,
+      completedAt: null,
+      errorMessage: null,
+      createdAt: "2026-10-15T10:00:00.000Z",
+    };
+
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([connection]);
+    vi.mocked(listCloudBackupRuns).mockResolvedValue([]);
+    vi.mocked(createCloudBackupRun).mockResolvedValue(run as any);
+
+    const notifications: CustomEvent[] = [];
+    const listener = (event: Event) => notifications.push(event as CustomEvent);
+    window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Run backup now" }));
+
+    await waitFor(() => {
+      expect(notifications.some((event) =>
+        event.detail?.source === "manual" &&
+        event.detail?.status === "progress" &&
+        event.detail?.runId === run.id
+      )).toBe(true);
+    });
+
+    expect(createCloudBackupRun).toHaveBeenCalledWith(
+      connection.id,
+      {
+        accessToken: "test-access-token",
+        sensitiveAuthorization: "test-authorization",
+      },
+    );
+
+    window.removeEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
   });
 
   it("shows an error if sensitive authorization rejects during destination verification", async () => {

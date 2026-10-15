@@ -6,6 +6,10 @@ import type { QuickOperationDefinition } from "../../lib/quick-operations-catalo
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useWorkstationModeStore } from "../../state/workstation-mode-store.js";
+import {
+  CLOUD_BACKUP_NOTIFICATION_EVENT,
+  type CloudBackupNotification,
+} from "../../lib/cloud-backup-notifications.js";
 
 interface NavItem {
   label: string;
@@ -121,6 +125,8 @@ export function AppShell({ children }: PropsWithChildren) {
     useState<string>("");
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [cloudBackupNotification, setCloudBackupNotification] =
+    useState<CloudBackupNotification | null>(null);
 
   useEffect(() => {
     function handleQuickOperationOpen(event: Event) {
@@ -152,6 +158,44 @@ export function AppShell({ children }: PropsWithChildren) {
       window.removeEventListener(
         "quick-operation:open",
         handleQuickOperationOpen,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleCloudBackupNotification(event: Event) {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (
+        typeof detail !== "object" ||
+        detail === null ||
+        !("status" in detail) ||
+        !("title" in detail) ||
+        !("message" in detail) ||
+        !("source" in detail)
+      ) {
+        return;
+      }
+
+      const notification = detail as CloudBackupNotification;
+      if (
+        !["progress", "success", "error"].includes(notification.status) ||
+        typeof notification.title !== "string" ||
+        typeof notification.message !== "string" ||
+        !["manual", "scheduled", "settings"].includes(notification.source)
+      ) {
+        return;
+      }
+      setCloudBackupNotification(notification);
+    }
+
+    window.addEventListener(
+      CLOUD_BACKUP_NOTIFICATION_EVENT,
+      handleCloudBackupNotification,
+    );
+    return () => {
+      window.removeEventListener(
+        CLOUD_BACKUP_NOTIFICATION_EVENT,
+        handleCloudBackupNotification,
       );
     };
   }, []);
@@ -550,6 +594,25 @@ export function AppShell({ children }: PropsWithChildren) {
         </aside>
 
         <main className="main-content">
+          {cloudBackupNotification && (
+            <section
+              className={`cloud-backup-progress-banner cloud-backup-progress-banner--${cloudBackupNotification.status}`}
+              role={cloudBackupNotification.status === "error" ? "alert" : "status"}
+              aria-live={cloudBackupNotification.status === "error" ? "assertive" : "polite"}
+            >
+              <div className="cloud-backup-progress-banner__copy">
+                <strong>{cloudBackupNotification.title}</strong>
+                <p>{cloudBackupNotification.message}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss cloud backup notification"
+                onClick={() => setCloudBackupNotification(null)}
+              >
+                Dismiss
+              </button>
+            </section>
+          )}
           <div className="page-container">{children}</div>
         </main>
       </div>

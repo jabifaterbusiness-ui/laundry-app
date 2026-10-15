@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { AppShell } from "../../../src/components/layout/AppShell.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
+import { CLOUD_BACKUP_NOTIFICATION_EVENT } from "../../../src/lib/cloud-backup-notifications.js";
 
 beforeEach(() => {
   useAuthStore.setState({
@@ -71,6 +72,31 @@ describe("AppShell", () => {
     renderShell("/orders");
 
     expect(screen.getByText("Current page content")).toBeInTheDocument();
+  });
+
+  it("shows and dismisses persistent cloud backup notifications", async () => {
+    renderShell("/orders");
+
+    window.dispatchEvent(
+      new CustomEvent(CLOUD_BACKUP_NOTIFICATION_EVENT, {
+        detail: {
+          status: "error",
+          title: "Scheduled cloud backup",
+          message: "Backup failed. Check the backup run details.",
+          source: "scheduled",
+          runId: "run-test-1",
+        },
+      }),
+    );
+
+    expect(await screen.findByText("Scheduled cloud backup")).toBeInTheDocument();
+    expect(screen.getByText("Backup failed. Check the backup run details.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Scheduled cloud backup")).not.toBeInTheDocument();
+    });
   });
 
   it("opens the Quick Operation launcher from the global event", async () => {

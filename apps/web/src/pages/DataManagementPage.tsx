@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { publishCloudBackupNotification } from "../lib/cloud-backup-notifications.js";
 import { ApiError } from "../lib/api-client.js";
 import {
   analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup,
@@ -189,22 +190,75 @@ export function DataManagementPage() {
     setCloudSettings(settings);
   }
 
+  const knownCloudRuns = useRef<Map<string, string> | null>(null);
+
   useEffect(() => {
-    if (!canManageCloud || !accessToken) return;
+    if (!canManageCloud || !accessToken) {
+      knownCloudRuns.current = null;
+      return;
+    }
+
     let cancelled = false;
-    void Promise.all([
-      listCloudBackupConnections({ accessToken }),
-      listCloudBackupRuns({ accessToken }),
-      getCloudBackupSettings({ accessToken }),
-    ]).then(([connections, runs, settings]) => {
-      if (cancelled) return;
-      setCloudConnections(connections);
-      setCloudRuns(runs);
-      setCloudSettings(settings);
-    }).catch((error: unknown) => {
-      if (!cancelled) setCloudError(error instanceof Error ? error.message : "Could not load cloud backups.");
-    });
-    return () => { cancelled = true; };
+    let polling = false;
+
+    async function loadCloudData(initial: boolean) {
+      if (polling) return;
+      polling = true;
+      try {
+        const [connections, runs, settings] = await Promise.all([
+          listCloudBackupConnections({ accessToken }),
+          listCloudBackupRuns({ accessToken }),
+          getCloudBackupSettings({ accessToken }),
+        ]);
+        if (cancelled) return;
+
+        const previous = knownCloudRuns.current;
+        const next = new Map<string, string>();
+
+        for (const run of runs) {
+          next.set(run.id, run.status);
+          if (initial || !previous) continue;
+
+          const priorStatus = previous.get(run.id);
+          const isNewScheduled = !previous.has(run.id) && run.trigger === "SCHEDULED";
+          const statusChanged = priorStatus !== undefined && priorStatus !== run.status;
+          if (!isNewScheduled && !statusChanged) continue;
+
+          publishCloudBackupNotification({
+            status: run.status === "SUCCEEDED" ? "success" : run.status === "FAILED" ? "error" : "progress",
+            title: run.trigger === "SCHEDULED" ? "Scheduled cloud backup" : "Cloud backup",
+            message: run.status === "SUCCEEDED"
+              ? "Backup completed successfully."
+              : run.status === "FAILED"
+                ? (run.errorMessage || "Backup failed. Check the backup run details.")
+                : `Backup ${run.status.toLowerCase()}. LaundryAngel is checking its status.`,
+            source: run.trigger === "SCHEDULED" ? "scheduled" : "manual",
+            runId: run.id,
+          });
+        }
+
+        knownCloudRuns.current = next;
+        setCloudConnections(connections);
+        setCloudRuns(runs);
+        setCloudSettings(settings);
+      } catch (error) {
+        if (!cancelled && initial) {
+          setCloudError(error instanceof Error ? error.message : "Could not load cloud backups.");
+        }
+      } finally {
+        polling = false;
+      }
+    }
+
+    void loadCloudData(true);
+    const interval = window.setInterval(() => {
+      void loadCloudData(false);
+    }, 15_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, [accessToken, canManageCloud]);
 
   useEffect(() => {
@@ -265,7 +319,11 @@ export function DataManagementPage() {
     }
   }
 
-  async function cloudAction(action: (authorization: string) => Promise<unknown>, success: string) {
+  async function cloudAction(
+    action: (authorization: string) => Promise<unknown>,
+    success: string,
+    notificationSource?: "manual",
+  ) {
     let authorization: string | null;
     try {
       authorization = await requestSensitiveAuthorization();
@@ -281,11 +339,48 @@ export function DataManagementPage() {
     setCloudError(null);
     setCloudMessage(null);
     try {
-      await action(authorization);
-      await refreshCloudData();
+      const result = await action(authorization);
+      if (notificationSource === "manual") {
+        const run = result as Partial<CloudBackupRun> | null;
+        if (run && typeof run.id === "string" && typeof run.status === "string") {
+          knownCloudRuns.current?.set(run.id, run.status);
+          publishCloudBackupNotification({
+            status: run.status === "SUCCEEDED" ? "success" : run.status === "FAILED" ? "error" : "progress",
+            title: "Manual cloud backup",
+            message: run.status === "SUCCEEDED"
+              ? "Backup completed successfully."
+              : run.status === "FAILED"
+                ? (run.errorMessage || "Backup failed. Check the backup run details.")
+                : `Backup ${run.status.toLowerCase()}. LaundryAngel is checking its status.`,
+            source: "manual",
+            runId: run.id,
+          });
+        } else {
+          publishCloudBackupNotification({
+            status: "progress",
+            title: "Manual cloud backup",
+            message: "The backup request was accepted. LaundryAngel is checking its status.",
+            source: "manual",
+          });
+        }
+      }
+
       setCloudMessage(success);
+      try {
+        await refreshCloudData();
+      } catch {
+        setCloudMessage(`${success} The latest backup list could not be refreshed.`);
+      }
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : "Cloud backup action failed.");
+      if (notificationSource === "manual") {
+        publishCloudBackupNotification({
+          status: "error",
+          title: "Manual cloud backup",
+          message: error instanceof Error ? error.message : "Cloud backup action failed.",
+          source: "manual",
+        });
+      }
       try {
         await refreshCloudData();
       } catch {
@@ -332,12 +427,21 @@ export function DataManagementPage() {
         { ...cloudSettings, enabled: cloudSettings.enabled },
       );
       setCloudSettings(saved);
-      await refreshCloudData();
-      setCloudMessage(
-        saved.enabled
-          ? "Backup preferences saved. Automatic backups are enabled for the selected verified destination."
-          : "Backup preferences saved. Automatic backups are disabled.",
-      );
+      const savedMessage = saved.enabled
+        ? "Backup preferences saved. Automatic backups are enabled for the selected verified destination."
+        : "Backup preferences saved. Automatic backups are disabled.";
+      setCloudMessage(savedMessage);
+      publishCloudBackupNotification({
+        status: "success",
+        title: "Cloud backup preferences saved",
+        message: savedMessage,
+        source: "settings",
+      });
+      try {
+        await refreshCloudData();
+      } catch {
+        setCloudMessage(`${savedMessage} The latest backup list could not be refreshed.`);
+      }
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : "Could not save backup preferences.");
     } finally {
@@ -557,7 +661,8 @@ export function DataManagementPage() {
               <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => {
                 void cloudAction(
                   (authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }),
-                  "Manual backup run completed.",
+                  "Manual backup request submitted.",
+                  "manual",
                 );
               }}>Run backup now</button>
             </article>
