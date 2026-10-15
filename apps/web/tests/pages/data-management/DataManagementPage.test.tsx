@@ -2,7 +2,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import {
+  getCloudBackupSettings,
   listCloudBackupConnections,
+  saveCloudBackupSettings,
   verifyCloudBackupConnection,
 } from "../../../src/lib/data-management-api.js";
 
@@ -96,6 +98,36 @@ describe("DataManagementPage authorization", () => {
 
     expect(await screen.findByText("Authorization service unavailable.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).not.toHaveBeenCalled();
+  });
+
+  it("shows an error and does not save preferences if sensitive authorization rejects", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(getCloudBackupSettings).mockResolvedValue({
+      id: "settings-1",
+      enabled: false,
+      frequency: "DAILY",
+      dayOfWeek: 0,
+      dayOfMonth: 1,
+      hour: 2,
+      minute: 0,
+      timezone: "Africa/Lagos",
+      retentionCount: 7,
+      destinationConnectionId: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    });
+    mockCloudOAuth.requestSensitiveAuthorization.mockRejectedValue(
+      new Error("Authorization service unavailable."),
+    );
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Save preferences" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Authorization service unavailable.",
+    );
+    expect(vi.mocked(saveCloudBackupSettings)).not.toHaveBeenCalled();
   });
 
   it("refreshes destination status after verification fails", async () => {

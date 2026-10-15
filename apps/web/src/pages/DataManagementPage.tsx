@@ -312,7 +312,13 @@ export function DataManagementPage() {
       return;
     }
 
-    const authorization = await requestSensitiveAuthorization();
+    let authorization: string | null;
+    try {
+      authorization = await requestSensitiveAuthorization();
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Sensitive authorization failed.");
+      return;
+    }
     if (!authorization) {
       setCloudError("Sensitive authorization was cancelled.");
       return;
