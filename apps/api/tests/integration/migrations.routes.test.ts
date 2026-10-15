@@ -26,6 +26,10 @@ const {
   createCloudBackupRunController,
   listCloudBackupRunsController,
   startCloudOAuthController,
+  listCloudBackupSchedulesController,
+  createCloudBackupScheduleController,
+  updateCloudBackupScheduleController,
+  deleteCloudBackupScheduleController,
 } = vi.hoisted(() => ({
   verifyAccessToken: vi.fn(),
   findUser: vi.fn(),
@@ -48,6 +52,10 @@ const {
   createCloudBackupRunController: vi.fn((_req, res) => res.status(201).json({ id: "run-1" })),
   listCloudBackupRunsController: vi.fn((_req, res) => res.status(200).json([])),
   startCloudOAuthController: vi.fn((_req, res) => res.status(200).json({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" })),
+  listCloudBackupSchedulesController: vi.fn((_req, res) => res.status(200).json([])),
+  createCloudBackupScheduleController: vi.fn((_req, res) => res.status(201).json({ id: "schedule-1" })),
+  updateCloudBackupScheduleController: vi.fn((_req, res) => res.status(200).json({ id: "schedule-1" })),
+  deleteCloudBackupScheduleController: vi.fn((_req, res) => res.status(204).end()),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -156,6 +164,10 @@ vi.mock("../../src/modules/migrations/backup-cloud.controller.js", () => ({
   createCloudBackupRunController,
   listCloudBackupRunsController,
   startCloudOAuthController,
+  listCloudBackupSchedulesController,
+  createCloudBackupScheduleController,
+  updateCloudBackupScheduleController,
+  deleteCloudBackupScheduleController,
 }));
 
 vi.mock("../../src/lib/audit.js", () => ({
@@ -551,6 +563,47 @@ describe("Migrations routes - existing role boundaries", () => {
 
     expect(response.status).toBe(403);
     expect(createCloudConnectionController).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a branch manager to list cloud backup schedules", async () => {
+    authAs("BRANCH_MANAGER");
+
+    const response = await request(createApp())
+      .get("/api/v1/migrations/backup/cloud/schedules")
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(403);
+    expect(listCloudBackupSchedulesController).not.toHaveBeenCalled();
+  });
+
+  it("denies schedule creation when migrations.manage is explicitly denied", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockImplementation(async (
+      _userId: string,
+      _businessId: string,
+      _role: string,
+      permissionCode: string,
+    ) => permissionCode !== "migrations.manage");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/cloud/schedules")
+      .set("Authorization", "Bearer test-token")
+      .send({
+        name: "Daily backup",
+        enabled: false,
+        frequency: "DAILY",
+        dayOfWeek: 1,
+        dayOfMonth: 1,
+        hour: 2,
+        minute: 0,
+        clockFormat: "12H",
+        timezone: "Africa/Lagos",
+        retentionCount: 30,
+        destinationConnectionId: null,
+      });
+
+    expect(response.status).toBe(403);
+    expect(createCloudBackupScheduleController).not.toHaveBeenCalled();
   });
 
   it("does not allow a branch manager to restore a backup", async () => {

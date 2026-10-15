@@ -1,12 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import {
   createCloudBackupRun,
+  createCloudBackupSchedule,
+  deleteCloudBackupSchedule,
   getCloudBackupSettings,
   listCloudBackupConnections,
   listCloudBackupRuns,
+  listCloudBackupSchedules,
   saveCloudBackupSettings,
+  updateCloudBackupSchedule,
   verifyCloudBackupConnection,
 } from "../../../src/lib/data-management-api.js";
 import { CLOUD_BACKUP_NOTIFICATION_EVENT } from "../../../src/lib/cloud-backup-notifications.js";
@@ -40,6 +44,10 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   verifyCloudBackupConnection: vi.fn(),
   createCloudBackupRun: vi.fn(),
   listCloudBackupRuns: vi.fn().mockResolvedValue([]),
+  listCloudBackupSchedules: vi.fn().mockResolvedValue([]),
+  createCloudBackupSchedule: vi.fn(),
+  updateCloudBackupSchedule: vi.fn(),
+  deleteCloudBackupSchedule: vi.fn(),
   getCloudBackupSettings: vi.fn().mockResolvedValue(null),
   saveCloudBackupSettings: vi.fn(),
 }));
@@ -75,55 +83,55 @@ describe("DataManagementPage authorization", () => {
     mockCloudOAuth.requestSensitiveAuthorization.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
     vi.mocked(listCloudBackupConnections).mockReset().mockResolvedValue([]);
+    vi.mocked(listCloudBackupRuns).mockReset().mockResolvedValue([]);
+    vi.mocked(listCloudBackupSchedules).mockReset().mockResolvedValue([]);
+    vi.mocked(createCloudBackupSchedule).mockReset();
+    vi.mocked(updateCloudBackupSchedule).mockReset();
+    vi.mocked(deleteCloudBackupSchedule).mockReset();
     vi.mocked(verifyCloudBackupConnection).mockReset();
     vi.mocked(saveCloudBackupSettings).mockClear();
   });
 
-  it("keeps settings-save success when refreshing cloud data fails", async () => {
+  it("opens the independent backup schedule editor", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
 
-    const settings = {
-      id: "settings-1",
-      enabled: false,
-      frequency: "DAILY" as const,
-      dayOfWeek: 0,
-      dayOfMonth: 1,
-      hour: 2,
-      minute: 0,
-      timezone: "Africa/Lagos",
-      retentionCount: 7,
-      destinationConnectionId: null,
-      createdAt: "2026-10-14T10:00:00.000Z",
-      updatedAt: "2026-10-14T10:00:00.000Z",
-    };
-
-    vi.mocked(getCloudBackupSettings).mockResolvedValue(settings);
-    vi.mocked(saveCloudBackupSettings).mockResolvedValue(settings);
-    vi.mocked(listCloudBackupRuns)
-      .mockReset()
-      .mockResolvedValueOnce([])
-      .mockRejectedValueOnce(new Error("Backup list refresh failed."));
-
-    const notifications: CustomEvent[] = [];
-    const listener = (event: Event) => notifications.push(event as CustomEvent);
-    window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
-
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Save preferences" }));
 
-    expect(
-      await screen.findByText(/backup preferences saved\. automatic backups are disabled/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/latest backup list could not be refreshed/i)).toBeInTheDocument();
-    expect(saveCloudBackupSettings).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
 
-    expect(notifications.some((event) =>
-      event.detail?.source === "settings" &&
-      event.detail?.status === "success"
-    )).toBe(true);
+    expect(await screen.findByRole("textbox", { name: "Schedule name" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Frequency" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create schedule" })).toBeTruthy();
+  });
 
-    window.removeEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
+  it("preserves unsaved schedule edits when background polling returns stale data", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    vi.mocked(listCloudBackupRuns).mockReset().mockResolvedValue([]);
+    vi.mocked(listCloudBackupSchedules).mockReset().mockResolvedValue([]);
+    vi.useFakeTimers();
+
+    try {
+      render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+      fireEvent.click(screen.getByRole("button", { name: "Add schedule" }));
+
+      const frequency = screen.getByRole("combobox", { name: "Frequency" });
+      fireEvent.change(frequency, { target: { value: "WEEKLY" } });
+
+      expect(frequency).toHaveValue("WEEKLY");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+
+      expect(frequency).toHaveValue("WEEKLY");
+      expect(screen.getByRole("combobox", { name: "Day of week" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("publishes a persistent notification when a manual backup starts", async () => {
@@ -212,34 +220,26 @@ describe("DataManagementPage authorization", () => {
     expect(vi.mocked(verifyCloudBackupConnection)).not.toHaveBeenCalled();
   });
 
-  it("shows an error and does not save preferences if sensitive authorization rejects", async () => {
+  it("does not create a schedule if sensitive authorization rejects", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
-    vi.mocked(getCloudBackupSettings).mockResolvedValue({
-      id: "settings-1",
-      enabled: false,
-      frequency: "DAILY",
-      dayOfWeek: 0,
-      dayOfMonth: 1,
-      hour: 2,
-      minute: 0,
-      timezone: "Africa/Lagos",
-      retentionCount: 7,
-      destinationConnectionId: null,
-      createdAt: "2026-10-14T10:00:00.000Z",
-      updatedAt: "2026-10-14T10:00:00.000Z",
-    });
     mockCloudOAuth.requestSensitiveAuthorization.mockRejectedValue(
       new Error("Authorization service unavailable."),
     );
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Save preferences" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Schedule name" }),
+      { target: { value: "Nightly backup" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Authorization service unavailable.",
     );
-    expect(vi.mocked(saveCloudBackupSettings)).not.toHaveBeenCalled();
+    expect(createCloudBackupSchedule).not.toHaveBeenCalled();
   });
 
   it("refreshes destination status after verification fails", async () => {

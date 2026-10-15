@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   backupSettingsFindUnique,
+  backupScheduleFindFirst,
   connectionFindFirst,
   backupRunFindMany,
   backupRunUpdateMany,
@@ -11,6 +12,7 @@ const {
   loggerError,
 } = vi.hoisted(() => ({
   backupSettingsFindUnique: vi.fn(),
+  backupScheduleFindFirst: vi.fn(),
   connectionFindFirst: vi.fn(),
   backupRunFindMany: vi.fn(),
   backupRunUpdateMany: vi.fn(),
@@ -23,6 +25,7 @@ const {
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     backupSettings: { findUnique: backupSettingsFindUnique },
+    backupSchedule: { findFirst: backupScheduleFindFirst },
     backupCloudConnection: { findFirst: connectionFindFirst },
     backupRun: {
       findMany: backupRunFindMany,
@@ -80,6 +83,7 @@ describe("pruneCloudBackupRuns", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     backupSettingsFindUnique.mockResolvedValue(settings);
+    backupScheduleFindFirst.mockResolvedValue({ id: "schedule-1", retentionCount: 2 });
     connectionFindFirst.mockResolvedValue(connection);
     backupRunUpdateMany.mockResolvedValue({ count: 1 });
     deleteArtifact.mockResolvedValue(undefined);
@@ -118,6 +122,43 @@ describe("pruneCloudBackupRuns", () => {
     }));
   });
 
+  it("isolates retention to the selected schedule", async () => {
+    backupScheduleFindFirst.mockResolvedValue({ id: "schedule-2", retentionCount: 1 });
+    backupRunFindMany.mockResolvedValue([
+      { id: "schedule-2-newest", storageKey: "backups/schedule-2-newest.enc" },
+      { id: "schedule-2-oldest", storageKey: "backups/schedule-2-oldest.enc" },
+    ]);
+
+    await expect(
+      pruneCloudBackupRuns("business-1", "connection-1", "schedule-2"),
+    ).resolves.toEqual({ deleted: 1 });
+
+    expect(backupScheduleFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "schedule-2",
+        businessId: "business-1",
+        destinationConnectionId: "connection-1",
+      },
+      select: { id: true, retentionCount: true },
+    });
+    expect(backupSettingsFindUnique).not.toHaveBeenCalled();
+    expect(backupRunFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: "business-1",
+        connectionId: "connection-1",
+        scheduleId: "schedule-2",
+        status: "SUCCEEDED",
+      }),
+    }));
+    expect(backupRunUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "schedule-2-oldest",
+        scheduleId: "schedule-2",
+      }),
+      data: { storageKey: null },
+    }));
+  });
+
   it("does not prune when the connection is not the configured destination", async () => {
     backupSettingsFindUnique.mockResolvedValue({
       ...settings,
@@ -148,6 +189,7 @@ describe("pruneCloudBackupRuns", () => {
       where: {
         businessId: "business-1",
         connectionId: "connection-1",
+        scheduleId: null,
         status: "SUCCEEDED",
         storageKey: { not: null },
       },
@@ -163,6 +205,7 @@ describe("pruneCloudBackupRuns", () => {
         id: "oldest",
         businessId: "business-1",
         connectionId: "connection-1",
+        scheduleId: null,
         status: "SUCCEEDED",
         storageKey: "backups/oldest.enc",
       },

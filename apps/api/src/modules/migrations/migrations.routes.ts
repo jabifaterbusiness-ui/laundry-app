@@ -18,6 +18,10 @@ import {
   createCloudBackupRunController,
   listCloudBackupRunsController,
   startCloudOAuthController,
+  listCloudBackupSchedulesController,
+  createCloudBackupScheduleController,
+  updateCloudBackupScheduleController,
+  deleteCloudBackupScheduleController,
 } from "./backup-cloud.controller.js";
 
 const ADMIN_ROLES = ["BUSINESS_OWNER", "BRANCH_MANAGER"] as const;
@@ -74,6 +78,34 @@ migrationsRouter.put(
   asyncHandler(saveCloudBackupSettingsController),
 );
 
+
+migrationsRouter.get(
+  "/backup/cloud/schedules",
+  requireRole(...OWNER_ONLY),
+  requirePermission("migrations.view"),
+  asyncHandler(listCloudBackupSchedulesController),
+);
+migrationsRouter.post(
+  "/backup/cloud/schedules",
+  requireRole(...OWNER_ONLY),
+  requirePermission("migrations.manage"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(createCloudBackupScheduleController),
+);
+migrationsRouter.patch(
+  "/backup/cloud/schedules/:id",
+  requireRole(...OWNER_ONLY),
+  requirePermission("migrations.manage"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(updateCloudBackupScheduleController),
+);
+migrationsRouter.delete(
+  "/backup/cloud/schedules/:id",
+  requireRole(...OWNER_ONLY),
+  requirePermission("migrations.manage"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(deleteCloudBackupScheduleController),
+);
 
 migrationsRouter.get(
   "/backup/cloud/runs",

@@ -15,6 +15,11 @@ import {
   getBackupSettings,
   listBackupConnections,
   saveBackupSettings,
+  listBackupSchedules,
+  createBackupSchedule,
+  updateBackupSchedule,
+  deleteBackupSchedule,
+  type BackupScheduleInput,
 } from "./backup-cloud.service.js";
 
 function businessId(req: Request): string {
@@ -41,6 +46,90 @@ const settingsSchema = z.object({
   retentionCount: z.number().int().min(1).max(365),
   destinationConnectionId: z.string().uuid().nullable(),
 }).strict();
+
+
+const backupScheduleSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  enabled: z.boolean(),
+  frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY"]),
+  dayOfWeek: z.number().int().min(0).max(6),
+  dayOfMonth: z.number().int().min(1).max(31),
+  hour: z.number().int().min(0).max(23),
+  minute: z.number().int().min(0).max(59),
+  clockFormat: z.enum(["12H", "24H"]),
+  timezone: z.string().trim().min(1).max(100),
+  retentionCount: z.number().int().min(1).max(365),
+  destinationConnectionId: z.string().uuid().nullable(),
+}).strict();
+
+const backupSchedulePatchSchema = backupScheduleSchema.partial().strict();
+
+export async function listCloudBackupSchedulesController(req: Request, res: Response) {
+  res.status(200).json({ schedules: await listBackupSchedules(businessId(req)) });
+}
+
+export async function createCloudBackupScheduleController(req: Request, res: Response) {
+  const input = backupScheduleSchema.parse(req.body) as BackupScheduleInput;
+  const tenantId = businessId(req);
+  const schedule = await createBackupSchedule(tenantId, input);
+  await recordAuditEvent({
+    action: "backup.schedule.created",
+    entityType: "BackupSchedule",
+    entityId: schedule.id,
+    businessId: tenantId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      frequency: schedule.frequency,
+      enabled: schedule.enabled,
+      destinationConnectionId: schedule.destinationConnectionId,
+    },
+  });
+  res.status(201).json({ schedule });
+}
+
+export async function updateCloudBackupScheduleController(req: Request, res: Response) {
+  const parsed = backupSchedulePatchSchema.parse(req.body);
+  if (Object.keys(parsed).length === 0) {
+    throw new AppError("Provide at least one schedule field to update.", 422);
+  }
+  const input: Partial<BackupScheduleInput> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value !== undefined) {
+      Object.assign(input, { [key]: value });
+    }
+  }
+  const tenantId = businessId(req);
+  const schedule = await updateBackupSchedule(tenantId, req.params.id!, input);
+  await recordAuditEvent({
+    action: "backup.schedule.updated",
+    entityType: "BackupSchedule",
+    entityId: schedule.id,
+    businessId: tenantId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      frequency: schedule.frequency,
+      enabled: schedule.enabled,
+      destinationConnectionId: schedule.destinationConnectionId,
+    },
+  });
+  res.status(200).json({ schedule });
+}
+
+export async function deleteCloudBackupScheduleController(req: Request, res: Response) {
+  const tenantId = businessId(req);
+  const result = await deleteBackupSchedule(tenantId, req.params.id!);
+  await recordAuditEvent({
+    action: "backup.schedule.deleted",
+    entityType: "BackupSchedule",
+    entityId: req.params.id!,
+    businessId: tenantId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+  });
+  res.status(200).json(result);
+}
 
 export async function listCloudConnectionsController(req: Request, res: Response) {
   res.status(200).json({ connections: await listBackupConnections(businessId(req)) });

@@ -6,7 +6,7 @@ const { findMany, createCloudBackupRun } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
-  prisma: { backupSettings: { findMany } },
+  prisma: { backupSchedule: { findMany } },
 }));
 vi.mock("../../src/modules/migrations/backup-cloud-runs.service.js", () => ({
   createCloudBackupRun,
@@ -18,6 +18,7 @@ import {
 } from "../../src/modules/migrations/backup-cloud-scheduler.service.js";
 
 const baseSchedule = {
+  id: "schedule-1",
   businessId: "business-1",
   enabled: true,
   frequency: "DAILY" as const,
@@ -48,6 +49,14 @@ describe("isBackupScheduleDue", () => {
     expect(isBackupScheduleDue({ ...baseSchedule, frequency: "MONTHLY", dayOfMonth: 14 }, now)).toBe(true);
   });
 
+  it("runs monthly schedules on the final day when the requested date does not exist", () => {
+    const monthly = { ...baseSchedule, frequency: "MONTHLY" as const, dayOfMonth: 31 };
+    expect(isBackupScheduleDue(monthly, new Date("2027-02-28T01:30:00.000Z"))).toBe(true);
+    expect(isBackupScheduleDue(monthly, new Date("2028-02-29T01:30:00.000Z"))).toBe(true);
+    expect(isBackupScheduleDue(monthly, new Date("2027-02-27T01:30:00.000Z"))).toBe(false);
+    expect(isBackupScheduleDue(monthly, new Date("2027-04-30T01:30:00.000Z"))).toBe(true);
+  });
+
   it("rejects a different configured minute and invalid timezones", () => {
     expect(isBackupScheduleDue({ ...baseSchedule, minute: 31 }, now)).toBe(false);
     expect(() => isBackupScheduleDue({ ...baseSchedule, timezone: "Not/A_Timezone" }, now)).toThrow();
@@ -71,7 +80,11 @@ describe("processScheduledCloudBackups", () => {
     expect(createCloudBackupRun).toHaveBeenCalledWith(
       "business-1",
       "connection-1",
-      { trigger: "SCHEDULED", scheduledFor: new Date("2026-10-14T01:30:00.000Z") },
+      {
+        trigger: "SCHEDULED",
+        scheduledFor: new Date("2026-10-14T01:30:00.000Z"),
+        scheduleId: "schedule-1",
+      },
     );
   });
 

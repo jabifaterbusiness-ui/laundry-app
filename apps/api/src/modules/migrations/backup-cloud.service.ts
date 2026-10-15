@@ -113,6 +113,14 @@ export async function deleteBackupConnection(businessId: string, connectionId: s
     throw new AppError("Choose another backup destination before deleting this connection.", 409);
   }
 
+  const scheduledSelection = await prisma.backupSchedule.findFirst({
+    where: { businessId, destinationConnectionId: connectionId },
+    select: { id: true },
+  });
+  if (scheduledSelection) {
+    throw new AppError("Choose another destination or remove schedules using this connection before deleting it.", 409);
+  }
+
   const runs = await prisma.backupRun.findFirst({
     where: { businessId, connectionId },
     select: { id: true },
@@ -125,6 +133,185 @@ export async function deleteBackupConnection(businessId: string, connectionId: s
     where: { businessId_id: { businessId, id: connectionId } },
   });
   return { deleted: true };
+}
+
+export type BackupScheduleInput = {
+  name: string;
+  enabled: boolean;
+  frequency: BackupScheduleFrequency;
+  dayOfWeek: number;
+  dayOfMonth: number;
+  hour: number;
+  minute: number;
+  clockFormat: "12H" | "24H";
+  timezone: string;
+  retentionCount: number;
+  destinationConnectionId: string | null;
+};
+
+const backupScheduleSelect = {
+  id: true,
+  businessId: true,
+  name: true,
+  enabled: true,
+  frequency: true,
+  dayOfWeek: true,
+  dayOfMonth: true,
+  hour: true,
+  minute: true,
+  clockFormat: true,
+  timezone: true,
+  retentionCount: true,
+  destinationConnectionId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.BackupScheduleSelect;
+
+function validateBackupSchedule(input: BackupScheduleInput): void {
+  const name = input.name.trim();
+  if (!name || name.length > 100) {
+    throw new AppError("Schedule name must be between 1 and 100 characters.", 422);
+  }
+
+  const ranges: Array<[string, number, number, number]> = [
+    ["dayOfWeek", input.dayOfWeek, 0, 6],
+    ["dayOfMonth", input.dayOfMonth, 1, 31],
+    ["hour", input.hour, 0, 23],
+    ["minute", input.minute, 0, 59],
+    ["retentionCount", input.retentionCount, 1, 365],
+  ];
+  for (const [field, value, min, max] of ranges) {
+    if (!Number.isInteger(value) || value < min || value > max) {
+      throw new AppError(`${field} must be an integer between ${min} and ${max}.`, 422);
+    }
+  }
+
+  if (input.clockFormat !== "12H" && input.clockFormat !== "24H") {
+    throw new AppError("Clock format must be 12H or 24H.", 422);
+  }
+  validateTimezone(input.timezone);
+
+  if (input.enabled && !input.destinationConnectionId) {
+    throw new AppError("Select a verified cloud destination before enabling this schedule.", 422);
+  }
+}
+
+async function validateScheduleDestination(
+  businessId: string,
+  input: BackupScheduleInput,
+): Promise<void> {
+  if (!input.destinationConnectionId) return;
+
+  const where = {
+    id: input.destinationConnectionId,
+    businessId,
+  };
+
+  if (input.enabled) {
+    const verified = await prisma.backupCloudConnection.findFirst({
+      where: { ...where, status: "CONNECTED", verifiedAt: { not: null } },
+      select: { id: true },
+    });
+    if (!verified) {
+      throw new AppError("The selected cloud destination has not been verified.", 422);
+    }
+    return;
+  }
+
+  const owned = await prisma.backupCloudConnection.findFirst({
+    where,
+    select: { id: true },
+  });
+  if (!owned) throw new AppError("Cloud connection not found for this business.", 404);
+}
+
+export async function listBackupSchedules(businessId: string) {
+  return prisma.backupSchedule.findMany({
+    where: { businessId },
+    select: backupScheduleSelect,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+}
+
+export async function createBackupSchedule(
+  businessId: string,
+  input: BackupScheduleInput,
+) {
+  const normalized: BackupScheduleInput = { ...input, name: input.name.trim() };
+  validateBackupSchedule(normalized);
+  await validateScheduleDestination(businessId, normalized);
+
+  return prisma.$transaction(async (tx) => {
+    const count = await tx.backupSchedule.count({ where: { businessId } });
+    if (count >= 10) {
+      throw new AppError("A business can have at most 10 backup schedules.", 409);
+    }
+
+    return tx.backupSchedule.create({
+      data: { businessId, ...normalized },
+      select: backupScheduleSelect,
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function updateBackupSchedule(
+  businessId: string,
+  scheduleId: string,
+  patch: Partial<BackupScheduleInput>,
+) {
+  const current = await prisma.backupSchedule.findFirst({
+    where: { id: scheduleId, businessId },
+    select: backupScheduleSelect,
+  });
+  if (!current) throw new AppError("Backup schedule not found.", 404);
+
+  const normalized: BackupScheduleInput = {
+    name: patch.name ?? current.name,
+    enabled: patch.enabled ?? current.enabled,
+    frequency: patch.frequency ?? current.frequency,
+    dayOfWeek: patch.dayOfWeek ?? current.dayOfWeek,
+    dayOfMonth: patch.dayOfMonth ?? current.dayOfMonth,
+    hour: patch.hour ?? current.hour,
+    minute: patch.minute ?? current.minute,
+    clockFormat: patch.clockFormat ?? current.clockFormat as "12H" | "24H",
+    timezone: patch.timezone ?? current.timezone,
+    retentionCount: patch.retentionCount ?? current.retentionCount,
+    destinationConnectionId: patch.destinationConnectionId === undefined
+      ? current.destinationConnectionId
+      : patch.destinationConnectionId,
+  };
+
+  normalized.name = normalized.name.trim();
+  validateBackupSchedule(normalized);
+  await validateScheduleDestination(businessId, normalized);
+
+  return prisma.backupSchedule.update({
+    where: { businessId_id: { businessId, id: scheduleId } },
+    data: normalized,
+    select: backupScheduleSelect,
+  });
+}
+
+export async function deleteBackupSchedule(businessId: string, scheduleId: string) {
+  return prisma.$transaction(async (tx) => {
+    const schedule = await tx.backupSchedule.findFirst({
+      where: { id: scheduleId, businessId },
+      select: { id: true },
+    });
+    if (!schedule) throw new AppError("Backup schedule not found.", 404);
+
+    // Preserve run history while removing its restrictive schedule relation.
+    await tx.backupRun.updateMany({
+      where: { businessId, scheduleId },
+      data: { scheduleId: null },
+    });
+
+    await tx.backupSchedule.delete({
+      where: { businessId_id: { businessId, id: scheduleId } },
+    });
+
+    return { deleted: true };
+  });
 }
 
 export async function getBackupSettings(businessId: string) {

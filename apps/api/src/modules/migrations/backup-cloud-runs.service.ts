@@ -113,7 +113,7 @@ export async function verifyBackupCloudConnection(
 export async function createCloudBackupRun(
   businessId: string,
   connectionId: string,
-  options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date } = {},
+  options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date; scheduleId?: string } = {},
 ) {
   const connection = await prisma.backupCloudConnection.findFirst({
     where: { businessId, id: connectionId },
@@ -141,15 +141,38 @@ export async function createCloudBackupRun(
   }
 
   const trigger = options.trigger ?? "MANUAL";
+  let scheduleId: string | null = null;
+
+  if (trigger === "SCHEDULED") {
+    if (!options.scheduleId || !options.scheduledFor) {
+      throw new AppError("A scheduled backup requires a schedule and scheduled time.", 422);
+    }
+
+    const schedule = await prisma.backupSchedule.findFirst({
+      where: {
+        id: options.scheduleId,
+        businessId,
+        enabled: true,
+        destinationConnectionId: connectionId,
+      },
+      select: { id: true },
+    });
+
+    if (!schedule) {
+      throw new AppError("The backup schedule is unavailable for this destination.", 422);
+    }
+
+    scheduleId = schedule.id;
+  }
+
   const run = await prisma.backupRun.create({
     data: {
       businessId,
       connectionId,
+      scheduleId,
       trigger,
       status: "PENDING",
-      ...(trigger === "SCHEDULED" && options.scheduledFor
-        ? { scheduledFor: options.scheduledFor }
-        : {}),
+      ...(trigger === "SCHEDULED" ? { scheduledFor: options.scheduledFor } : {}),
     },
     select: { id: true },
   });
@@ -206,7 +229,7 @@ export async function createCloudBackupRun(
     // Retention runs after the new backup is safely uploaded. A cleanup error
     // must not turn a successfully stored backup into a failed backup run.
     try {
-      const retention = await pruneCloudBackupRuns(businessId, connectionId);
+      const retention = await pruneCloudBackupRuns(businessId, connectionId, scheduleId ?? undefined);
       if (retention.deleted > 0) {
         logger.info(
           `Cloud backup retention completed for business ${businessId}: deleted=${retention.deleted}.`,
@@ -276,25 +299,47 @@ export async function createCloudBackupRun(
 }
 
 /**
- * Keeps the newest successful backups for the selected destination. Database
- * history is retained; a storage key is cleared only after deletion succeeds.
+ * Keeps the newest successful backups for a destination or an individual schedule.
+ * Database history is retained; a storage key is cleared only after deletion succeeds.
  */
 export async function pruneCloudBackupRuns(
   businessId: string,
   connectionId: string,
+  scheduleId?: string,
 ) {
-  const settings = await prisma.backupSettings.findUnique({
-    where: { businessId },
-    select: { retentionCount: true, destinationConnectionId: true },
-  });
+  let retentionCount: number;
 
-  if (
-    !settings ||
-    settings.destinationConnectionId !== connectionId ||
-    !Number.isInteger(settings.retentionCount) ||
-    settings.retentionCount < 1
-  ) {
-    return { deleted: 0 };
+  if (scheduleId) {
+    const schedule = await prisma.backupSchedule.findFirst({
+      where: { id: scheduleId, businessId, destinationConnectionId: connectionId },
+      select: { id: true, retentionCount: true },
+    });
+
+    if (
+      !schedule ||
+      !Number.isInteger(schedule.retentionCount) ||
+      schedule.retentionCount < 1
+    ) {
+      return { deleted: 0 };
+    }
+
+    retentionCount = schedule.retentionCount;
+  } else {
+    const settings = await prisma.backupSettings.findUnique({
+      where: { businessId },
+      select: { retentionCount: true, destinationConnectionId: true },
+    });
+
+    if (
+      !settings ||
+      settings.destinationConnectionId !== connectionId ||
+      !Number.isInteger(settings.retentionCount) ||
+      settings.retentionCount < 1
+    ) {
+      return { deleted: 0 };
+    }
+
+    retentionCount = settings.retentionCount;
   }
 
   const destinationRecord = await prisma.backupCloudConnection.findFirst({
@@ -312,6 +357,7 @@ export async function pruneCloudBackupRuns(
     where: {
       businessId,
       connectionId,
+      scheduleId: scheduleId ?? null,
       status: "SUCCEEDED",
       storageKey: { not: null },
     },
@@ -320,7 +366,7 @@ export async function pruneCloudBackupRuns(
   });
 
   let deleted = 0;
-  for (const run of successfulRuns.slice(settings.retentionCount)) {
+  for (const run of successfulRuns.slice(retentionCount)) {
     if (!run.storageKey) continue;
 
     if (s3Destination) {
@@ -344,6 +390,7 @@ export async function pruneCloudBackupRuns(
         id: run.id,
         businessId,
         connectionId,
+        scheduleId: scheduleId ?? null,
         status: "SUCCEEDED",
         storageKey: run.storageKey,
       },
@@ -361,7 +408,7 @@ export async function listCloudBackupRuns(businessId: string) {
     orderBy: { createdAt: "desc" },
     take: 100,
     select: {
-      id: true, connectionId: true, trigger: true, status: true,
+      id: true, scheduleId: true, connectionId: true, trigger: true, status: true,
       storageKey: true, checksumSha256: true, sizeBytes: true,
       startedAt: true, scheduledFor: true, completedAt: true,
       errorMessage: true, createdAt: true,

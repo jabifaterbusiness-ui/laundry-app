@@ -6,7 +6,10 @@ import {
   listCloudBackupConnections, createCloudBackupConnection, startCloudBackupOAuth,
   verifyCloudBackupConnection, createCloudBackupRun, listCloudBackupRuns,
   getCloudBackupSettings, saveCloudBackupSettings,
+  listCloudBackupSchedules, createCloudBackupSchedule,
+  updateCloudBackupSchedule, deleteCloudBackupSchedule,
   type CloudBackupConnection, type CloudBackupRun, type CloudBackupSettings,
+  type CloudBackupSchedule, type CloudBackupScheduleInput,
   type MigrationAnalysisResponse,
 } from "../lib/data-management-api.js";
 import { useSensitiveAuthorization } from "../components/auth/SensitiveAuthorizationProvider.js";
@@ -99,6 +102,11 @@ export function DataManagementPage() {
   const [cloudConnections, setCloudConnections] = useState<CloudBackupConnection[]>([]);
   const [cloudRuns, setCloudRuns] = useState<CloudBackupRun[]>([]);
   const [cloudSettings, setCloudSettings] = useState<CloudBackupSettings | null>(null);
+  const cloudSettingsDirty = useRef(false);
+  const [cloudSchedules, setCloudSchedules] = useState<CloudBackupSchedule[]>([]);
+  const [cloudScheduleDraft, setCloudScheduleDraft] = useState<CloudBackupScheduleInput | null>(null);
+  const [editingCloudScheduleId, setEditingCloudScheduleId] = useState<string | null>(null);
+  const cloudSchedulesDirty = useRef(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [cloudMessage, setCloudMessage] = useState<string | null>(null);
@@ -180,14 +188,28 @@ export function DataManagementPage() {
   async function refreshCloudData() {
     if (!accessToken) return;
     const auth = { accessToken };
-    const [connections, runs, settings] = await Promise.all([
+    const [connections, runs, settings, schedules] = await Promise.all([
       listCloudBackupConnections(auth),
       listCloudBackupRuns(auth),
       getCloudBackupSettings(auth),
+      listCloudBackupSchedules(auth),
     ]);
     setCloudConnections(connections);
     setCloudRuns(runs);
-    setCloudSettings(settings);
+    setCloudSchedules((current) => {
+      if (cloudSchedulesDirty.current) return current;
+      return schedules;
+    });
+    if (!cloudSettingsDirty.current) {
+      setCloudSettings(settings);
+    }
+  }
+
+  function updateCloudSettings(
+    update: (current: CloudBackupSettings) => CloudBackupSettings,
+  ) {
+    cloudSettingsDirty.current = true;
+    setCloudSettings((current) => current ? update(current) : current);
   }
 
   const knownCloudRuns = useRef<Map<string, string> | null>(null);
@@ -205,10 +227,11 @@ export function DataManagementPage() {
       if (polling) return;
       polling = true;
       try {
-        const [connections, runs, settings] = await Promise.all([
+        const [connections, runs, settings, schedules] = await Promise.all([
           listCloudBackupConnections({ accessToken }),
           listCloudBackupRuns({ accessToken }),
           getCloudBackupSettings({ accessToken }),
+          listCloudBackupSchedules({ accessToken }),
         ]);
         if (cancelled) return;
 
@@ -240,7 +263,12 @@ export function DataManagementPage() {
         knownCloudRuns.current = next;
         setCloudConnections(connections);
         setCloudRuns(runs);
-        setCloudSettings(settings);
+        if (!cloudSchedulesDirty.current) {
+          setCloudSchedules(schedules);
+        }
+        if (!cloudSettingsDirty.current) {
+          setCloudSettings(settings);
+        }
       } catch (error) {
         if (!cancelled && initial) {
           setCloudError(error instanceof Error ? error.message : "Could not load cloud backups.");
@@ -391,6 +419,129 @@ export function DataManagementPage() {
     }
   }
 
+  function newCloudScheduleDraft(): CloudBackupScheduleInput {
+    return {
+      name: "",
+      enabled: false,
+      frequency: "DAILY",
+      dayOfWeek: 1,
+      dayOfMonth: 1,
+      hour: 2,
+      minute: 0,
+      clockFormat: "12H",
+      timezone: "Africa/Lagos",
+      retentionCount: 30,
+      destinationConnectionId: null,
+    };
+  }
+
+  function startCloudScheduleEdit(schedule?: CloudBackupSchedule) {
+    cloudSchedulesDirty.current = false;
+    setEditingCloudScheduleId(schedule?.id ?? null);
+    setCloudScheduleDraft(schedule ? {
+      name: schedule.name,
+      enabled: schedule.enabled,
+      frequency: schedule.frequency,
+      dayOfWeek: schedule.dayOfWeek,
+      dayOfMonth: schedule.dayOfMonth,
+      hour: schedule.hour,
+      minute: schedule.minute,
+      clockFormat: schedule.clockFormat,
+      timezone: schedule.timezone,
+      retentionCount: schedule.retentionCount,
+      destinationConnectionId: schedule.destinationConnectionId,
+    } : newCloudScheduleDraft());
+    setCloudError(null);
+    setCloudMessage(null);
+  }
+
+  function updateCloudScheduleDraft(
+    update: (current: CloudBackupScheduleInput) => CloudBackupScheduleInput,
+  ) {
+    cloudSchedulesDirty.current = true;
+    setCloudScheduleDraft((current) => current ? update(current) : current);
+  }
+
+  async function handleCloudScheduleSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !cloudScheduleDraft) return;
+
+    const destination = cloudConnections.find(
+      (connection) => connection.id === cloudScheduleDraft.destinationConnectionId,
+    );
+    if (cloudScheduleDraft.enabled &&
+      (!destination || destination.status !== "CONNECTED" || !destination.verifiedAt)) {
+      setCloudError("To enable this schedule, select a connected and verified destination.");
+      return;
+    }
+
+    let authorization: string | null;
+    try {
+      authorization = await requestSensitiveAuthorization();
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Sensitive authorization failed.");
+      return;
+    }
+    if (!authorization) {
+      setCloudError("Sensitive authorization was cancelled.");
+      return;
+    }
+
+    setCloudBusy(true);
+    setCloudError(null);
+    setCloudMessage(null);
+    try {
+      const auth = { accessToken, sensitiveAuthorization: authorization };
+      const saved = editingCloudScheduleId
+        ? await updateCloudBackupSchedule(editingCloudScheduleId, auth, cloudScheduleDraft)
+        : await createCloudBackupSchedule(auth, cloudScheduleDraft);
+
+      setCloudSchedules((current) => editingCloudScheduleId
+        ? current.map((item) => item.id === saved.id ? saved : item)
+        : [...current, saved]);
+      cloudSchedulesDirty.current = false;
+      setCloudScheduleDraft(null);
+      setEditingCloudScheduleId(null);
+      setCloudMessage(`Schedule "${saved.name}" ${editingCloudScheduleId ? "updated" : "created"}.`);
+      await refreshCloudData();
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Could not save the backup schedule.");
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
+  async function handleCloudScheduleToggle(schedule: CloudBackupSchedule) {
+    await cloudAction(
+      async (authorization) => {
+        const updated = await updateCloudBackupSchedule(
+          schedule.id,
+          { accessToken, sensitiveAuthorization: authorization },
+          { enabled: !schedule.enabled },
+        );
+        setCloudSchedules((current) => current.map((item) => item.id === updated.id ? updated : item));
+        return updated;
+      },
+      `Schedule "${schedule.name}" ${schedule.enabled ? "paused" : "resumed"}.`,
+    );
+  }
+
+  async function handleCloudScheduleDelete(schedule: CloudBackupSchedule) {
+    if (!window.confirm(`Delete the schedule "${schedule.name}"? Existing backup history will be preserved.`)) {
+      return;
+    }
+    await cloudAction(
+      async (authorization) => {
+        await deleteCloudBackupSchedule(schedule.id, {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        });
+        setCloudSchedules((current) => current.filter((item) => item.id !== schedule.id));
+      },
+      `Schedule "${schedule.name}" deleted. Existing backup history is preserved.`,
+    );
+  }
+
   async function handleCloudSettingsSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken || !cloudSettings) return;
@@ -426,6 +577,7 @@ export function DataManagementPage() {
         { accessToken, sensitiveAuthorization: authorization },
         { ...cloudSettings, enabled: cloudSettings.enabled },
       );
+      cloudSettingsDirty.current = false;
       setCloudSettings(saved);
       const savedMessage = saved.enabled
         ? "Backup preferences saved. Automatic backups are enabled for the selected verified destination."
@@ -668,77 +820,111 @@ export function DataManagementPage() {
             </article>
           ))}
 
-          <h3>Schedule and retention preferences</h3>
-          {!cloudSettings ? (
-            <p>Loading backup preferences…</p>
-          ) : (
-            <form onSubmit={handleCloudSettingsSave}>
+          <h3>Backup schedules ({cloudSchedules.length}/10)</h3>
+          <p>Create independent daily, weekly, or monthly schedules. Each schedule has its own destination, timezone, clock display, and retention policy. Monthly dates that do not exist in a month run on that month's final day.</p>
+
+          {cloudSchedules.length === 0 && <p>No backup schedules configured yet.</p>}
+          {cloudSchedules.map((schedule) => {
+            const latestRun = cloudRuns.find((run) => run.scheduleId === schedule.id);
+            return (
+            <article key={schedule.id} className="data-management-destination">
+              <h4>{schedule.name}</h4>
+              <p>
+                {schedule.frequency.toLowerCase()} · {String(schedule.clockFormat === "24H" ? schedule.hour : (schedule.hour % 12 || 12)).padStart(2, "0")}:{String(schedule.minute).padStart(2, "0")}
+                {schedule.clockFormat === "12H" ? (schedule.hour >= 12 ? " PM" : " AM") : ""}
+                {" · "}{schedule.timezone} · Keep {schedule.retentionCount} successful backups
+              </p>
+              {schedule.frequency === "WEEKLY" && (
+                <p>Day: {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][schedule.dayOfWeek]}</p>
+              )}
+              {schedule.frequency === "MONTHLY" && <p>Day of month: {schedule.dayOfMonth} (or the final day if that date does not exist)</p>}
+              <p>Destination: {cloudConnections.find((connection) => connection.id === schedule.destinationConnectionId)?.displayName ?? "Not selected"}</p>
+              <p>Status: {schedule.enabled ? "Enabled" : "Paused"}</p>
+              <p>
+                Latest run: {latestRun ? `${latestRun.status}${latestRun.completedAt ? ` · ${new Date(latestRun.completedAt).toLocaleString()}` : ""}${latestRun.errorMessage ? ` · ${latestRun.errorMessage}` : ""}` : "No runs yet"}
+              </p>
+              <button type="button" disabled={cloudBusy} onClick={() => startCloudScheduleEdit(schedule)}>Edit</button>{" "}
+              <button type="button" disabled={cloudBusy} onClick={() => void handleCloudScheduleToggle(schedule)}>{schedule.enabled ? "Pause" : "Resume"}</button>{" "}
+              <button type="button" disabled={cloudBusy} onClick={() => void handleCloudScheduleDelete(schedule)}>Delete</button>
+            </article>
+            );
+          })}
+
+          {!cloudScheduleDraft && (
+            <button
+              type="button"
+              disabled={cloudBusy || cloudSchedules.length >= 10}
+              onClick={() => startCloudScheduleEdit()}
+            >
+              Add schedule
+            </button>
+          )}
+          {cloudSchedules.length >= 10 && !cloudScheduleDraft && (
+            <p>You have reached the limit of 10 schedules for this business.</p>
+          )}
+
+          {cloudScheduleDraft && (
+            <form onSubmit={handleCloudScheduleSave}>
+              <h3>{editingCloudScheduleId ? "Edit backup schedule" : "New backup schedule"}</h3>
+              <label>Schedule name
+                <input value={cloudScheduleDraft.name} maxLength={100} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, name: e.target.value }))} required />
+              </label>
               <label className="data-management-schedule-toggle">
                 <input
                   type="checkbox"
-                  checked={cloudSettings.enabled}
-                  disabled={!cloudConnections.some(
-                    (connection) =>
-                      connection.id === cloudSettings.destinationConnectionId &&
-                      connection.status === "CONNECTED" &&
-                      Boolean(connection.verifiedAt),
-                  )}
-                  onChange={(e) => setCloudSettings((current) => current ? { ...current, enabled: e.target.checked } : current)}
+                  checked={cloudScheduleDraft.enabled}
+                  disabled={!cloudConnections.some((connection) => connection.id === cloudScheduleDraft.destinationConnectionId && connection.status === "CONNECTED" && Boolean(connection.verifiedAt))}
+                  onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, enabled: e.target.checked }))}
                 />
-                <span>
-                  <strong>Enable automatic backups</strong>
-                  <small>
-                    {cloudSettings.enabled
-                      ? "Automatic backups are enabled. The scheduler checks the configured schedule while the API is running."
-                      : "Choose a connected, verified destination below before enabling automatic backups."}
-                  </small>
-                </span>
+                <span><strong>Enable this schedule</strong><small>Only connected and verified destinations can be enabled.</small></span>
               </label>
               <label>Frequency
-                <select value={cloudSettings.frequency} onChange={(e) => setCloudSettings((current) => current ? { ...current, frequency: e.target.value as CloudBackupSettings["frequency"] } : current)}>
+                <select value={cloudScheduleDraft.frequency} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, frequency: e.target.value as CloudBackupScheduleInput["frequency"] }))}>
                   <option value="DAILY">Daily</option>
                   <option value="WEEKLY">Weekly</option>
                   <option value="MONTHLY">Monthly</option>
                 </select>
               </label>
-              {cloudSettings.frequency === "WEEKLY" && (
+              {cloudScheduleDraft.frequency === "WEEKLY" && (
                 <label>Day of week
-                  <select value={cloudSettings.dayOfWeek} onChange={(e) => setCloudSettings((current) => current ? { ...current, dayOfWeek: Number(e.target.value) } : current)}>
-                    <option value={0}>Sunday</option><option value={1}>Monday</option>
-                    <option value={2}>Tuesday</option><option value={3}>Wednesday</option>
-                    <option value={4}>Thursday</option><option value={5}>Friday</option>
-                    <option value={6}>Saturday</option>
+                  <select value={cloudScheduleDraft.dayOfWeek} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, dayOfWeek: Number(e.target.value) }))}>
+                    <option value={0}>Sunday</option><option value={1}>Monday</option><option value={2}>Tuesday</option><option value={3}>Wednesday</option><option value={4}>Thursday</option><option value={5}>Friday</option><option value={6}>Saturday</option>
                   </select>
                 </label>
               )}
-              {cloudSettings.frequency === "MONTHLY" && (
-                <label>Day of month
-                  <input type="number" min={1} max={31} value={cloudSettings.dayOfMonth} onChange={(e) => setCloudSettings((current) => current ? { ...current, dayOfMonth: Number(e.target.value) } : current)} required />
+              {cloudScheduleDraft.frequency === "MONTHLY" && (
+                <label>Day of month (1–31)
+                  <input type="number" min={1} max={31} value={cloudScheduleDraft.dayOfMonth} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, dayOfMonth: Number(e.target.value) }))} required />
                 </label>
               )}
-              <label>Time zone
-                <input value={cloudSettings.timezone} onChange={(e) => setCloudSettings((current) => current ? { ...current, timezone: e.target.value } : current)} placeholder="Africa/Lagos" required />
+              <label>Time zone (IANA)
+                <input value={cloudScheduleDraft.timezone} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, timezone: e.target.value }))} placeholder="Africa/Lagos" required />
               </label>
-              <div className="data-management-settings-grid">
-                <label>Hour (24-hour time)
-                  <input type="number" min={0} max={23} value={cloudSettings.hour} onChange={(e) => setCloudSettings((current) => current ? { ...current, hour: Number(e.target.value) } : current)} required />
-                </label>
-                <label>Minute
-                  <input type="number" min={0} max={59} value={cloudSettings.minute} onChange={(e) => setCloudSettings((current) => current ? { ...current, minute: Number(e.target.value) } : current)} required />
-                </label>
-              </div>
-              <label>Retention count (successful backups to keep)
-                <input type="number" min={1} max={365} value={cloudSettings.retentionCount} onChange={(e) => setCloudSettings((current) => current ? { ...current, retentionCount: Number(e.target.value) } : current)} required />
-              </label>
-              <label>Preferred destination
-                <select value={cloudSettings.destinationConnectionId ?? ""} onChange={(e) => setCloudSettings((current) => current ? { ...current, destinationConnectionId: e.target.value || null } : current)}>
-                  <option value="">No preferred destination</option>
-                  {cloudConnections.map((connection) => (
-                    <option key={connection.id} value={connection.id}>{connection.displayName} ({connection.status})</option>
-                  ))}
+              <label>Clock display
+                <select value={cloudScheduleDraft.clockFormat} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, clockFormat: e.target.value as CloudBackupScheduleInput["clockFormat"] }))}>
+                  <option value="12H">12-hour (AM/PM)</option>
+                  <option value="24H">24-hour</option>
                 </select>
               </label>
-              <button type="submit" disabled={cloudBusy || !accessToken}>Save preferences</button>
+              <div className="data-management-settings-grid">
+                <label>Hour (24-hour value)
+                  <input type="number" min={0} max={23} value={cloudScheduleDraft.hour} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, hour: Number(e.target.value) }))} required />
+                </label>
+                <label>Minute
+                  <input type="number" min={0} max={59} value={cloudScheduleDraft.minute} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, minute: Number(e.target.value) }))} required />
+                </label>
+              </div>
+              <label>Successful backups to keep (1–365)
+                <input type="number" min={1} max={365} value={cloudScheduleDraft.retentionCount} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, retentionCount: Number(e.target.value) }))} required />
+              </label>
+              <label>Destination
+                <select value={cloudScheduleDraft.destinationConnectionId ?? ""} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, destinationConnectionId: e.target.value || null }))}>
+                  <option value="">Select a destination</option>
+                  {cloudConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.displayName} ({connection.status}{connection.verifiedAt ? ", verified" : ""})</option>)}
+                </select>
+              </label>
+              <button type="submit" disabled={cloudBusy || !accessToken}>{editingCloudScheduleId ? "Save schedule" : "Create schedule"}</button>{" "}
+              <button type="button" disabled={cloudBusy} onClick={() => { cloudSchedulesDirty.current = false; setCloudScheduleDraft(null); setEditingCloudScheduleId(null); }}>Cancel</button>
             </form>
           )}
 

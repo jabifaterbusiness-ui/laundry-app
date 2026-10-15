@@ -3,6 +3,7 @@ import { logger } from "../../lib/logger.js";
 import { createCloudBackupRun } from "./backup-cloud-runs.service.js";
 
 type Schedule = {
+  id: string;
   businessId: string;
   enabled: boolean;
   frequency: "DAILY" | "WEEKLY" | "MONTHLY";
@@ -19,6 +20,8 @@ function localScheduleParts(date: Date, timezone: string) {
     timeZone: timezone,
     weekday: "short",
     day: "numeric",
+    month: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -26,6 +29,8 @@ function localScheduleParts(date: Date, timezone: string) {
   const value = (type: string) => parts.find((part) => part.type === type)?.value;
   const weekday = value("weekday");
   const day = Number(value("day"));
+  const month = Number(value("month"));
+  const year = Number(value("year"));
   const hour = Number(value("hour"));
   const minute = Number(value("minute"));
   const weekdays: Record<string, number> = {
@@ -33,10 +38,12 @@ function localScheduleParts(date: Date, timezone: string) {
   };
 
   if (!weekday || !(weekday in weekdays) ||
-      !Number.isInteger(day) || !Number.isInteger(hour) || !Number.isInteger(minute)) {
+      !Number.isInteger(day) || !Number.isInteger(month) ||
+      !Number.isInteger(year) || !Number.isInteger(hour) ||
+      !Number.isInteger(minute)) {
     throw new Error(`Unable to calculate scheduled backup time for ${timezone}.`);
   }
-  return { weekday: weekdays[weekday]!, day, hour, minute };
+  return { weekday: weekdays[weekday]!, day, month, year, hour, minute };
 }
 
 export function isBackupScheduleDue(schedule: Schedule, now: Date): boolean {
@@ -44,7 +51,10 @@ export function isBackupScheduleDue(schedule: Schedule, now: Date): boolean {
   const local = localScheduleParts(now, schedule.timezone);
   if (local.hour !== schedule.hour || local.minute !== schedule.minute) return false;
   if (schedule.frequency === "WEEKLY" && local.weekday !== schedule.dayOfWeek) return false;
-  if (schedule.frequency === "MONTHLY" && local.day !== schedule.dayOfMonth) return false;
+  if (schedule.frequency === "MONTHLY") {
+    const lastDay = new Date(Date.UTC(local.year, local.month, 0)).getUTCDate();
+    if (local.day !== Math.min(schedule.dayOfMonth, lastDay)) return false;
+  }
   return true;
 }
 
@@ -54,13 +64,14 @@ function isDuplicateSlot(error: unknown): boolean {
 }
 
 export async function processScheduledCloudBackups(now = new Date()) {
-  const schedules = await prisma.backupSettings.findMany({
+  const schedules = await prisma.backupSchedule.findMany({
     where: {
       enabled: true,
       destinationConnectionId: { not: null },
       business: { isActive: true },
     },
     select: {
+      id: true,
       businessId: true,
       enabled: true,
       frequency: true,
@@ -85,6 +96,7 @@ export async function processScheduledCloudBackups(now = new Date()) {
       await createCloudBackupRun(schedule.businessId, schedule.destinationConnectionId!, {
         trigger: "SCHEDULED",
         scheduledFor,
+        scheduleId: schedule.id,
       });
       started += 1;
     } catch (error) {

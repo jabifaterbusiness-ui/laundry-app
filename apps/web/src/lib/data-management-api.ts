@@ -174,6 +174,7 @@ export type CloudBackupConnection = {
 
 export type CloudBackupRun = {
   id: string;
+  scheduleId: string | null;
   connectionId: string;
   trigger: string;
   status: string;
@@ -201,6 +202,29 @@ export type CloudBackupSettings = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type CloudBackupSchedule = {
+  id: string;
+  businessId: string;
+  name: string;
+  enabled: boolean;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  dayOfWeek: number;
+  dayOfMonth: number;
+  hour: number;
+  minute: number;
+  clockFormat: "12H" | "24H";
+  timezone: string;
+  retentionCount: number;
+  destinationConnectionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CloudBackupScheduleInput = Omit<
+  CloudBackupSchedule,
+  "id" | "businessId" | "createdAt" | "updatedAt"
+>;
 
 type CloudAuth = {
   accessToken: string | null;
@@ -342,4 +366,47 @@ export async function saveCloudBackupSettings(
     }),
   );
   return result.settings;
+}
+
+export async function listCloudBackupSchedules(
+  auth: CloudAuth,
+): Promise<CloudBackupSchedule[]> {
+  const result = await apiFetch<{ schedules: CloudBackupSchedule[] }>(
+    "/migrations/backup/cloud/schedules",
+    cloudRequestOptions(auth),
+  );
+  return result.schedules;
+}
+
+export async function createCloudBackupSchedule(
+  auth: CloudAuth,
+  input: CloudBackupScheduleInput,
+): Promise<CloudBackupSchedule> {
+  const result = await apiFetch<{ schedule: CloudBackupSchedule }>(
+    "/migrations/backup/cloud/schedules",
+    cloudRequestOptions(auth, "POST", input),
+  );
+  return result.schedule;
+}
+
+export async function updateCloudBackupSchedule(
+  scheduleId: string,
+  auth: CloudAuth,
+  input: Partial<CloudBackupScheduleInput>,
+): Promise<CloudBackupSchedule> {
+  const result = await apiFetch<{ schedule: CloudBackupSchedule }>(
+    `/migrations/backup/cloud/schedules/${encodeURIComponent(scheduleId)}`,
+    cloudRequestOptions(auth, "PATCH", input),
+  );
+  return result.schedule;
+}
+
+export async function deleteCloudBackupSchedule(
+  scheduleId: string,
+  auth: CloudAuth,
+): Promise<void> {
+  await apiFetch<{ deleted: boolean }>(
+    `/migrations/backup/cloud/schedules/${encodeURIComponent(scheduleId)}`,
+    cloudRequestOptions(auth, "DELETE"),
+  );
 }

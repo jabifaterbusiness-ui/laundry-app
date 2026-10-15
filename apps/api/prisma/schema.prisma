@@ -160,6 +160,7 @@ model Business {
   subscriptionPayments         SubscriptionPayment[]
   paymentWebhookEvents         PaymentWebhookEvent[]
   backupSettings               BackupSettings?
+  backupSchedules              BackupSchedule[]
   backupConnections            BackupCloudConnection[]
   backupRuns                   BackupRun[]
 
@@ -2287,6 +2288,7 @@ model BackupCloudConnection {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   selectedBySettings BackupSettings[]   @relation("BackupDestination")
+  selectedBySchedules BackupSchedule[] @relation("BackupScheduleDestination")
   runs           BackupRun[]
 
   @@unique([businessId, id])
@@ -2295,10 +2297,38 @@ model BackupCloudConnection {
   @@map("backup_cloud_connections")
 }
 
+model BackupSchedule {
+  id                      String                  @id @default(uuid())
+  businessId              String
+  business                Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name                    String                  @default("Backup schedule")
+  enabled                 Boolean                 @default(false)
+  frequency               BackupScheduleFrequency @default(DAILY)
+  dayOfWeek               Int                     @default(1)
+  dayOfMonth              Int                     @default(1)
+  hour                    Int                     @default(2)
+  minute                  Int                     @default(0)
+  clockFormat             String                  @default("12H")
+  timezone                String                  @default("Africa/Lagos")
+  retentionCount          Int                     @default(30)
+  destinationConnectionId String?
+  destinationConnection   BackupCloudConnection?  @relation("BackupScheduleDestination", fields: [businessId, destinationConnectionId], references: [businessId, id], onDelete: Restrict)
+  runs                    BackupRun[]
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  @@unique([businessId, id])
+  @@index([businessId, enabled, frequency, hour, minute])
+  @@index([businessId, destinationConnectionId])
+  @@map("backup_schedules")
+}
+
 model BackupRun {
   id           String          @id @default(uuid())
   businessId   String
   business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scheduleId   String?
+  schedule     BackupSchedule? @relation(fields: [businessId, scheduleId], references: [businessId, id], onDelete: Restrict)
   connectionId String?
   connection   BackupCloudConnection? @relation(fields: [businessId, connectionId], references: [businessId, id], onDelete: Restrict)
   trigger      BackupRunTrigger
@@ -2313,7 +2343,8 @@ model BackupRun {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  @@unique([businessId, scheduledFor])
+  @@unique([scheduleId, scheduledFor])
+  @@index([businessId, scheduleId, createdAt])
   @@index([businessId, createdAt])
   @@index([businessId, status, createdAt])
   @@index([connectionId, status])
