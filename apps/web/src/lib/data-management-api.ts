@@ -315,9 +315,31 @@ export async function saveCloudBackupSettings(
   auth: CloudAuth,
   input: Omit<CloudBackupSettings, "id" | "createdAt" | "updatedAt">,
 ): Promise<CloudBackupSettings> {
+  const {
+    enabled,
+    frequency,
+    dayOfWeek,
+    dayOfMonth,
+    hour,
+    minute,
+    timezone,
+    retentionCount,
+    destinationConnectionId,
+  } = input;
+
   const result = await apiFetch<{ settings: CloudBackupSettings }>(
     "/migrations/backup/cloud/settings",
-    cloudRequestOptions(auth, "PUT", input),
+    cloudRequestOptions(auth, "PUT", {
+      enabled,
+      frequency,
+      dayOfWeek,
+      dayOfMonth,
+      hour,
+      minute,
+      timezone,
+      retentionCount,
+      destinationConnectionId,
+    }),
   );
   return result.settings;
 }
