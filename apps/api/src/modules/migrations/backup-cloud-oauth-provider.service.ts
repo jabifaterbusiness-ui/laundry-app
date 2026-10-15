@@ -245,7 +245,11 @@ export async function verifyOAuthCloudDestination(input: {
       ? "https://api.dropboxapi.com/2/users/get_current_account"
       : "https://graph.microsoft.com/v1.0/me/drive";
 
-  const response = await authorizedRequest(url, credentials);
+  const response = await authorizedRequest(
+    url,
+    credentials,
+    input.provider === "DROPBOX" ? { method: "POST" } : {},
+  );
   await assertProviderSuccess(response);
 }
 

@@ -180,6 +180,26 @@ describe("OAuth cloud provider adapter", () => {
     }
   });
 
+  it("verifies Dropbox destinations using POST", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ account_id: "test-account" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyOAuthCloudDestination({
+      ...inputBase,
+      provider: "DROPBOX",
+    })).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("https://api.dropboxapi.com/2/users/get_current_account");
+    if (!call) throw new Error("Expected Dropbox verification request.");
+
+    const request = call[1] as RequestInit;
+    expect(request.method).toBe("POST");
+    expect(new Headers(request.headers).get("authorization"))
+      .toBe("Bearer test-access-token");
+  });
+
   it("refreshes expired credentials and preserves the refresh token if omitted", async () => {
     mocks.decrypt.mockReturnValue(JSON.stringify({
       accessToken: "expired-access-token",
