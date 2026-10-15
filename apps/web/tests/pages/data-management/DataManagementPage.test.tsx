@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import {
+  listCloudBackupConnections,
+  verifyCloudBackupConnection,
+} from "../../../src/lib/data-management-api.js";
 
 const mockUser = vi.hoisted(() => ({
   current: null as any,
@@ -65,6 +69,73 @@ describe("DataManagementPage authorization", () => {
     mockCloudOAuth.start.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
+    vi.mocked(listCloudBackupConnections).mockReset().mockResolvedValue([]);
+    vi.mocked(verifyCloudBackupConnection).mockReset();
+  });
+
+  it("shows an error if sensitive authorization rejects during destination verification", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([{
+      id: "dropbox-1",
+      provider: "DROPBOX",
+      displayName: "Dropbox backups",
+      config: null,
+      status: "PENDING",
+      verifiedAt: null,
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    }]);
+    mockCloudOAuth.requestSensitiveAuthorization.mockRejectedValue(
+      new Error("Authorization service unavailable."),
+    );
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+
+    expect(await screen.findByText("Authorization service unavailable.")).toBeTruthy();
+    expect(vi.mocked(verifyCloudBackupConnection)).not.toHaveBeenCalled();
+  });
+
+  it("refreshes destination status after verification fails", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    const pendingConnection = {
+      id: "dropbox-1",
+      provider: "DROPBOX" as const,
+      displayName: "Dropbox backups",
+      config: null,
+      status: "PENDING" as const,
+      verifiedAt: null,
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    const failedConnection = {
+      ...pendingConnection,
+      status: "ERROR" as const,
+      lastError: "Provider verification failed.",
+    };
+    let connectionReads = 0;
+    vi.mocked(listCloudBackupConnections).mockImplementation(async () => {
+      connectionReads += 1;
+      return [connectionReads === 1 ? pendingConnection : failedConnection];
+    });
+    vi.mocked(verifyCloudBackupConnection).mockRejectedValue(
+      new Error("Cloud destination verification failed. Check the destination settings and authorization."),
+    );
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+
+    expect(
+      await screen.findByText("Cloud destination verification failed. Check the destination settings and authorization."),
+    ).toBeTruthy();
+    expect(await screen.findByText("DROPBOX · ERROR")).toBeTruthy();
+    expect(await screen.findByText("Provider verification failed.")).toBeTruthy();
+    expect(vi.mocked(verifyCloudBackupConnection)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(listCloudBackupConnections)).toHaveBeenCalledTimes(2);
   });
 
   it("allows a Business Owner with a custom visible job title", () => {

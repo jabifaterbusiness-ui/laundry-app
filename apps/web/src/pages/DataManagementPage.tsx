@@ -266,7 +266,13 @@ export function DataManagementPage() {
   }
 
   async function cloudAction(action: (authorization: string) => Promise<unknown>, success: string) {
-    const authorization = await requestSensitiveAuthorization();
+    let authorization: string | null;
+    try {
+      authorization = await requestSensitiveAuthorization();
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "Sensitive authorization failed.");
+      return;
+    }
     if (!authorization) {
       setCloudError("Sensitive authorization was cancelled.");
       return;
@@ -280,6 +286,11 @@ export function DataManagementPage() {
       setCloudMessage(success);
     } catch (error) {
       setCloudError(error instanceof Error ? error.message : "Cloud backup action failed.");
+      try {
+        await refreshCloudData();
+      } catch {
+        // Preserve the original cloud-action error if refreshing also fails.
+      }
     } finally {
       setCloudBusy(false);
     }
