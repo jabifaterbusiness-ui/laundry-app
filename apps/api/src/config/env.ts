@@ -3,6 +3,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  ENABLE_BACKGROUND_SCHEDULERS: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   PORT: z.coerce.number().int().positive().default(4000),
   APP_URL: z.string().url().default("http://localhost:4000"),
   WEB_APP_URL: z.string().url().default("http://localhost:5173"),

@@ -4,6 +4,7 @@ export const config = {
   env: env.NODE_ENV,
   isProduction: env.NODE_ENV === "production",
   isTest: env.NODE_ENV === "test",
+  enableBackgroundSchedulers: env.ENABLE_BACKGROUND_SCHEDULERS,
   port: env.PORT,
   appUrl: env.APP_URL,
   webAppUrl: env.WEB_APP_URL,

@@ -14,8 +14,12 @@ async function startServer() {
   );
 
   registerConfiguredSubscriptionPaymentProviders();
-  startFinancialStatementScheduler();
-  startBackupCloudScheduler();
+  if (config.enableBackgroundSchedulers) {
+    startFinancialStatementScheduler();
+    startBackupCloudScheduler();
+  } else {
+    logger.info("Background schedulers disabled by ENABLE_BACKGROUND_SCHEDULERS=false.");
+  }
 
   const app = createApp();
 
