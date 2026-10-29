@@ -92,6 +92,41 @@ describe("customer-receipt-image", () => {
     expect(metadata.height).toBeGreaterThan(0);
   });
 
+  it("allocates additional receipt space for partial-payment history and balance", async () => {
+    const withoutPayments = await renderCustomerReceiptImage(RECEIPT);
+    const withPayments = await renderCustomerReceiptImage({
+      ...RECEIPT,
+      totalPaid: 5000,
+      balanceDue: 4000,
+      payments: [
+        {
+          id: "payment-1",
+          amount: 3000,
+          method: "CASH",
+          type: "PAYMENT",
+          reference: null,
+          createdAt: "2026-09-07T08:30:00.000Z",
+        },
+        {
+          id: "payment-2",
+          amount: 2000,
+          method: "TRANSFER",
+          type: "PAYMENT",
+          reference: "TRX-123",
+          createdAt: "2026-09-07T09:00:00.000Z",
+        },
+      ],
+    });
+
+    const [withoutMetadata, withMetadata] = await Promise.all([
+      sharp(withoutPayments).metadata(),
+      sharp(withPayments).metadata(),
+    ]);
+
+    expect(withMetadata.format).toBe("png");
+    expect(withMetadata.height).toBeGreaterThan(withoutMetadata.height ?? 0);
+  });
+
   it("renders the receipt without customer contact information", async () => {
     const image = await renderCustomerReceiptImage(RECEIPT);
 
