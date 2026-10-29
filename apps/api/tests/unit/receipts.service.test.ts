@@ -191,6 +191,39 @@ describe("getCustomerReceipt", () => {
     ]);
   });
 
+  it("subtracts posted refunds from net paid and updates the balance due", async () => {
+    invoiceFindFirst.mockResolvedValue({
+      ...invoiceFixture,
+      payments: [
+        {
+          id: "payment-1",
+          amount: 5000,
+          method: "CASH",
+          type: "PAYMENT",
+          reference: null,
+          createdAt: new Date("2026-08-29T10:30:00.000Z"),
+        },
+        {
+          id: "refund-1",
+          amount: 1000,
+          method: "CASH",
+          type: "REFUND",
+          reference: null,
+          createdAt: new Date("2026-08-29T11:30:00.000Z"),
+        },
+      ],
+    } as never);
+
+    const result = await getCustomerReceipt(INVOICE_ID, "biz-A", BRANCH_ID);
+
+    expect(result?.totalPaid).toBe(4000);
+    expect(result?.balanceDue).toBe(9500);
+    expect(result?.payments.map((payment) => payment.type)).toEqual([
+      "PAYMENT",
+      "REFUND",
+    ]);
+  });
+
   it("never exposes the private internal note", async () => {
     invoiceFindFirst.mockResolvedValue(invoiceFixture as never);
 
