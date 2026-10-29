@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in deploy/.env.production.local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.production.local}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in deploy/.env.production.local}
+    volumes:
+      - laundryangel_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - laundryangel
+
+  api:
+    image: laundryangel-api:production
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      ENABLE_BACKGROUND_SCHEDULERS: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in deploy/.env.production.local}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.production.local}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB in deploy/.env.production.local}?schema=public
+      MIGRATION_STORAGE_DIR: /app/apps/api/data/migrations
+      BUSINESS_BRANDING_STORAGE_DIR: /app/apps/api/data/business-branding
+    command: ["node", "dist/server.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - laundryangel_migration_data:/app/apps/api/data/migrations
+      - laundryangel_branding_data:/app/apps/api/data/business-branding
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - laundryangel
+
+  migrate:
+    image: laundryangel-api:production
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env.production.local
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in deploy/.env.production.local}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.production.local}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB in deploy/.env.production.local}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    profiles:
+      - tools
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - laundryangel
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.production.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - laundryangel
+
+networks:
+  laundryangel:
+
+volumes:
+  laundryangel_pg_data:
+  laundryangel_migration_data:
+  laundryangel_branding_data:
