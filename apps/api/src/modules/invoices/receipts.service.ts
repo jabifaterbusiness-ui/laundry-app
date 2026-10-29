@@ -145,7 +145,7 @@ function projectItems(invoice: NonNullable<InvoiceForReceipt>) {
 }
 
 function projectPayments(invoice: NonNullable<InvoiceForReceipt>) {
-  const payments = invoice.payments.map((payment) => ({
+  const payments = (invoice.payments ?? []).map((payment) => ({
     id: payment.id,
     amount: payment.amount,
     method: payment.method,
