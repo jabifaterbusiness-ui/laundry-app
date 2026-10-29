@@ -41,6 +41,9 @@ const RECEIPT = {
     },
   ],
   totalAmount: 9000,
+  totalPaid: 0,
+  balanceDue: 9000,
+  payments: [],
   garmentNote: "Minor stain noted",
   customerAgreement: "Customer agrees to the company laundry terms.",
 };
