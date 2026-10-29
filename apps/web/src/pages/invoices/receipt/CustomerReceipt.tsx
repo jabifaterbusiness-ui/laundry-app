@@ -60,6 +60,12 @@ export function CustomerReceipt({
         </div>
       </div>
 
+      {receipt.balanceDue <= 0 && (
+        <div className="receipt__paid-in-full" role="status" aria-label="Paid in full">
+          PAID IN FULL
+        </div>
+      )}
+
       <section className="receipt__customer">
         <div>
           <span className="receipt__label">CUSTOMER</span>
