@@ -182,6 +182,63 @@
   font-size: 18px;
 }
 
+.receipt__payments {
+  margin-top: 14px;
+  font-size: 11px;
+  break-inside: auto;
+}
+
+.receipt__payments h3 {
+  margin: 0 0 7px;
+  font-size: 12px;
+  color: var(--receipt-primary, #111);
+}
+
+.receipt__payments table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.receipt__payments th,
+.receipt__payments td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.receipt__payments th:last-child,
+.receipt__payments td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.receipt__payment-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #999;
+}
+
+.receipt__payment-totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.receipt__payment-totals span {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.receipt__payment-totals strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .receipt__footer {
   display: flex;
   flex-direction: column;
