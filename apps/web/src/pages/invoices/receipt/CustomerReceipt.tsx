@@ -139,6 +139,44 @@ export function CustomerReceipt({
         </div>
       </div>
 
+      <section className="receipt__payments">
+        <h3>PAYMENT HISTORY</h3>
+        {receipt.payments.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>DATE</th>
+                <th>METHOD</th>
+                <th>REFERENCE</th>
+                <th>AMOUNT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td>{formatReceiptDate(payment.createdAt)}</td>
+                  <td>{payment.type === "REFUND" ? "REFUND" : ({
+                    CASH: "Cash",
+                    TRANSFER: "Bank transfer",
+                    POS: "POS",
+                    PAY_FROM_ACCOUNT: "Customer account",
+                  } as const)[payment.method]}</td>
+                  <td>{payment.reference || "—"}</td>
+                  <td>{payment.type === "REFUND" ? "−" : ""}{formatReceiptMoney(payment.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No payments recorded.</p>
+        )}
+        <div className="receipt__payment-totals">
+          <div><span>TOTAL AMOUNT</span><strong>{formatReceiptMoney(receipt.totalAmount)}</strong></div>
+          <div><span>AMOUNT PAID</span><strong>{formatReceiptMoney(receipt.totalPaid)}</strong></div>
+          <div><span>BALANCE DUE</span><strong>{formatReceiptMoney(receipt.balanceDue)}</strong></div>
+        </div>
+      </section>
+
       <section className="receipt__agreement">
         <span className="receipt__label">CUSTOMER AGREEMENT</span>
         <p>{receipt.customerAgreement}</p>
