@@ -85,6 +85,9 @@ const RECEIPT = {
   createdAt: "2026-09-07T08:00:00.000Z",
   items: [],
   totalAmount: 9000,
+  totalPaid: 0,
+  balanceDue: 9000,
+  payments: [],
   garmentNote: "Minor stain noted",
   customerAgreement: "Customer agrees to the company laundry terms.",
 };
