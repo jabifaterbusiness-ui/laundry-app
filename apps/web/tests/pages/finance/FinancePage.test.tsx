@@ -458,13 +458,13 @@ describe("FinancePage", () => {
     const section = deliverySection.closest("section");
     expect(section).not.toBeNull();
 
-    const monthlyMinute = within(
+    const monthlyMinute = await within(
       section as HTMLElement,
-    ).getByLabelText("Minute");
+    ).findByLabelText("Minute");
 
-    const dailyMinute = within(
+    const dailyMinute = await within(
       section as HTMLElement,
-    ).getByLabelText("Daily minute");
+    ).findByLabelText("Daily minute");
 
     await user.click(monthlyMinute);
     await user.keyboard("5");
