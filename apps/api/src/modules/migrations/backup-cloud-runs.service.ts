@@ -178,6 +178,7 @@ export async function createCloudBackupRun(
   });
 
   let uploadedStorageKey: string | null = null;
+  let failureStage = "mark_running";
 
   try {
     await prisma.backupRun.update({
@@ -185,9 +186,11 @@ export async function createCloudBackupRun(
       data: { status: "RUNNING", startedAt: new Date() },
     });
 
+    failureStage = "generate_artifact";
     const artifact = await createScheduledBackupArtifact(businessId);
     let storageKey: string;
 
+    failureStage = "upload_artifact";
     if (s3Destination) {
       storageKey = `backups/${run.id}.enc`;
       await uploadS3CompatibleArtifact({
@@ -209,6 +212,7 @@ export async function createCloudBackupRun(
 
     uploadedStorageKey = storageKey;
 
+    failureStage = "persist_success";
     const completed = await prisma.backupRun.update({
       where: { id: run.id },
       data: {
@@ -246,7 +250,16 @@ export async function createCloudBackupRun(
     }
 
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
-  } catch {
+  } catch (error) {
+    logger.error({
+      backupRunId: run.id,
+      provider: connection.provider,
+      trigger,
+      stage: failureStage,
+      errorType: error instanceof Error ? error.name : typeof error,
+      ...(error instanceof AppError ? { statusCode: error.statusCode } : {}),
+    }, "Cloud backup run failed.");
+
     try {
       // If upload succeeded but recording the run failed, avoid leaving an
       // untracked remote artifact where its provider reference is available.
@@ -275,10 +288,17 @@ export async function createCloudBackupRun(
             });
           }
         }
-      } catch {
+      } catch (cleanupError) {
+        logger.error({
+          backupRunId: run.id,
+          provider: connection.provider,
+          stage: "cleanup_uploaded_artifact",
+          errorType: cleanupError instanceof Error ? cleanupError.name : typeof cleanupError,
+        }, "Cloud backup artifact cleanup failed.");
         // Keep the sanitized backup failure; never clear an unconfirmed reference.
       }
 
+      failureStage = "persist_failure";
       await prisma.backupRun.update({
         where: { id: run.id },
         data: {
@@ -287,7 +307,13 @@ export async function createCloudBackupRun(
           errorMessage: "Backup generation or cloud upload failed.",
         },
       });
-    } catch {
+    } catch (persistenceError) {
+      logger.error({
+        backupRunId: run.id,
+        provider: connection.provider,
+        stage: failureStage,
+        errorType: persistenceError instanceof Error ? persistenceError.name : typeof persistenceError,
+      }, "Failed to persist cloud backup failure status.");
       // Preserve the sanitized backup failure if failure-state persistence also fails.
     }
 
