@@ -75,6 +75,7 @@ export function InvoicesPage() {
     }>
   >([]);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   const brandingQuery = useQuery({
     queryKey: ["business-branding", activeBranchId],
@@ -417,6 +418,7 @@ export function InvoicesPage() {
         return;
       }
 
+      setPrintError(null);
       setPrintMode(event.ctrlKey ? "company" : "customer");
     }
 
@@ -442,8 +444,16 @@ export function InvoicesPage() {
     }
 
     if (receiptQuery.isError || !receiptQuery.data) {
+      setPrintError(
+        receiptQuery.error instanceof Error
+          ? receiptQuery.error.message
+          : `Unable to load the ${printMode} receipt. Please try again.`,
+      );
+      setPrintMode(null);
       return;
     }
+
+    setPrintError(null);
 
     const printClass =
       printMode === "customer"
@@ -491,6 +501,12 @@ export function InvoicesPage() {
   return (
     <main>
       <h1>Invoices & Receipts</h1>
+
+      {printError && (
+        <p role="alert">
+          {printError}
+        </p>
+      )}
 
       <div>
         <select
@@ -645,14 +661,20 @@ export function InvoicesPage() {
           >
             <button
               type="button"
-              onClick={() => setPrintMode("customer")}
+              onClick={() => {
+                setPrintError(null);
+                setPrintMode("customer");
+              }}
             >
               Print Customer Copy (F1)
             </button>
 
             <button
               type="button"
-              onClick={() => setPrintMode("company")}
+              onClick={() => {
+                setPrintError(null);
+                setPrintMode("company");
+              }}
             >
               Print Company Copy (Ctrl+F1)
             </button>
