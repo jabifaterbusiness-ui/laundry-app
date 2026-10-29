@@ -121,6 +121,7 @@ const invoiceFixture = {
   companyWebsite: "https://example.com",
   companyAddress: "12 Main Street",
   totalAmount: 9000,
+  payments: [],
   garmentNote: "Small mark on sleeve",
   internalNote: "KEEP CUSTOMER'S WHITE SHIRT SEPARATE",
   customerAgreement: "Please check garments before leaving.",
@@ -238,6 +239,9 @@ describe("Customer receipt endpoint", () => {
         },
       ],
       totalAmount: 9000,
+      totalPaid: 0,
+      balanceDue: 9000,
+      payments: [],
       garmentNote: "Small mark on sleeve",
       customerAgreement: "Please check garments before leaving.",
     });

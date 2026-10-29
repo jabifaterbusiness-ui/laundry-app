@@ -29,6 +29,16 @@ export type CustomerReceipt = {
     totalPrice: number;
   }>;
   totalAmount: number;
+  totalPaid: number;
+  balanceDue: number;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: string;
+    type: "PAYMENT" | "REFUND";
+    reference: string | null;
+    createdAt: string;
+  }>;
   garmentNote: string | null;
   customerAgreement: string;
 };
@@ -61,6 +71,16 @@ export type CompanyReceipt = {
     totalPrice: number;
   }>;
   totalAmount: number;
+  totalPaid: number;
+  balanceDue: number;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: string;
+    type: "PAYMENT" | "REFUND";
+    reference: string | null;
+    createdAt: string;
+  }>;
   garmentNote: string | null;
   internalNote: string | null;
 };
@@ -96,6 +116,18 @@ async function getInvoiceSnapshot(
           createdAt: "asc",
         },
       },
+      payments: {
+        where: { status: "POSTED" },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          amount: true,
+          method: true,
+          type: true,
+          reference: true,
+          createdAt: true,
+        },
+      },
     },
   });
 }
@@ -110,6 +142,27 @@ function projectItems(invoice: NonNullable<InvoiceForReceipt>) {
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice,
   }));
+}
+
+function projectPayments(invoice: NonNullable<InvoiceForReceipt>) {
+  const payments = (invoice.payments ?? []).map((payment) => ({
+    id: payment.id,
+    amount: payment.amount,
+    method: payment.method,
+    type: payment.type as "PAYMENT" | "REFUND",
+    reference: payment.reference,
+    createdAt: payment.createdAt.toISOString(),
+  }));
+  const totalPaid = payments.reduce(
+    (total, payment) => total + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+    0,
+  );
+
+  return {
+    payments,
+    totalPaid,
+    balanceDue: Math.max(0, invoice.totalAmount - totalPaid),
+  };
 }
 
 /**
@@ -156,6 +209,7 @@ export async function getCustomerReceipt(
     createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
     totalAmount: invoice.totalAmount,
+    ...projectPayments(invoice),
     garmentNote: invoice.garmentNote,
     customerAgreement: invoice.customerAgreement,
   };
@@ -203,6 +257,7 @@ export async function getCompanyReceipt(
     createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
     totalAmount: invoice.totalAmount,
+    ...projectPayments(invoice),
     garmentNote: invoice.garmentNote,
     internalNote: invoice.internalNote,
   };

@@ -62,6 +62,34 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
     0,
   );
 
+  const paymentRows = receipt.payments.length
+    ? receipt.payments.map((payment) => {
+        const method = payment.type === "REFUND"
+          ? "Refund"
+          : ({
+              CASH: "Cash",
+              TRANSFER: "Bank transfer",
+              POS: "POS",
+              PAY_FROM_ACCOUNT: "Customer account",
+            } as const)[payment.method as "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT"];
+        return `<tr><td>${escapeHtml(formatDate(payment.createdAt))}</td><td>${escapeHtml(method)}</td><td>${escapeHtml(payment.reference ?? "—")}</td><td>${payment.type === "REFUND" ? "−" : ""}${formatAmount(payment.amount)}</td></tr>`;
+      }).join("")
+    : '<tr><td colspan="4">No payments recorded.</td></tr>';
+
+  const paymentHistory = `
+    <div class="payment-history">
+      <h2>Payment History</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead>
+        <tbody>${paymentRows}</tbody>
+      </table>
+      <div class="payment-totals">
+        <div><span>Total amount</span><strong>${formatAmount(receipt.totalAmount)}</strong></div>
+        <div><span>Amount paid</span><strong>${formatAmount(receipt.totalPaid)}</strong></div>
+        <div><span>Balance due</span><strong>${formatAmount(receipt.balanceDue)}</strong></div>
+      </div>
+    </div>`;
+
   const companyContact = [
     receipt.companyPhone,
     receipt.companyEmail,
@@ -274,6 +302,55 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
       font-weight: 700;
     }
 
+    .payment-history {
+      margin-top: 22px;
+      font-size: 13px;
+    }
+
+    .payment-history h2 {
+      font-size: 16px;
+      margin: 0 0 8px;
+    }
+
+    .payment-history th,
+    .payment-history td {
+      padding: 8px 5px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .payment-history th:last-child,
+    .payment-history td:last-child {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .payment-totals {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 2px solid ${primaryColor};
+    }
+
+    .payment-totals span,
+    .payment-totals strong {
+      display: block;
+    }
+
+    .payment-totals span {
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    .payment-totals strong {
+      margin-top: 4px;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
     .note,
     .agreement {
       margin-top: 18px;
@@ -364,6 +441,8 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
       </table>
 
       ${garmentNote}
+
+      ${paymentHistory}
 
       <div class="summary">
         <div class="summary-pcs">

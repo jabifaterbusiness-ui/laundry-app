@@ -647,18 +647,30 @@ function OrderManagementContent({
   useEffect(() => {
     if (!printInvoiceId || !printMode) return;
 
-    const ready =
+    const receiptQuery =
       printMode === "customer"
-        ? customerReceiptQuery.data
-        : companyReceiptQuery.data;
+        ? customerReceiptQuery
+        : companyReceiptQuery;
 
-    if (!ready) return;
+    if (receiptQuery.isLoading || receiptQuery.isFetching) return;
+
+    if (receiptQuery.isError || !receiptQuery.data) {
+      setError(
+        receiptQuery.error instanceof Error
+          ? receiptQuery.error.message
+          : `Unable to load the ${printMode} receipt. Please try again.`,
+      );
+      setPrintInvoiceId(null);
+      setPrintMode(null);
+      return;
+    }
 
     const className =
       printMode === "customer"
         ? "printing-customer"
         : "printing-company";
 
+    setError(null);
     document.body.classList.add(className);
 
     const cleanup = () => {
@@ -681,7 +693,15 @@ function OrderManagementContent({
   }, [
     printInvoiceId,
     printMode,
+    customerReceiptQuery.isLoading,
+    customerReceiptQuery.isFetching,
+    customerReceiptQuery.isError,
+    customerReceiptQuery.error,
     customerReceiptQuery.data,
+    companyReceiptQuery.isLoading,
+    companyReceiptQuery.isFetching,
+    companyReceiptQuery.isError,
+    companyReceiptQuery.error,
     companyReceiptQuery.data,
   ]);
 

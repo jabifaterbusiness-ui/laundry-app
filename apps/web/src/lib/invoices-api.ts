@@ -92,6 +92,16 @@ export type CustomerReceipt = {
   createdAt: string;
   items: ReceiptItem[];
   totalAmount: number;
+  totalPaid: number;
+  balanceDue: number;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT";
+    type: "PAYMENT" | "REFUND";
+    reference: string | null;
+    createdAt: string;
+  }>;
   garmentNote: string | null;
   customerAgreement: string;
 };
@@ -110,6 +120,16 @@ export type CompanyReceipt = {
   createdAt: string;
   items: ReceiptItem[];
   totalAmount: number;
+  totalPaid: number;
+  balanceDue: number;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT";
+    type: "PAYMENT" | "REFUND";
+    reference: string | null;
+    createdAt: string;
+  }>;
   garmentNote: string | null;
   internalNote: string | null;
 };
