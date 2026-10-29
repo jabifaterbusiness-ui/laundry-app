@@ -6,6 +6,10 @@ const {
   connectionFindFirst,
   backupRunFindMany,
   backupRunUpdateMany,
+  backupRunCreate,
+  backupRunUpdate,
+  backupRunFindFirst,
+  createArtifact,
   deleteArtifact,
   deleteOAuthArtifact,
   loggerInfo,
@@ -16,6 +20,10 @@ const {
   connectionFindFirst: vi.fn(),
   backupRunFindMany: vi.fn(),
   backupRunUpdateMany: vi.fn(),
+  backupRunCreate: vi.fn(),
+  backupRunUpdate: vi.fn(),
+  backupRunFindFirst: vi.fn(),
+  createArtifact: vi.fn(),
   deleteArtifact: vi.fn(),
   deleteOAuthArtifact: vi.fn(),
   loggerInfo: vi.fn(),
@@ -30,6 +38,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     backupRun: {
       findMany: backupRunFindMany,
       updateMany: backupRunUpdateMany,
+      create: backupRunCreate,
+      update: backupRunUpdate,
+      findFirst: backupRunFindFirst,
     },
   },
 }));
@@ -58,10 +69,10 @@ vi.mock("../../src/modules/migrations/backup-cloud-oauth-provider.service.js", (
 }));
 
 vi.mock("../../src/modules/migrations/backup.service.js", () => ({
-  createScheduledBackupArtifact: vi.fn(),
+  createScheduledBackupArtifact: createArtifact,
 }));
 
-import { pruneCloudBackupRuns } from "../../src/modules/migrations/backup-cloud-runs.service.js";
+import { createCloudBackupRun, pruneCloudBackupRuns } from "../../src/modules/migrations/backup-cloud-runs.service.js";
 
 const settings = {
   retentionCount: 2,
@@ -79,6 +90,42 @@ const connection = {
   credentialsCiphertext: "encrypted-test-credentials",
 };
 
+
+describe("createCloudBackupRun diagnostics", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backupRunCreate.mockResolvedValue({ id: "run-1" });
+    backupRunUpdate.mockResolvedValue({});
+    backupRunFindFirst.mockResolvedValue(null);
+    createArtifact.mockRejectedValue(new Error("internal detail must not be logged"));
+    connectionFindFirst
+      .mockResolvedValueOnce({ id: "connection-1", provider: "GOOGLE_DRIVE", credentialsCiphertext: "encrypted-test-credentials" })
+      .mockResolvedValueOnce({ id: "connection-1" });
+  });
+
+  it("logs the failing stage without logging raw error messages", async () => {
+    await expect(
+      createCloudBackupRun("business-1", "connection-1"),
+    ).rejects.toThrow("Backup failed. Check the destination configuration and server logs.");
+
+    expect(loggerError).toHaveBeenCalledWith({
+      backupRunId: "run-1",
+      provider: "GOOGLE_DRIVE",
+      trigger: "MANUAL",
+      stage: "generate_artifact",
+      errorType: "Error",
+    }, "Cloud backup run failed.");
+    expect(JSON.stringify(loggerError.mock.calls)).not.toContain("internal detail must not be logged");
+    expect(backupRunUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "run-1" },
+      data: expect.objectContaining({
+        status: "FAILED",
+        errorMessage: "Backup generation or cloud upload failed.",
+      }),
+    }));
+  });
+});
+
 describe("pruneCloudBackupRuns", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -86,6 +133,10 @@ describe("pruneCloudBackupRuns", () => {
     backupScheduleFindFirst.mockResolvedValue({ id: "schedule-1", retentionCount: 2 });
     connectionFindFirst.mockResolvedValue(connection);
     backupRunUpdateMany.mockResolvedValue({ count: 1 });
+    backupRunCreate.mockResolvedValue({ id: "run-1" });
+    backupRunUpdate.mockResolvedValue({});
+    backupRunFindFirst.mockResolvedValue(null);
+    createArtifact.mockResolvedValue({ encrypted: Buffer.from("encrypted"), checksumSha256: "a".repeat(64), sizeBytes: 10 });
     deleteArtifact.mockResolvedValue(undefined);
     deleteOAuthArtifact.mockResolvedValue(undefined);
   });
