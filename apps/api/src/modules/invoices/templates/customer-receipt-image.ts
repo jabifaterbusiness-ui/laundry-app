@@ -167,7 +167,26 @@ export async function renderCustomerReceiptImage(
   const tableBottom = tableTop + headerHeight + itemCount * rowHeight;
   const agreementY = tableBottom + 35;
   const totalY = agreementY + (receipt.garmentNote ? 130 : 45);
-  const footerY = totalY + 205;
+  const paymentSectionY = totalY + 105;
+  const paymentRows = receipt.payments.map((payment, index) => {
+    const method = payment.type === "REFUND"
+      ? "Refund"
+      : ({
+          CASH: "Cash",
+          TRANSFER: "Bank transfer",
+          POS: "POS",
+          PAY_FROM_ACCOUNT: "Customer account",
+        } as const)[payment.method as "CASH" | "TRANSFER" | "POS" | "PAY_FROM_ACCOUNT"];
+    const label = `${formatDate(payment.createdAt)} · ${method}${payment.reference ? ` · ${payment.reference}` : ""}`;
+    const y = paymentSectionY + 72 + index * 38;
+    return `
+      <text x="${padding}" y="${y}" font-size="19" font-family="Arial" fill="${textColor}">${escapeXml(label)}</text>
+      <text x="${width - padding}" y="${y}" text-anchor="end" font-size="20" font-family="Arial" font-weight="700" fill="${textColor}">${payment.type === "REFUND" ? "−" : ""}${escapeXml(formatAmount(payment.amount))}</text>
+    `;
+  }).join("");
+  const paymentSectionHeight = 170 + receipt.payments.length * 38;
+  const agreementSectionY = paymentSectionY + paymentSectionHeight;
+  const footerY = agreementSectionY + 150;
   const height = footerY + 80;
 
   // Read the logo directly from private, business-scoped storage.
@@ -356,14 +375,26 @@ export async function renderCustomerReceiptImage(
         ${escapeXml(formatAmount(receipt.totalAmount))}
       </text>
 
-      <text x="${padding}" y="${totalY + 100}" font-size="23" font-family="Arial" font-weight="700" fill="${textColor}">
+      <text x="${padding}" y="${paymentSectionY}" font-size="23"
+        font-family="Arial" font-weight="700" fill="${accentColor}">
+        PAYMENT HISTORY
+      </text>
+
+      ${paymentRows || `<text x="${padding}" y="${paymentSectionY + 65}" font-size="20" font-family="Arial" fill="${textColor}">No payments recorded.</text>`}
+
+      <line x1="${padding}" y1="${paymentSectionY + 85 + receipt.payments.length * 38}" x2="${width - padding}" y2="${paymentSectionY + 85 + receipt.payments.length * 38}" stroke="#d1d5db" stroke-width="1" />
+
+      <text x="${padding}" y="${paymentSectionY + 120 + receipt.payments.length * 38}" font-size="18" font-family="Arial" fill="${textColor}">AMOUNT PAID: ${escapeXml(formatAmount(receipt.totalPaid))}</text>
+      <text x="${width - padding}" y="${paymentSectionY + 120 + receipt.payments.length * 38}" text-anchor="end" font-size="20" font-family="Arial" font-weight="700" fill="${textColor}">BALANCE DUE: ${escapeXml(formatAmount(receipt.balanceDue))}</text>
+
+      <text x="${padding}" y="${agreementSectionY}" font-size="23" font-family="Arial" font-weight="700" fill="${textColor}">
         CUSTOMER AGREEMENT
       </text>
 
       ${wrapSvgText(
         receipt.customerAgreement,
         padding,
-        totalY + 142,
+        agreementSectionY + 42,
         width - padding * 2,
         22,
         textColor,
