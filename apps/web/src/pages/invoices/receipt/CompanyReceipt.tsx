@@ -59,7 +59,7 @@ export function CompanyReceipt({
         </div>
       </div>
 
-      {receipt.balanceDue <= 0 && (
+      {receipt.totalAmount > 0 && receipt.balanceDue <= 0 && (
         <div className="receipt__paid-in-full" role="status" aria-label="Paid in full">
           PAID IN FULL
         </div>
