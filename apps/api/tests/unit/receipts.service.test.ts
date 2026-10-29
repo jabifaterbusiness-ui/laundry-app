@@ -48,6 +48,7 @@ const invoiceFixture = {
   receiptHeaderStyle: "modern",
 
   totalAmount: 13500,
+  payments: [],
   garmentNote: "Small stain already present on white shirt.",
   internalNote: "Keep Agbada separate. Customer will inspect before pickup.",
   customerAgreement: "Please check garments before leaving.",
@@ -135,9 +136,59 @@ describe("getCustomerReceipt", () => {
         },
       ],
       totalAmount: 13500,
+      totalPaid: 0,
+      balanceDue: 13500,
+      payments: [],
       garmentNote: "Small stain already present on white shirt.",
       customerAgreement: "Please check garments before leaving.",
     });
+  });
+
+  it("includes posted partial payments and calculates the remaining balance", async () => {
+    invoiceFindFirst.mockResolvedValue({
+      ...invoiceFixture,
+      payments: [
+        {
+          id: "payment-1",
+          amount: 5000,
+          method: "CASH",
+          type: "PAYMENT",
+          reference: null,
+          createdAt: new Date("2026-08-29T10:30:00.000Z"),
+        },
+        {
+          id: "payment-2",
+          amount: 2500,
+          method: "TRANSFER",
+          type: "PAYMENT",
+          reference: "TRX-123",
+          createdAt: new Date("2026-08-29T11:30:00.000Z"),
+        },
+      ],
+    } as never);
+
+    const result = await getCustomerReceipt(INVOICE_ID, "biz-A", BRANCH_ID);
+
+    expect(result?.totalPaid).toBe(7500);
+    expect(result?.balanceDue).toBe(6000);
+    expect(result?.payments).toEqual([
+      {
+        id: "payment-1",
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        reference: null,
+        createdAt: "2026-08-29T10:30:00.000Z",
+      },
+      {
+        id: "payment-2",
+        amount: 2500,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        reference: "TRX-123",
+        createdAt: "2026-08-29T11:30:00.000Z",
+      },
+    ]);
   });
 
   it("never exposes the private internal note", async () => {
@@ -184,6 +235,18 @@ describe("getCustomerReceipt", () => {
         items: {
           orderBy: {
             createdAt: "asc",
+          },
+        },
+        payments: {
+          where: { status: "POSTED" },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            type: true,
+            reference: true,
+            createdAt: true,
           },
         },
       },
@@ -250,6 +313,9 @@ describe("getCompanyReceipt", () => {
         },
       ],
       totalAmount: 13500,
+      totalPaid: 0,
+      balanceDue: 13500,
+      payments: [],
       garmentNote: "Small stain already present on white shirt.",
       internalNote:
         "Keep Agbada separate. Customer will inspect before pickup.",
