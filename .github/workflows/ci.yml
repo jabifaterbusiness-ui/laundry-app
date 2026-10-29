@@ -2,9 +2,12 @@ name: CI
 
 on:
   pull_request:
-    branches: [friend-work, main]
+    branches:
+      - friend-work
   push:
-    branches: [friend-work, main, fix/receipt-print-visibility]
+    branches:
+      - friend-work
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,34 +17,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Generate Prisma and validate monorepo
+  verify:
+    name: Test, lint, typecheck, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/laundryangel_ci?schema=public
+      JWT_ACCESS_SECRET: ci-only-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-at-least-32-characters
+      NODE_ENV: test
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
+      - name: Build shared package
+        run: npm run build:shared
       - name: Generate Prisma Client
         run: npm run db:generate
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
+      - name: Run test suites
         run: npm test
-
-      - name: Lint
+      - name: Lint API and web
         run: npm run lint
-
-      - name: Build
+      - name: Typecheck API and web
+        run: npm run typecheck
+      - name: Build production applications
         run: npm run build
