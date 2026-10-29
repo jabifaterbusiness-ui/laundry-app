@@ -79,6 +79,42 @@ describe("renderCustomerReceiptEmail", () => {
     expect(html).toContain("header header-centered");
   });
 
+  it("includes each payment method, amount paid, and balance due", () => {
+    const html = renderCustomerReceiptEmail(makeReceipt({
+      totalPaid: 7500,
+      balanceDue: 1500,
+      payments: [
+        {
+          id: "payment-1",
+          amount: 5000,
+          method: "CASH",
+          type: "PAYMENT",
+          reference: null,
+          createdAt: "2026-09-08T01:00:00.000Z",
+        },
+        {
+          id: "payment-2",
+          amount: 2500,
+          method: "TRANSFER",
+          type: "PAYMENT",
+          reference: "TRX-123",
+          createdAt: "2026-09-08T02:00:00.000Z",
+        },
+      ],
+    }));
+
+    expect(html).toContain("Payment History");
+    expect(html).toContain("Cash");
+    expect(html).toContain("Bank transfer");
+    expect(html).toContain("TRX-123");
+    expect(html).toContain("₦5,000.00");
+    expect(html).toContain("₦2,500.00");
+    expect(html).toContain("Amount paid");
+    expect(html).toContain("Balance due");
+    expect(html).toContain("₦7,500.00");
+    expect(html).toContain("₦1,500.00");
+  });
+
   it("never includes customer contact information in the receipt", () => {
     const html = renderCustomerReceiptEmail(makeReceipt());
 
