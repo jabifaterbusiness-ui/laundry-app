@@ -90,11 +90,11 @@ function readMemo(memoBuffer: Buffer | undefined, blockNumber: number): string {
     remaining -= chunks[chunks.length - 1]!.length;
     offset += blockSize;
   }
-return iconv.decode(Buffer.concat(chunks), "windows-1252").replace(/\0/g, "").trim();
+return iconv.decode(Buffer.concat(chunks), "windows-1252").replaceAll("\0", "").trim();
 }
 
 function parseValue(raw: Buffer, field: DbfField, memoBuffer?: Buffer): unknown {
-const text = iconv.decode(raw, "windows-1252").replace(/\0/g, "").trim();
+const text = iconv.decode(raw, "windows-1252").replaceAll("\0", "").trim();
   if (field.type === "C" || field.type === "G" || field.type === "P") return text;
   if (field.type === "M") return readMemo(memoBuffer, raw.length >= 4 ? raw.readInt32LE(0) : 0);
   if (field.type === "L") return /^(y|t|1)$/i.test(text);
