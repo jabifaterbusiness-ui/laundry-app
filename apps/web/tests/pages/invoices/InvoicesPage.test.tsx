@@ -625,6 +625,9 @@ describe("InvoicesPage digital receipt shortcut", () => {
         },
       ],
       totalAmount: 5000,
+      totalPaid: 0,
+      balanceDue: 5000,
+      payments: [],
       garmentNote: "Handle with care",
       customerAgreement: "Customer agreement",
     });
@@ -689,6 +692,9 @@ describe("InvoicesPage digital receipt shortcut", () => {
       createdAt: "2026-09-01T10:00:00.000Z",
       items: [],
       totalAmount: 10000,
+      totalPaid: 0,
+      balanceDue: 10000,
+      payments: [],
       garmentNote: null,
       internalNote: "Company internal note",
     });
