@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [friend-work, main]
   push:
-    branches: [friend-work, main]
+    branches: [friend-work, main, fix/receipt-print-visibility]
 
 permissions:
   contents: read
