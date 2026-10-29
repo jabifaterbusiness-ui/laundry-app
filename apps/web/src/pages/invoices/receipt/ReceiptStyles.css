@@ -251,8 +251,8 @@ body.printing-company .invoice-print-customer {
     visibility: hidden !important;
   }
 
-  body.printing-customer .invoice-print-area,
-  body.printing-company .invoice-print-area {
+  body.printing-customer #root .invoice-print-area,
+  body.printing-company #root .invoice-print-area {
     position: fixed !important;
     inset: 0 !important;
     display: block !important;
@@ -264,18 +264,18 @@ body.printing-company .invoice-print-customer {
     overflow: visible !important;
   }
 
-  body.printing-customer .invoice-print-area *,
-  body.printing-company .invoice-print-area * {
+  body.printing-customer #root .invoice-print-area *,
+  body.printing-company #root .invoice-print-area * {
     visibility: visible !important;
   }
 
-  body.printing-customer .invoice-print-company,
-  body.printing-company .invoice-print-customer {
+  body.printing-customer #root .invoice-print-company,
+  body.printing-company #root .invoice-print-customer {
     display: none !important;
   }
 
-  body.printing-customer .invoice-print-customer,
-  body.printing-company .invoice-print-company {
+  body.printing-customer #root .invoice-print-customer,
+  body.printing-company #root .invoice-print-company {
     display: block !important;
     visibility: visible !important;
   }
