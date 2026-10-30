@@ -276,19 +276,19 @@
 }
 .data-management button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgb(30 25 55 / 8%); }
 .data-management button:disabled { cursor: not-allowed; opacity: .48; }
-.data-management button.data-management-button-primary {
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-primary {
   border-color: var(--dm-pink);
   background: linear-gradient(135deg, #d63b87, #b82270);
   color: #fff;
   box-shadow: 0 4px 10px rgb(198 43 118 / 15%);
 }
-.data-management button.data-management-button-primary:hover:not(:disabled) { background: linear-gradient(135deg, #c92f7b, #a91e63); }
-.data-management button.data-management-button-warning {
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-primary:hover:not(:disabled) { background: linear-gradient(135deg, #c92f7b, #a91e63); }
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-warning {
   border-color: #e5b66f;
   background: #fff7e9;
   color: #9b5d12;
 }
-.data-management button.data-management-button-secondary { background: #fff; color: #56536c; }
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-secondary { background: #fff; color: #56536c; }
 .data-management .data-management-cloud-header { align-items: flex-start; margin-bottom: 17px; }
 .data-management-cloud-header h2 { margin-top: 4px; font-size: 1.35rem; }
 .data-management-cloud-lock { border-color: #d9e9e2; background: rgb(247 255 250 / 65%); color: #26734f; }
@@ -337,7 +337,7 @@
 .data-management-provider-status.is-ready,
 .data-management-provider-status.is-connected { color: #21805a; }
 .data-management-provider-status.has-error { color: #b43b55; }
-.data-management button.data-management-button-connect { min-height: 32px !important; padding: 6px 10px !important; border-color: #ead0df !important; background: #fff7fb !important; color: #a52267 !important; }
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-connect { min-height: 32px !important; padding: 6px 10px !important; border-color: #ead0df !important; background: #fff7fb !important; color: #a52267 !important; }
 .data-management-provider-details {
   flex: 1 0 100%;
   padding: 7px 0 0 !important;
@@ -373,7 +373,7 @@
 .data-management-account-row small[role="alert"] { color: #b43b55; }
 .data-management-inline-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .data-management-inline-actions button { min-height: 30px !important; padding: 5px 9px !important; font-size: .72rem !important; }
-.data-management button.data-management-danger-action { color: #ad3450 !important; border-color: #f0d5dc !important; background: #fff8fa !important; }
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-danger-action { color: #ad3450 !important; border-color: #f0d5dc !important; background: #fff8fa !important; }
 .data-management-manual-backup {
   display: flex;
   align-items: center;
@@ -389,7 +389,7 @@
 .data-management-manual-backup p { margin: 0; color: var(--dm-muted); font-size: .8rem; }
 .data-management-manual-controls { display: flex; align-items: flex-end; gap: 9px; min-width: min(100%, 450px); }
 .data-management-destination-select { flex: 1 1 190px; min-width: 0; margin: 0 !important; }
-.data-management button.data-management-button-manual {
+.data-management button:not(.data-management-heading-toggle):not(.data-management-provider-details).data-management-button-manual {
   min-height: 40px;
   padding: 9px 15px;
   border-color: #ae2469;
