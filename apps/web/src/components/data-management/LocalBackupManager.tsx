@@ -133,6 +133,7 @@ export function LocalBackupManager() {
   const [folderHandle, setFolderHandle] = useState<LocalDirectoryHandle | null>(null);
   const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));
   const [scheduleDraft, setScheduleDraft] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftFrequency, setDraftFrequency] = useState<Frequency>("DAILY");
   const [draftTime, setDraftTime] = useState("02:00");
@@ -239,23 +240,41 @@ export function LocalBackupManager() {
     return () => { cancelled = true; window.clearInterval(interval); };
   }, [accessToken, backupPassword, folderHandle, schedules]);
 
+  function startScheduleEdit(schedule?: LocalBackupSchedule) {
+    setEditingScheduleId(schedule?.id ?? null);
+    setDraftName(schedule?.name ?? "");
+    setDraftFrequency(schedule?.frequency ?? "DAILY");
+    setDraftTime(schedule ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}` : "02:00");
+    setDraftDayOfWeek(schedule?.dayOfWeek ?? 1);
+    setDraftDayOfMonth(schedule?.dayOfMonth ?? 1);
+    setScheduleDraft(true);
+  }
+
   function addSchedule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draftName.trim() || schedules.length >= 10) return;
+    if (!draftName.trim() || (!editingScheduleId && schedules.length >= 10)) return;
     const [hour, minute] = draftTime.split(":").map(Number);
-    setSchedules((current) => [...current, {
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: draftName.trim(),
-      frequency: draftFrequency,
-      hour,
-      minute,
-      dayOfWeek: draftDayOfWeek,
-      dayOfMonth: draftDayOfMonth,
-      enabled: true,
-    }]);
+    if (editingScheduleId) {
+      setSchedules((current) => current.map((item) => item.id === editingScheduleId
+        ? { ...item, name: draftName.trim(), frequency: draftFrequency, hour, minute, dayOfWeek: draftDayOfWeek, dayOfMonth: draftDayOfMonth }
+        : item));
+      setMessage("Local backup schedule updated.");
+    } else {
+      setSchedules((current) => [...current, {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: draftName.trim(),
+        frequency: draftFrequency,
+        hour,
+        minute,
+        dayOfWeek: draftDayOfWeek,
+        dayOfMonth: draftDayOfMonth,
+        enabled: true,
+      }]);
+      setMessage("Local backup schedule saved on this device.");
+    }
     setDraftName("");
+    setEditingScheduleId(null);
     setScheduleDraft(false);
-    setMessage("Local backup schedule saved on this device.");
   }
 
   return (
@@ -295,11 +314,11 @@ export function LocalBackupManager() {
         {schedules.length > 0 && <div className="data-management-local-schedule-list">
           {schedules.map((schedule) => <article className="data-management-local-schedule" key={schedule.id}>
             <div><strong>{schedule.name}</strong><span>{schedule.frequency.toLowerCase()} · {String(schedule.hour).padStart(2, "0")}:{String(schedule.minute).padStart(2, "0")}{schedule.frequency === "WEEKLY" ? ` · ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][schedule.dayOfWeek]}` : ""}{schedule.frequency === "MONTHLY" ? ` · Day ${schedule.dayOfMonth}` : ""}</span></div>
-            <div className="data-management-inline-actions"><span className={schedule.enabled ? "data-management-status-enabled" : "data-management-status-paused"}>{schedule.enabled ? "Enabled" : "Paused"}</span><button type="button" onClick={() => setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, enabled: !item.enabled } : item))}>{schedule.enabled ? "Pause" : "Resume"}</button><button type="button" className="data-management-danger-action" onClick={() => setSchedules((current) => current.filter((item) => item.id !== schedule.id))}>Delete</button></div>
+            <div className="data-management-inline-actions"><span className={schedule.enabled ? "data-management-status-enabled" : "data-management-status-paused"}>{schedule.enabled ? "Enabled" : "Paused"}</span><button type="button" onClick={() => startScheduleEdit(schedule)}>Edit</button><button type="button" onClick={() => setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, enabled: !item.enabled } : item))}>{schedule.enabled ? "Pause" : "Resume"}</button><button type="button" className="data-management-danger-action" onClick={() => setSchedules((current) => current.filter((item) => item.id !== schedule.id))}>Delete</button></div>
           </article>)}
         </div>}
         {scheduleDraft && <form className="data-management-schedule-editor" onSubmit={addSchedule}>
-          <h4>New local backup schedule</h4>
+          <h4>{editingScheduleId ? "Edit local backup schedule" : "New local backup schedule"}</h4>
           <div className="data-management-settings-grid">
             <label>Schedule name<input value={draftName} onChange={(event) => setDraftName(event.target.value)} maxLength={80} placeholder="e.g. Daily office backup" required /></label>
             <label>Frequency<select value={draftFrequency} onChange={(event) => setDraftFrequency(event.target.value as Frequency)}><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select></label>
@@ -307,7 +326,7 @@ export function LocalBackupManager() {
             {draftFrequency === "WEEKLY" && <label>Day of week<select value={draftDayOfWeek} onChange={(event) => setDraftDayOfWeek(Number(event.target.value))}>{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => <option value={index} key={day}>{day}</option>)}</select></label>}
             {draftFrequency === "MONTHLY" && <label>Day of month<input type="number" min={1} max={31} value={draftDayOfMonth} onChange={(event) => setDraftDayOfMonth(Number(event.target.value))} required /></label>}
           </div>
-          <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit">Save local schedule</button><button type="button" onClick={() => setScheduleDraft(false)}>Cancel</button></div>
+          <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit">{editingScheduleId ? "Save changes" : "Save local schedule"}</button><button type="button" onClick={() => { setScheduleDraft(false); setEditingScheduleId(null); }}>Cancel</button></div>
         </form>}
         <p className="data-management-local-note">Local schedules are stored on this device. They run only while LaundryAngel is open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage.</p>
       </div>
