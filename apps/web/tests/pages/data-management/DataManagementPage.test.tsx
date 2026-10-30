@@ -353,7 +353,7 @@ describe("DataManagementPage authorization", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", { name: /export encrypted backup/i }),
+      screen.getByRole("heading", { name: /instant local backup/i }),
     ).toBeInTheDocument();
 
     expect(
