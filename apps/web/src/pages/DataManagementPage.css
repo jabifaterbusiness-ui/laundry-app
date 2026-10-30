@@ -495,8 +495,40 @@
 .data-management-run-pending { background: #fff6e8; color: #966116; }
 .data-management-cloud-footnote { margin: 12px 2px 0; color: var(--dm-muted); font-size: .72rem; }
 .data-management :where(.error, [role="alert"]) { overflow-wrap: anywhere; }
+
+.data-management-local-backup {
+  margin: 0 0 16px;
+  padding: 17px;
+  border: 1px solid #e8d9ef;
+  border-radius: 17px;
+  background: linear-gradient(125deg, #fff7fb 0%, #f8f5ff 58%, #fff 100%);
+  box-shadow: 0 7px 22px rgb(91 55 111 / 5%);
+}
+.data-management-local-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+.data-management-local-header h2 { margin: 4px 0; color: #713d8f; font-size: 1.18rem; }
+.data-management-local-header p { margin: 0; color: var(--dm-muted); font-size: .79rem; }
+.data-management-local-lock { flex: 0 0 auto; padding: 6px 9px; border: 1px solid #e5d9f0; border-radius: 999px; background: #fff; color: #76518e; font-size: .68rem; font-weight: 750; }
+.data-management-local-destination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid #e8e3ef; border-radius: 12px; background: rgb(255 255 255 / 82%); }
+.data-management-local-folder { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.data-management-local-folder > span { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: #f0eafa; color: #8050a0; font-size: 1.1rem; }
+.data-management-local-folder > div { display: grid; gap: 3px; min-width: 0; }
+.data-management-local-folder strong { overflow-wrap: anywhere; color: var(--dm-ink); font-size: .8rem; }
+.data-management-local-folder small { color: var(--dm-muted); font-size: .69rem; }
+.data-management-local-manual { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-top: 10px; }
+.data-management-local-manual label { margin: 0; }
+.data-management-local-schedules { margin-top: 15px; padding-top: 13px; border-top: 1px solid #e9e1ef; }
+.data-management-local-schedule-list { display: grid; gap: 7px; margin-top: 10px; }
+.data-management-local-schedule { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid #ece8f1; border-radius: 11px; background: rgb(255 255 255 / 86%); }
+.data-management-local-schedule > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.data-management-local-schedule strong { color: var(--dm-ink); font-size: .77rem; }
+.data-management-local-schedule span { color: var(--dm-muted); font-size: .68rem; }
+.data-management-local-schedule .data-management-inline-actions { justify-content: flex-end; }
+.data-management-local-note { margin: 12px 1px 0; color: var(--dm-muted); font-size: .69rem; line-height: 1.5; }
+
 @media (max-width: 900px) {
   .data-management-provider-grid { grid-template-columns: 1fr; }
+  .data-management-local-manual { grid-template-columns: minmax(0, 1fr); }
+  .data-management-local-manual .data-management-button-manual { width: 100%; }
   .data-management-provider-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; }
   .data-management-provider-details,
   .data-management-provider-accounts { grid-column: 1 / -1; }
@@ -511,6 +543,12 @@
   .data-management-tool-heading > .data-management-button { margin-left: 54px; }
   .data-management-tool-content { padding: 0 12px 13px; }
   .data-management-manual-backup { align-items: stretch; flex-direction: column; }
+  .data-management-local-header,
+  .data-management-local-destination,
+  .data-management-local-schedule { align-items: flex-start; flex-direction: column; }
+  .data-management-local-lock { align-self: flex-start; }
+  .data-management-local-destination > button { width: 100%; }
+  .data-management-local-schedule .data-management-inline-actions { justify-content: flex-start; }
   .data-management-manual-controls { min-width: 0; flex-direction: column; align-items: stretch; }
   .data-management-schedule-grid,
   .data-management-settings-grid { grid-template-columns: minmax(0, 1fr); }
