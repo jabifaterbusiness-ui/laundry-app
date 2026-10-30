@@ -81,13 +81,15 @@ export async function verifyBackupCloudConnection(
       });
     }
   } catch (error) {
-    logger.error({
+    // Log only controlled AppError messages; never log provider response bodies,
+    // OAuth credentials, access tokens, refresh tokens, or encrypted payloads.
+    logger.warn({
       provider: record.provider,
       connectionId: record.id,
       errorType: error instanceof Error ? error.name : typeof error,
       ...(error instanceof AppError
         ? { statusCode: error.statusCode, diagnostic: error.message }
-        : {}),
+        : { diagnostic: "Unexpected provider verification error." }),
     }, "Cloud destination verification failed.");
 
     try {
