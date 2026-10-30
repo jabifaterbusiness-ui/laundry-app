@@ -303,7 +303,8 @@ describe("DataManagementPage authorization", () => {
     );
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Verify" }));
 
     expect(
       await screen.findByText("Cloud destination verification failed. Check the destination settings and authorization."),
