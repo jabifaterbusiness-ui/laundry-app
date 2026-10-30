@@ -740,6 +740,7 @@ export function DataManagementPage() {
 
         <article className="data-management-tool-card data-management-tool-import">
           <div className="data-management-tool-heading">
+            <h3 className="data-management-tool-semantic-heading">
             <button
               type="button"
               className="data-management-heading-toggle"
@@ -756,6 +757,7 @@ export function DataManagementPage() {
               </span>
               <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("import") ? "−" : "+"}</span>
             </button>
+            </h3>
             <button className="data-management-button data-management-button-primary" type="button" disabled={!migrationFile || busy} onClick={handleAnalyze}>Analyze backup</button>
           </div>
           <div id="data-management-import-panel" className="data-management-tool-content" hidden={!panelIsOpen("import")}>
@@ -807,11 +809,13 @@ export function DataManagementPage() {
           <>
             <article className="data-management-tool-card data-management-tool-export">
               <div className="data-management-tool-heading">
+                <h3 className="data-management-tool-semantic-heading">
                 <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("export")} aria-controls="data-management-export-panel" title="The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and store it separately." data-tooltip="Encrypted before download. Use a password of at least 12 characters and store it separately." onClick={() => togglePanel("export")}>
                   <span className="data-management-tool-icon" aria-hidden="true">⇩</span>
-                  <span className="data-management-tool-title"><h3>Export encrypted backup</h3><small>Download a protected copy of your business data</small></span>
+                  <span className="data-management-tool-title"><strong>Export encrypted backup</strong><small>Download a protected copy of your business data</small></span>
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("export") ? "−" : "+"}</span>
                 </button>
+                </h3>
                 <button className="data-management-button data-management-button-primary" type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
               </div>
               <div id="data-management-export-panel" className="data-management-tool-content" hidden={!panelIsOpen("export")}>
@@ -824,11 +828,13 @@ export function DataManagementPage() {
 
             <article className="data-management-tool-card data-management-tool-restore">
               <div className="data-management-tool-heading">
+                <h3 className="data-management-tool-semantic-heading">
                 <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("restore")} aria-controls="data-management-restore-panel" title="Restore is merge-only. It does not delete current data or overwrite passwords and security access." data-tooltip="Merge-only restore. Existing data and staff security credentials are protected." onClick={() => togglePanel("restore")}>
                   <span className="data-management-tool-icon" aria-hidden="true">↻</span>
-                  <span className="data-management-tool-title"><h3>Restore encrypted backup</h3><small>Safely merge data from a previous LaundryAngel backup</small></span>
+                  <span className="data-management-tool-title"><strong>Restore encrypted backup</strong><small>Safely merge data from a previous LaundryAngel backup</small></span>
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("restore") ? "−" : "+"}</span>
                 </button>
+                </h3>
                 <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
               </div>
               <div id="data-management-restore-panel" className="data-management-tool-content" hidden={!panelIsOpen("restore")}>
