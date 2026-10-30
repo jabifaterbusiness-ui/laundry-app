@@ -223,7 +223,9 @@ describe("DataManagementPage authorization", () => {
     window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: /Run instant backup/i }));
+    const instantBackupButton = await screen.findByRole("button", { name: /Run instant backup/i });
+    await waitFor(() => expect(instantBackupButton).toBeEnabled());
+    fireEvent.click(instantBackupButton);
 
     await waitFor(() => {
       expect(notifications.some((event) =>
