@@ -525,6 +525,21 @@
 .data-management-local-schedule .data-management-inline-actions { justify-content: flex-end; }
 .data-management-local-note { margin: 12px 1px 0; color: var(--dm-muted); font-size: .69rem; line-height: 1.5; }
 
+.data-management-local-history { margin-top: 14px; padding: 12px; border: 1px solid #e9e4ef; border-radius: 12px; background: rgb(255 255 255 / 82%); }
+.data-management-local-history-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.data-management-local-history-heading h4 { margin: 0; color: #58456a; font-size: .78rem; }
+.data-management-local-history-heading span { color: var(--dm-muted); font-size: .66rem; }
+.data-management-local-history ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.data-management-local-history li { display: grid; gap: 4px; padding: 8px 9px; border-radius: 9px; background: #fbf9fd; }
+.data-management-local-history li > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.data-management-local-history li strong { color: var(--dm-ink); font-size: .72rem; }
+.data-management-local-history li span,
+.data-management-local-history li small,
+.data-management-local-history > p { color: var(--dm-muted); font-size: .66rem; }
+.data-management-local-history li small { overflow-wrap: anywhere; }
+.data-management-local-history > p { margin: 0; }
+
+
 @media (max-width: 900px) {
   .data-management-provider-grid { grid-template-columns: 1fr; }
   .data-management-local-manual { grid-template-columns: minmax(0, 1fr); }
@@ -547,6 +562,7 @@
   .data-management-local-destination,
   .data-management-local-schedule { align-items: flex-start; flex-direction: column; }
   .data-management-local-lock { align-self: flex-start; }
+  .data-management-local-history li > div { align-items: flex-start; flex-direction: column; }
   .data-management-local-destination > button { width: 100%; }
   .data-management-local-schedule .data-management-inline-actions { justify-content: flex-start; }
   .data-management-manual-controls { min-width: 0; flex-direction: column; align-items: stretch; }
