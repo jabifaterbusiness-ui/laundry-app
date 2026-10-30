@@ -175,6 +175,7 @@ export function LocalBackupManager() {
   useEffect(() => {
     setSchedules(readSchedules(scheduleKey));
     setHistory(readHistory(historyKey));
+    setFolderHandle(null);
     let cancelled = false;
     void readFolderHandle(folderKey).then((handle) => {
       if (!cancelled) setFolderHandle(handle);
