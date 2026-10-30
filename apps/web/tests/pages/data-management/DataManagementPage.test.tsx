@@ -115,7 +115,7 @@ describe("DataManagementPage authorization", () => {
     expect(await screen.findByRole("heading", { name: "Google Drive" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Dropbox" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "OneDrive" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /2 saved accounts.*view details/i })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /2 saved accounts.*view details/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Verify" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /2 saved accounts.*view details/i }));
