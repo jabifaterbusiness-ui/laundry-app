@@ -1,51 +1,54 @@
-# Production Readiness
+# LaundryAngel OVH Release Readiness
+
+Last reviewed: 2026-10-30
 
 ## Repository checkpoint
 
-- Branch: `main`
-- Latest commit: `a105de8`
-- Latest commit message: `chore(deploy): add production environment template`
-- Remote: `https://github.com/jabifaterbusiness-ui/laundry-app`
+- Working branch: `friend-work`
+- Latest merged change: `a98a69d` — redesign backup management dashboard (PR #8)
+- Post-merge GitHub Actions CI: successful
+- Current release candidate: `friend-work`
+- Production deployment from this checkpoint: not performed
 
-## Production assets
+## OVH migration checkpoint
 
-- API image definition: `Dockerfile`
-- Web image definition: `deploy/web.Dockerfile`
-- Nginx configuration: `deploy/nginx/default.conf`
-- Production environment template: `deploy/production.env.example`
-- Prisma production binary target: `linux-musl-openssl-3.0.x`
-- Explicit migration command: `npm run db:migrate:deploy --workspace=apps/api`
+- VPS: active (OVH VPS-1, Ubuntu 26.04, 2 vCPU, 4 GB RAM).
+- Server access: SSH access confirmed.
+- Runtime: Docker Engine and Docker Compose installed.
+- Application: the OVH application stack was previously started; API request handling and background scheduler startup were observed.
+- Database preparation: the PostgreSQL production archive passed integrity checks and an isolated restore rehearsal was completed.
+- Production cutover: not declared complete. The isolated restore rehearsal is not a substitute for final production database and public-traffic verification.
+- Public launch: blocked on the production domain and HTTPS configuration.
+- Previously reported migration-readiness estimate: 93%. This is a historical checkpoint, not a newly measured percentage or a claim that public launch is complete.
 
-## Validation completed
+## Current code and CI validation
 
-- API tests passed: 65 files / 1,010 tests
-- Web tests passed: 21 files / 155 tests
-- API typecheck passed
-- Web typecheck passed
-- API lint passed
-- Web lint passed
-- Shared, API, and web production builds passed
-- Production API container health smoke test passed
-- Production Prisma engine and database connection rehearsal passed
-- Production image migration rehearsal passed against temporary PostgreSQL
-- Production PWA icons generated and included
-- No tracked real environment files or secret-like files
+- PR #8 is merged into `friend-work`.
+- Post-merge CI Run #40 passed on merge commit `a98a69d`.
+- The CI workflow covers tests, lint, API/web typechecks, and production builds.
+- The production environment template is aligned with the variables consumed by `deploy/compose.production.yml` and the API environment schema.
 
-## Remaining deployment tasks
+## Remaining release gates
 
-1. Provision production PostgreSQL.
-2. Configure real production secrets and environment variables.
-3. Deploy the API container.
-4. Run Prisma migrations against the production database.
-5. Deploy the web container.
-6. Configure the production domain and HTTPS.
-7. Run authenticated staging or production end-to-end smoke tests.
-8. Complete final release verification and rollback documentation.
+1. Obtain the production domain when budget allows.
+2. Point the domain to the OVH server and configure HTTPS.
+3. Set `APP_URL`, `WEB_APP_URL`, and `CORS_ORIGIN` to the final HTTPS origins.
+4. Verify the public web app, API health endpoint, authentication, and core customer/staff workflows over HTTPS.
+5. Reconcile the live production database state with the validated migration/archive checkpoint before any traffic cutover.
+6. Complete and review the release rollback procedure.
+7. Obtain explicit owner approval before any production deployment, migration, restart, or traffic cutover.
 
-## Security reminders
+## Deferred operational checks
 
-- Never commit `.env`, `.env.local`, credentials, private keys, or real secrets.
-- Use different production access and refresh secrets.
-- Restrict `CORS_ORIGIN` to the real web application origin.
-- Run migrations explicitly during deployment; do not run them automatically on API startup.
+- Cloud-backup operations, OAuth changes, backup/restore execution, and production backup diagnostics are paused at the owner's request until the domain is available.
+- Do not run these checks or change stored backup connections, schedules, credentials, or records while the pause remains in effect.
+
+## Production configuration and security
+
+- The Compose deployment reads `deploy/.env.production.local`; keep it private with restrictive permissions (for example, mode 600).
+- Compose constructs `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
+- Use distinct, strong production JWT access and refresh secrets.
+- Keep payment, email, and WhatsApp credentials server-side only.
+- Never commit `.env`, `.env.local`, real credentials, private keys, or production database URLs.
+- Run Prisma migrations explicitly during an approved release; do not run migrations automatically on API startup.
 - Keep platform-admin access separate from tenant users.
