@@ -309,7 +309,7 @@ export function LocalBackupManager() {
       <div className="data-management-local-schedules">
         <div className="data-management-subsection-heading">
           <div><h3>Local backup schedules <span className="data-management-count">{schedules.length}/10</span></h3><p>{schedules.filter((schedule) => schedule.enabled).length} active · runs while this page is open and the folder is accessible</p></div>
-          <button className="data-management-button data-management-button-secondary" type="button" disabled={schedules.length >= 10} onClick={() => { if (scheduleDraft) { setScheduleDraft(false); setEditingScheduleId(null); } else { startScheduleEdit(); } }}>{scheduleDraft ? "Cancel" : "＋ Add local schedule"}</button>
+          <button className="data-management-button data-management-button-secondary" type="button" disabled={schedules.length >= 10 || !folderPickerAvailable} onClick={() => { if (scheduleDraft) { setScheduleDraft(false); setEditingScheduleId(null); } else { startScheduleEdit(); } }}>{scheduleDraft ? "Cancel" : "＋ Add local schedule"}</button>
         </div>
         {schedules.length > 0 && <div className="data-management-local-schedule-list">
           {schedules.map((schedule) => <article className="data-management-local-schedule" key={schedule.id}>
@@ -328,7 +328,7 @@ export function LocalBackupManager() {
           </div>
           <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit">{editingScheduleId ? "Save changes" : "Save local schedule"}</button><button type="button" onClick={() => { setScheduleDraft(false); setEditingScheduleId(null); }}>Cancel</button></div>
         </form>}
-        <p className="data-management-local-note">Local schedules are stored on this device. They run only while LaundryAngel is open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage.</p>
+        <p className="data-management-local-note">Local schedules are stored on this device. They run only while LaundryAngel is open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
       </div>
     </section>
   );
