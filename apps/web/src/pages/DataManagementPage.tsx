@@ -960,6 +960,20 @@ export function DataManagementPage() {
               </div>
               <button className="data-management-button data-management-button-primary" type="submit" disabled={cloudBusy || !accessToken}>Save custom destination</button>
             </form>
+            {cloudConnections.some((connection) => connection.provider === "S3_COMPATIBLE") && (
+              <div className="data-management-custom-accounts">
+                <h4>Saved custom destinations</h4>
+                {cloudConnections.filter((connection) => connection.provider === "S3_COMPATIBLE").map((connection) => (
+                  <div className="data-management-account-row" key={connection.id}>
+                    <div><strong>{connection.displayName}</strong><span>{connection.status}{connection.verifiedAt ? " · Verified " + new Date(connection.verifiedAt).toLocaleString() : ""}</span>{connection.lastError && <small role="alert">{connection.lastError}</small>}</div>
+                    <div className="data-management-inline-actions">
+                      <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void cloudAction((authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Destination verification completed.")}>Verify</button>
+                      <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => void cloudAction((authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Manual backup request submitted.", "manual")}>Run now</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="data-management-subsection">
