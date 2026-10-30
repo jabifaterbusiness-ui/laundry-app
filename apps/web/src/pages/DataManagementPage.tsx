@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { publishCloudBackupNotification } from "../lib/cloud-backup-notifications.js";
 import { ApiError } from "../lib/api-client.js";
 import {
-  analyzeMigration, exportBackup, getMigrationJob, importMigrationJob, restoreBackup,
+  analyzeMigration, getMigrationJob, importMigrationJob, restoreBackup,
   listCloudBackupConnections, createCloudBackupConnection, startCloudBackupOAuth,
   verifyCloudBackupConnection, createCloudBackupRun, listCloudBackupRuns,
   getCloudBackupSettings, saveCloudBackupSettings,
@@ -17,71 +17,7 @@ import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 import { useSearchParams } from "react-router-dom";
 import "./DataManagementPage.css";
-
-type SaveFilePickerOptions = {
-  suggestedName?: string;
-  types?: Array<{
-    description?: string;
-    accept: Record<string, string[]>;
-  }>;
-};
-
-type SaveFileHandle = {
-  createWritable: () => Promise<{
-    write: (data: Blob) => Promise<void>;
-    close: () => Promise<void>;
-  }>;
-};
-
-type WindowWithSaveFilePicker = Window & {
-  showSaveFilePicker?: (
-    options?: SaveFilePickerOptions,
-  ) => Promise<SaveFileHandle>;
-};
-
-function backupFilename() {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-
-  return [
-    "LaundryAngel_Backup",
-    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
-    `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`,
-  ].join("_") + ".laundry-backup";
-}
-
-async function saveBackupBlob(blob: Blob) {
-  const filename = backupFilename();
-  const picker = (window as WindowWithSaveFilePicker).showSaveFilePicker;
-
-  if (picker) {
-    const handle = await picker({
-      suggestedName: filename,
-      types: [
-        {
-          description: "LaundryAngel encrypted backup",
-          accept: {
-            "application/octet-stream": [".laundry-backup"],
-          },
-        },
-      ],
-    });
-
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return;
-  }
-
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { LocalBackupManager } from "../components/data-management/LocalBackupManager.js";
 
 export function DataManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -94,7 +30,6 @@ export function DataManagementPage() {
   const [analysis, setAnalysis] = useState<MigrationAnalysisResponse | null>(null);
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
   const [customerMapping, setCustomerMapping] = useState<MigrationAnalysisResponse["summary"]["customerMapping"]>({});
-  const [backupPassword, setBackupPassword] = useState("");
   const [restorePassword, setRestorePassword] = useState("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -673,25 +608,6 @@ export function DataManagementPage() {
     } finally { setBusy(false); }
   }
 
-  async function handleExport() {
-    if (!backupPassword) {
-      setMessage("Enter the backup password.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      const blob = await exportBackup(backupPassword, { accessToken });
-      await saveBackupBlob(blob);
-      setMessage("Encrypted backup saved successfully.");
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Backup export failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleRestore() {
     if (!restoreFile || !restorePassword) {
       setMessage("Choose a backup file and enter its password.");
@@ -807,24 +723,7 @@ export function DataManagementPage() {
 
         {canRestore && (
           <>
-            <article className="data-management-tool-card data-management-tool-export">
-              <div className="data-management-tool-heading">
-                <h3 className="data-management-tool-semantic-heading">
-                <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("export")} aria-controls="data-management-export-panel" title="The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and store it separately." data-tooltip="Encrypted before download. Use a password of at least 12 characters and store it separately." onClick={() => togglePanel("export")}>
-                  <span className="data-management-tool-icon" aria-hidden="true">⇩</span>
-                  <span className="data-management-tool-title"><strong>Export encrypted backup</strong><small>Download a protected copy of your business data</small></span>
-                  <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("export") ? "−" : "+"}</span>
-                </button>
-                </h3>
-                <button className="data-management-button data-management-button-primary" type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
-              </div>
-              <div id="data-management-export-panel" className="data-management-tool-content" hidden={!panelIsOpen("export")}>
-                <p>Your backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and keep it separately from the backup file.</p>
-                <label>Backup password
-                  <input type="password" autoComplete="new-password" placeholder="At least 12 characters" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} />
-                </label>
-              </div>
-            </article>
+            <LocalBackupManager key={user?.businessId ?? user?.id ?? "default"} />
 
             <article className="data-management-tool-card data-management-tool-restore">
               <div className="data-management-tool-heading">
@@ -909,11 +808,6 @@ export function DataManagementPage() {
                                 (authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }),
                                 "Destination verification completed.",
                               )}>Verify</button>
-                              <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => void cloudAction(
-                                (authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }),
-                                "Manual backup request submitted.",
-                                "manual",
-                              )}>Run now</button>
                             </div>
                           </div>
                         ))}
@@ -928,8 +822,8 @@ export function DataManagementPage() {
           <div className="data-management-manual-backup">
             <div>
               <span className="data-management-eyebrow">ON-DEMAND PROTECTION</span>
-              <h3>Instant manual backup</h3>
-              <p>Start an encrypted backup immediately, without waiting for the next schedule.</p>
+              <h3>Instant Cloud Backup</h3>
+              <p>Start an encrypted cloud backup immediately, without waiting for its separate schedule.</p>
             </div>
             <div className="data-management-manual-controls">
               <label className="data-management-destination-select">Save backup to
@@ -978,7 +872,7 @@ export function DataManagementPage() {
                     <div><strong>{connection.displayName}</strong><span>{connection.status}{connection.verifiedAt ? " · Verified " + new Date(connection.verifiedAt).toLocaleString() : ""}</span>{connection.lastError && <small role="alert">{connection.lastError}</small>}</div>
                     <div className="data-management-inline-actions">
                       <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void cloudAction((authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Destination verification completed.")}>Verify</button>
-                      <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => void cloudAction((authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Manual backup request submitted.", "manual")}>Run now</button>
+                      
                     </div>
                   </div>
                 ))}
