@@ -146,7 +146,7 @@ describe("DataManagementPage authorization", () => {
     try {
       render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-      fireEvent.click(screen.getByRole("button", { name: "Add schedule" }));
+      fireEvent.click(screen.getByRole("button", { name: /Add schedule/ }));
 
       const frequency = screen.getByRole("combobox", { name: "Frequency" });
       fireEvent.change(frequency, { target: { value: "WEEKLY" } });
