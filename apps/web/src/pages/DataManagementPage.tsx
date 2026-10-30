@@ -17,6 +17,7 @@ import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 import { useSearchParams } from "react-router-dom";
 import "./DataManagementPage.css";
+import { LocalBackupManager } from "../components/data-management/LocalBackupManager.js";
 
 type SaveFilePickerOptions = {
   suggestedName?: string;
