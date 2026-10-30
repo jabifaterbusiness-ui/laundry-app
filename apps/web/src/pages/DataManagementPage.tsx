@@ -808,24 +808,7 @@ export function DataManagementPage() {
 
         {canRestore && (
           <>
-            <article className="data-management-tool-card data-management-tool-export">
-              <div className="data-management-tool-heading">
-                <h3 className="data-management-tool-semantic-heading">
-                <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("export")} aria-controls="data-management-export-panel" title="The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and store it separately." data-tooltip="Encrypted before download. Use a password of at least 12 characters and store it separately." onClick={() => togglePanel("export")}>
-                  <span className="data-management-tool-icon" aria-hidden="true">⇩</span>
-                  <span className="data-management-tool-title"><strong>Export encrypted backup</strong><small>Download a protected copy of your business data</small></span>
-                  <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("export") ? "−" : "+"}</span>
-                </button>
-                </h3>
-                <button className="data-management-button data-management-button-primary" type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
-              </div>
-              <div id="data-management-export-panel" className="data-management-tool-content" hidden={!panelIsOpen("export")}>
-                <p>Your backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and keep it separately from the backup file.</p>
-                <label>Backup password
-                  <input type="password" autoComplete="new-password" placeholder="At least 12 characters" value={backupPassword} onChange={(e) => setBackupPassword(e.target.value)} />
-                </label>
-              </div>
-            </article>
+            <LocalBackupManager />
 
             <article className="data-management-tool-card data-management-tool-restore">
               <div className="data-management-tool-heading">
