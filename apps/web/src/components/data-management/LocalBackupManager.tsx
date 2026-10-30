@@ -3,7 +3,7 @@ import { exportBackup } from "../lib/data-management-api.js";
 import { useAuthStore } from "../state/auth-store.js";
 
 type Frequency = "DAILY" | "WEEKLY" | "MONTHLY";
-type LocalBackupSchedule = {
+type LocalBackupHistory = {\n  id: string;\n  fileName: string;\n  savedAt: string;\n  trigger: "MANUAL" | "SCHEDULED";\n  scheduleName?: string;\n};\ntype LocalBackupSchedule = {
   id: string;
   name: string;
   frequency: Frequency;
@@ -128,10 +128,10 @@ export function LocalBackupManager() {
   const user = useAuthStore((state) => state.user);
   const businessId = user?.businessId ?? user?.id ?? "default";
   const scheduleKey = useMemo(() => scheduleStorageKey(businessId), [businessId]);
-  const folderKey = useMemo(() => folderStorageKey(businessId), [businessId]);
+  const folderKey = useMemo(() => folderStorageKey(businessId), [businessId]);\n  const historyKey = useMemo(() => historyStorageKey(businessId), [businessId]);
   const [backupPassword, setBackupPassword] = useState("");
   const [folderHandle, setFolderHandle] = useState<LocalDirectoryHandle | null>(null);
-  const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));
+  const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));\n  const [history, setHistory] = useState<LocalBackupHistory[]>(() => readHistory(historyStorageKey(businessId)));
   const [scheduleDraft, setScheduleDraft] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -154,7 +154,7 @@ export function LocalBackupManager() {
       if (!cancelled) setMessage("Choose your backup folder again to restore local folder access.");
     });
     return () => { cancelled = true; };
-  }, [folderKey, scheduleKey]);
+  }, [folderKey, historyKey, scheduleKey]);
 
   useEffect(() => {
     window.localStorage.setItem(scheduleKey, JSON.stringify(schedules));
@@ -328,6 +328,13 @@ export function LocalBackupManager() {
           </div>
           <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit">{editingScheduleId ? "Save changes" : "Save local schedule"}</button><button type="button" onClick={() => { setScheduleDraft(false); setEditingScheduleId(null); }}>Cancel</button></div>
         </form>}
+        <div className="data-management-local-history">
+          <div className="data-management-local-history-heading"><h4>Recent local backup activity</h4><span>{history.length} saved locally</span></div>
+          {history.length ? <ul>{history.slice(0, 6).map((item) => <li key={item.id}>
+            <div><strong>{item.trigger === "SCHEDULED" ? item.scheduleName ?? "Scheduled backup" : "Manual local backup"}</strong><span>{new Date(item.savedAt).toLocaleString()}</span></div>
+            <small>{item.fileName}</small>
+          </li>)}</ul> : <p>No local backups have been saved on this device yet.</p>}
+        </div>
         <p className="data-management-local-note">Local schedules are stored on this device. They run only while LaundryAngel is open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
       </div>
     </section>
