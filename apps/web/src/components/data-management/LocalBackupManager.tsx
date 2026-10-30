@@ -241,7 +241,7 @@ export function LocalBackupManager() {
   }
 
   useEffect(() => {
-    if (!accessToken || !backupPassword || !folderHandle || !schedules.some((schedule) => schedule.enabled)) return;
+    if (!accessToken || backupPassword.length < 12 || !folderHandle || !schedules.some((schedule) => schedule.enabled)) return;
     let cancelled = false;
     const runDueSchedules = async () => {
       if (schedulerBusy.current || cancelled) return;
