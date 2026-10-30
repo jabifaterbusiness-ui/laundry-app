@@ -1056,7 +1056,7 @@ export function DataManagementPage() {
                     <tr key={run.id}>
                       <td>{new Date(run.createdAt).toLocaleString()}</td>
                       <td><span className={`data-management-run-status data-management-run-${run.status.toLowerCase()}`}>{run.status}</span></td>
-                      <td>{run.sizeBytes ? (run.sizeBytes / 1024).toFixed(1) + " KB" : "—"}</td>
+                      <td>{run.sizeBytes ? (Number(run.sizeBytes) / 1024).toFixed(1) + " KB" : "—"}</td>
                       <td className="data-management-checksum">{run.checksumSha256 ?? "—"}</td>
                       <td>{run.errorMessage ?? run.storageKey ?? "—"}</td>
                     </tr>
