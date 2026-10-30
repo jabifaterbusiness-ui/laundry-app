@@ -894,7 +894,7 @@ export function DataManagementPage() {
                         {provider.connections.map((connection) => (
                           <div className="data-management-account-row" key={connection.id}>
                             <div>
-                              <strong>{connection.displayName}</strong>
+                              <strong>{connection.displayName}{provider.connections.filter((item) => item.displayName === connection.displayName).length > 1 ? " · Account " + (provider.connections.filter((item) => item.displayName === connection.displayName).findIndex((item) => item.id === connection.id) + 1) : ""}</strong>
                               <span>{connection.status}{connection.verifiedAt ? ` · Verified ${new Date(connection.verifiedAt).toLocaleString()}` : ""}</span>
                               {connection.lastError && <small role="alert">{connection.lastError}</small>}
                             </div>
