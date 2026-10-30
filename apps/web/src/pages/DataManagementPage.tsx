@@ -882,7 +882,7 @@ export function DataManagementPage() {
                       </span>
                     </div>
                     <button className="data-management-button data-management-button-connect" type="button" disabled={cloudBusy || !accessToken} onClick={() => void handleCloudOAuth(provider.provider)}>
-                      {connected.length ? "Connect another" : "Connect"}
+                      {connected.length ? "Connect another " + provider.label + " account" : "Connect " + provider.label}
                     </button>
                     {provider.connections.length > 0 && (
                       <button className="data-management-provider-details" type="button" aria-expanded={panelIsOpen(provider.provider)} onClick={() => togglePanel(provider.provider)}>
