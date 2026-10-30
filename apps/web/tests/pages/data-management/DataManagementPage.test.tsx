@@ -92,6 +92,36 @@ describe("DataManagementPage authorization", () => {
     vi.mocked(saveCloudBackupSettings).mockClear();
   });
 
+  it("shows the three cloud providers once and groups repeated accounts", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    const connection = {
+      provider: "DROPBOX" as const,
+      displayName: "LaundryAngel backups",
+      config: null,
+      status: "CONNECTED" as const,
+      verifiedAt: "2026-10-14T10:00:00.000Z",
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([
+      { ...connection, id: "dropbox-1" },
+      { ...connection, id: "dropbox-2", displayName: "LaundryAngel backups (2)" },
+    ] as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "Google Drive" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Dropbox" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "OneDrive" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /2 saved accounts.*view details/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Verify" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /2 saved accounts.*view details/i }));
+    expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(2);
+  });
+
   it("opens the independent backup schedule editor", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
