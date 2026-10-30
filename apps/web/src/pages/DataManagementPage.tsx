@@ -719,7 +719,7 @@ export function DataManagementPage() {
       <header className="data-management-header">
         <div>
           <span className="data-management-eyebrow">LAUNDRYANGEL · DATA PROTECTION</span>
-          <h1>Backup &amp; Data Management</h1>
+          <h1>Backup &amp; Data Migration</h1>
           <p>Import existing records, protect your business data and manage secure cloud backups.</p>
         </div>
         <div className="data-management-header-meta">
