@@ -128,7 +128,7 @@ describe("DataManagementPage authorization", () => {
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
 
     expect(await screen.findByRole("textbox", { name: "Schedule name" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Frequency" })).toBeTruthy();
@@ -261,7 +261,7 @@ describe("DataManagementPage authorization", () => {
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
     fireEvent.change(
       await screen.findByRole("textbox", { name: "Schedule name" }),
       { target: { value: "Nightly backup" } },
