@@ -138,7 +138,15 @@ describe("DataManagementPage authorization", () => {
 
     expect(await screen.findByText("Daily office backup")).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Local backup schedules/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Recent local backup activity" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Backup schedules/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Schedule name" }), {
+      target: { value: "Daily office backup updated" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Daily office backup updated")).toBeTruthy();
   });
 
   it("opens the independent backup schedule editor", async () => {
