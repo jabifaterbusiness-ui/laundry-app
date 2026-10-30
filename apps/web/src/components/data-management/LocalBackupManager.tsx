@@ -364,9 +364,9 @@ export function LocalBackupManager() {
           <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit">{editingScheduleId ? "Save changes" : "Save local schedule"}</button><button type="button" onClick={() => { setScheduleDraft(false); setEditingScheduleId(null); }}>Cancel</button></div>
         </form>}
         <div className="data-management-local-history">
-          <div className="data-management-local-history-heading"><h4>Recent local backup activity</h4><span>{history.length} saved locally</span></div>
+          <div className="data-management-local-history-heading"><h4>Recent local backup activity</h4><span>{history.length} recent entries</span></div>
           {history.length ? <ul>{history.slice(0, 6).map((item) => <li key={item.id}>
-            <div><strong>{item.trigger === "SCHEDULED" ? item.scheduleName ?? "Scheduled backup" : "Manual local backup"}</strong><span>{new Date(item.savedAt).toLocaleString()}</span></div>
+            <div><strong>{item.trigger === "SCHEDULED" ? item.scheduleName ?? "Scheduled backup" : "Manual backup / download"}</strong><span>{new Date(item.savedAt).toLocaleString()}</span></div>
             <small>{item.fileName}</small>
           </li>)}</ul> : <p>No local backups have been saved on this device yet.</p>}
         </div>
