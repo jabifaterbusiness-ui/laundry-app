@@ -982,10 +982,15 @@ export function DataManagementPage() {
 
           <div className="data-management-subsection">
             <div className="data-management-subsection-heading">
-              <div><h3>Backup schedules <span className="data-management-count">{cloudSchedules.length}/10</span></h3><p>Independent daily, weekly or monthly automatic backups. Timezone and retention are set per schedule.</p></div>
-              <button className="data-management-button data-management-button-primary" type="button" disabled={cloudBusy || cloudSchedules.length >= 10} onClick={() => startCloudScheduleEdit()}>＋ Add schedule</button>
+              <div><h3>Backup schedules <span className="data-management-count">{cloudSchedules.length}/10</span></h3><p>{cloudSchedules.filter((schedule) => schedule.enabled).length} active · {cloudSchedules.length} configured · Daily, weekly or monthly</p></div>
+              <div className="data-management-inline-actions">
+                <button className="data-management-button data-management-button-secondary" type="button" aria-expanded={panelIsOpen("schedules")} onClick={() => togglePanel("schedules")}>{panelIsOpen("schedules") ? "Hide schedules" : "View schedules"}</button>
+                <button className="data-management-button data-management-button-primary" type="button" disabled={cloudBusy || cloudSchedules.length >= 10} onClick={() => { setExpandedPanels((current) => ({ ...current, schedules: true })); startCloudScheduleEdit(); }}>＋ Add schedule</button>
+              </div>
             </div>
-            {cloudSchedules.length === 0 && <p className="data-management-empty">No schedules configured yet. Add a schedule to automate encrypted backups.</p>}
+            {panelIsOpen("schedules") && (
+              <>
+                {cloudSchedules.length === 0 && <p className="data-management-empty">No schedules configured yet. Add a schedule to automate encrypted backups.</p>}
             <div className="data-management-schedule-grid">
               {cloudSchedules.map((schedule) => {
                 const latestRun = cloudRuns.find((run) => run.scheduleId === schedule.id);
@@ -1027,6 +1032,8 @@ export function DataManagementPage() {
                 <label className="data-management-schedule-toggle"><input type="checkbox" checked={cloudScheduleDraft.enabled} disabled={!cloudConnections.some((connection) => connection.id === cloudScheduleDraft.destinationConnectionId && connection.status === "CONNECTED" && Boolean(connection.verifiedAt))} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, enabled: e.target.checked }))} /><span><strong>Enable this schedule</strong><small>Only connected and verified destinations can be enabled.</small></span></label>
                 <div className="data-management-inline-actions"><button className="data-management-button data-management-button-primary" type="submit" disabled={cloudBusy || !accessToken}>{editingCloudScheduleId ? "Save schedule" : "Create schedule"}</button><button type="button" disabled={cloudBusy} onClick={() => { cloudSchedulesDirty.current = false; setCloudScheduleDraft(null); setEditingCloudScheduleId(null); }}>Cancel</button></div>
               </form>
+            )}
+              </>
             )}
           </div>
 
