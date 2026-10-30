@@ -136,11 +136,12 @@ export function DataManagementPage() {
   }));
 
   useEffect(() => {
-    const selectedIsReady = verifiedCloudConnections.some(
-      (connection) => connection.id === manualDestinationId,
+    const verified = cloudConnections.filter(
+      (connection) => connection.status === "CONNECTED" && Boolean(connection.verifiedAt),
     );
+    const selectedIsReady = verified.some((connection) => connection.id === manualDestinationId);
     if (!selectedIsReady) {
-      setManualDestinationId(verifiedCloudConnections[0]?.id ?? "");
+      setManualDestinationId(verified[0]?.id ?? "");
     }
   }, [cloudConnections, manualDestinationId]);
 
@@ -808,7 +809,7 @@ export function DataManagementPage() {
               <div className="data-management-tool-heading">
                 <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("export")} aria-controls="data-management-export-panel" title="The backup is encrypted before it leaves the server. Use a strong password of at least 12 characters and store it separately." data-tooltip="Encrypted before download. Use a password of at least 12 characters and store it separately." onClick={() => togglePanel("export")}>
                   <span className="data-management-tool-icon" aria-hidden="true">⇩</span>
-                  <span className="data-management-tool-title"><strong>Export encrypted backup</strong><small>Download a protected copy of your business data</small></span>
+                  <span className="data-management-tool-title"><h3>Export encrypted backup</h3><small>Download a protected copy of your business data</small></span>
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("export") ? "−" : "+"}</span>
                 </button>
                 <button className="data-management-button data-management-button-primary" type="button" disabled={busy || backupPassword.length < 12} onClick={handleExport}>Download backup</button>
@@ -825,7 +826,7 @@ export function DataManagementPage() {
               <div className="data-management-tool-heading">
                 <button type="button" className="data-management-heading-toggle" aria-expanded={panelIsOpen("restore")} aria-controls="data-management-restore-panel" title="Restore is merge-only. It does not delete current data or overwrite passwords and security access." data-tooltip="Merge-only restore. Existing data and staff security credentials are protected." onClick={() => togglePanel("restore")}>
                   <span className="data-management-tool-icon" aria-hidden="true">↻</span>
-                  <span className="data-management-tool-title"><strong>Restore encrypted backup</strong><small>Safely merge data from a previous LaundryAngel backup</small></span>
+                  <span className="data-management-tool-title"><h3>Restore encrypted backup</h3><small>Safely merge data from a previous LaundryAngel backup</small></span>
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("restore") ? "−" : "+"}</span>
                 </button>
                 <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
