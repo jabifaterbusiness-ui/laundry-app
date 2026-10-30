@@ -893,11 +893,6 @@ export function DataManagementPage() {
                                 (authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }),
                                 "Destination verification completed.",
                               )}>Verify</button>
-                              <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => void cloudAction(
-                                (authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }),
-                                "Manual backup request submitted.",
-                                "manual",
-                              )}>Run now</button>
                             </div>
                           </div>
                         ))}
@@ -912,8 +907,8 @@ export function DataManagementPage() {
           <div className="data-management-manual-backup">
             <div>
               <span className="data-management-eyebrow">ON-DEMAND PROTECTION</span>
-              <h3>Instant manual backup</h3>
-              <p>Start an encrypted backup immediately, without waiting for the next schedule.</p>
+              <h3>Instant Cloud Backup</h3>
+              <p>Start an encrypted cloud backup immediately, without waiting for its separate schedule.</p>
             </div>
             <div className="data-management-manual-controls">
               <label className="data-management-destination-select">Save backup to
@@ -962,7 +957,7 @@ export function DataManagementPage() {
                     <div><strong>{connection.displayName}</strong><span>{connection.status}{connection.verifiedAt ? " · Verified " + new Date(connection.verifiedAt).toLocaleString() : ""}</span>{connection.lastError && <small role="alert">{connection.lastError}</small>}</div>
                     <div className="data-management-inline-actions">
                       <button type="button" disabled={cloudBusy || !accessToken} onClick={() => void cloudAction((authorization) => verifyCloudBackupConnection(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Destination verification completed.")}>Verify</button>
-                      <button type="button" disabled={cloudBusy || !accessToken || connection.status !== "CONNECTED"} onClick={() => void cloudAction((authorization) => createCloudBackupRun(connection.id, { accessToken, sensitiveAuthorization: authorization }), "Manual backup request submitted.", "manual")}>Run now</button>
+                      
                     </div>
                   </div>
                 ))}
