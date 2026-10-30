@@ -112,10 +112,12 @@ function dateKey(date: Date) {
 }
 
 function isScheduleDue(schedule: LocalBackupSchedule, now: Date) {
-  if (!schedule.enabled || schedule.hour !== now.getHours() || schedule.minute !== now.getMinutes()) return false;
+  if (!schedule.enabled) return false;
   if (schedule.frequency === "WEEKLY" && schedule.dayOfWeek !== now.getDay()) return false;
   if (schedule.frequency === "MONTHLY" && schedule.dayOfMonth !== now.getDate()) return false;
-  return schedule.lastRunKey !== dateKey(now);
+  const scheduledMinute = schedule.hour * 60 + schedule.minute;
+  const currentMinute = now.getHours() * 60 + now.getMinutes();
+  return currentMinute >= scheduledMinute && schedule.lastRunKey !== dateKey(now);
 }
 
 export function LocalBackupManager() {
