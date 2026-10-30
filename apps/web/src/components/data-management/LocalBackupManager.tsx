@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { exportBackup } from "../lib/data-management-api.js";
-import { useAuthStore } from "../state/auth-store.js";
+import { exportBackup } from "../../lib/data-management-api.js";
+import { useAuthStore } from "../../state/auth-store.js";
 
 type Frequency = "DAILY" | "WEEKLY" | "MONTHLY";
 type LocalBackupHistory = {
