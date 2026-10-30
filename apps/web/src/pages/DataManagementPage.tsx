@@ -929,7 +929,11 @@ export function DataManagementPage() {
               <label className="data-management-destination-select">Save backup to
                 <select value={manualDestinationId} onChange={(e) => setManualDestinationId(e.target.value)} disabled={!verifiedCloudConnections.length}>
                   <option value="">Choose a verified destination</option>
-                  {verifiedCloudConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.displayName} · {connection.provider.replace("_", " ")}</option>)}
+                  {verifiedCloudConnections.map((connection) => {
+                    const matching = verifiedCloudConnections.filter((item) => item.provider === connection.provider && item.displayName === connection.displayName);
+                    const accountNumber = matching.findIndex((item) => item.id === connection.id) + 1;
+                    return <option key={connection.id} value={connection.id}>{connection.displayName}{matching.length > 1 ? " · Account " + accountNumber : ""} · {connection.provider.replace("_", " ")}</option>;
+                  })}
                 </select>
               </label>
               <button className="data-management-button data-management-button-manual" type="button" disabled={cloudBusy || !accessToken || !manualDestinationId} onClick={() => {
