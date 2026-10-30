@@ -80,6 +80,7 @@ describe("DataManagementPage authorization", () => {
     mockUser.current = null;
     mockCloudOAuth.accessToken = null;
     window.localStorage.clear();
+    Reflect.deleteProperty(window, "showDirectoryPicker");
     mockCloudOAuth.start.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
@@ -124,6 +125,7 @@ describe("DataManagementPage authorization", () => {
   });
 
   it("keeps local backup schedules separate from the cloud schedule manager", async () => {
+    Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: vi.fn() });
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
 
