@@ -233,7 +233,7 @@ export function LocalBackupManager() {
         fileName = downloadBackup(blob);
         setMessage("Encrypted backup download started. Choose a folder on supported browsers to remember a local destination.");
       }
-      setHistory((current) => [{ id: `local-history-${Date.now()}`, fileName, savedAt: new Date().toISOString(), trigger: "MANUAL" }, ...current].slice(0, 20));
+      setHistory((current) => [{ id: `local-history-${Date.now()}`, fileName, savedAt: new Date().toISOString(), trigger: "MANUAL" as const }, ...current].slice(0, 20));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Local backup could not be created.");
     } finally {
@@ -260,7 +260,7 @@ export function LocalBackupManager() {
           if (cancelled) break;
           const blob = await exportBackup(backupPassword, { accessToken });
           const fileName = await writeBackupToFolder(folderHandle, blob);
-          setHistory((current) => [{ id: `local-history-${Date.now()}-${schedule.id}`, fileName, savedAt: now.toISOString(), trigger: "SCHEDULED", scheduleName: schedule.name }, ...current].slice(0, 20));
+          setHistory((current) => [{ id: `local-history-${Date.now()}-${schedule.id}`, fileName, savedAt: now.toISOString(), trigger: "SCHEDULED" as const, scheduleName: schedule.name }, ...current].slice(0, 20));
           const key = dateKey(now);
           setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, lastRunKey: key } : item));
           setMessage(`Local schedule “${schedule.name}” completed and saved to “${folderHandle.name}”.`);
@@ -289,7 +289,14 @@ export function LocalBackupManager() {
   function addSchedule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draftName.trim() || (!editingScheduleId && schedules.length >= 10)) return;
-    const [hour, minute] = draftTime.split(":").map(Number);
+    const [hourText, minuteText] = draftTime.split(":");
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+      setError("Choose a valid local backup time.");
+      return;
+    }
+    setError(null);
     if (editingScheduleId) {
       setSchedules((current) => current.map((item) => item.id === editingScheduleId
         ? { ...item, name: draftName.trim(), frequency: draftFrequency, hour, minute, dayOfWeek: draftDayOfWeek, dayOfMonth: draftDayOfMonth }
