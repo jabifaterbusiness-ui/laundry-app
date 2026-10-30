@@ -3,7 +3,14 @@ import { exportBackup } from "../lib/data-management-api.js";
 import { useAuthStore } from "../state/auth-store.js";
 
 type Frequency = "DAILY" | "WEEKLY" | "MONTHLY";
-type LocalBackupHistory = {\n  id: string;\n  fileName: string;\n  savedAt: string;\n  trigger: "MANUAL" | "SCHEDULED";\n  scheduleName?: string;\n};\ntype LocalBackupSchedule = {
+type LocalBackupHistory = {
+  id: string;
+  fileName: string;
+  savedAt: string;
+  trigger: "MANUAL" | "SCHEDULED";
+  scheduleName?: string;
+};
+type LocalBackupSchedule = {
   id: string;
   name: string;
   frequency: Frequency;
@@ -41,6 +48,10 @@ function scheduleStorageKey(businessId: string) {
 
 function folderStorageKey(businessId: string) {
   return `laundryangel.localBackupFolder.${businessId}`;
+}
+
+function historyStorageKey(businessId: string) {
+  return `laundryangel.localBackupHistory.${businessId}`;
 }
 
 function openFolderDatabase(): Promise<IDBDatabase> {
@@ -82,10 +93,12 @@ async function readFolderHandle(key: string): Promise<LocalDirectoryHandle | nul
 }
 
 async function writeBackupToFolder(handle: LocalDirectoryHandle, blob: Blob) {
-  const file = await handle.getFileHandle(backupFilename(), { create: true });
+  const filename = backupFilename();
+  const file = await handle.getFileHandle(filename, { create: true });
   const writable = await file.createWritable();
   await writable.write(blob);
   await writable.close();
+  return filename;
 }
 
 function downloadBackup(blob: Blob) {
@@ -97,6 +110,18 @@ function downloadBackup(blob: Blob) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return anchor.download;
+}
+
+function readHistory(key: string): LocalBackupHistory[] {
+  try {
+    const value = window.localStorage.getItem(key);
+    if (!value) return [];
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function readSchedules(key: string): LocalBackupSchedule[] {
@@ -128,10 +153,12 @@ export function LocalBackupManager() {
   const user = useAuthStore((state) => state.user);
   const businessId = user?.businessId ?? user?.id ?? "default";
   const scheduleKey = useMemo(() => scheduleStorageKey(businessId), [businessId]);
-  const folderKey = useMemo(() => folderStorageKey(businessId), [businessId]);\n  const historyKey = useMemo(() => historyStorageKey(businessId), [businessId]);
+  const folderKey = useMemo(() => folderStorageKey(businessId), [businessId]);
+  const historyKey = useMemo(() => historyStorageKey(businessId), [businessId]);
   const [backupPassword, setBackupPassword] = useState("");
   const [folderHandle, setFolderHandle] = useState<LocalDirectoryHandle | null>(null);
-  const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));\n  const [history, setHistory] = useState<LocalBackupHistory[]>(() => readHistory(historyStorageKey(businessId)));
+  const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));
+  const [history, setHistory] = useState<LocalBackupHistory[]>(() => readHistory(historyStorageKey(businessId)));
   const [scheduleDraft, setScheduleDraft] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -147,6 +174,7 @@ export function LocalBackupManager() {
 
   useEffect(() => {
     setSchedules(readSchedules(scheduleKey));
+    setHistory(readHistory(historyKey));
     let cancelled = false;
     void readFolderHandle(folderKey).then((handle) => {
       if (!cancelled) setFolderHandle(handle);
@@ -159,6 +187,10 @@ export function LocalBackupManager() {
   useEffect(() => {
     window.localStorage.setItem(scheduleKey, JSON.stringify(schedules));
   }, [scheduleKey, schedules]);
+
+  useEffect(() => {
+    window.localStorage.setItem(historyKey, JSON.stringify(history));
+  }, [historyKey, history]);
 
   async function chooseFolder() {
     const picker = (window as WindowWithDirectoryPicker).showDirectoryPicker;
@@ -190,15 +222,17 @@ export function LocalBackupManager() {
     setMessage(null);
     try {
       const blob = await exportBackup(backupPassword, { accessToken });
+      let fileName: string;
       if (folderHandle) {
         const permission = await folderHandle.requestPermission?.({ mode: "readwrite" });
         if (permission === "denied") throw new Error("Folder access was denied. Choose the folder again and grant permission.");
-        await writeBackupToFolder(folderHandle, blob);
+        fileName = await writeBackupToFolder(folderHandle, blob);
         setMessage(`Encrypted local backup saved to “${folderHandle.name}”.`);
       } else {
-        downloadBackup(blob);
+        fileName = downloadBackup(blob);
         setMessage("Encrypted backup download started. Choose a folder on supported browsers to remember a local destination.");
       }
+      setHistory((current) => [{ id: `local-history-${Date.now()}`, fileName, savedAt: new Date().toISOString(), trigger: "MANUAL" }, ...current].slice(0, 20));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Local backup could not be created.");
     } finally {
@@ -224,7 +258,8 @@ export function LocalBackupManager() {
         for (const schedule of due) {
           if (cancelled) break;
           const blob = await exportBackup(backupPassword, { accessToken });
-          await writeBackupToFolder(folderHandle, blob);
+          const fileName = await writeBackupToFolder(folderHandle, blob);
+          setHistory((current) => [{ id: `local-history-${Date.now()}-${schedule.id}`, fileName, savedAt: now.toISOString(), trigger: "SCHEDULED", scheduleName: schedule.name }, ...current].slice(0, 20));
           const key = dateKey(now);
           setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, lastRunKey: key } : item));
           setMessage(`Local schedule “${schedule.name}” completed and saved to “${folderHandle.name}”.`);
