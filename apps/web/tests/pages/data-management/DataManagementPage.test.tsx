@@ -174,7 +174,8 @@ describe("DataManagementPage authorization", () => {
     window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Run backup now" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
 
     await waitFor(() => {
       expect(notifications.some((event) =>
@@ -214,7 +215,8 @@ describe("DataManagementPage authorization", () => {
     );
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Verify" }));
 
     expect(await screen.findByText("Authorization service unavailable.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).not.toHaveBeenCalled();
@@ -276,7 +278,7 @@ describe("DataManagementPage authorization", () => {
     expect(
       await screen.findByText("Cloud destination verification failed. Check the destination settings and authorization."),
     ).toBeTruthy();
-    expect(await screen.findByText("DROPBOX · ERROR")).toBeTruthy();
+    expect(await screen.findByText("ERROR")).toBeTruthy();
     expect(await screen.findByText("Provider verification failed.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(listCloudBackupConnections)).toHaveBeenCalledTimes(2);
