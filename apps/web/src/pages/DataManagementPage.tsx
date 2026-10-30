@@ -723,7 +723,7 @@ export function DataManagementPage() {
 
         {canRestore && (
           <>
-            <LocalBackupManager />
+            <LocalBackupManager key={user?.businessId ?? user?.id ?? "default"} />
 
             <article className="data-management-tool-card data-management-tool-restore">
               <div className="data-management-tool-heading">
