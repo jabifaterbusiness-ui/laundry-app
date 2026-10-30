@@ -14,6 +14,9 @@ const {
   deleteOAuthArtifact,
   loggerInfo,
   loggerError,
+  loggerWarn,
+  backupCloudConnectionUpdate,
+  verifyOAuthCloudDestination,
 } = vi.hoisted(() => ({
   backupSettingsFindUnique: vi.fn(),
   backupScheduleFindFirst: vi.fn(),
@@ -28,13 +31,19 @@ const {
   deleteOAuthArtifact: vi.fn(),
   loggerInfo: vi.fn(),
   loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
+  backupCloudConnectionUpdate: vi.fn(),
+  verifyOAuthCloudDestination: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     backupSettings: { findUnique: backupSettingsFindUnique },
     backupSchedule: { findFirst: backupScheduleFindFirst },
-    backupCloudConnection: { findFirst: connectionFindFirst },
+    backupCloudConnection: {
+      findFirst: connectionFindFirst,
+      update: backupCloudConnectionUpdate,
+    },
     backupRun: {
       findMany: backupRunFindMany,
       updateMany: backupRunUpdateMany,
@@ -46,7 +55,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
-  logger: { info: loggerInfo, error: loggerError },
+  logger: { info: loggerInfo, error: loggerError, warn: loggerWarn },
 }));
 
 vi.mock("../../src/modules/migrations/backup-crypto.service.js", () => ({
@@ -65,14 +74,18 @@ vi.mock("../../src/modules/migrations/backup-s3.provider.js", () => ({
 vi.mock("../../src/modules/migrations/backup-cloud-oauth-provider.service.js", () => ({
   deleteOAuthCloudArtifact: deleteOAuthArtifact,
   uploadOAuthCloudArtifact: vi.fn(),
-  verifyOAuthCloudDestination: vi.fn(),
+  verifyOAuthCloudDestination,
 }));
 
 vi.mock("../../src/modules/migrations/backup.service.js", () => ({
   createScheduledBackupArtifact: createArtifact,
 }));
 
-import { createCloudBackupRun, pruneCloudBackupRuns } from "../../src/modules/migrations/backup-cloud-runs.service.js";
+import {
+  createCloudBackupRun,
+  pruneCloudBackupRuns,
+  verifyBackupCloudConnection,
+} from "../../src/modules/migrations/backup-cloud-runs.service.js";
 
 const settings = {
   retentionCount: 2,
@@ -123,6 +136,50 @@ describe("createCloudBackupRun diagnostics", () => {
         errorMessage: "Backup generation or cloud upload failed.",
       }),
     }));
+  });
+});
+
+describe("verifyBackupCloudConnection diagnostics", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectionFindFirst.mockResolvedValue({
+      id: "connection-1",
+      provider: "GOOGLE_DRIVE",
+      credentialsCiphertext: "encrypted-test-credentials",
+    });
+    verifyOAuthCloudDestination.mockRejectedValue(
+      new Error("sensitive provider response and token details"),
+    );
+    backupCloudConnectionUpdate.mockResolvedValue({});
+  });
+
+  it("logs a safe diagnostic without exposing unexpected provider errors", async () => {
+    await expect(
+      verifyBackupCloudConnection("business-1", "connection-1"),
+    ).rejects.toThrow(
+      "Cloud destination verification failed. Check the destination settings and authorization.",
+    );
+
+    expect(loggerWarn).toHaveBeenCalledWith({
+      provider: "GOOGLE_DRIVE",
+      connectionId: "connection-1",
+      errorType: "Error",
+      diagnostic: "Unexpected provider verification error.",
+    }, "Cloud destination verification failed.");
+
+    expect(JSON.stringify(loggerWarn.mock.calls)).not.toContain(
+      "sensitive provider response and token details",
+    );
+    expect(backupCloudConnectionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId_id: { businessId: "business-1", id: "connection-1" } },
+        data: {
+          status: "ERROR",
+          verifiedAt: null,
+          lastError: "Provider verification failed.",
+        },
+      }),
+    );
   });
 });
 
