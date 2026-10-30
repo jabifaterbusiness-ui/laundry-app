@@ -32,7 +32,7 @@ type WindowWithDirectoryPicker = Window & {
 function backupFilename() {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `LaundryAngel_Backup_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.laundry-backup`;
+  return `LaundryAngel_Backup_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}-${Date.now()}.laundry-backup`;
 }
 
 function scheduleStorageKey(businessId: string) {
@@ -44,6 +44,9 @@ function folderStorageKey(businessId: string) {
 }
 
 function openFolderDatabase(): Promise<IDBDatabase> {
+  if (typeof indexedDB === "undefined") {
+    return Promise.reject(new Error("This browser cannot remember a selected backup folder."));
+  }
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("LaundryAngelLocalBackups", 1);
     request.onupgradeneeded = () => {
