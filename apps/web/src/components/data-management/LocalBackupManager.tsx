@@ -370,7 +370,7 @@ export function LocalBackupManager() {
             <small>{item.fileName}</small>
           </li>)}</ul> : <p>No local backups have been saved on this device yet.</p>}
         </div>
-        <p className="data-management-local-note">Local schedules are stored on this device. They run only while LaundryAngel is open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
+        <p className="data-management-local-note">Local schedules are stored on this device. They run only while the Data Management page remains open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
       </div>
     </section>
   );
