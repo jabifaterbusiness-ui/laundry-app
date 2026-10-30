@@ -163,7 +163,7 @@ export function LocalBackupManager() {
   async function chooseFolder() {
     const picker = (window as WindowWithDirectoryPicker).showDirectoryPicker;
     if (!picker) {
-      setError("This browser does not support remembered folder access. Use the normal download option for manual backups.");
+      setError("Remembered folder access requires a supported browser on a secure HTTPS connection. Use the normal download option for manual backups.");
       return;
     }
     try {
@@ -291,7 +291,7 @@ export function LocalBackupManager() {
       <div className="data-management-local-destination">
         <div className="data-management-local-folder">
           <span aria-hidden="true">▣</span>
-          <div><strong>{folderHandle ? folderHandle.name : "No local folder selected"}</strong><small>{folderHandle ? "Remembered on this device and browser" : folderPickerAvailable ? "Choose a folder to use it as your default destination" : "Folder access is unavailable in this browser"}</small></div>
+          <div><strong>{folderHandle ? folderHandle.name : "No local folder selected"}</strong><small>{folderHandle ? "Remembered on this device and browser" : folderPickerAvailable ? "Choose a folder to use it as your default destination" : "Requires a supported browser and secure HTTPS connection"}</small></div>
         </div>
         <button className="data-management-button data-management-button-secondary" type="button" onClick={() => void chooseFolder()}>{folderHandle ? "Change folder" : "Choose backup folder"}</button>
       </div>
@@ -309,7 +309,7 @@ export function LocalBackupManager() {
       <div className="data-management-local-schedules">
         <div className="data-management-subsection-heading">
           <div><h3>Local backup schedules <span className="data-management-count">{schedules.length}/10</span></h3><p>{schedules.filter((schedule) => schedule.enabled).length} active · runs while this page is open and the folder is accessible</p></div>
-          <button className="data-management-button data-management-button-secondary" type="button" disabled={schedules.length >= 10} onClick={() => setScheduleDraft((current) => !current)}>{scheduleDraft ? "Cancel" : "＋ Add local schedule"}</button>
+          <button className="data-management-button data-management-button-secondary" type="button" disabled={schedules.length >= 10} onClick={() => { if (scheduleDraft) { setScheduleDraft(false); setEditingScheduleId(null); } else { startScheduleEdit(); } }}>{scheduleDraft ? "Cancel" : "＋ Add local schedule"}</button>
         </div>
         {schedules.length > 0 && <div className="data-management-local-schedule-list">
           {schedules.map((schedule) => <article className="data-management-local-schedule" key={schedule.id}>
