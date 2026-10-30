@@ -92,13 +92,43 @@ describe("DataManagementPage authorization", () => {
     vi.mocked(saveCloudBackupSettings).mockClear();
   });
 
+  it("shows the three cloud providers once and groups repeated accounts", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    const connection = {
+      provider: "DROPBOX" as const,
+      displayName: "LaundryAngel backups",
+      config: null,
+      status: "CONNECTED" as const,
+      verifiedAt: "2026-10-14T10:00:00.000Z",
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([
+      { ...connection, id: "dropbox-1" },
+      { ...connection, id: "dropbox-2", displayName: "LaundryAngel backups (2)" },
+    ] as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "Google Drive" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Dropbox" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "OneDrive" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /2 saved accounts.*view details/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Verify" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /2 saved accounts.*view details/i }));
+    expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(2);
+  });
+
   it("opens the independent backup schedule editor", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
 
     expect(await screen.findByRole("textbox", { name: "Schedule name" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Frequency" })).toBeTruthy();
@@ -116,7 +146,7 @@ describe("DataManagementPage authorization", () => {
     try {
       render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-      fireEvent.click(screen.getByRole("button", { name: "Add schedule" }));
+      fireEvent.click(screen.getByRole("button", { name: /Add schedule/ }));
 
       const frequency = screen.getByRole("combobox", { name: "Frequency" });
       fireEvent.change(frequency, { target: { value: "WEEKLY" } });
@@ -174,7 +204,8 @@ describe("DataManagementPage authorization", () => {
     window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Run backup now" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
 
     await waitFor(() => {
       expect(notifications.some((event) =>
@@ -214,7 +245,8 @@ describe("DataManagementPage authorization", () => {
     );
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Verify" }));
 
     expect(await screen.findByText("Authorization service unavailable.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).not.toHaveBeenCalled();
@@ -229,7 +261,7 @@ describe("DataManagementPage authorization", () => {
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
     fireEvent.change(
       await screen.findByRole("textbox", { name: "Schedule name" }),
       { target: { value: "Nightly backup" } },
@@ -271,12 +303,13 @@ describe("DataManagementPage authorization", () => {
     );
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Verify destination" }));
+    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Verify" }));
 
     expect(
       await screen.findByText("Cloud destination verification failed. Check the destination settings and authorization."),
     ).toBeTruthy();
-    expect(await screen.findByText("DROPBOX · ERROR")).toBeTruthy();
+    expect(await screen.findByText("ERROR")).toBeTruthy();
     expect(await screen.findByText("Provider verification failed.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(listCloudBackupConnections)).toHaveBeenCalledTimes(2);
