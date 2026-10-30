@@ -79,6 +79,7 @@ describe("DataManagementPage authorization", () => {
   beforeEach(() => {
     mockUser.current = null;
     mockCloudOAuth.accessToken = null;
+    window.localStorage.clear();
     mockCloudOAuth.start.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockReset();
     mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue("test-authorization");
@@ -120,6 +121,24 @@ describe("DataManagementPage authorization", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /2 saved accounts.*view details/i }));
     expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(2);
+  });
+
+  it("keeps local backup schedules separate from the cloud schedule manager", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "Instant Local Backup" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Add local schedule/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Schedule name" }), {
+      target: { value: "Daily office backup" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save local schedule" }));
+
+    expect(await screen.findByText("Daily office backup")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Local backup schedules/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Backup schedules/ })).toBeTruthy();
   });
 
   it("opens the independent backup schedule editor", async () => {
@@ -204,8 +223,7 @@ describe("DataManagementPage authorization", () => {
     window.addEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: /saved account.*view details/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Run instant backup/i }));
 
     await waitFor(() => {
       expect(notifications.some((event) =>
