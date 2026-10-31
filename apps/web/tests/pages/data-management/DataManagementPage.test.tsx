@@ -164,6 +164,56 @@ describe("DataManagementPage authorization", () => {
     expect(screen.getByRole("button", { name: "Create schedule" })).toBeTruthy();
   });
 
+  it("saves a 12-hour schedule with the correct 24-hour value", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(createCloudBackupSchedule).mockResolvedValue({
+      id: "schedule-2",
+      businessId: "business-1",
+      name: "Afternoon backup",
+      enabled: false,
+      frequency: "DAILY",
+      dayOfWeek: 1,
+      dayOfMonth: 1,
+      hour: 14,
+      minute: 0,
+      clockFormat: "12H",
+      timezone: "Africa/Lagos",
+      retentionCount: 30,
+      destinationConnectionId: null,
+      createdAt: "2026-10-31T00:00:00.000Z",
+      updatedAt: "2026-10-31T00:00:00.000Z",
+    } as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Schedule name" }), {
+      target: { value: "Afternoon backup" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Hour" }), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "AM/PM" }), {
+      target: { value: "PM" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+
+    await waitFor(() => {
+      expect(createCloudBackupSchedule).toHaveBeenCalledWith(
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
+        expect.objectContaining({
+          hour: 14,
+          minute: 0,
+          clockFormat: "12H",
+          timezone: "Africa/Lagos",
+        }),
+      );
+    });
+  });
+
   it("preserves unsaved schedule edits when background polling returns stale data", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
