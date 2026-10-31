@@ -79,6 +79,9 @@ describe("cloud backup OAuth", () => {
     delete process.env.GOOGLE_DRIVE_CLIENT_SECRET;
     delete process.env.DROPBOX_APP_KEY;
     delete process.env.DROPBOX_APP_SECRET;
+    delete process.env.MICROSOFT_CLIENT_ID;
+    delete process.env.MICROSOFT_CLIENT_SECRET;
+    delete process.env.MICROSOFT_TENANT_ID;
   });
 
   it("requests Dropbox account and file permissions with offline access", async () => {
