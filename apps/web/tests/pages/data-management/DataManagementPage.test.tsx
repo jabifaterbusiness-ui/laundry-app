@@ -144,10 +144,10 @@ describe("DataManagementPage authorization", () => {
 
     const destination = await screen.findByRole("combobox", { name: /Save backup to/i });
     await waitFor(() => {
-      expect(destination).toHaveDisplayValue("Choose a verified destination");
-      expect(screen.getByRole("option", { name: /Google Drive/ })).toBeTruthy();
-      expect(screen.getByRole("option", { name: /Dropbox/ })).toBeTruthy();
-      expect(screen.queryByRole("option", { name: /OneDrive/ })).toBeNull();
+      expect(destination).toHaveValue("google-1");
+      expect(screen.getByRole("option", { name: /google drive/i })).toBeTruthy();
+      expect(screen.getByRole("option", { name: /dropbox/i })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: /onedrive/i })).toBeNull();
     });
     expect(screen.getByText(/Only connected and verified accounts appear in this list/i)).toBeTruthy();
   });
