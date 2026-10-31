@@ -837,6 +837,7 @@ export function DataManagementPage() {
                   })}
                 </select>
               </label>
+              <p className="data-management-cloud-footnote">Only connected and verified accounts appear in this list. Connect a provider above, then verify its saved account before using it for an instant backup.</p>
               <button className="data-management-button data-management-button-manual" type="button" disabled={cloudBusy || !accessToken || !manualDestinationId} onClick={() => {
                 const destination = verifiedCloudConnections.find((connection) => connection.id === manualDestinationId);
                 if (!destination) return;
