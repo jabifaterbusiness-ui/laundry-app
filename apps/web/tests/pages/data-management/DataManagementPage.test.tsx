@@ -124,6 +124,34 @@ describe("DataManagementPage authorization", () => {
     expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(2);
   });
 
+  it("offers only connected and verified cloud accounts as instant destinations", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    const base = {
+      displayName: "LaundryAngel backups",
+      config: null,
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([
+      { ...base, id: "google-1", provider: "GOOGLE_DRIVE", status: "CONNECTED", verifiedAt: "2026-10-14T10:00:00.000Z" },
+      { ...base, id: "dropbox-1", provider: "DROPBOX", status: "CONNECTED", verifiedAt: "2026-10-14T10:00:00.000Z" },
+      { ...base, id: "onedrive-1", provider: "ONEDRIVE", status: "CONNECTED", verifiedAt: null },
+    ] as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    const destination = await screen.findByRole("combobox", { name: /Save backup to/i });
+    await waitFor(() => {
+      expect(destination).toHaveDisplayValue("Choose a verified destination");
+      expect(screen.getByRole("option", { name: /Google Drive/ })).toBeTruthy();
+      expect(screen.getByRole("option", { name: /Dropbox/ })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: /OneDrive/ })).toBeNull();
+    });
+    expect(screen.getByText(/Only connected and verified accounts appear in this list/i)).toBeTruthy();
+  });
+
   it("keeps local backup schedules separate from the cloud schedule manager", async () => {
     Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: vi.fn() });
     mockUser.current = businessUser();
