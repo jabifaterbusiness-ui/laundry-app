@@ -31,6 +31,16 @@
 - Production PWA icons generated and included
 - No tracked real environment files or secret-like files
 
+## Cloud backup OAuth prerequisites
+
+Google Drive, Dropbox, and OneDrive are supported, but each provider must be configured independently in the API environment before its Connect action can start OAuth:
+
+- Google Drive: `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET`
+- Dropbox: `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET`
+- OneDrive: `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`; `MICROSOFT_TENANT_ID` is optional and defaults to `common`
+
+Register the exact callback URL derived from `APP_URL`: `/api/v1/migrations/backup/cloud/oauth/callback`. Keep all client secrets in the hosting provider's secret store; never commit real values. A newly connected account is initially pending and must be verified before it appears in the instant-backup destination selector.
+
 ## Remaining deployment tasks
 
 1. Provision production PostgreSQL.
