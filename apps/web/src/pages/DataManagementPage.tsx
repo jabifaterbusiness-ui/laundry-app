@@ -18,6 +18,7 @@ import { useAuthStore } from "../state/auth-store.js";
 import { useSearchParams } from "react-router-dom";
 import "./DataManagementPage.css";
 import { LocalBackupManager } from "../components/data-management/LocalBackupManager.js";
+import { getMeridiem, to12HourClock, to24HourClock } from "../lib/cloud-backup-time.js";
 
 export function DataManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -924,7 +925,20 @@ export function DataManagementPage() {
                   {cloudScheduleDraft.frequency === "MONTHLY" && <label>Day of month<input type="number" min={1} max={31} value={cloudScheduleDraft.dayOfMonth} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, dayOfMonth: Number(e.target.value) }))} required /></label>}
                   <label>Time zone<input value={cloudScheduleDraft.timezone} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, timezone: e.target.value }))} placeholder="Africa/Lagos" required /></label>
                   <label>Clock display<select value={cloudScheduleDraft.clockFormat} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, clockFormat: e.target.value as CloudBackupScheduleInput["clockFormat"] }))}><option value="12H">12-hour (AM/PM)</option><option value="24H">24-hour</option></select></label>
-                  <label>Hour<input type="number" min={0} max={23} value={cloudScheduleDraft.hour} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, hour: Number(e.target.value) }))} required /></label>
+                  {cloudScheduleDraft.clockFormat === "12H" ? (
+                    <>
+                      <label>Hour<select value={to12HourClock(cloudScheduleDraft.hour)} onChange={(e) => updateCloudScheduleDraft((current) => ({
+                        ...current,
+                        hour: to24HourClock(Number(e.target.value), getMeridiem(current.hour)),
+                      }))}>{Array.from({ length: 12 }, (_, index) => index + 1).map((hour) => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+                      <label>AM/PM<select value={getMeridiem(cloudScheduleDraft.hour)} onChange={(e) => updateCloudScheduleDraft((current) => ({
+                        ...current,
+                        hour: to24HourClock(to12HourClock(current.hour), e.target.value as "AM" | "PM"),
+                      }))}><option value="AM">AM</option><option value="PM">PM</option></select></label>
+                    </>
+                  ) : (
+                    <label>Hour<input type="number" min={0} max={23} value={cloudScheduleDraft.hour} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, hour: Number(e.target.value) }))} required /></label>
+                  )}
                   <label>Minute<input type="number" min={0} max={59} value={cloudScheduleDraft.minute} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, minute: Number(e.target.value) }))} required /></label>
                   <label>Successful backups to keep<input type="number" min={1} max={365} value={cloudScheduleDraft.retentionCount} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, retentionCount: Number(e.target.value) }))} required /></label>
                   <label>Destination<select value={cloudScheduleDraft.destinationConnectionId ?? ""} onChange={(e) => updateCloudScheduleDraft((current) => ({ ...current, destinationConnectionId: e.target.value || null }))}><option value="">Select a destination</option>{cloudConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.displayName} ({connection.status}{connection.verifiedAt ? ", verified" : ""})</option>)}</select></label>
