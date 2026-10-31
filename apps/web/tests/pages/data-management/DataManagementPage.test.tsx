@@ -124,6 +124,34 @@ describe("DataManagementPage authorization", () => {
     expect(screen.getAllByRole("button", { name: "Verify" })).toHaveLength(2);
   });
 
+  it("offers only connected and verified cloud accounts as instant destinations", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    const base = {
+      displayName: "LaundryAngel backups",
+      config: null,
+      lastError: null,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    vi.mocked(listCloudBackupConnections).mockResolvedValue([
+      { ...base, id: "google-1", provider: "GOOGLE_DRIVE", status: "CONNECTED", verifiedAt: "2026-10-14T10:00:00.000Z" },
+      { ...base, id: "dropbox-1", provider: "DROPBOX", status: "CONNECTED", verifiedAt: "2026-10-14T10:00:00.000Z" },
+      { ...base, id: "onedrive-1", provider: "ONEDRIVE", status: "CONNECTED", verifiedAt: null },
+    ] as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+
+    const destination = await screen.findByRole("combobox", { name: /Save backup to/i });
+    await waitFor(() => {
+      expect(destination).toHaveValue("google-1");
+      expect(screen.getByRole("option", { name: /google drive/i })).toBeTruthy();
+      expect(screen.getByRole("option", { name: /dropbox/i })).toBeTruthy();
+      expect(screen.queryByRole("option", { name: /onedrive/i })).toBeNull();
+    });
+    expect(screen.getByText(/Only connected and verified accounts appear in this list/i)).toBeTruthy();
+  });
+
   it("keeps local backup schedules separate from the cloud schedule manager", async () => {
     Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: vi.fn() });
     mockUser.current = businessUser();
@@ -162,6 +190,56 @@ describe("DataManagementPage authorization", () => {
     expect(await screen.findByRole("textbox", { name: "Schedule name" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Frequency" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create schedule" })).toBeTruthy();
+  });
+
+  it("saves a 12-hour schedule with the correct 24-hour value", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(createCloudBackupSchedule).mockResolvedValue({
+      id: "schedule-2",
+      businessId: "business-1",
+      name: "Afternoon backup",
+      enabled: false,
+      frequency: "DAILY",
+      dayOfWeek: 1,
+      dayOfMonth: 1,
+      hour: 14,
+      minute: 0,
+      clockFormat: "12H",
+      timezone: "Africa/Lagos",
+      retentionCount: 30,
+      destinationConnectionId: null,
+      createdAt: "2026-10-31T00:00:00.000Z",
+      updatedAt: "2026-10-31T00:00:00.000Z",
+    } as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /Add schedule/ }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Schedule name" }), {
+      target: { value: "Afternoon backup" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Hour" }), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "AM/PM" }), {
+      target: { value: "PM" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+
+    await waitFor(() => {
+      expect(createCloudBackupSchedule).toHaveBeenCalledWith(
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
+        expect.objectContaining({
+          hour: 14,
+          minute: 0,
+          clockFormat: "12H",
+          timezone: "Africa/Lagos",
+        }),
+      );
+    });
   });
 
   it("preserves unsaved schedule edits when background polling returns stale data", async () => {

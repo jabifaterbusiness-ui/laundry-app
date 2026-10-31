@@ -37,6 +37,14 @@ describe("isBackupScheduleDue", () => {
     expect(isBackupScheduleDue(baseSchedule, now)).toBe(true);
   });
 
+  it("matches afternoon schedules using the stored 24-hour value in the configured timezone", () => {
+    const afternoon = { ...baseSchedule, hour: 14 };
+    const localTwoThirtyPm = new Date("2026-10-14T13:30:00.000Z");
+
+    expect(isBackupScheduleDue(afternoon, localTwoThirtyPm)).toBe(true);
+    expect(isBackupScheduleDue({ ...afternoon, hour: 2 }, localTwoThirtyPm)).toBe(false);
+  });
+
   it("rejects disabled schedules and missing destinations", () => {
     expect(isBackupScheduleDue({ ...baseSchedule, enabled: false }, now)).toBe(false);
     expect(isBackupScheduleDue({ ...baseSchedule, destinationConnectionId: null }, now)).toBe(false);
