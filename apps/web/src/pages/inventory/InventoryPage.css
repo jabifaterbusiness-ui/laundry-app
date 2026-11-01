@@ -126,3 +126,10 @@
 .inventory-workspace .inventory-procurement > form { margin-top: 20px; }
 .inventory-workspace .inventory-procurement table { margin: 14px 0; }
 @media (max-width: 760px) { .inventory-workspace .inventory-procurement-grid { grid-template-columns: 1fr; } }
+
+.inventory-workspace .inventory-po-line { display: grid; grid-template-columns: minmax(90px, .35fr) minmax(180px, 1.4fr) minmax(100px, .7fr) minmax(120px, .8fr) auto; align-items: end; gap: 12px; padding: 12px; margin: 10px 0; border: 1px solid #ece7f5; border-radius: 12px; background: #fff; }
+.inventory-workspace .inventory-po-line > strong { align-self: center; color: #6b50a0; font-size: 12px; }
+.inventory-workspace .inventory-po-line label { min-width: 0; }
+.inventory-workspace .inventory-po-add { margin: 4px 0 14px; background: #f3edff; color: #6030b1; border: 1px solid #e4d8fa; }
+.inventory-workspace .inventory-po-remove { background: transparent; color: #a33b55; border: 1px solid #f0d5dd; }
+@media (max-width: 900px) { .inventory-workspace .inventory-po-line { grid-template-columns: 1fr 1fr; } .inventory-workspace .inventory-po-line > strong { grid-column: 1 / -1; } }
