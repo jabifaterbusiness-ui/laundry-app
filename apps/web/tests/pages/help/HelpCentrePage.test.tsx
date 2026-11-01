@@ -15,7 +15,7 @@ beforeEach(() => {
       securityRole: "BUSINESS_OWNER",
       businessId: "business-1",
       branches: [{ id: "branch-1", name: "Main Branch", isActive: true }],
-      permissions: ["orders.view", "orders.update", "customers.view", "customers.update", "payments.manage", "invoices.view", "invoices.manage", "inventory.manage"],
+      permissions: ["orders.view", "orders.update", "customers.view", "customers.update", "payments.manage", "invoices.view", "invoices.manage", "inventory.manage", "migrations.manage"],
     },
   });
 });
