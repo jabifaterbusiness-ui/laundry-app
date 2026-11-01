@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformOwnerPage } from "./PlatformOwnerPage.js";
+import { SensitiveAuthorizationProvider } from "../../components/auth/SensitiveAuthorizationProvider.js";
 import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
@@ -288,7 +289,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PlatformOwnerPage />
+        <SensitiveAuthorizationProvider>
+          <PlatformOwnerPage />
+        </SensitiveAuthorizationProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
