@@ -4,7 +4,7 @@ const { db } = vi.hoisted(() => ({
   db: {
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
-    inventorySupplier: { create: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+    inventorySupplier: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     inventoryPurchaseOrder: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
     inventoryPurchaseOrderLine: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     inventoryGoodsReceipt: { create: vi.fn() },
@@ -43,7 +43,7 @@ describe("inventory procurement service", () => {
 
   it("rejects purchase orders for a branch or supplier outside the business", async () => {
     db.branch.findFirst.mockResolvedValue({ id: "branch-A", businessId: "biz-A", isActive: true });
-    db.inventorySupplier.findFirst = vi.fn().mockResolvedValue(null);
+    db.inventorySupplier.findFirst.mockResolvedValue(null);
     await expect(createInventoryPurchaseOrder(
       { businessId: "biz-A", branchId: "branch-A" },
       { supplierId: "supplier-B", orderNumber: "PO-1", createdById: "user-A", lines: [{ inventoryItemId: "item-A", quantityOrdered: 5, unitCost: 100 }] },
