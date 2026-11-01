@@ -86,7 +86,7 @@ export async function createOrRenewSubscription(
 
   const endsAt = addPlanDuration(startsAt, input.plan);
 
-  return prisma.subscription.upsert({
+  const renewed = await prisma.subscription.upsert({
     where: { businessId },
     create: {
       businessId,
@@ -108,6 +108,15 @@ export async function createOrRenewSubscription(
       cancellationReason: null,
     },
   });
+
+  if (existing) {
+    await prisma.businessInboxMessage.updateMany({
+      where: { sourceSubscriptionId: existing.id, readAt: null },
+      data: { expiresAt: now },
+    });
+  }
+
+  return renewed;
 }
 
 export async function requireActiveSubscription(businessId: string) {

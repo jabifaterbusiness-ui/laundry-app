@@ -2374,11 +2374,14 @@ model BusinessInboxMessage {
   expiresAt                DateTime?
   readAt                   DateTime?
   dismissedAt              DateTime?
+  notificationKey          String?  @unique
+  sourceSubscriptionId     String?
   createdByPlatformAdminId String
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
   @@index([businessId, userId, publishedAt])
   @@index([userId, readAt, publishedAt])
   @@index([broadcastId])
+  @@index([sourceSubscriptionId, readAt])
   @@map("business_inbox_messages")
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    businessInboxMessage: { updateMany: vi.fn() },
     subscription: {
       findUnique: vi.fn(),
       update: vi.fn(),
