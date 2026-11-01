@@ -1456,7 +1456,7 @@ describe("Platform Owner routes - subscription cancellation", () => {
 
   it("cancels immediately and records an audit event", async () => {
     vi.mocked(prisma.subscription.findUnique).mockResolvedValue(existingSubscription as never);
-    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, status: "CANCELLED" } as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, status: "CANCELLED", cancellationReason: "Account closure requested" } as never);
     const response = await request(app)
       .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
