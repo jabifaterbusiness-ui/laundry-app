@@ -20,6 +20,8 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     inventoryMovement: {
       create: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     branch: {
       findFirst: vi.fn(),
