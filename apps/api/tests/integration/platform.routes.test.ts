@@ -1456,9 +1456,7 @@ describe("Platform Owner routes - subscription cancellation", () => {
 
   it("cancels immediately and records an audit event", async () => {
     vi.mocked(prisma.subscription.findUnique).mockResolvedValue(existingSubscription as never);
-    vi.mocked(prisma.subscription.update).mockImplementation(async (args) => ({
-      ...existingSubscription, ...args.data,
-    }) as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, status: "CANCELLED" } as never);
     const response = await request(app)
       .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
@@ -1477,9 +1475,7 @@ describe("Platform Owner routes - subscription cancellation", () => {
 
   it("schedules cancellation at period end without ending access early", async () => {
     vi.mocked(prisma.subscription.findUnique).mockResolvedValue(existingSubscription as never);
-    vi.mocked(prisma.subscription.update).mockImplementation(async (args) => ({
-      ...existingSubscription, ...args.data,
-    }) as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, cancelAtPeriodEnd: true, cancellationReason: "Do not renew" } as never);
     const response = await request(app)
       .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
