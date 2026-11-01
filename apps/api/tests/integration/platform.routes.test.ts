@@ -30,6 +30,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
     },
     payment: {
       aggregate: vi.fn(),
@@ -1237,6 +1238,87 @@ describe("Platform Owner routes - company status controls", () => {
     expect(response.status).toBe(403);
     expect(prisma.business.findUnique).not.toHaveBeenCalled();
     expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - subscription cancellation", () => {
+  const subscription = {
+    id: "sub-A",
+    businessId: "biz-A",
+    plan: "MONTHLY",
+    status: "ACTIVE",
+    startsAt: new Date("2026-10-01T00:00:00.000Z"),
+    endsAt: new Date("2026-11-30T00:00:00.000Z"),
+    business: { name: "Laundry A" },
+  };
+
+  it("cancels immediately and records the reason", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(subscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({
+      ...subscription,
+      status: "CANCELLED",
+      cancelAtPeriodEnd: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "IMMEDIATE", reason: "Business closure requested" });
+
+    expect(response.status).toBe(200);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: expect.objectContaining({
+        status: "CANCELLED",
+        cancelAtPeriodEnd: false,
+        cancellationReason: "Business closure requested",
+      }),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("schedules cancellation at the paid-through date without shortening access", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(subscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({
+      ...subscription,
+      cancelAtPeriodEnd: true,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "PERIOD_END", reason: "Customer chose not to renew" });
+
+    expect(response.status).toBe(200);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: expect.objectContaining({
+        cancelAtPeriodEnd: true,
+        cancellationReason: "Customer chose not to renew",
+      }),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects invalid cancellation timing and missing reason", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "LATER", reason: "" });
+
+    expect(response.status).toBe(422);
+    expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from subscription cancellation", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ when: "IMMEDIATE", reason: "Requested" });
+
+    expect(response.status).toBe(403);
+    expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
   });
 });
 
