@@ -11,6 +11,11 @@ const {
   useIsMutatingMock,
   getCustomerMock,
   getOrderMock,
+  exportBackupMock,
+  listCloudBackupConnectionsMock,
+  getCloudBackupSettingsMock,
+  createCloudBackupRunMock,
+  requestSensitiveAuthorizationMock,
 } = vi.hoisted(() => ({
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
@@ -19,6 +24,28 @@ const {
   useIsMutatingMock: vi.fn(() => 0),
   getCustomerMock: vi.fn(),
   getOrderMock: vi.fn(),
+  exportBackupMock: vi.fn(),
+  listCloudBackupConnectionsMock: vi.fn(),
+  getCloudBackupSettingsMock: vi.fn(),
+  createCloudBackupRunMock: vi.fn(),
+  requestSensitiveAuthorizationMock: vi.fn().mockResolvedValue("sensitive-auth"),
+}));
+
+vi.mock("../../../src/lib/data-management-api.js", () => ({
+  exportBackup: exportBackupMock,
+  listCloudBackupConnections: listCloudBackupConnectionsMock,
+  getCloudBackupSettings: getCloudBackupSettingsMock,
+  createCloudBackupRun: createCloudBackupRunMock,
+}));
+
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
+  useSensitiveAuthorization: () => ({
+    requestSensitiveAuthorization: requestSensitiveAuthorizationMock,
+  }),
+}));
+
+vi.mock("../../../src/lib/cloud-backup-notifications.js", () => ({
+  publishCloudBackupNotification: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/quick-operations-api.js", () => ({
@@ -44,6 +71,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     user: {
       id: string;
       businessId: string | null;
+      securityRole: string;
     } | null;
   }) => unknown) =>
     selector({
@@ -52,6 +80,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
       user: {
         id: "user-1",
         businessId: "business-1",
+        securityRole: "BUSINESS_OWNER",
       },
     }),
 }));
@@ -103,6 +132,22 @@ vi.mock("../../../src/lib/offline-sync-queue.js", () => ({
 }));
 
 const operations: Record<string, QuickOperationDefinition> = {
+  MCB: {
+    code: "MCB",
+    name: "Manual Cloud Backup",
+    description: "Create an encrypted cloud backup.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  MLB: {
+    code: "MLB",
+    name: "Manual Local Backup",
+    description: "Download an encrypted local backup.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
   MU: {
     code: "MU",
     name: "Manual Update",
@@ -246,6 +291,17 @@ describe("QuickOperationLauncher", () => {
     });
 
     getOrderMock.mockReset();
+    exportBackupMock.mockReset();
+    exportBackupMock.mockResolvedValue(new Blob(["backup"]));
+    listCloudBackupConnectionsMock.mockReset();
+    listCloudBackupConnectionsMock.mockResolvedValue([]);
+    getCloudBackupSettingsMock.mockReset();
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: null });
+    createCloudBackupRunMock.mockReset();
+    createCloudBackupRunMock.mockResolvedValue({ id: "run-1", status: "SUCCEEDED" });
+    requestSensitiveAuthorizationMock.mockReset();
+    requestSensitiveAuthorizationMock.mockResolvedValue("sensitive-auth");
+
     getOrderMock.mockResolvedValue({
       id: "order-2",
       businessId: "business-1",
@@ -264,6 +320,50 @@ describe("QuickOperationLauncher", () => {
       createdAt: "",
       updatedAt: "",
     });
+  });
+
+  it("requires a strong encryption password for a manual local backup", async () => {
+    render(
+      <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(
+      await screen.findByText(/at least 12 characters/i),
+    ).toBeInTheDocument();
+    expect(exportBackupMock).not.toHaveBeenCalled();
+  });
+
+  it("starts a manual cloud backup on the verified configured destination", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      {
+        id: "connection-1",
+        displayName: "Primary cloud",
+        status: "CONNECTED",
+        verifiedAt: "2026-11-01T00:00:00.000Z",
+      },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({
+      destinationConnectionId: "connection-1",
+    });
+
+    render(
+      <QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(createCloudBackupRunMock).toHaveBeenCalledWith(
+        "connection-1",
+        {
+          accessToken: "access-token",
+          sensitiveAuthorization: "sensitive-auth",
+        },
+      );
+    });
+    expect(requestSensitiveAuthorizationMock).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/completed successfully/i)).toBeInTheDocument();
   });
 
   it("renders the selected operation", () => {
