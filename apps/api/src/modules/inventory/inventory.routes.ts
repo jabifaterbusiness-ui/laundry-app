@@ -13,6 +13,7 @@ import {
   listStock,
   createMovement,
   adjustStock,
+  listMovements,
 } from "./inventory.controller.js";
 
 export const inventoryRouter = Router();
