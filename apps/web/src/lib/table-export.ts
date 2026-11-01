@@ -42,8 +42,10 @@ export function writePrintableTable<T>(target: Window, title: string, columns: E
   const body = rows.map((row) => "<tr>" + columns.map((c) => "<td>" + xmlEscape(printableValue(c.value(row))) + "</td>").join("") + "</tr>").join("");
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + xmlEscape(title) + '</title><style>' +
     '@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;color:#172033;margin:0}h1{font-size:20px;margin:0 0 5px}p{color:#667085;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d9e0e7;padding:7px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#087f8c;color:#fff;font-weight:700}tbody tr:nth-child(even){background:#f4f8f9}@media print{thead{display:table-header-group}tr{break-inside:avoid}}' +
-    '</style></head><body><h1>' + xmlEscape(title) + '</h1><p>Generated ' + xmlEscape(new Date().toLocaleString()) + ' · ' + rows.length.toLocaleString() + ' records</p><table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table><script>window.addEventListener("load",function(){window.focus();window.print();});</script></body></html>';
+    '</style></head><body><h1>' + xmlEscape(title) + '</h1><p>Generated ' + xmlEscape(new Date().toLocaleString()) + ' · ' + rows.length.toLocaleString() + ' records</p><table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></body></html>';
   target.document.open();
   target.document.write(html);
   target.document.close();
+  target.focus();
+  target.setTimeout(() => target.print(), 250);
 }

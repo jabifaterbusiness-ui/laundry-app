@@ -28,7 +28,7 @@ describe("HelpCentrePage", () => {
   it("renders practical guides, support contact and shortcut catalogue", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Help Centre" })).toBeInTheDocument();
-    expect(screen.getByText("laundryangel2026@gmail.com")).toBeInTheDocument();
+    expect(screen.getAllByText("laundryangel2026@gmail.com").length).toBeGreaterThan(0);
     expect(screen.getByText("Branches: how they work and why they matter")).toBeInTheDocument();
     expect(screen.getByText("Instant Local Backup")).toBeInTheDocument();
     expect(screen.getByText("Quick Operations shortcuts")).toBeInTheDocument();

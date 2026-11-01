@@ -27,7 +27,7 @@ export function TableExportActions<T>({ title, filename, columns, loadRows }: Pr
   return <div className="table-export-actions" aria-label={"Export " + title}>
     <span>Export all records</span>
     <button type="button" onClick={() => void exportExcel()} disabled={busy !== null}>{busy === "excel" ? "Preparing Excel…" : "Excel (.xls)"}</button>
-    <button type="button" onClick={() => void exportPdf()} disabled={busy !== null}>{busy === "pdf" ? "Preparing PDF…" : "PDF"}</button>
+    <button type="button" onClick={() => void exportPdf()} disabled={busy !== null}>{busy === "pdf" ? "Preparing PDF…" : "PDF (Save from print dialog)"}</button>
     {error ? <span className="table-export-error" role="alert">{error}</span> : null}
   </div>;
 }
