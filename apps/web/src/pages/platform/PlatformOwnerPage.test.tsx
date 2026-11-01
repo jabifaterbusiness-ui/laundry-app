@@ -8,6 +8,7 @@ import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
   renewPlatformBusinessSubscription,
+  cancelPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformBusinessDetails,
@@ -38,6 +39,7 @@ vi.mock("../../lib/platform-api.js", () => ({
   activatePlatformBusiness: vi.fn(),
   deactivatePlatformBusiness: vi.fn(),
   renewPlatformBusinessSubscription: vi.fn(),
+  cancelPlatformBusinessSubscription: vi.fn(),
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
     getPlatformBusinessDetails: vi.fn(),
@@ -67,6 +69,7 @@ const mockedDeactivate = vi.mocked(deactivatePlatformBusiness);
 const mockedRenewSubscription = vi.mocked(
   renewPlatformBusinessSubscription,
 );
+const mockedCancelSubscription = vi.mocked(cancelPlatformBusinessSubscription);
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedBusinessDetails = vi.mocked(getPlatformBusinessDetails);
@@ -992,6 +995,40 @@ describe("PlatformOwnerPage", () => {
         "Company subscription created or renewed successfully.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("cancels a company subscription immediately after confirmation and reason", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(window, "prompt").mockReturnValue("Requested by business owner");
+    mockedCancelSubscription.mockResolvedValue({
+      id: "sub-A",
+      plan: "MONTHLY",
+      status: "CANCELLED",
+      startsAt: "2026-01-01T00:00:00.000Z",
+      endsAt: "2026-11-01T00:00:00.000Z",
+      cancelAtPeriodEnd: false,
+      cancelledAt: "2026-11-01T00:00:00.000Z",
+      cancellationReason: "Requested by business owner",
+    });
+
+    renderPage();
+    expect(await screen.findByText("Laundry A")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel now" }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Cancel Laundry A's subscription immediately?",
+    );
+    expect(window.prompt).toHaveBeenCalledWith(
+      "Enter the reason for this cancellation:",
+    );
+    await waitFor(() => expect(mockedCancelSubscription).toHaveBeenCalledWith(
+      "biz-A",
+      "IMMEDIATE",
+      "Requested by business owner",
+      "platform-token",
+    ));
+    expect(await screen.findByText("Subscription cancelled immediately.")).toBeInTheDocument();
   });
 
   it("renders billing configuration for subscription prices, providers, and methods", async () => {
