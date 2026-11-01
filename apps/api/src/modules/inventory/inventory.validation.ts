@@ -66,3 +66,48 @@ export const adjustInventoryStockSchema = z.object({
   reason: z.string().trim().min(1, "Adjustment reason is required").max(1000, "Adjustment reason is too long"),
   reference: z.string().trim().max(200, "Adjustment reference is too long").optional(),
 }).strict();
+
+
+export const createInventorySupplierSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  contactName: z.string().trim().max(200).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  phone: z.string().trim().max(40).optional(),
+  address: z.string().trim().max(1000).optional(),
+  taxId: z.string().trim().max(100).optional(),
+  notes: z.string().trim().max(2000).optional(),
+}).strict();
+
+export const listInventorySuppliersQuerySchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(25),
+});
+
+export const createInventoryPurchaseOrderSchema = z.object({
+  supplierId: z.string().uuid(),
+  orderNumber: z.string().trim().min(1).max(100),
+  expectedAt: z.coerce.date().optional(),
+  notes: z.string().trim().max(2000).optional(),
+  lines: z.array(z.object({
+    inventoryItemId: z.string().uuid(),
+    quantityOrdered: z.coerce.number().int().positive().max(100000000),
+    unitCost: z.coerce.number().int().min(0).max(2147483647),
+  }).strict()).min(1).max(200),
+}).strict();
+
+export const listInventoryPurchaseOrdersQuerySchema = z.object({
+  status: z.enum(["DRAFT", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"]).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(25),
+});
+
+export const receiveInventoryPurchaseOrderSchema = z.object({
+  receiptNumber: z.string().trim().min(1).max(100),
+  notes: z.string().trim().max(2000).optional(),
+  lines: z.array(z.object({
+    purchaseOrderLineId: z.string().uuid(),
+    quantity: z.coerce.number().int().positive().max(100000000),
+    unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
+  }).strict()).min(1).max(200),
+}).strict();

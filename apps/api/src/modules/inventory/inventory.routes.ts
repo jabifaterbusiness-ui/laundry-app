@@ -14,6 +14,11 @@ import {
   createMovement,
   adjustStock,
   listMovements,
+  createSupplier,
+  listSuppliers,
+  createPurchaseOrder,
+  listPurchaseOrders,
+  receivePurchaseOrder,
 } from "./inventory.controller.js";
 
 export const inventoryRouter = Router();
@@ -61,3 +66,10 @@ inventoryRouter.post(
   asyncHandler(requireBranchContext),
   asyncHandler(adjustStock),
 );
+
+
+inventoryRouter.get("/suppliers", requirePermission("inventory.view"), asyncHandler(listSuppliers));
+inventoryRouter.post("/suppliers", requirePermission("inventory.manage"), asyncHandler(createSupplier));
+inventoryRouter.get("/purchase-orders", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(listPurchaseOrders));
+inventoryRouter.post("/purchase-orders", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createPurchaseOrder));
+inventoryRouter.post("/purchase-orders/:id/receive", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(receivePurchaseOrder));

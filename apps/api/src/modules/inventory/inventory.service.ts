@@ -515,3 +515,157 @@ export async function listInventoryMovements(
     },
   };
 }
+
+
+export async function createInventorySupplier(scope: BusinessScope, input: {
+  name: string; contactName?: string; email?: string; phone?: string;
+  address?: string; taxId?: string; notes?: string;
+}) {
+  try {
+    return await prisma.inventorySupplier.create({ data: {
+      businessId: scope.businessId, name: input.name.trim(),
+      contactName: input.contactName?.trim() || null,
+      email: input.email?.trim() || null, phone: input.phone?.trim() || null,
+      address: input.address?.trim() || null, taxId: input.taxId?.trim() || null,
+      notes: input.notes?.trim() || null,
+    } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new AppError("A supplier with this name already exists", 409);
+    }
+    throw error;
+  }
+}
+
+export async function listInventorySuppliers(scope: BusinessScope, input: {
+  search?: string; page: number; pageSize: number;
+}) {
+  const where: Prisma.InventorySupplierWhereInput = {
+    businessId: scope.businessId,
+    ...(input.search ? { OR: [
+      { name: { contains: input.search, mode: "insensitive" } },
+      { contactName: { contains: input.search, mode: "insensitive" } },
+      { email: { contains: input.search, mode: "insensitive" } },
+    ] } : {}),
+  };
+  const [suppliers, total] = await prisma.$transaction([
+    prisma.inventorySupplier.findMany({ where, orderBy: { name: "asc" }, skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+    prisma.inventorySupplier.count({ where }),
+  ]);
+  return { suppliers, pagination: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+}
+
+export async function createInventoryPurchaseOrder(scope: BranchScope, input: {
+  supplierId: string; orderNumber: string; expectedAt?: Date; notes?: string;
+  createdById: string; lines: Array<{ inventoryItemId: string; quantityOrdered: number; unitCost: number }>;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const [branch, supplier] = await Promise.all([
+      tx.branch.findFirst({ where: { id: scope.branchId, businessId: scope.businessId, isActive: true } }),
+      tx.inventorySupplier.findFirst({ where: { id: input.supplierId, businessId: scope.businessId, isActive: true } }),
+    ]);
+    if (!branch) throw new AppError("Branch not found or inactive", 404);
+    if (!supplier) throw new AppError("Supplier not found or inactive for this business", 404);
+    const itemIds = [...new Set(input.lines.map((line) => line.inventoryItemId))];
+    if (itemIds.length !== input.lines.length) throw new AppError("Each inventory item may appear only once on a purchase order", 422);
+    const items = await tx.inventoryItem.findMany({ where: { id: { in: itemIds }, businessId: scope.businessId, isActive: true }, select: { id: true } });
+    if (items.length !== itemIds.length) throw new AppError("One or more inventory items are unavailable in this business", 422);
+    try {
+      return await tx.inventoryPurchaseOrder.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, supplierId: supplier.id,
+        orderNumber: input.orderNumber.trim(), status: "ORDERED", orderedAt: new Date(),
+        expectedAt: input.expectedAt ?? null, notes: input.notes?.trim() || null, createdById: input.createdById,
+        lines: { create: input.lines.map((line) => ({
+          inventoryItemId: line.inventoryItemId, quantityOrdered: line.quantityOrdered,
+          unitCost: line.unitCost,
+        })) },
+      }, include: { supplier: true, lines: { include: { inventoryItem: true } } } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError("A purchase order with this number already exists", 409);
+      }
+      throw error;
+    }
+  });
+}
+
+export async function listInventoryPurchaseOrders(scope: BranchScope, input: {
+  status?: "DRAFT" | "ORDERED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
+  page: number; pageSize: number;
+}) {
+  const where: Prisma.InventoryPurchaseOrderWhereInput = {
+    businessId: scope.businessId, branchId: scope.branchId,
+    ...(input.status ? { status: input.status } : {}),
+  };
+  const [purchaseOrders, total] = await prisma.$transaction([
+    prisma.inventoryPurchaseOrder.findMany({
+      where, include: { supplier: true, lines: { include: { inventoryItem: true } }, receipts: true },
+      orderBy: { createdAt: "desc" }, skip: (input.page - 1) * input.pageSize, take: input.pageSize,
+    }),
+    prisma.inventoryPurchaseOrder.count({ where }),
+  ]);
+  return { purchaseOrders, pagination: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+}
+
+export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
+  purchaseOrderId: string; receiptNumber: string; receivedById: string; notes?: string;
+  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.inventoryPurchaseOrder.findFirst({
+      where: { id: input.purchaseOrderId, businessId: scope.businessId, branchId: scope.branchId },
+      include: { lines: true },
+    });
+    if (!order) throw new AppError("Purchase order not found for this branch", 404);
+    if (order.status !== "ORDERED" && order.status !== "PARTIALLY_RECEIVED") {
+      throw new AppError("Only ordered or partially received purchase orders can receive goods", 422);
+    }
+    if (input.lines.length === 0) throw new AppError("At least one receipt line is required", 422);
+    const ids = [...new Set(input.lines.map((line) => line.purchaseOrderLineId))];
+    if (ids.length !== input.lines.length) throw new AppError("A purchase order line may appear only once per receipt", 422);
+    for (const lineInput of input.lines) {
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_purchase_order_lines" WHERE "id" = ${lineInput.purchaseOrderLineId} FOR UPDATE`);
+      const orderLine = await tx.inventoryPurchaseOrderLine.findFirst({
+        where: { id: lineInput.purchaseOrderLineId, purchaseOrderId: order.id },
+        include: { inventoryItem: true },
+      });
+      if (!orderLine) throw new AppError("A receipt line does not belong to this purchase order", 422);
+      if (!orderLine.inventoryItem.isActive) throw new AppError("Cannot receive an inactive inventory item", 422);
+      if (lineInput.quantity > orderLine.quantityOrdered - orderLine.quantityReceived) {
+        throw new AppError(`Received quantity exceeds the outstanding quantity for ${orderLine.inventoryItem.name}`, 422);
+      }
+    }
+    const receipt = await tx.inventoryGoodsReceipt.create({ data: {
+      businessId: scope.businessId, branchId: scope.branchId, purchaseOrderId: order.id,
+      receiptNumber: input.receiptNumber.trim(), receivedById: input.receivedById,
+      notes: input.notes?.trim() || null,
+      lines: { create: input.lines.map((line) => {
+        const orderLine = order.lines.find((candidate) => candidate.id === line.purchaseOrderLineId)!;
+        return { purchaseOrderLineId: line.purchaseOrderLineId, inventoryItemId: orderLine.inventoryItemId,
+          quantity: line.quantity, unitCost: line.unitCost ?? orderLine.unitCost };
+      }) },
+    }, include: { lines: true } });
+    for (const lineInput of input.lines) {
+      const orderLine = await tx.inventoryPurchaseOrderLine.findUniqueOrThrow({ where: { id: lineInput.purchaseOrderLineId } });
+      await tx.inventoryPurchaseOrderLine.update({ where: { id: orderLine.id }, data: { quantityReceived: { increment: lineInput.quantity } } });
+      const stock = await tx.inventoryStock.upsert({
+        where: { inventoryItemId_branchId: { inventoryItemId: orderLine.inventoryItemId, branchId: scope.branchId } },
+        create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: orderLine.inventoryItemId, quantity: 0 },
+        update: {},
+      });
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+      const lockedStock = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+      const resultingQuantity = lockedStock.quantity + lineInput.quantity;
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity } });
+      await tx.inventoryMovement.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: orderLine.inventoryItemId,
+        quantity: lineInput.quantity, type: "RECEIPT", resultingQuantity,
+        reason: "Goods received against purchase order", reference: receipt.receiptNumber, createdById: input.receivedById,
+      } });
+    }
+    const updatedLines = await tx.inventoryPurchaseOrderLine.findMany({ where: { purchaseOrderId: order.id } });
+    const complete = updatedLines.every((line) => line.quantityReceived >= line.quantityOrdered);
+    return { receipt, status: complete ? "RECEIVED" as const : "PARTIALLY_RECEIVED" as const,
+      purchaseOrder: await tx.inventoryPurchaseOrder.update({ where: { id: order.id }, data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED" } }) };
+  });
+}

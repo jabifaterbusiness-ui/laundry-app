@@ -10,6 +10,11 @@ import {
   createInventoryMovementSchema,
   adjustInventoryStockSchema,
   listInventoryMovementsQuerySchema,
+  createInventorySupplierSchema,
+  listInventorySuppliersQuerySchema,
+  createInventoryPurchaseOrderSchema,
+  listInventoryPurchaseOrdersQuerySchema,
+  receiveInventoryPurchaseOrderSchema,
 } from "./inventory.validation.js";
 import {
   createInventoryItem,
@@ -19,6 +24,11 @@ import {
   createInventoryMovement,
   adjustInventoryStock,
   listInventoryMovements,
+  createInventorySupplier,
+  listInventorySuppliers,
+  createInventoryPurchaseOrder,
+  listInventoryPurchaseOrders,
+  receiveInventoryPurchaseOrder,
 } from "./inventory.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -288,4 +298,55 @@ export async function listMovements(req: Request, res: Response) {
     },
   );
   res.status(200).json(result);
+}
+
+
+export async function createSupplier(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const input = createInventorySupplierSchema.parse(req.body);
+  const supplier = await createInventorySupplier({ businessId }, input);
+  await recordAuditEvent({ action: "inventory.supplier_created", entityType: "InventorySupplier", entityId: supplier.id,
+    businessId, branchId: req.branchId ?? null, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { name: supplier.name } });
+  res.status(201).json({ data: supplier });
+}
+
+export async function listSuppliers(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const query = listInventorySuppliersQuerySchema.parse(req.query);
+  res.status(200).json(await listInventorySuppliers({ businessId }, query));
+}
+
+export async function createPurchaseOrder(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const input = createInventoryPurchaseOrderSchema.parse(req.body);
+  const order = await createInventoryPurchaseOrder({ businessId, branchId }, {
+    ...input, createdById: req.user!.id,
+  });
+  await recordAuditEvent({ action: "inventory.purchase_order_created", entityType: "InventoryPurchaseOrder", entityId: order.id,
+    businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length } });
+  res.status(201).json({ data: order });
+}
+
+export async function listPurchaseOrders(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const query = listInventoryPurchaseOrdersQuerySchema.parse(req.query);
+  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId }, query));
+}
+
+export async function receivePurchaseOrder(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = inventoryItemIdParamSchema.parse({ id: req.params.id });
+  const input = receiveInventoryPurchaseOrderSchema.parse(req.body);
+  const result = await receiveInventoryPurchaseOrder({ businessId, branchId }, {
+    purchaseOrderId: id, ...input, receivedById: req.user!.id,
+  });
+  await recordAuditEvent({ action: "inventory.goods_received", entityType: "InventoryGoodsReceipt", entityId: result.receipt.id,
+    businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { receiptNumber: result.receipt.receiptNumber, purchaseOrderId: id, lineCount: result.receipt.lines.length, status: result.status } });
+  res.status(201).json({ data: result });
 }
