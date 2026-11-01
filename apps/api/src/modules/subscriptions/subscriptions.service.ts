@@ -29,6 +29,10 @@ export function getSubscriptionStatus(
   status: SubscriptionStatus,
   now = new Date(),
 ): SubscriptionStatus {
+  if (status === "CANCELLED") {
+    return "CANCELLED";
+  }
+
   if (status === "EXPIRED" || endsAt <= now) {
     return "EXPIRED";
   }
@@ -90,12 +94,18 @@ export async function createOrRenewSubscription(
       status: "ACTIVE",
       startsAt,
       endsAt,
+      cancelAtPeriodEnd: false,
+      cancelledAt: null,
+      cancellationReason: null,
     },
     update: {
       plan: input.plan,
       status: "ACTIVE",
       startsAt,
       endsAt,
+      cancelAtPeriodEnd: false,
+      cancelledAt: null,
+      cancellationReason: null,
     },
   });
 }

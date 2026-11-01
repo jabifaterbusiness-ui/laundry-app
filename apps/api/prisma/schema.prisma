@@ -61,6 +61,7 @@ enum SubscriptionPlan {
 enum SubscriptionStatus {
   ACTIVE
   EXPIRED
+  CANCELLED
 }
 
 // A tenant. Every business-scoped record in the system will eventually
@@ -321,6 +322,9 @@ model Subscription {
   status   SubscriptionStatus @default(ACTIVE)
   startsAt DateTime
   endsAt   DateTime
+  cancelAtPeriodEnd Boolean @default(false)
+  cancelledAt DateTime?
+  cancellationReason String?
 
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt

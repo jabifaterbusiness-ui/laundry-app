@@ -9,6 +9,7 @@ import {
   renewBusinessSubscription,
   activateBusiness,
   deactivateBusiness,
+  cancelBusinessSubscription,
   overview,
   revenue,
   growth,
@@ -101,6 +102,10 @@ platformRouter.get(
 platformRouter.post(
   "/businesses/:businessId/subscription",
   asyncHandler(renewBusinessSubscription),
+);
+platformRouter.post(
+  "/businesses/:businessId/subscription/cancel",
+  asyncHandler(cancelBusinessSubscription),
 );
 platformRouter.post(
   "/businesses/:businessId/activate",

@@ -661,3 +661,64 @@ export async function renewPlatformBusinessSubscription(
 
   return subscription;
 }
+
+
+export async function cancelPlatformBusinessSubscription(
+  businessId: string,
+  when: "IMMEDIATE" | "PERIOD_END",
+  reason: string,
+  actorUserId: string,
+  correlationId?: string,
+) {
+  const subscription = await prisma.subscription.findUnique({
+    where: { businessId },
+    include: { business: { select: { name: true } } },
+  });
+
+  if (!subscription) {
+    throw new AppError("Business subscription not found", 404);
+  }
+
+  if (subscription.status === "CANCELLED") {
+    throw new AppError("Subscription is already cancelled", 409);
+  }
+
+  const now = new Date();
+  const updated = when === "IMMEDIATE"
+    ? await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: "CANCELLED",
+          endsAt: now,
+          cancelAtPeriodEnd: false,
+          cancelledAt: now,
+          cancellationReason: reason,
+        },
+      })
+    : await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          cancelAtPeriodEnd: true,
+          cancellationReason: reason,
+        },
+      });
+
+  await recordAuditEvent({
+    action: when === "IMMEDIATE"
+      ? "platform.subscription.cancelled_immediately"
+      : "platform.subscription.cancellation_scheduled",
+    entityType: "SUBSCRIPTION",
+    entityId: subscription.id,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: {
+      businessName: subscription.business.name,
+      cancellationTiming: when,
+      effectiveAt: when === "IMMEDIATE" ? now : subscription.endsAt,
+      reason,
+    },
+  });
+
+  return updated;
+}

@@ -10,6 +10,7 @@ import {
   getPlatformBusinessDetails,
   renewPlatformBusinessSubscription,
   setPlatformBusinessActiveStatus,
+  cancelPlatformBusinessSubscription,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
 import { updatePlatformConfigSchema } from "./platform-config.validation.js";
@@ -414,4 +415,35 @@ export async function deletePaymentMethod(
       req.correlationId,
     ),
   );
+}
+
+
+export async function cancelBusinessSubscription(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) {
+    res.status(400).json({ message: "Business ID is required" });
+    return;
+  }
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const body = req.body as { when?: unknown; reason?: unknown };
+  if (body.when !== "IMMEDIATE" && body.when !== "PERIOD_END") {
+    res.status(422).json({ message: "Cancellation timing must be IMMEDIATE or PERIOD_END" });
+    return;
+  }
+  if (typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 1000) {
+    res.status(422).json({ message: "A cancellation reason between 3 and 1000 characters is required" });
+    return;
+  }
+
+  res.status(200).json(await cancelPlatformBusinessSubscription(
+    businessId,
+    body.when,
+    body.reason.trim(),
+    req.user.id,
+    req.correlationId,
+  ));
 }
