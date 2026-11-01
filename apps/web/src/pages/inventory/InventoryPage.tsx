@@ -252,10 +252,10 @@ export function InventoryPage() {
   const [supplierPhone, setSupplierPhone] = useState("");
   const [supplierEmail, setSupplierEmail] = useState("");
   const [poSupplierId, setPoSupplierId] = useState("");
-  const [poItemId, setPoItemId] = useState("");
   const [poNumber, setPoNumber] = useState("");
-  const [poQuantity, setPoQuantity] = useState("1");
-  const [poUnitCost, setPoUnitCost] = useState("0");
+  const [poLines, setPoLines] = useState<Array<{ inventoryItemId: string; quantityOrdered: string; unitCost: string }>>([
+    { inventoryItemId: "", quantityOrdered: "1", unitCost: "0" },
+  ]);
   const [receiveOrderId, setReceiveOrderId] = useState("");
   const [receiveLineId, setReceiveLineId] = useState("");
   const [receiveQuantity, setReceiveQuantity] = useState("");
@@ -279,9 +279,9 @@ export function InventoryPage() {
   const purchaseOrderMutation = useMutation({
     mutationFn: () => createInventoryPurchaseOrder({
       supplierId: poSupplierId, orderNumber: poNumber.trim(),
-      lines: [{ inventoryItemId: poItemId, quantityOrdered: Number(poQuantity), unitCost: Number(poUnitCost) }],
+      lines: poLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityOrdered: Number(line.quantityOrdered), unitCost: Number(line.unitCost) })),
     }, { accessToken }, activeBranchId),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoQuantity("1"); setPoUnitCost("0"); setProcurementError(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setProcurementError(null); },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to create purchase order."),
   });
   const receiveMutation = useMutation({
@@ -1107,13 +1107,18 @@ export function InventoryPage() {
             <label>Email<input type="email" value={supplierEmail} onChange={(event) => setSupplierEmail(event.target.value)} maxLength={254} /></label>
             <button type="submit" disabled={supplierMutation.isPending}>{supplierMutation.isPending ? "Saving..." : "Save supplier"}</button>
           </form>
-          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poItemId || !poNumber.trim() || !Number.isInteger(Number(poQuantity)) || Number(poQuantity) <= 0 || !Number.isInteger(Number(poUnitCost)) || Number(poUnitCost) < 0) { setProcurementError("Complete the purchase order details with valid quantities and costs."); return; } purchaseOrderMutation.mutate(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
             <h3>Create purchase order</h3>
             <label>Supplier<select value={poSupplierId} onChange={(event) => setPoSupplierId(event.target.value)} required><option value="">Select supplier</option>{suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
             <label>Order number<input value={poNumber} onChange={(event) => setPoNumber(event.target.value)} required maxLength={100} /></label>
-            <label>Inventory item<select value={poItemId} onChange={(event) => setPoItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Quantity<input type="number" min="1" step="1" value={poQuantity} onChange={(event) => setPoQuantity(event.target.value)} required /></label>
-            <label>Unit cost (whole currency units)<input type="number" min="0" step="1" value={poUnitCost} onChange={(event) => setPoUnitCost(event.target.value)} required /></label>
+            {poLines.map((line, index) => <div className="inventory-po-line" key={index}>
+              <strong>Line {index + 1}</strong>
+              <label>Inventory item<select value={line.inventoryItemId} onChange={(event) => setPoLines((current) => current.map((entry, i) => i === index ? { ...entry, inventoryItemId: event.target.value } : entry))} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label>Quantity<input aria-label={`Order line ${index + 1} quantity`} type="number" min="1" step="1" value={line.quantityOrdered} onChange={(event) => setPoLines((current) => current.map((entry, i) => i === index ? { ...entry, quantityOrdered: event.target.value } : entry))} required /></label>
+              <label>Unit cost<input aria-label={`Order line ${index + 1} unit cost`} type="number" min="0" step="1" value={line.unitCost} onChange={(event) => setPoLines((current) => current.map((entry, i) => i === index ? { ...entry, unitCost: event.target.value } : entry))} required /></label>
+              {poLines.length > 1 && <button type="button" className="inventory-po-remove" onClick={() => setPoLines((current) => current.filter((_, i) => i !== index))}>Remove line</button>}
+            </div>)}
+            <button type="button" className="inventory-po-add" onClick={() => setPoLines((current) => [...current, { inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }])} disabled={poLines.length >= 50}>+ Add another item</button>
             <button type="submit" disabled={purchaseOrderMutation.isPending || !activeBranchId || suppliers.length === 0 || activeItems.length === 0}>{purchaseOrderMutation.isPending ? "Creating..." : "Create purchase order"}</button>
           </form>
         </div>
