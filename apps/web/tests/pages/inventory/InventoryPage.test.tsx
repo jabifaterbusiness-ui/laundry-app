@@ -14,6 +14,11 @@ const mockListInventoryStock = vi.fn();
 const mockListInventoryMovements = vi.fn();
 const mockCreateInventoryMovement = vi.fn();
 const mockAdjustInventoryStock = vi.fn();
+const mockListInventorySuppliers = vi.fn();
+const mockCreateInventorySupplier = vi.fn();
+const mockListInventoryPurchaseOrders = vi.fn();
+const mockCreateInventoryPurchaseOrder = vi.fn();
+const mockReceiveInventoryPurchaseOrder = vi.fn();
 
 vi.mock("../../../src/lib/inventory-api.js", () => ({
   listInventoryItems: (...args: unknown[]) =>
@@ -30,6 +35,11 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
     mockCreateInventoryMovement(...args),
   adjustInventoryStock: (...args: unknown[]) =>
     mockAdjustInventoryStock(...args),
+  listInventorySuppliers: (...args: unknown[]) => mockListInventorySuppliers(...args),
+  createInventorySupplier: (...args: unknown[]) => mockCreateInventorySupplier(...args),
+  listInventoryPurchaseOrders: (...args: unknown[]) => mockListInventoryPurchaseOrders(...args),
+  createInventoryPurchaseOrder: (...args: unknown[]) => mockCreateInventoryPurchaseOrder(...args),
+  receiveInventoryPurchaseOrder: (...args: unknown[]) => mockReceiveInventoryPurchaseOrder(...args),
 }));
 
 vi.mock("../../../src/state/auth-store.js", () => ({
@@ -94,6 +104,8 @@ function renderPage() {
 }
 
 function mockSuccessfulQueries() {
+  mockListInventorySuppliers.mockResolvedValue({ suppliers: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } });
+  mockListInventoryPurchaseOrders.mockResolvedValue({ purchaseOrders: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } });
   mockListInventoryItems.mockResolvedValue({
     items: [item],
     pagination: {
@@ -141,6 +153,9 @@ beforeEach(() => {
     stock,
     inventoryItem: item,
   });
+  mockCreateInventorySupplier.mockResolvedValue({ data: { id: "supplier-1", name: "Test Supplier", isActive: true } });
+  mockCreateInventoryPurchaseOrder.mockResolvedValue({ data: {} });
+  mockReceiveInventoryPurchaseOrder.mockResolvedValue({ data: {} });
   mockAdjustInventoryStock.mockResolvedValue({
     movement: {
       id: "movement-2",
