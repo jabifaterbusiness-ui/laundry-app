@@ -1393,13 +1393,15 @@ const subscriptionPriceDeleteMutation = useMutation({
                         {business.isActive ? "Active" : "Inactive"}
                       </span>
                       {business.subscription ? (
-                        <span className="platform-subscription">
-                          {business.subscription.plan} ·{" "}
-                          {business.subscription.status}
-                        </span>
-                        <small className="platform-subscription-dates">
-                          {formatDate(business.subscription.startsAt)} – {formatDate(business.subscription.endsAt)}
-                        </small>
+                        <>
+                          <span className="platform-subscription">
+                            {business.subscription.plan} ·{" "}
+                            {business.subscription.status}
+                          </span>
+                          <small className="platform-subscription-dates">
+                            {formatDate(business.subscription.startsAt)} – {formatDate(business.subscription.endsAt)}
+                          </small>
+                        </>
                       ) : (
                         <span className="platform-subscription">
                           No subscription
