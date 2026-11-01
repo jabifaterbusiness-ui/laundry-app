@@ -1500,7 +1500,7 @@ const subscriptionPriceDeleteMutation = useMutation({
                           </button>
                           <button
                             type="button"
-                            className="button button-danger"
+                            className="button button-secondary"
                             disabled={subscriptionCancellationMutation.isPending}
                             onClick={() => handleSubscriptionCancellation(business.id, business.name, "IMMEDIATE")}
                           >
