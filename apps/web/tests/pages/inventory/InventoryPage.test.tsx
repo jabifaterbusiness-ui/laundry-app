@@ -319,7 +319,7 @@ describe("InventoryPage", () => {
     renderPage();
 
     expect(
-      await screen.findByText("Bleach"),
+      await screen.findByRole("option", { name: "Bleach" }),
     ).toBeInTheDocument();
 
     const buttons = screen.getAllByRole("button");
