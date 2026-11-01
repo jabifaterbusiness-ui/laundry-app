@@ -612,6 +612,9 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
   lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
 }) {
   return prisma.$transaction(async (tx) => {
+    // Serialize receipts for the same purchase order. This prevents concurrent
+    // deliveries on different lines from calculating a stale final order status.
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_purchase_orders" WHERE "id" = ${input.purchaseOrderId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);
     const order = await tx.inventoryPurchaseOrder.findFirst({
       where: { id: input.purchaseOrderId, businessId: scope.businessId, branchId: scope.branchId },
       include: { lines: true },

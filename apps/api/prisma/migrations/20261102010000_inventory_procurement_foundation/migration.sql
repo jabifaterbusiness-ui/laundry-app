@@ -87,3 +87,11 @@ ALTER TABLE "inventory_goods_receipts" ADD CONSTRAINT "inventory_goods_receipts_
 ALTER TABLE "inventory_goods_receipt_lines" ADD CONSTRAINT "inventory_goods_receipt_lines_goodsReceiptId_fkey" FOREIGN KEY ("goodsReceiptId") REFERENCES "inventory_goods_receipts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "inventory_goods_receipt_lines" ADD CONSTRAINT "inventory_goods_receipt_lines_purchaseOrderLineId_fkey" FOREIGN KEY ("purchaseOrderLineId") REFERENCES "inventory_purchase_order_lines"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "inventory_goods_receipt_lines" ADD CONSTRAINT "inventory_goods_receipt_lines_inventoryItemId_fkey" FOREIGN KEY ("inventoryItemId") REFERENCES "inventory_items"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "inventory_purchase_order_lines"
+  ADD CONSTRAINT "inventory_purchase_order_lines_quantity_ordered_check" CHECK ("quantityOrdered" > 0),
+  ADD CONSTRAINT "inventory_purchase_order_lines_quantity_received_check" CHECK ("quantityReceived" >= 0 AND "quantityReceived" <= "quantityOrdered"),
+  ADD CONSTRAINT "inventory_purchase_order_lines_unit_cost_check" CHECK ("unitCost" >= 0);
+ALTER TABLE "inventory_goods_receipt_lines"
+  ADD CONSTRAINT "inventory_goods_receipt_lines_quantity_check" CHECK ("quantity" > 0),
+  ADD CONSTRAINT "inventory_goods_receipt_lines_unit_cost_check" CHECK ("unitCost" >= 0);
