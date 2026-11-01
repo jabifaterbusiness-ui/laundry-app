@@ -111,7 +111,7 @@ export async function createOrRenewSubscription(
 
   if (existing) {
     await prisma.businessInboxMessage.updateMany({
-      where: { sourceSubscriptionId: existing.id, readAt: null },
+      where: { sourceSubscriptionId: existing.id },
       data: { expiresAt: now },
     });
   }

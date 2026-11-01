@@ -162,9 +162,14 @@ export function AppShell({ children }: PropsWithChildren) {
     const timer = window.setTimeout(() => {
       setShownInboxPopupIds((current) => [...current, activeInboxPopup.id]);
       setActiveInboxPopupId(null);
+      if (accessToken) {
+        void dismissBusinessInboxMessage(activeInboxPopup.id, accessToken)
+          .then(() => queryClient.invalidateQueries({ queryKey: ["business-inbox"] }))
+          .catch(() => undefined);
+      }
     }, activeInboxPopup.displayDurationMinutes * 60_000);
     return () => window.clearTimeout(timer);
-  }, [activeInboxPopup?.id, activeInboxPopup?.displayDurationMinutes]);
+  }, [activeInboxPopup?.id, activeInboxPopup?.displayDurationMinutes, accessToken, queryClient]);
 
   async function dismissActiveInboxPopup() {
     if (!activeInboxPopup || !accessToken) return;
