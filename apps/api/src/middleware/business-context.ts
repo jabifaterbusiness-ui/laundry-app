@@ -23,14 +23,16 @@ export async function requireBusinessContext(
     where: {
       id: req.user.businessId,
       isActive: true,
+      OR: [
+        { suspendedUntil: null },
+        { suspendedUntil: { lte: new Date() } },
+      ],
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
   });
 
   if (!business) {
-    throw new AppError("Business account not found or inactive", 403);
+    throw new AppError("Business account not found, inactive, or temporarily suspended", 403);
   }
 
   next();

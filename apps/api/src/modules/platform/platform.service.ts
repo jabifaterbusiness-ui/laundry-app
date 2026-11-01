@@ -408,6 +408,8 @@ export async function listPlatformBusinesses() {
       address: true,
       logoUrl: true,
       isActive: true,
+      suspendedUntil: true,
+      suspensionReason: true,
       createdAt: true,
       updatedAt: true,
       subscription: {
@@ -729,5 +731,26 @@ export async function cancelPlatformBusinessSubscription(
     },
   });
 
+  return updated;
+}
+
+
+export async function suspendPlatformBusiness(businessId: string, suspendedUntil: Date, reason: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, isActive: true, suspendedUntil: true } });
+  if (!business) throw new AppError("Business not found", 404);
+  if (!business.isActive) throw new AppError("Reactivate the business before applying a timed suspension", 409);
+  if (suspendedUntil <= new Date()) throw new AppError("Suspension expiry must be in the future", 422);
+  if (suspendedUntil.getTime() > Date.now() + 365 * 24 * 60 * 60 * 1000) throw new AppError("Timed suspension cannot exceed 365 days", 422);
+  const updated = await prisma.business.update({ where: { id: businessId }, data: { suspendedUntil, suspensionReason: reason }, select: { id: true, name: true, isActive: true, suspendedUntil: true, suspensionReason: true, updatedAt: true } });
+  await recordAuditEvent({ action: "platform.business.suspended", entityType: "Business", entityId: businessId, businessId, actorUserId, ...(correlationId !== undefined ? { correlationId } : {}), metadata: { businessName: business.name, suspendedUntil, reason, previousSuspendedUntil: business.suspendedUntil } });
+  return updated;
+}
+
+export async function clearPlatformBusinessSuspension(businessId: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, suspendedUntil: true, suspensionReason: true } });
+  if (!business) throw new AppError("Business not found", 404);
+  if (!business.suspendedUntil) throw new AppError("Business has no timed suspension", 409);
+  const updated = await prisma.business.update({ where: { id: businessId }, data: { suspendedUntil: null, suspensionReason: null }, select: { id: true, name: true, isActive: true, suspendedUntil: true, suspensionReason: true, updatedAt: true } });
+  await recordAuditEvent({ action: "platform.business.suspension_cleared", entityType: "Business", entityId: businessId, businessId, actorUserId, ...(correlationId !== undefined ? { correlationId } : {}), metadata: { businessName: business.name, previousSuspendedUntil: business.suspendedUntil, previousReason: business.suspensionReason } });
   return updated;
 }

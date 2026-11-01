@@ -10,6 +10,8 @@ import {
   activateBusiness,
   deactivateBusiness,
   cancelBusinessSubscription,
+  suspendBusiness,
+  clearBusinessSuspension,
   overview,
   revenue,
   growth,
@@ -116,3 +118,6 @@ platformRouter.post(
   asyncHandler(deactivateBusiness),
 );
 platformRouter.get("/audit-logs", asyncHandler(auditLogs));
+
+platformRouter.post("/businesses/:businessId/suspend", asyncHandler(suspendBusiness));
+platformRouter.post("/businesses/:businessId/suspension/clear", asyncHandler(clearBusinessSuspension));

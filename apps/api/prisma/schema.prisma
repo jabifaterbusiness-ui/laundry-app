@@ -120,8 +120,10 @@ model Business {
   paymentIdentity         BusinessPaymentIdentity?
   sensitiveAuthorizations SensitiveAuthorization[]
 
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  isActive         Boolean   @default(true)
+  suspendedUntil   DateTime?
+  suspensionReason String?
+  createdAt        DateTime  @default(now())
   updatedAt DateTime @updatedAt
 
   branches                    Branch[]

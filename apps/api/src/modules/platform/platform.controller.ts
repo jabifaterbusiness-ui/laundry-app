@@ -11,6 +11,8 @@ import {
   renewPlatformBusinessSubscription,
   setPlatformBusinessActiveStatus,
   cancelPlatformBusinessSubscription,
+  suspendPlatformBusiness,
+  clearPlatformBusinessSuspension,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
 import { updatePlatformConfigSchema } from "./platform-config.validation.js";
@@ -446,4 +448,23 @@ export async function cancelBusinessSubscription(req: Request, res: Response) {
     req.user.id,
     req.correlationId,
   ));
+}
+
+
+export async function suspendBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) { res.status(400).json({ message: "Business ID is required" }); return; }
+  if (!req.user) { res.status(401).json({ message: "Authentication required" }); return; }
+  const body = req.body as { durationDays?: unknown; reason?: unknown };
+  if (typeof body.durationDays !== "number" || !Number.isInteger(body.durationDays) || body.durationDays < 1 || body.durationDays > 365) { res.status(422).json({ message: "Suspension duration must be a whole number from 1 to 365 days" }); return; }
+  if (typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 1000) { res.status(422).json({ message: "A suspension reason between 3 and 1000 characters is required" }); return; }
+  const until = new Date(Date.now() + body.durationDays * 86400000);
+  res.status(200).json(await suspendPlatformBusiness(businessId, until, body.reason.trim(), req.user.id, req.correlationId));
+}
+
+export async function clearBusinessSuspension(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) { res.status(400).json({ message: "Business ID is required" }); return; }
+  if (!req.user) { res.status(401).json({ message: "Authentication required" }); return; }
+  res.status(200).json(await clearPlatformBusinessSuspension(businessId, req.user.id, req.correlationId));
 }
