@@ -391,7 +391,7 @@ describe("InventoryPage", () => {
     );
 
     fireEvent.change(
-      movementSection.querySelector('input[type="number"]'),
+      movementSection.querySelector<HTMLInputElement>('input[type="number"]')!,
       {
         target: { value: "3" },
       },
@@ -442,7 +442,7 @@ describe("InventoryPage", () => {
     );
 
     fireEvent.change(
-      movementSection.querySelector('input[type="number"]'),
+      movementSection.querySelector<HTMLInputElement>('input[type="number"]')!,
       {
         target: { value: "4" },
       },
