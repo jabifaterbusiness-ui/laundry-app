@@ -44,6 +44,8 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     inventoryMovement: {
       create: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     branch: {
       findFirst: vi.fn(),
