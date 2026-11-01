@@ -477,3 +477,41 @@ export async function adjustInventoryStock(
 
   return result;
 }
+
+
+export async function listInventoryMovements(
+  scope: BranchScope,
+  input: {
+    inventoryItemId?: string;
+    type?: "RECEIPT" | "ISSUE" | "ADJUSTMENT";
+    page: number;
+    pageSize: number;
+  },
+) {
+  const where: Prisma.InventoryMovementWhereInput = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    ...(input.inventoryItemId ? { inventoryItemId: input.inventoryItemId } : {}),
+    ...(input.type ? { type: input.type } : {}),
+  };
+  const skip = (input.page - 1) * input.pageSize;
+  const [movements, total] = await prisma.$transaction([
+    prisma.inventoryMovement.findMany({
+      where,
+      include: { inventoryItem: true },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.inventoryMovement.count({ where }),
+  ]);
+  return {
+    movements,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.ceil(total / input.pageSize),
+    },
+  };
+}
