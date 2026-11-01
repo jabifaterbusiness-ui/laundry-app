@@ -439,7 +439,7 @@ describe("InventoryPage", () => {
     );
 
     fireEvent.change(
-      screen.getByLabelText("Quantity"),
+      movementSection.querySelector('input[type="number"]'),
       {
         target: { value: "4" },
       },
