@@ -436,6 +436,12 @@ export function QuickOperationLauncher({
     setIsSubmitting(true);
 
     try {
+      if (activeOperation.code === "MLB" || activeOperation.code === "MCB") {
+        if (user?.securityRole !== "BUSINESS_OWNER") {
+          throw new Error("Only the Business Owner can run manual backups.");
+        }
+      }
+
       if (activeOperation.code === "MLB") {
         const blob = await exportBackup(backupPassword, { accessToken });
         const url = URL.createObjectURL(blob);
