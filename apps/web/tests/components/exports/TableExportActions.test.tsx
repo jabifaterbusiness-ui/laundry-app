@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { TableExportActions } from "../../../src/components/exports/TableExportActions.js";
 
 const originalCreateObjectURL = URL.createObjectURL;
@@ -26,7 +26,8 @@ describe("TableExportActions", () => {
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    vi.spyOn(window, "setTimeout").mockImplementation(((handler: TimerHandler) => { if (typeof handler === "function") handler(); return 1; }) as typeof window.setTimeout);
+    let revokeTimer: (() => void) | undefined;
+    vi.spyOn(window, "setTimeout").mockImplementation(((handler: TimerHandler) => { if (typeof handler === "function") revokeTimer = handler; return 1; }) as typeof window.setTimeout);
     const loadRows = vi.fn().mockResolvedValue([{ name: "Jane & John" }]);
 
     render(<TableExportActions
@@ -36,10 +37,15 @@ describe("TableExportActions", () => {
       columns={[{ header: "Name", value: (row: { name: string }) => row.name }]}
     />);
 
-    fireEvent.click(screen.getByRole("button", { name: /excel/i }));
-    await waitFor(() => expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob)));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /excel/i }));
+      await Promise.resolve();
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(loadRows).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
+    revokeTimer?.();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:laundryangel-export");
   });
 
   it("opens a print-ready table and invokes the browser PDF print dialog", async () => {
@@ -66,8 +72,11 @@ describe("TableExportActions", () => {
       columns={[{ header: "Service", value: (row: { name: string }) => row.name }]}
     />);
 
-    fireEvent.click(screen.getByRole("button", { name: /pdf/i }));
-    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /pdf/i }));
+      await Promise.resolve();
+    });
+    expect(print).toHaveBeenCalledTimes(1);
     expect(loadRows).toHaveBeenCalledTimes(1);
     expect(written.join("")).toContain("A &amp; B");
     expect(written.join("")).toContain("Price list");
