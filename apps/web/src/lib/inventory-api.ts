@@ -244,3 +244,47 @@ export async function adjustInventoryStock(
     body: JSON.stringify(input),
   });
 }
+
+export interface InventorySupplier {
+  id: string; businessId: string; name: string; contactName: string | null;
+  email: string | null; phone: string | null; address: string | null;
+  taxId: string | null; notes: string | null; isActive: boolean;
+  createdAt: string; updatedAt: string;
+}
+export interface InventoryPurchaseOrderLine {
+  id: string; purchaseOrderId: string; inventoryItemId: string;
+  quantityOrdered: number; quantityReceived: number; unitCost: number;
+  inventoryItem: InventoryItem;
+}
+export interface InventoryPurchaseOrder {
+  id: string; businessId: string; branchId: string; supplierId: string;
+  orderNumber: string; status: "DRAFT" | "ORDERED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
+  orderedAt: string | null; expectedAt: string | null; notes: string | null;
+  supplier: InventorySupplier; lines: InventoryPurchaseOrderLine[];
+}
+export interface CreateInventorySupplierInput {
+  name: string; contactName?: string; email?: string; phone?: string; address?: string; taxId?: string; notes?: string;
+}
+export interface CreateInventoryPurchaseOrderInput {
+  supplierId: string; orderNumber: string; expectedAt?: string; notes?: string;
+  lines: Array<{ inventoryItemId: string; quantityOrdered: number; unitCost: number }>;
+}
+export interface ReceiveInventoryPurchaseOrderInput {
+  receiptNumber: string; notes?: string;
+  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
+}
+export async function listInventorySuppliers(params: { search?: string; page?: number; pageSize?: number } = {}, auth: AuthOptions) {
+  return apiFetch<{ suppliers: InventorySupplier[]; pagination: Pagination }>(`/inventory/suppliers${buildQuery(params)}`, { accessToken: auth.accessToken });
+}
+export async function createInventorySupplier(input: CreateInventorySupplierInput, auth: AuthOptions) {
+  return apiFetch<{ data: InventorySupplier }>("/inventory/suppliers", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function listInventoryPurchaseOrders(params: { status?: InventoryPurchaseOrder["status"]; page?: number; pageSize?: number } = {}, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ purchaseOrders: InventoryPurchaseOrder[]; pagination: Pagination }>(`/inventory/purchase-orders${buildQuery(params)}`, { accessToken: auth.accessToken, branchId });
+}
+export async function createInventoryPurchaseOrder(input: CreateInventoryPurchaseOrderInput, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryPurchaseOrder }>("/inventory/purchase-orders", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+export async function receiveInventoryPurchaseOrder(id: string, input: ReceiveInventoryPurchaseOrderInput, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: unknown }>(`/inventory/purchase-orders/${id}/receive`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
