@@ -16,6 +16,7 @@ const {
   getCloudBackupSettingsMock,
   createCloudBackupRunMock,
   requestSensitiveAuthorizationMock,
+  createManualLocalBackupMock,
 } = vi.hoisted(() => ({
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
@@ -29,6 +30,11 @@ const {
   getCloudBackupSettingsMock: vi.fn(),
   createCloudBackupRunMock: vi.fn(),
   requestSensitiveAuthorizationMock: vi.fn().mockResolvedValue("sensitive-auth"),
+  createManualLocalBackupMock: vi.fn(),
+}));
+
+vi.mock("../../../src/components/data-management/LocalBackupManager.js", () => ({
+  createManualLocalBackup: createManualLocalBackupMock,
 }));
 
 vi.mock("../../../src/lib/data-management-api.js", () => ({
@@ -293,6 +299,11 @@ describe("QuickOperationLauncher", () => {
     getOrderMock.mockReset();
     exportBackupMock.mockReset();
     exportBackupMock.mockResolvedValue(new Blob(["backup"]));
+    createManualLocalBackupMock.mockReset();
+    createManualLocalBackupMock.mockResolvedValue({
+      fileName: "LaundryAngel_Backup_test.laundry-backup",
+      destination: "Backups",
+    });
     listCloudBackupConnectionsMock.mockReset();
     listCloudBackupConnectionsMock.mockResolvedValue([]);
     getCloudBackupSettingsMock.mockReset();
@@ -333,6 +344,27 @@ describe("QuickOperationLauncher", () => {
       await screen.findByText(/at least 12 characters/i),
     ).toBeInTheDocument();
     expect(exportBackupMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a manual local backup using the remembered destination", async () => {
+    render(
+      <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
+    );
+
+    fireEvent.change(
+      screen.getByLabelText(/backup encryption password/i),
+      { target: { value: "a-strong-backup-password" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(createManualLocalBackupMock).toHaveBeenCalledWith(
+        "business-1",
+        "a-strong-backup-password",
+        { accessToken: "access-token" },
+      );
+    });
+    expect(await screen.findByText(/in Backups/i)).toBeInTheDocument();
   });
 
   it("starts a manual cloud backup on the verified configured destination", async () => {
