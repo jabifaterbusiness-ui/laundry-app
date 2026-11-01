@@ -92,7 +92,9 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
  {category:"Finance, payroll and oversight",intro:"Review business performance, staff pay and unusual activity.",guides:[
   {title:"Finance",summary:"Understand income, expenses and financial controls.",steps:[
    "Open Finance. Access is permission-controlled; reports.view and/or expenses.view may be required for the corresponding areas.",
-   "Use the expense workflow to record business costs with a category, date, amount, description and supporting reference. Depending on your permission, expenses can be created, approved or rejected, recognised in the financial statement, or voided. These are separate actions and should follow the evidence and approval process.",
+   "Use the expense workflow to record business costs with a category, date, amount, description and supporting reference. Categories include Salary, Rent, Utilities, Inventory, Transport, Maintenance, Finance Charge, Tax, Employee Reimbursement, Miscellaneous and Other.",
+   "Expenses move through controlled states such as Draft, Pending, Approved, Rejected and Void. Depending on your permission, you can create, approve/reject, recognise or void an expense. These are separate actions and should follow the evidence and approval process.",
+   "Only recognised expenses are included in the financial statement. The expense list lets you filter by category and status and review the recognised date and approving/recognising user.",
    "The statement period controls the From and To dates. Financial overview shows gross invoiced revenue, refunds, net revenue, recognised expenses and profit/loss; the expense breakdown groups recognised costs by category.",
    "Management can configure automatic daily and monthly financial statement delivery. Daily statements cover the previous local calendar day; monthly statements cover the previous month. Set the schedule time and enable Email and/or WhatsApp recipients where configured."
    "Review expenses alongside collections and revenue. Reconcile the application's records with bank/cash records and source documents regularly; summaries are an operational aid, not a replacement for accounting review."
@@ -140,7 +142,7 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Review run history for status and errors. A successful backup should be followed by a restore rehearsal in a safe environment. Keep provider credentials and backup passwords private."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Import from previous software: accepted files and current scope",summary:"Analyse a legacy backup before confirming an import.",steps:[
-   "The migration analyser recognises DBF / Visual FoxPro-style backups, ZIP archives containing DBF/CSV/JSON/XLSX files, CSV, JSON, XLSX/XLS and versioned encrypted LaundryAngel backups.",
+   "The legacy migration upload accepts DBF, ZIP, CSV, JSON, XLSX and XLS files. ZIP archives may contain supported DBF/CSV/JSON/XLSX source files. The encrypted .laundry-backup file is for the separate Restore workflow, not the legacy migration analyser.",
    "The current legacy import target is customer records. A DBF/FoxPro backup can recognise CUSTOMER.DBF and common name, phone, address, email and notes fields. Other source tables are reported as unsupported in the preview; do not assume orders, garments, invoices, payments or inventory are imported yet.",
    "Choose the source file, run analysis, inspect the preview and field mapping, then select the duplicate policy (skip, merge missing information or create a separate record) before confirming. Imports are business-scoped, audited and do not delete existing records.",
    "ZIP uploads are checked for unsafe paths and excessive file counts or decompressed size. Do not rename unrelated files to a supported extension or upload unknown executables."
