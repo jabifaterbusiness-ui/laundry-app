@@ -479,6 +479,8 @@ export async function getPlatformBusinessDetails(businessId: string) {
       address: true,
       logoUrl: true,
       isActive: true,
+      suspendedUntil: true,
+      suspensionReason: true,
       createdAt: true,
       updatedAt: true,
       subscription: {
