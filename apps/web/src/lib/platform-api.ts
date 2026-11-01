@@ -584,3 +584,21 @@ export async function archivePlatformBusiness(businessId: string, accessToken: s
     { method: "POST", accessToken },
   );
 }
+
+
+export async function permanentlyDeletePlatformBusiness(
+  businessId: string,
+  confirmation: string,
+  authorizationToken: string,
+  accessToken: string | null,
+) {
+  return apiFetch<{ deleted: true; businessId: string; businessName: string }>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/permanent`,
+    {
+      method: "DELETE",
+      accessToken,
+      sensitiveAuthorization: authorizationToken,
+      body: JSON.stringify({ confirmation }),
+    },
+  );
+}

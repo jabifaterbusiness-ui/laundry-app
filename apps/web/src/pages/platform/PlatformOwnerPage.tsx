@@ -7,6 +7,7 @@ import {
   suspendPlatformBusiness,
   clearPlatformBusinessSuspension,
   archivePlatformBusiness,
+  permanentlyDeletePlatformBusiness,
   getPlatformMessages,
   createPlatformMessage,
   renewPlatformBusinessSubscription,
@@ -34,6 +35,7 @@ import {
   deletePlatformPaymentMethod,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 import "./PlatformOwnerPage.css";
 
 function formatNumber(value: number): string {
@@ -56,6 +58,7 @@ function formatDate(value: string): string {
 
 export function PlatformOwnerPage() {
   const { user, accessToken } = useAuthStore();
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const isPlatformAdmin = user?.securityRole === "PLATFORM_ADMIN";
 
   const overviewQuery = useQuery({
@@ -256,6 +259,16 @@ export function PlatformOwnerPage() {
     mutationFn: (businessId: string) => archivePlatformBusiness(businessId, accessToken),
     onSuccess: async () => { setStatusFeedback("Business archived. It can be reactivated to restore access."); await refreshPlatformData(); },
     onError: (error) => setStatusFeedback(error instanceof Error ? error.message : "Unable to archive business."),
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: ({ businessId, confirmation, authorizationToken }: { businessId: string; confirmation: string; authorizationToken: string }) =>
+      permanentlyDeletePlatformBusiness(businessId, confirmation, authorizationToken, accessToken),
+    onSuccess: async (result) => {
+      setStatusFeedback(`Business ${result.businessName} was permanently deleted.`);
+      await refreshPlatformData();
+    },
+    onError: (error) => setStatusFeedback(error instanceof Error ? error.message : "Unable to permanently delete business."),
   });
 
   const suspensionMutation = useMutation({
@@ -1533,7 +1546,23 @@ const subscriptionPriceDeleteMutation = useMutation({
                           {archiveMutation.isPending ? "Archiving…" : "Archive business"}
                         </button>
                       ) : business.archivedAt ? (
-                        <span className="platform-status inactive">Archived {formatDate(business.archivedAt)}</span>
+                        <>
+                          <span className="platform-status inactive">Archived {formatDate(business.archivedAt)}</span>
+                          <button
+                            type="button"
+                            className="button button-danger"
+                            disabled={permanentDeleteMutation.isPending}
+                            onClick={async () => {
+                              const confirmation = window.prompt(`Permanent deletion cannot be undone. Type DELETE ${business.slug} to continue.`);
+                              if (confirmation !== `DELETE ${business.slug}`) return;
+                              const authorizationToken = await requestSensitiveAuthorization();
+                              if (!authorizationToken) return;
+                              permanentDeleteMutation.mutate({ businessId: business.id, confirmation, authorizationToken });
+                            }}
+                          >
+                            {permanentDeleteMutation.isPending ? "Deleting..." : "Permanently delete"}
+                          </button>
+                        </>
                       ) : null}
 
                       <button
