@@ -11,6 +11,8 @@ export interface PlatformBusiness {
   address: string | null;
   logoUrl: string | null;
   isActive: boolean;
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
   owner?: {
     fullName: string;
     email: string;
@@ -558,4 +560,13 @@ export async function cancelPlatformBusinessSubscription(
       body: JSON.stringify({ when, reason }),
     },
   );
+}
+
+
+export async function suspendPlatformBusiness(businessId: string, durationDays: number, reason: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; suspendedUntil: string; suspensionReason: string; updatedAt: string }>(`/platform/businesses/${encodeURIComponent(businessId)}/suspend`, { method: "POST", accessToken, body: JSON.stringify({ durationDays, reason }) });
+}
+
+export async function clearPlatformBusinessSuspension(businessId: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; suspendedUntil: null; suspensionReason: null; updatedAt: string }>(`/platform/businesses/${encodeURIComponent(businessId)}/suspension/clear`, { method: "POST", accessToken });
 }

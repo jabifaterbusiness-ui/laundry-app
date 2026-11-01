@@ -1612,3 +1612,32 @@ describe("Platform Owner routes - configuration", () => {
 });
 
 });
+
+
+describe("Platform Owner routes - timed business suspension", () => {
+  const business = { id: "biz-A", name: "Laundry A", isActive: true, suspendedUntil: null, suspensionReason: null };
+  it("applies a timed suspension and records an audit event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue(business as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({ ...business, suspendedUntil: new Date(Date.now() + 3 * 86400000), suspensionReason: "Policy review", updatedAt: new Date() } as never);
+    const response = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ durationDays: 3, reason: "Policy review" });
+    expect(response.status).toBe(200);
+    expect(response.body.suspensionReason).toBe("Policy review");
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "biz-A" }, data: expect.objectContaining({ suspensionReason: "Policy review" }) }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+  it("clears an existing timed suspension and records an audit event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({ ...business, suspendedUntil: new Date(Date.now() + 86400000), suspensionReason: "Policy review" } as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({ ...business, updatedAt: new Date() } as never);
+    const response = await request(app).post("/api/v1/platform/businesses/biz-A/suspension/clear").set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    expect(response.status).toBe(200);
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "biz-A" }, data: { suspendedUntil: null, suspensionReason: null } }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+  it("rejects invalid duration and tenant access", async () => {
+    const invalid = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ durationDays: 0, reason: "Policy review" });
+    const denied = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${OWNER_A}`).send({ durationDays: 3, reason: "Policy review" });
+    expect(invalid.status).toBe(422);
+    expect(denied.status).toBe(403);
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});

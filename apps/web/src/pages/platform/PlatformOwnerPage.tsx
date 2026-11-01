@@ -4,6 +4,8 @@ import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
   cancelPlatformBusinessSubscription,
+  suspendPlatformBusiness,
+  clearPlatformBusinessSuspension,
   renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
@@ -225,6 +227,17 @@ export function PlatformOwnerPage() {
         error instanceof Error ? error.message : "Unable to cancel subscription.",
       );
     },
+  });
+
+  const suspensionMutation = useMutation({
+    mutationFn: (input: { businessId: string; durationDays: number; reason: string }) => suspendPlatformBusiness(input.businessId, input.durationDays, input.reason, accessToken),
+    onSuccess: async () => { setSubscriptionFeedback("Timed business suspension applied."); await refreshPlatformData(); },
+    onError: (error) => setSubscriptionFeedback(error instanceof Error ? error.message : "Unable to suspend business."),
+  });
+  const clearSuspensionMutation = useMutation({
+    mutationFn: (businessId: string) => clearPlatformBusinessSuspension(businessId, accessToken),
+    onSuccess: async () => { setSubscriptionFeedback("Business suspension lifted."); await refreshPlatformData(); },
+    onError: (error) => setSubscriptionFeedback(error instanceof Error ? error.message : "Unable to lift suspension."),
   });
 
   const [configurationFeedback, setConfigurationFeedback] =
@@ -615,6 +628,17 @@ const subscriptionPriceDeleteMutation = useMutation({
     const reason = window.prompt("Enter the reason for this cancellation:");
     if (!reason || reason.trim().length < 3) return;
     subscriptionCancellationMutation.mutate({ businessId, when, reason: reason.trim() });
+  };
+
+  const handleTimedSuspension = (businessId: string, businessName: string) => {
+    const rawDays = window.prompt("Suspend " + businessName + " for how many days? (1–365)");
+    if (rawDays === null) return;
+    const durationDays = Number(rawDays);
+    if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365) { setSubscriptionFeedback("Enter a whole number of days between 1 and 365."); return; }
+    const reason = window.prompt("Enter the reason for this suspension:");
+    if (!reason || reason.trim().length < 3) return;
+    if (!window.confirm("Temporarily suspend " + businessName + " for " + durationDays + " days?")) return;
+    suspensionMutation.mutate({ businessId, durationDays, reason: reason.trim() });
   };
 
   return (
@@ -1488,6 +1512,15 @@ const subscriptionPriceDeleteMutation = useMutation({
                             ? "Renew Monthly"
                             : "Create Monthly Subscription"}
                       </button>
+                      {business.suspendedUntil && new Date(business.suspendedUntil) > new Date() ? (
+                        <button type="button" className="button button-secondary" disabled={clearSuspensionMutation.isPending} onClick={() => { if (window.confirm("Lift the timed suspension for " + business.name + "?")) clearSuspensionMutation.mutate(business.id); }}>
+                          Lift timed suspension
+                        </button>
+                      ) : business.isActive ? (
+                        <button type="button" className="button button-secondary" disabled={suspensionMutation.isPending} onClick={() => handleTimedSuspension(business.id, business.name)}>
+                          Timed suspension
+                        </button>
+                      ) : null}
                       {business.subscription && business.subscription.status !== "CANCELLED" ? (
                         <>
                           <button
