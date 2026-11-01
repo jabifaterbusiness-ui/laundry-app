@@ -1093,6 +1093,46 @@ export function InventoryPage() {
           </>
         ) : null}
       </section>
+
+      <section className="inventory-panel inventory-procurement" aria-label="Suppliers and procurement">
+        <div className="inventory-ledger-heading">
+          <div><h2>Suppliers &amp; Procurement</h2><p>Raise branch purchase orders and record full or partial deliveries directly into stock.</p></div>
+          <span className="inventory-procurement-count">{purchaseOrders.length} recent orders</span>
+        </div>
+        <div className="inventory-procurement-grid">
+          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (supplierName.trim()) supplierMutation.mutate(); }}>
+            <h3>Add supplier</h3>
+            <label>Supplier name<input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} required maxLength={200} /></label>
+            <label>Phone<input value={supplierPhone} onChange={(event) => setSupplierPhone(event.target.value)} maxLength={40} /></label>
+            <label>Email<input type="email" value={supplierEmail} onChange={(event) => setSupplierEmail(event.target.value)} maxLength={254} /></label>
+            <button type="submit" disabled={supplierMutation.isPending}>{supplierMutation.isPending ? "Saving..." : "Save supplier"}</button>
+          </form>
+          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poItemId || !poNumber.trim() || !Number.isInteger(Number(poQuantity)) || Number(poQuantity) <= 0 || !Number.isInteger(Number(poUnitCost)) || Number(poUnitCost) < 0) { setProcurementError("Complete the purchase order details with valid quantities and costs."); return; } purchaseOrderMutation.mutate(); }}>
+            <h3>Create purchase order</h3>
+            <label>Supplier<select value={poSupplierId} onChange={(event) => setPoSupplierId(event.target.value)} required><option value="">Select supplier</option>{suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+            <label>Order number<input value={poNumber} onChange={(event) => setPoNumber(event.target.value)} required maxLength={100} /></label>
+            <label>Inventory item<select value={poItemId} onChange={(event) => setPoItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Quantity<input type="number" min="1" step="1" value={poQuantity} onChange={(event) => setPoQuantity(event.target.value)} required /></label>
+            <label>Unit cost (whole currency units)<input type="number" min="0" step="1" value={poUnitCost} onChange={(event) => setPoUnitCost(event.target.value)} required /></label>
+            <button type="submit" disabled={purchaseOrderMutation.isPending || !activeBranchId || suppliers.length === 0 || activeItems.length === 0}>{purchaseOrderMutation.isPending ? "Creating..." : "Create purchase order"}</button>
+          </form>
+        </div>
+        {procurementError && <p role="alert">{procurementError}</p>}
+        <h3>Purchase orders</h3>
+        {!activeBranchId ? <p>Select a branch to manage purchase orders.</p> : purchaseOrdersQuery.isLoading ? <p>Loading purchase orders...</p> : purchaseOrdersQuery.isError ? <p role="alert">Unable to load purchase orders.</p> : purchaseOrders.length === 0 ? <p>No purchase orders have been raised for this branch.</p> : (
+          <table><thead><tr><th>Order</th><th>Supplier</th><th>Items received</th><th>Status</th><th>Ordered</th></tr></thead><tbody>
+            {purchaseOrders.map((order: InventoryPurchaseOrder) => <tr key={order.id}><td>{order.orderNumber}</td><td>{order.supplier.name}</td><td>{order.lines.map((line) => `${line.inventoryItem.name}: ${line.quantityReceived}/${line.quantityOrdered}`).join(", ")}</td><td>{order.status.replaceAll("_", " ")}</td><td>{order.orderedAt ? new Date(order.orderedAt).toLocaleDateString() : "—"}</td></tr>)}
+          </tbody></table>
+        )}
+        <form onSubmit={(event) => { event.preventDefault(); if (!receiveOrderId || !receiveLineId || !receiptNumber.trim() || !Number.isInteger(Number(receiveQuantity)) || Number(receiveQuantity) <= 0) { setProcurementError("Choose an outstanding order line and enter a valid receipt quantity and reference."); return; } receiveMutation.mutate(); }}>
+          <h3>Record goods received</h3>
+          <label>Purchase order<select value={receiveOrderId} onChange={(event) => { setReceiveOrderId(event.target.value); setReceiveLineId(""); }} required><option value="">Select order</option>{purchaseOrders.filter((order) => order.status === "ORDERED" || order.status === "PARTIALLY_RECEIVED").map((order) => <option key={order.id} value={order.id}>{order.orderNumber} — {order.supplier.name}</option>)}</select></label>
+          <label>Outstanding item<select value={receiveLineId} onChange={(event) => setReceiveLineId(event.target.value)} required><option value="">Select item</option>{outstandingReceiptLines.map((line) => <option key={line.id} value={line.id}>{line.inventoryItem.name} — {line.quantityOrdered - line.quantityReceived} outstanding</option>)}</select></label>
+          <label>Quantity received<input type="number" min="1" step="1" value={receiveQuantity} onChange={(event) => setReceiveQuantity(event.target.value)} required /></label>
+          <label>Goods receipt reference<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} required maxLength={100} /></label>
+          <button type="submit" disabled={receiveMutation.isPending || !activeBranchId}>{receiveMutation.isPending ? "Recording..." : "Record delivery"}</button>
+        </form>
+      </section>
     </main>
   );
 }
