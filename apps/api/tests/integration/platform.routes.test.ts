@@ -150,6 +150,7 @@ beforeEach(() => {
         startsAt: new Date("2026-01-01T00:00:00.000Z"),
         endsAt: new Date("2099-01-01T00:00:00.000Z"),
       },
+      users: [{ fullName: "Owner A", email: "owner@a.example" }],
       _count: {
         users: 5,
         customers: 20,
@@ -879,6 +880,7 @@ describe("Platform Owner routes - company visibility", () => {
         id: "biz-A",
         name: "Laundry A",
         isActive: true,
+        owner: { fullName: "Owner A", email: "owner@a.example" },
         subscription: expect.objectContaining({
           plan: "MONTHLY",
           status: "ACTIVE",

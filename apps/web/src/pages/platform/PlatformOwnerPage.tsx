@@ -1368,6 +1368,10 @@ const subscriptionPriceDeleteMutation = useMutation({
                   </button>
 
                   <div className="platform-business-stats">
+                    <span className="platform-business-owner">
+                      <strong>{business.owner?.fullName ?? "Owner not assigned"}</strong>
+                      <small>{business.owner?.email ?? "No owner email on record"}</small>
+                    </span>
                     <span>
                       {formatNumber(business._count.users)} users
                     </span>
@@ -1393,6 +1397,9 @@ const subscriptionPriceDeleteMutation = useMutation({
                           {business.subscription.plan} ·{" "}
                           {business.subscription.status}
                         </span>
+                        <small className="platform-subscription-dates">
+                          {formatDate(business.subscription.startsAt)} – {formatDate(business.subscription.endsAt)}
+                        </small>
                       ) : (
                         <span className="platform-subscription">
                           No subscription

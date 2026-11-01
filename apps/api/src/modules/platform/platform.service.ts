@@ -83,6 +83,12 @@ export async function getPlatformOverview() {
             endsAt: true,
           },
         },
+        users: {
+          where: { securityRole: "BUSINESS_OWNER", isActive: true },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { fullName: true, email: true },
+        },
         _count: {
           select: {
             users: true,
@@ -122,7 +128,10 @@ export async function getPlatformOverview() {
       paymentCount: revenue._count._all,
       totalCollected: revenue._sum.amount ?? 0,
     },
-    recentBusinesses,
+    recentBusinesses: recentBusinesses.map(({ users, ...business }) => ({
+      ...business,
+      owner: users?.[0] ?? null,
+    })),
   };
 }
 
@@ -384,7 +393,7 @@ export async function getPlatformGlobalStatistics() {
 }
 
 export async function listPlatformBusinesses() {
-  return prisma.business.findMany({
+  const businesses = await prisma.business.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -407,6 +416,12 @@ export async function listPlatformBusinesses() {
           endsAt: true,
         },
       },
+      users: {
+        where: { securityRole: "BUSINESS_OWNER", isActive: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { fullName: true, email: true },
+      },
       _count: {
         select: {
           users: true,
@@ -417,6 +432,10 @@ export async function listPlatformBusinesses() {
       },
     },
   });
+  return businesses.map(({ users, ...business }) => ({
+    ...business,
+    owner: users?.[0] ?? null,
+  }));
 }
 
 export async function listPlatformAuditLogs(limit = 100) {

@@ -11,6 +11,10 @@ export interface PlatformBusiness {
   address: string | null;
   logoUrl: string | null;
   isActive: boolean;
+  owner?: {
+    fullName: string;
+    email: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
   subscription: {
