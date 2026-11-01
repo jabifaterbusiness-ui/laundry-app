@@ -7,6 +7,7 @@ import {
   createOrRenewSubscription,
 } from "../subscriptions/subscriptions.service.js";
 import type { CreateSubscriptionInput } from "../subscriptions/subscriptions.validation.js";
+import { requireSensitiveAuthorization } from "../auth/sensitive-authorization.service.js";
 
 export async function getPlatformHealth() {
   const checkedAt = new Date();
@@ -861,4 +862,53 @@ export async function archivePlatformBusiness(businessId: string, actorUserId: s
     metadata: { businessName: business.name, archivedAt },
   });
   return updated;
+}
+
+
+export async function permanentlyDeletePlatformBusiness(input: {
+  businessId: string;
+  confirmation: string;
+  authorizationToken: string;
+  actorUserId: string;
+  correlationId?: string;
+}) {
+  const authorization = await requireSensitiveAuthorization({
+    token: input.authorizationToken,
+    userId: input.actorUserId,
+    businessId: null,
+  });
+  const business = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: { id: true, name: true, slug: true, isActive: true, archivedAt: true },
+  });
+  if (!business) throw new AppError("Business not found", 404);
+  if (business.isActive || !business.archivedAt) {
+    throw new AppError("Deactivate and archive the business before permanent deletion", 409);
+  }
+  if (input.confirmation !== `DELETE ${business.slug}`) {
+    throw new AppError(`Type DELETE ${business.slug} exactly to confirm permanent deletion`, 422);
+  }
+
+  try {
+    await prisma.business.delete({ where: { id: business.id } });
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2003") {
+      throw new AppError("This business has records protected by data-retention constraints. It remains archived and was not deleted.", 409);
+    }
+    throw error;
+  }
+
+  await prisma.sensitiveAuthorization.update({
+    where: { id: authorization.id },
+    data: { revokedAt: new Date() },
+  });
+  await recordAuditEvent({
+    action: "platform.business.permanently_deleted",
+    entityType: "Business",
+    entityId: business.id,
+    actorUserId: input.actorUserId,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    metadata: { businessName: business.name, businessSlug: business.slug, archivedAt: business.archivedAt },
+  });
+  return { deleted: true as const, businessId: business.id, businessName: business.name };
 }

@@ -507,3 +507,20 @@ export async function archiveBusiness(req: Request, res: Response) {
   if (!req.user) throw new AppError("Authentication required", 401);
   res.status(200).json(await archivePlatformBusiness(businessId, req.user.id, req.correlationId));
 }
+
+
+export async function permanentlyDeleteBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) throw new AppError("Business ID is required", 400);
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const authorizationHeader = req.headers["x-sensitive-authorization"];
+  const authorizationToken = Array.isArray(authorizationHeader) ? authorizationHeader[0] : authorizationHeader;
+  if (!authorizationToken) throw new AppError("Recent password re-authorization is required", 403);
+  const body = req.body as { confirmation?: unknown };
+  if (typeof body.confirmation !== "string") throw new AppError("Permanent deletion confirmation is required", 422);
+  res.status(200).json(await permanentlyDeletePlatformBusiness({
+    businessId, confirmation: body.confirmation, authorizationToken,
+    actorUserId: req.user.id,
+    ...(req.correlationId ? { correlationId: req.correlationId } : {}),
+  }));
+}
