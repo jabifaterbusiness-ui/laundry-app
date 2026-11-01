@@ -212,6 +212,22 @@ export async function createInventoryMovement(
   });
 }
 
+export async function listInventoryMovements(
+  params: ListInventoryMovementsParams = {},
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<{ movements: InventoryMovement[]; pagination: Pagination }> {
+  return apiFetch(`/inventory/movements${buildQuery({
+    inventoryItemId: params.inventoryItemId,
+    type: params.type,
+    page: params.page,
+    pageSize: params.pageSize,
+  })}`, {
+    accessToken: auth.accessToken,
+    branchId,
+  });
+}
+
 export async function adjustInventoryStock(
   input: AdjustInventoryStockInput,
   auth: AuthOptions,
