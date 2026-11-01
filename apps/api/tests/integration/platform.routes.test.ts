@@ -1706,3 +1706,40 @@ describe("Platform Owner routes - announcements and business inbox delivery", ()
     expect(prisma.businessInboxMessage.createMany).not.toHaveBeenCalled();
   });
 });
+
+
+describe("Platform Owner routes - business archive", () => {
+  it("requires deactivation before archiving and records the archive event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: false, archivedAt: null,
+    } as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: false,
+      archivedAt: new Date(), updatedAt: new Date(),
+    } as never);
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    expect(response.status).toBe(200);
+    expect(response.body.archivedAt).toBeTruthy();
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "biz-A" }, data: expect.objectContaining({ archivedAt: expect.any(Date) }),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects archiving an active business and denies tenant users", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: true, archivedAt: null,
+    } as never);
+    const active = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    const denied = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+    expect(active.status).toBe(409);
+    expect(denied.status).toBe(403);
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
