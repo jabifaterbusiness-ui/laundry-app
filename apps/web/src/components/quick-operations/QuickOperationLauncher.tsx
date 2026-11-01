@@ -621,13 +621,20 @@ export function QuickOperationLauncher({
         );
       }
     } catch (err: unknown) {
-      setError(
-        err instanceof ApiError
+      const message = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
           ? err.message
-          : err instanceof Error
-            ? err.message
-            : "The operation could not be completed. Please try again.",
-      );
+          : "The operation could not be completed. Please try again.";
+      if (activeOperation.code === "MCB") {
+        publishCloudBackupNotification({
+          status: "error",
+          title: "Manual cloud backup",
+          message,
+          source: "manual",
+        });
+      }
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
