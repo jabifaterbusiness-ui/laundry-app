@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { AppError } from "../../middleware/error-handler.js";
 import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
@@ -13,6 +14,8 @@ import {
   cancelPlatformBusinessSubscription,
   suspendPlatformBusiness,
   clearPlatformBusinessSuspension,
+  createPlatformAnnouncement,
+  listPlatformAnnouncements,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
 import { updatePlatformConfigSchema } from "./platform-config.validation.js";
@@ -467,4 +470,30 @@ export async function clearBusinessSuspension(req: Request, res: Response) {
   if (!businessId) { res.status(400).json({ message: "Business ID is required" }); return; }
   if (!req.user) { res.status(401).json({ message: "Authentication required" }); return; }
   res.status(200).json(await clearPlatformBusinessSuspension(businessId, req.user.id, req.correlationId));
+}
+
+ 
+export async function createPlatformMessage(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const body = req.body as { title?: unknown; body?: unknown; businessId?: unknown; publishedAt?: unknown; expiresAt?: unknown; displayDurationMinutes?: unknown };
+  if (typeof body.title !== "string" || body.title.trim().length < 3 || body.title.trim().length > 160) throw new AppError("Message title must be between 3 and 160 characters", 422);
+  if (typeof body.body !== "string" || body.body.trim().length < 3 || body.body.trim().length > 5000) throw new AppError("Message body must be between 3 and 5000 characters", 422);
+  if (body.businessId !== undefined && (typeof body.businessId !== "string" || !body.businessId.trim())) throw new AppError("Business ID must be a non-empty string when provided", 422);
+  const duration = body.displayDurationMinutes ?? 10;
+  if (typeof duration !== "number" || !Number.isInteger(duration) || duration < 1 || duration > 60) throw new AppError("Popup duration must be a whole number from 1 to 60 minutes", 422);
+  const publishedAt = body.publishedAt === undefined ? new Date() : new Date(String(body.publishedAt));
+  if (!Number.isFinite(publishedAt.getTime())) throw new AppError("A valid publication date is required", 422);
+  const expiresAt = body.expiresAt === undefined || body.expiresAt === null ? null : new Date(String(body.expiresAt));
+  if (expiresAt && (!Number.isFinite(expiresAt.getTime()) || expiresAt <= publishedAt)) throw new AppError("Expiry must be a valid date after publication", 422);
+  const result = await createPlatformAnnouncement({
+    title: body.title.trim(), body: body.body.trim(),
+    businessId: typeof body.businessId === "string" ? body.businessId : null,
+    publishedAt, expiresAt, displayDurationMinutes: duration,
+    actorUserId: req.user.id, correlationId: req.correlationId,
+  });
+  res.status(201).json(result);
+}
+
+export async function listPlatformMessages(_req: Request, res: Response) {
+  res.status(200).json(await listPlatformAnnouncements());
 }

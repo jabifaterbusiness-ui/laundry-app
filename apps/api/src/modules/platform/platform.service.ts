@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -755,4 +756,81 @@ export async function clearPlatformBusinessSuspension(businessId: string, actorU
   const updated = await prisma.business.update({ where: { id: businessId }, data: { suspendedUntil: null, suspensionReason: null }, select: { id: true, name: true, isActive: true, suspendedUntil: true, suspensionReason: true, updatedAt: true } });
   await recordAuditEvent({ action: "platform.business.suspension_cleared", entityType: "Business", entityId: businessId, businessId, actorUserId, ...(correlationId !== undefined ? { correlationId } : {}), metadata: { businessName: business.name, previousSuspendedUntil: business.suspendedUntil, previousReason: business.suspensionReason } });
   return updated;
+}
+
+
+export async function createPlatformAnnouncement(input: {
+  title: string; body: string; businessId: string | null; publishedAt: Date;
+  expiresAt: Date | null; displayDurationMinutes: number; actorUserId: string;
+  correlationId?: string;
+}) {
+  const targetBusinesses = await prisma.business.findMany({
+    where: input.businessId ? { id: input.businessId } : { isActive: true },
+    select: { id: true },
+  });
+  if (input.businessId && targetBusinesses.length === 0) throw new AppError("Target business not found", 404);
+  const businessIds = targetBusinesses.map((business) => business.id);
+  const recipients = businessIds.length ? await prisma.user.findMany({
+    where: { businessId: { in: businessIds }, isActive: true, deletedAt: null },
+    select: { id: true, businessId: true },
+  }) : [];
+  if (recipients.length === 0) throw new AppError("No active business users are available to receive this message", 409);
+  const broadcastId = randomUUID();
+  await prisma.businessInboxMessage.createMany({
+    data: recipients.map((recipient) => ({
+      broadcastId, businessId: recipient.businessId!, userId: recipient.id,
+      title: input.title, body: input.body,
+      displayDurationMinutes: input.displayDurationMinutes,
+      publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+      createdByPlatformAdminId: input.actorUserId,
+    })),
+  });
+  await recordAuditEvent({
+    action: input.businessId ? "platform.message.sent_to_business" : "platform.message.broadcast",
+    entityType: "BUSINESS_INBOX_MESSAGE", entityId: broadcastId,
+    ...(input.businessId ? { businessId: input.businessId } : {}),
+    actorUserId: input.actorUserId,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    metadata: {
+      title: input.title, recipientCount: recipients.length,
+      businessCount: new Set(recipients.map((recipient) => recipient.businessId)).size,
+      publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+      displayDurationMinutes: input.displayDurationMinutes,
+    },
+  });
+  return {
+    broadcastId, recipientCount: recipients.length,
+    businessCount: new Set(recipients.map((recipient) => recipient.businessId)).size,
+    publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+  };
+}
+
+export async function listPlatformAnnouncements() {
+  const messages = await prisma.businessInboxMessage.findMany({
+    orderBy: { createdAt: "desc" }, take: 250,
+    select: {
+      broadcastId: true, title: true, body: true, publishedAt: true,
+      expiresAt: true, displayDurationMinutes: true, readAt: true,
+      dismissedAt: true, businessId: true, business: { select: { name: true } },
+    },
+  });
+  const grouped = new Map<string, {
+    broadcastId: string; title: string; body: string; publishedAt: Date;
+    expiresAt: Date | null; displayDurationMinutes: number; recipientCount: number;
+    readCount: number; dismissedCount: number; businesses: Set<string>;
+  }>();
+  for (const message of messages) {
+    const entry = grouped.get(message.broadcastId) ?? {
+      broadcastId: message.broadcastId, title: message.title, body: message.body,
+      publishedAt: message.publishedAt, expiresAt: message.expiresAt,
+      displayDurationMinutes: message.displayDurationMinutes, recipientCount: 0,
+      readCount: 0, dismissedCount: 0, businesses: new Set<string>(),
+    };
+    entry.recipientCount += 1;
+    if (message.readAt) entry.readCount += 1;
+    if (message.dismissedAt) entry.dismissedCount += 1;
+    entry.businesses.add(message.business.name);
+    grouped.set(message.broadcastId, entry);
+  }
+  return [...grouped.values()].map(({ businesses, ...entry }) => ({ ...entry, businessCount: businesses.size }));
 }

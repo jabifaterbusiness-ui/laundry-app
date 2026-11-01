@@ -166,6 +166,7 @@ model Business {
   backupSchedules              BackupSchedule[]
   backupConnections            BackupCloudConnection[]
   backupRuns                   BackupRun[]
+  inboxMessages                BusinessInboxMessage[]
 
   @@map("businesses")
 }
@@ -258,6 +259,7 @@ model User {
   expensesRecognized            Expense[]                     @relation("ExpenseRecognizer")
   financialStatementRecipients  FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
   inventoryMovementsCreated     InventoryMovement[]           @relation("InventoryMovementCreator")
+  inboxMessages                BusinessInboxMessage[]          @relation("BusinessInboxRecipient")
 
   customersStatusChanged       Customer[]              @relation("CustomerStatusChangedBy")
   customerStatusHistoryChanges CustomerStatusHistory[] @relation("CustomerStatusHistoryChangedBy")
@@ -2355,4 +2357,28 @@ model BackupRun {
   @@index([businessId, status, createdAt])
   @@index([connectionId, status])
   @@map("backup_runs")
+}
+
+
+model BusinessInboxMessage {
+  id                       String   @id @default(uuid())
+  broadcastId              String
+  businessId               String
+  business                 Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId                   String
+  user                     User     @relation("BusinessInboxRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  title                    String
+  body                     String   @db.Text
+  displayDurationMinutes   Int      @default(10)
+  publishedAt              DateTime @default(now())
+  expiresAt                DateTime?
+  readAt                   DateTime?
+  dismissedAt              DateTime?
+  createdByPlatformAdminId String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  @@index([businessId, userId, publishedAt])
+  @@index([userId, readAt, publishedAt])
+  @@index([broadcastId])
+  @@map("business_inbox_messages")
 }

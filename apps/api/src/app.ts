@@ -40,6 +40,7 @@ import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middlew
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
+import { inboxRouter } from "./modules/inbox/inbox.routes.js";
 import { requirePlatformOperational } from "./modules/platform/platform-controls.middleware.js";
 import { subscriptionPaymentWebhookRouter } from "./modules/subscriptions/subscription-payment-webhook.routes.js";
 
@@ -84,6 +85,8 @@ export function createApp() {
   // Platform Owner / Super-Admin routes intentionally bypass tenant context.
   // The platform router itself requires authenticated PLATFORM_ADMIN access.
   v1.use("/platform", platformRouter);
+  // Inbox remains available for subscription renewal and suspension notices.
+  v1.use("/inbox", requireAuth, inboxRouter);
   // Payment-provider webhooks are authenticated by provider signatures, not user JWTs.
   v1.use("/webhooks", subscriptionPaymentWebhookRouter);
 
