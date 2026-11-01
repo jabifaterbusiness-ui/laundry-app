@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     $queryRaw: vi.fn(),
-    businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn() },
+    businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     business: {
       count: vi.fn(),
       findMany: vi.fn(),
