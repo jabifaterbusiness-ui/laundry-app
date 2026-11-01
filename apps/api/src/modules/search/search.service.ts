@@ -63,6 +63,12 @@ export async function globalSearch(
                   contains: query,
                 },
               },
+              {
+                email: {
+                  contains: query,
+                  mode: "insensitive",
+                },
+              },
             ],
           },
           orderBy: {
@@ -73,6 +79,17 @@ export async function globalSearch(
             id: true,
             name: true,
             phone: true,
+            email: true,
+            ...(canViewOrders
+              ? {
+                  orders: {
+                    where: { branchId },
+                    orderBy: { createdAt: "desc" as const },
+                    take: 1,
+                    select: { id: true, orderNumber: true, status: true },
+                  },
+                }
+              : {}),
           },
         })
       : Promise.resolve([]),
@@ -153,8 +170,10 @@ export async function globalSearch(
       type: "CUSTOMER" as const,
       id: customer.id,
       title: customer.name,
-      subtitle: customer.phone,
-      href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
+      subtitle: [customer.phone, customer.email].filter(Boolean).join(" · "),
+      href: customer.orders?.[0]?.id
+        ? `/orders?orderId=${encodeURIComponent(customer.orders[0].id)}`
+        : `/orders?customerId=${encodeURIComponent(customer.id)}`,
     })),
 
     ...orders.map((order) => ({
