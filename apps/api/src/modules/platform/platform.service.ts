@@ -411,6 +411,7 @@ export async function listPlatformBusinesses() {
       isActive: true,
       suspendedUntil: true,
       suspensionReason: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       subscription: {
@@ -602,7 +603,7 @@ export async function setPlatformBusinessActiveStatus(
 
   await prisma.business.update({
     where: { id: businessId },
-    data: { isActive },
+    data: { isActive, ...(isActive ? { archivedAt: null } : {}) },
   });
 
   await recordAuditEvent({
@@ -833,4 +834,31 @@ export async function listPlatformAnnouncements() {
     grouped.set(message.broadcastId, entry);
   }
   return [...grouped.values()].map(({ businesses, ...entry }) => ({ ...entry, businessCount: businesses.size }));
+}
+
+
+export async function archivePlatformBusiness(businessId: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, name: true, isActive: true, archivedAt: true },
+  });
+  if (!business) throw new AppError("Business not found", 404);
+  if (business.isActive) throw new AppError("Deactivate the business before archiving it", 409);
+  if (business.archivedAt) throw new AppError("Business is already archived", 409);
+  const archivedAt = new Date();
+  const updated = await prisma.business.update({
+    where: { id: businessId },
+    data: { archivedAt },
+    select: { id: true, name: true, isActive: true, archivedAt: true, updatedAt: true },
+  });
+  await recordAuditEvent({
+    action: "platform.business.archived",
+    entityType: "Business",
+    entityId: businessId,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: { businessName: business.name, archivedAt },
+  });
+  return updated;
 }

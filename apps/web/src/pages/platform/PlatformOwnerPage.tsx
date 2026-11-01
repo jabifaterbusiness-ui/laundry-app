@@ -6,6 +6,7 @@ import {
   cancelPlatformBusinessSubscription,
   suspendPlatformBusiness,
   clearPlatformBusinessSuspension,
+  archivePlatformBusiness,
   getPlatformMessages,
   createPlatformMessage,
   renewPlatformBusinessSubscription,
@@ -249,6 +250,12 @@ export function PlatformOwnerPage() {
         error instanceof Error ? error.message : "Unable to cancel subscription.",
       );
     },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (businessId: string) => archivePlatformBusiness(businessId, accessToken),
+    onSuccess: async () => { setStatusFeedback("Business archived. It can be reactivated to restore access."); await refreshPlatformData(); },
+    onError: (error) => setStatusFeedback(error instanceof Error ? error.message : "Unable to archive business."),
   });
 
   const suspensionMutation = useMutation({
@@ -1513,6 +1520,21 @@ const subscriptionPriceDeleteMutation = useMutation({
                             ? "Deactivate"
                             : "Activate"}
                       </button>
+
+                      {!business.isActive && !business.archivedAt ? (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={archiveMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm("Archive " + business.name + "? The business must be deactivated first.")) archiveMutation.mutate(business.id);
+                          }}
+                        >
+                          {archiveMutation.isPending ? "Archiving…" : "Archive business"}
+                        </button>
+                      ) : business.archivedAt ? (
+                        <span className="platform-status inactive">Archived {formatDate(business.archivedAt)}</span>
+                      ) : null}
 
                       <button
                         type="button"

@@ -12,6 +12,7 @@ import {
   cancelBusinessSubscription,
   suspendBusiness,
   clearBusinessSuspension,
+  archiveBusiness,
   createPlatformMessage,
   listPlatformMessages,
   overview,
@@ -126,3 +127,5 @@ platformRouter.post("/businesses/:businessId/suspension/clear", asyncHandler(cle
 
 platformRouter.get("/messages", asyncHandler(listPlatformMessages));
 platformRouter.post("/messages", asyncHandler(createPlatformMessage));
+
+platformRouter.post("/businesses/:businessId/archive", asyncHandler(archiveBusiness));

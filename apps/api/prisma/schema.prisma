@@ -123,6 +123,7 @@ model Business {
   isActive         Boolean   @default(true)
   suspendedUntil   DateTime?
   suspensionReason String?
+  archivedAt       DateTime?
   createdAt        DateTime  @default(now())
   updatedAt DateTime @updatedAt
 

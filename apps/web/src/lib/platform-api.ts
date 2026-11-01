@@ -13,6 +13,7 @@ export interface PlatformBusiness {
   isActive: boolean;
   suspendedUntil?: string | null;
   suspensionReason?: string | null;
+  archivedAt?: string | null;
   owner?: {
     fullName: string;
     email: string;
@@ -575,4 +576,11 @@ export interface PlatformAnnouncement { broadcastId: string; title: string; body
 export async function getPlatformMessages(accessToken: string | null) { return apiFetch<PlatformAnnouncement[]>("/platform/messages", { accessToken }); }
 export async function createPlatformMessage(input: { title: string; body: string; businessId?: string; publishedAt?: string; expiresAt?: string; displayDurationMinutes: number }, accessToken: string | null) {
  return apiFetch<{ broadcastId: string; recipientCount: number; businessCount: number; publishedAt: string; expiresAt: string | null }>("/platform/messages", { method: "POST", accessToken, body: JSON.stringify(input) });
+}
+
+export async function archivePlatformBusiness(businessId: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; archivedAt: string; updatedAt: string }>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/archive`,
+    { method: "POST", accessToken },
+  );
 }

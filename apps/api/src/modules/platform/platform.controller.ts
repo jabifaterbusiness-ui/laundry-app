@@ -14,6 +14,7 @@ import {
   cancelPlatformBusinessSubscription,
   suspendPlatformBusiness,
   clearPlatformBusinessSuspension,
+  archivePlatformBusiness,
   createPlatformAnnouncement,
   listPlatformAnnouncements,
 } from "./platform.service.js";
@@ -496,4 +497,12 @@ export async function createPlatformMessage(req: Request, res: Response) {
 
 export async function listPlatformMessages(_req: Request, res: Response) {
   res.status(200).json(await listPlatformAnnouncements());
+}
+
+
+export async function archiveBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) throw new AppError("Business ID is required", 400);
+  if (!req.user) throw new AppError("Authentication required", 401);
+  res.status(200).json(await archivePlatformBusiness(businessId, req.user.id, req.correlationId));
 }
