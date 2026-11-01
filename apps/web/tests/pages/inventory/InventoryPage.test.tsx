@@ -114,21 +114,8 @@ function mockSuccessfulQueries() {
     },
   });
   mockListInventoryMovements.mockResolvedValue({
-    movements: [{
-      id: "movement-history-1",
-      businessId: "business-1",
-      branchId: "branch-1",
-      inventoryItemId: item.id,
-      quantity: 3,
-      type: "RECEIPT",
-      resultingQuantity: 12,
-      reason: "Supplier delivery",
-      reference: "PO-1001",
-      createdById: "user-1",
-      createdAt: "2026-09-07T10:00:00.000Z",
-      inventoryItem: item,
-    }],
-    pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    movements: [],
+    pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
   });
 }
 
@@ -199,6 +186,23 @@ describe("InventoryPage", () => {
   });
 
   it("shows the branch-scoped stock movement ledger", async () => {
+    mockListInventoryMovements.mockResolvedValue({
+      movements: [{
+        id: "movement-history-1",
+        businessId: "business-1",
+        branchId: "branch-1",
+        inventoryItemId: item.id,
+        quantity: 3,
+        type: "RECEIPT",
+        resultingQuantity: 12,
+        reason: "Supplier delivery",
+        reference: "PO-1001",
+        createdById: "user-1",
+        createdAt: "2026-09-07T10:00:00.000Z",
+        inventoryItem: item,
+      }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
     renderPage();
 
     expect(await screen.findByText("Stock Movement History")).toBeInTheDocument();

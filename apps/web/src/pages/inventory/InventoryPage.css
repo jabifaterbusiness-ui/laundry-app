@@ -79,3 +79,42 @@
   .inventory-workspace form { grid-template-columns: 1fr; }
   .inventory-workspace table { min-width: 560px; }
 }
+
+.inventory-workspace .inventory-ledger-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.inventory-workspace .inventory-ledger-heading h2 { margin-bottom: 6px; }
+.inventory-workspace .inventory-ledger-heading p {
+  margin: 0;
+  color: var(--inventory-muted);
+  font-size: 12px;
+}
+.inventory-workspace .inventory-ledger-heading label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: min(260px, 100%);
+  color: var(--inventory-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.inventory-workspace .inventory-ledger-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 16px;
+  color: var(--inventory-muted);
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .inventory-workspace .inventory-ledger-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .inventory-workspace .inventory-ledger-heading label { min-width: 0; }
+}

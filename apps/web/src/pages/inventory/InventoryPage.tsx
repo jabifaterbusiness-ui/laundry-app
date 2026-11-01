@@ -978,9 +978,9 @@ export function InventoryPage() {
               ? movementHistoryQuery.error.message
               : "Failed to load stock movement history."}
           </p>
-        ) : movementHistoryQuery.data.movements.length === 0 ? (
+        ) : movementHistoryQuery.isSuccess && movementHistoryQuery.data.movements.length === 0 ? (
           <p>No stock movements have been recorded for this selection.</p>
-        ) : (
+        ) : movementHistoryQuery.isSuccess ? (
           <>
             <table>
               <thead>
@@ -1030,7 +1030,7 @@ export function InventoryPage() {
               </div>
             ) : null}
           </>
-        )}
+        ) : null}
       </section>
     </main>
   );
