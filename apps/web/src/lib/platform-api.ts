@@ -570,3 +570,9 @@ export async function suspendPlatformBusiness(businessId: string, durationDays: 
 export async function clearPlatformBusinessSuspension(businessId: string, accessToken: string | null) {
   return apiFetch<{ id: string; name: string; isActive: boolean; suspendedUntil: null; suspensionReason: null; updatedAt: string }>(`/platform/businesses/${encodeURIComponent(businessId)}/suspension/clear`, { method: "POST", accessToken });
 }
+
+export interface PlatformAnnouncement { broadcastId: string; title: string; body: string; publishedAt: string; expiresAt: string | null; displayDurationMinutes: number; recipientCount: number; readCount: number; dismissedCount: number; businessCount: number; }
+export async function getPlatformMessages(accessToken: string | null) { return apiFetch<PlatformAnnouncement[]>("/platform/messages", { accessToken }); }
+export async function createPlatformMessage(input: { title: string; body: string; businessId?: string; publishedAt?: string; expiresAt?: string; displayDurationMinutes: number }, accessToken: string | null) {
+ return apiFetch<{ broadcastId: string; recipientCount: number; businessCount: number; publishedAt: string; expiresAt: string | null }>("/platform/messages", { method: "POST", accessToken, body: JSON.stringify(input) });
+}
