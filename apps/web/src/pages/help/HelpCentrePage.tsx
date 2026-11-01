@@ -13,7 +13,7 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Add services and prices, maintain the colour catalogue and inventory items, upload the business logo, set receipt appearance and review the default customer agreement.",
    "Set up your subscription, connect and verify a backup destination, then run a test backup. Create a test customer and order and print a sample receipt before going live.",
    "Before entering orders, confirm the active branch in the top bar. Staff assigned to several branches must choose the correct outlet."
-  ],links:[["Business settings","/business/settings"],["Branches","/branches"],["Price list","/services"],["Backup & migration","/data-management"]].map(([label,href])=>({label,href}))},
+  ],links:[{label:"Business settings",href:"/business/settings"},{label:"Branches",href:"/branches"},{label:"Price list",href:"/services"},{label:"Backup & migration",href:"/data-management"}]},
   {title:"Create a customer and an order",summary:"From customer lookup to an order and customer receipt.",steps:[
    "Open Orders and search for the customer by name or phone. Select an existing customer where possible to avoid duplicates. If no match exists, use the add-customer action and enter the customer's name and phone; email, address and notes are optional.",
    "Start the order, add the garments/services, quantities and available garment details, then review the calculated charges and save.",

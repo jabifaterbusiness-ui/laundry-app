@@ -142,13 +142,16 @@ describe("subscription service", () => {
   });
 
   it("extends an active subscription from its existing end date", async () => {
+    const existingEnd = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    const expectedEnd = new Date(existingEnd);
+    expectedEnd.setFullYear(expectedEnd.getFullYear() + 1);
     const existing = {
       id: "sub-1",
       businessId: "biz-1",
       plan: "MONTHLY",
       status: "ACTIVE",
       startsAt: new Date("2026-09-01T00:00:00.000Z"),
-      endsAt: new Date("2026-11-01T00:00:00.000Z"),
+      endsAt: existingEnd,
     };
 
     findUnique.mockResolvedValue(existing as never);
@@ -164,8 +167,8 @@ describe("subscription service", () => {
         update: expect.objectContaining({
           plan: "YEARLY",
           status: "ACTIVE",
-          startsAt: new Date("2026-11-01T00:00:00.000Z"),
-          endsAt: new Date("2027-11-01T00:00:00.000Z"),
+          startsAt: existingEnd,
+          endsAt: expectedEnd,
         }),
       }),
     );
