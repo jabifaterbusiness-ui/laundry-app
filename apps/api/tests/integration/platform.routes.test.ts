@@ -1170,7 +1170,7 @@ describe("Platform Owner routes - company status controls", () => {
 
     expect(prisma.business.update).toHaveBeenCalledWith({
       where: { id: "biz-A" },
-      data: { isActive: true },
+      data: { isActive: true, archivedAt: null },
     });
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
