@@ -9,6 +9,8 @@ import {
   deactivatePlatformBusiness,
   renewPlatformBusinessSubscription,
   cancelPlatformBusinessSubscription,
+  getPlatformMessages,
+  createPlatformMessage,
   getPlatformAuditLogs,
   getPlatformBusinesses,
   getPlatformBusinessDetails,
@@ -40,6 +42,8 @@ vi.mock("../../lib/platform-api.js", () => ({
   deactivatePlatformBusiness: vi.fn(),
   renewPlatformBusinessSubscription: vi.fn(),
   cancelPlatformBusinessSubscription: vi.fn(),
+  getPlatformMessages: vi.fn(),
+  createPlatformMessage: vi.fn(),
   getPlatformAuditLogs: vi.fn(),
   getPlatformBusinesses: vi.fn(),
     getPlatformBusinessDetails: vi.fn(),
@@ -70,6 +74,8 @@ const mockedRenewSubscription = vi.mocked(
   renewPlatformBusinessSubscription,
 );
 const mockedCancelSubscription = vi.mocked(cancelPlatformBusinessSubscription);
+const mockedMessages = vi.mocked(getPlatformMessages);
+const mockedCreateMessage = vi.mocked(createPlatformMessage);
 const mockedOverview = vi.mocked(getPlatformOverview);
 const mockedBusinesses = vi.mocked(getPlatformBusinesses);
 const mockedBusinessDetails = vi.mocked(getPlatformBusinessDetails);
@@ -325,6 +331,8 @@ beforeEach(() => {
     recentAuditLogs: [],
   });
   mockedAudits.mockResolvedValue([]);
+  mockedMessages.mockResolvedValue([]);
+  mockedCreateMessage.mockResolvedValue({ broadcastId: "broadcast-1", recipientCount: 2, businessCount: 1, publishedAt: "2026-11-01T00:00:00.000Z", expiresAt: null });
   mockedRevenue.mockResolvedValue(revenue);
   mockedGrowth.mockResolvedValue(growth);
   mockedGlobalStatistics.mockResolvedValue(globalStatistics);
