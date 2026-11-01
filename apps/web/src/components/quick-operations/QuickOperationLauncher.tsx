@@ -7,12 +7,12 @@ import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.j
 import { listOfflineSyncOperations } from "../../lib/offline-sync-queue.js";
 import {
   createCloudBackupRun,
-  exportBackup,
   getCloudBackupSettings,
   listCloudBackupConnections,
 } from "../../lib/data-management-api.js";
 import { publishCloudBackupNotification } from "../../lib/cloud-backup-notifications.js";
 import { useSensitiveAuthorization } from "../auth/SensitiveAuthorizationProvider.js";
+import { createManualLocalBackup } from "../data-management/LocalBackupManager.js";
 import {
   executeQuickOperation,
 } from "../../lib/quick-operations-api.js";
@@ -443,17 +443,15 @@ export function QuickOperationLauncher({
       }
 
       if (activeOperation.code === "MLB") {
-        const blob = await exportBackup(backupPassword, { accessToken });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        anchor.href = url;
-        anchor.download = `LaundryAngel_Backup_${timestamp}.laundry-backup`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setSuccess("Encrypted local backup generated. Check your browser's default download location.");
+        if (!user?.businessId) {
+          throw new Error("A business account is required to create a local backup.");
+        }
+        const backup = await createManualLocalBackup(
+          user.businessId,
+          backupPassword,
+          { accessToken },
+        );
+        setSuccess(`Encrypted local backup saved as ${backup.fileName} in ${backup.destination}.`);
         return;
       }
 
