@@ -26,6 +26,7 @@ describe("TableExportActions", () => {
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    vi.spyOn(window, "setTimeout").mockImplementation(((handler: TimerHandler) => { if (typeof handler === "function") handler(); return 1; }) as typeof window.setTimeout);
     const loadRows = vi.fn().mockResolvedValue([{ name: "Jane & John" }]);
 
     render(<TableExportActions
