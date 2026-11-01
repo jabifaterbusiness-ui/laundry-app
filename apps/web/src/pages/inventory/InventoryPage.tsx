@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./InventoryPage.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -348,10 +349,10 @@ export function InventoryPage() {
   }
 
   return (
-    <main>
-      <h1>Inventory</h1>
+    <main className="inventory-workspace">
+      <header className="inventory-header"><div><span className="inventory-eyebrow">OPERATIONS / CONTROL CENTRE</span><h1>Inventory Management</h1><p>Track your catalogue, branch stock levels and every stock movement in one place.</p></div><div className="inventory-header-meta"><span className="inventory-live-dot" /> Live branch data</div></header>
 
-      <section aria-label="Inventory items">
+      <section className="inventory-panel inventory-catalogue" aria-label="Inventory items">
         <h2>Inventory Items</h2>
 
         <div>
@@ -486,7 +487,7 @@ export function InventoryPage() {
       </section>
 
       {itemFormOpen && (
-        <section aria-label="Inventory item form">
+        <section className="inventory-panel inventory-editor" aria-label="Inventory item form">
           <h2>
             {editingItem
               ? "Edit inventory item"
@@ -596,7 +597,7 @@ export function InventoryPage() {
         </section>
       )}
 
-      <section aria-label="Current stock">
+      <section className="inventory-panel inventory-balances" aria-label="Current stock">
         <h2>Current Stock</h2>
 
         {!activeBranchId && (
@@ -702,7 +703,7 @@ export function InventoryPage() {
         )}
       </section>
 
-      <section aria-label="Stock movement">
+      <section className="inventory-panel inventory-movements" aria-label="Stock movement">
         <h2>Receive / Issue Stock</h2>
 
         <form onSubmit={submitMovement}>
@@ -821,7 +822,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section aria-label="Stock adjustment">
+      <section className="inventory-panel inventory-adjustments" aria-label="Stock adjustment">
         <h2>Adjust Stock</h2>
 
         <form onSubmit={submitAdjustment}>
