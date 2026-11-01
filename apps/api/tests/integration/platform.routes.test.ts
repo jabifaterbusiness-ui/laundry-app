@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     $queryRaw: vi.fn(),
+    businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn() },
     business: {
       count: vi.fn(),
       findMany: vi.fn(),
@@ -1639,5 +1640,69 @@ describe("Platform Owner routes - timed business suspension", () => {
     expect(invalid.status).toBe(422);
     expect(denied.status).toBe(403);
     expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - announcements and business inbox delivery", () => {
+  it("broadcasts a platform announcement to active business users and records delivery audit", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValue([
+      { id: "biz-A" },
+      { id: "biz-B" },
+    ] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      { id: "owner-A", businessId: "biz-A" },
+      { id: "staff-A", businessId: "biz-A" },
+      { id: "owner-B", businessId: "biz-B" },
+    ] as never);
+    vi.mocked(prisma.businessInboxMessage.createMany).mockResolvedValue({ count: 3 } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "Service update", body: "Scheduled maintenance tonight.", displayDurationMinutes: 10 });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(expect.objectContaining({
+      recipientCount: 3,
+      businessCount: 2,
+    }));
+    expect(prisma.businessInboxMessage.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([
+        expect.objectContaining({ businessId: "biz-A", userId: "owner-A", title: "Service update" }),
+        expect.objectContaining({ businessId: "biz-B", userId: "owner-B", title: "Service update" }),
+      ]),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("allows a platform admin to target one business and rejects tenant users", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValue([{ id: "biz-A" }] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([{ id: "owner-A", businessId: "biz-A" }] as never);
+    vi.mocked(prisma.businessInboxMessage.createMany).mockResolvedValue({ count: 1 } as never);
+
+    const denied = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ title: "Notice", body: "For your business only." });
+    expect(denied.status).toBe(403);
+
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "Direct notice", body: "For Laundry A.", businessId: "biz-A" });
+    expect(response.status).toBe(201);
+    expect(prisma.business.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "biz-A" },
+    }));
+  });
+
+  it("rejects invalid message content and popup duration", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "x", body: "Notice", displayDurationMinutes: 120 });
+    expect(response.status).toBe(422);
+    expect(prisma.businessInboxMessage.createMany).not.toHaveBeenCalled();
   });
 });
