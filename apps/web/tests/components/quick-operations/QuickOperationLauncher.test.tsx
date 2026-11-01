@@ -44,7 +44,7 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   createCloudBackupRun: createCloudBackupRunMock,
 }));
 
-vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.tsx", () => ({
   useSensitiveAuthorization: () => ({
     requestSensitiveAuthorization: requestSensitiveAuthorizationMock,
   }),
