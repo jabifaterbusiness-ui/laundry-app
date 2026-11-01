@@ -12,7 +12,7 @@ export type Role = (typeof ROLES)[number];
 export interface BranchMembership {
   id: string;
   name: string;
-  isActive: boolean;
+  isActive?: boolean;
 }
 
 export interface AuthenticatedUser {

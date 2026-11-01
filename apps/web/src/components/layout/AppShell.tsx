@@ -121,7 +121,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const setActiveBranch = useAuthStore((state) => state.setActiveBranch);
   const queryClient = useQueryClient();
-  const activeBranches = (user?.branches ?? []).filter((branch) => branch.isActive);
+  const activeBranches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
 
@@ -135,7 +135,7 @@ export function AppShell({ children }: PropsWithChildren) {
     useState<CloudBackupNotification | null>(null);
 
   useEffect(() => {
-    const branches = (user?.branches ?? []).filter((branch) => branch.isActive);
+    const branches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
     const currentIsValid = branches.some((branch) => branch.id === activeBranchId);
     if (activeBranchId && !currentIsValid) setActiveBranch(branches.length === 1 ? branches[0]!.id : null);
     else if (!activeBranchId && branches.length === 1) setActiveBranch(branches[0]!.id);
