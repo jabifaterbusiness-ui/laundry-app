@@ -155,6 +155,9 @@ model Business {
   financialStatementRecipients FinancialStatementRecipient[]
   financialStatements          FinancialStatement[]
   inventoryItems               InventoryItem[]
+  inventorySuppliers            InventorySupplier[]
+  inventoryPurchaseOrders       InventoryPurchaseOrder[]
+  inventoryGoodsReceipts        InventoryGoodsReceipt[]
   inventoryStocks              InventoryStock[]
   inventoryMovements           InventoryMovement[]
   businessRolePermissions      BusinessRolePermission[]
@@ -201,6 +204,8 @@ model Branch {
   financialRepayments   FinancialRepayment[]
   expenses              Expense[]
   inventoryStocks       InventoryStock[]
+  inventoryPurchaseOrders InventoryPurchaseOrder[]
+  inventoryGoodsReceipts InventoryGoodsReceipt[]
   inventoryMovements    InventoryMovement[]
   offlineSyncOperations OfflineSyncOperation[]
 
@@ -260,6 +265,8 @@ model User {
   expensesRecognized            Expense[]                     @relation("ExpenseRecognizer")
   financialStatementRecipients  FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
   inventoryMovementsCreated     InventoryMovement[]           @relation("InventoryMovementCreator")
+  inventoryPurchaseOrdersCreated InventoryPurchaseOrder[]      @relation("InventoryPurchaseOrderCreator")
+  inventoryGoodsReceiptsReceived InventoryGoodsReceipt[]       @relation("InventoryGoodsReceiptReceiver")
   inboxMessages                BusinessInboxMessage[]          @relation("BusinessInboxRecipient")
 
   customersStatusChanged       Customer[]              @relation("CustomerStatusChangedBy")
@@ -1178,6 +1185,8 @@ model InventoryItem {
 
   stocks    InventoryStock[]
   movements InventoryMovement[]
+  purchaseOrderLines InventoryPurchaseOrderLine[]
+  goodsReceiptLines InventoryGoodsReceiptLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1252,6 +1261,111 @@ model InventoryMovement {
   @@index([businessId, inventoryItemId, createdAt])
   @@index([createdById])
   @@map("inventory_movements")
+}
+
+enum InventoryPurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model InventorySupplier {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name String
+  contactName String?
+  email String?
+  phone String?
+  address String?
+  taxId String?
+  notes String?
+  isActive Boolean @default(true)
+  purchaseOrders InventoryPurchaseOrder[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+  @@map("inventory_suppliers")
+}
+
+model InventoryPurchaseOrder {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supplierId String
+  supplier InventorySupplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  orderNumber String
+  status InventoryPurchaseOrderStatus @default(DRAFT)
+  orderedAt DateTime?
+  expectedAt DateTime?
+  notes String?
+  createdById String
+  createdBy User @relation("InventoryPurchaseOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lines InventoryPurchaseOrderLine[]
+  receipts InventoryGoodsReceipt[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, orderNumber])
+  @@index([businessId, branchId, status, createdAt])
+  @@index([businessId, supplierId, createdAt])
+  @@map("inventory_purchase_orders")
+}
+
+model InventoryPurchaseOrderLine {
+  id String @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder InventoryPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantityOrdered Int
+  quantityReceived Int @default(0)
+  unitCost Int
+  createdAt DateTime @default(now())
+  goodsReceiptLines InventoryGoodsReceiptLine[]
+  @@unique([purchaseOrderId, inventoryItemId])
+  @@index([inventoryItemId])
+  @@map("inventory_purchase_order_lines")
+}
+
+model InventoryGoodsReceipt {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  purchaseOrderId String
+  purchaseOrder InventoryPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  receiptNumber String
+  receivedById String
+  receivedBy User @relation("InventoryGoodsReceiptReceiver", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAt DateTime @default(now())
+  notes String?
+  lines InventoryGoodsReceiptLine[]
+  createdAt DateTime @default(now())
+  @@unique([businessId, receiptNumber])
+  @@index([businessId, branchId, receivedAt])
+  @@index([purchaseOrderId, receivedAt])
+  @@map("inventory_goods_receipts")
+}
+
+model InventoryGoodsReceiptLine {
+  id String @id @default(uuid())
+  goodsReceiptId String
+  goodsReceipt InventoryGoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String
+  purchaseOrderLine InventoryPurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity Int
+  unitCost Int
+  createdAt DateTime @default(now())
+  @@index([inventoryItemId, createdAt])
+  @@map("inventory_goods_receipt_lines")
 }
 
 // ---------------------------------------------------------------------
