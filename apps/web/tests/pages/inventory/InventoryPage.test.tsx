@@ -372,6 +372,9 @@ describe("InventoryPage", () => {
     renderPage();
 
     await screen.findByRole("button", { name: "Detergent" });
+    const movementSection = screen.getByRole("region", {
+      name: "Stock movement",
+    });
 
     fireEvent.change(
       screen.getByLabelText("Movement"),
