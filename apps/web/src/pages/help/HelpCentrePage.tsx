@@ -92,7 +92,9 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
  {category:"Finance, payroll and oversight",intro:"Review business performance, staff pay and unusual activity.",guides:[
   {title:"Finance",summary:"Understand income, expenses and financial controls.",steps:[
    "Open Finance. Access is permission-controlled; reports.view and/or expenses.view may be required for the corresponding areas.",
-   "Use the expense workflow to record business costs with a meaningful category, date, amount, description and supporting reference. Follow the approval controls shown on the page and do not approve your own request where separation-of-duties controls apply.",
+   "Use the expense workflow to record business costs with a category, date, amount, description and supporting reference. Depending on your permission, expenses can be created, approved or rejected, recognised in the financial statement, or voided. These are separate actions and should follow the evidence and approval process.",
+   "The statement period controls the From and To dates. Financial overview shows gross invoiced revenue, refunds, net revenue, recognised expenses and profit/loss; the expense breakdown groups recognised costs by category.",
+   "Management can configure automatic daily and monthly financial statement delivery. Daily statements cover the previous local calendar day; monthly statements cover the previous month. Set the schedule time and enable Email and/or WhatsApp recipients where configured."
    "Review expenses alongside collections and revenue. Reconcile the application's records with bank/cash records and source documents regularly; summaries are an operational aid, not a replacement for accounting review."
   ],links:[{label:"Finance",href:"/finance"},{label:"Reports",href:"/reports"}]},
   {title:"Payroll: requests, approvals and payment",summary:"Process staff pay through controlled stages.",steps:[
@@ -124,17 +126,17 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
   {title:"Instant Local Backup",summary:"Create a backup immediately in a folder on this device.",steps:[
    "Open Backup & Data Migration and locate Instant Local Backup. Choose a local folder when prompted, then use the manual backup action to create a backup immediately.",
    "The browser must support the File System Access API and the site must use secure HTTPS (localhost is also treated as secure by modern browsers). The selected folder must remain accessible.",
-   "Instant Local Backup is user-triggered: it runs now and saves to the selected device folder. It is not a cloud backup and does not run while the browser/page is closed."
+   "Enter a backup encryption password of at least 12 characters, select a folder and run the manual backup. Instant Local Backup is user-triggered: it runs now and saves to the selected device folder. It is not a cloud backup and does not run while the browser/page is closed."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Local backup schedules",summary:"Run browser-managed backups on a recurring timetable.",steps:[
-   "Select a local folder first, then add a local schedule and choose the interval and time options offered by the page. Review the schedule list and its enabled/paused status.",
+   "Select a local folder and provide the backup password (at least 12 characters), then add a schedule. Local schedules support Daily, Weekly and Monthly intervals; choose the time and, where required, the weekday or day of month. Up to 10 local schedules can be stored on this device.",
    "Local schedules run only while the Backup page is open, the browser is running and the folder is accessible. They are not a server-side 24/7 scheduler. Keep the device powered and the page open during the scheduled window.",
    "Check local backup history after a run. If the browser reports that the folder is unavailable, reselect the folder and verify browser permissions."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Cloud backups and schedules",summary:"Store encrypted backups with a verified cloud destination.",steps:[
    "Connect a supported provider shown in the cloud backup section: Google Drive, Dropbox or OneDrive. Complete provider authorization/configuration and then run connection verification.",
    "A destination is selectable only when its status is Connected and it has a verification timestamp. A saved but unverified or errored connection is not a usable destination.",
-   "Choose the destination, configure available settings such as frequency, time zone and retention, save, and create a cloud schedule. Cloud schedules are server-managed, unlike browser-managed local schedules. You can also start a manual cloud backup.",
+   "Choose the destination, configure frequency (Daily, Weekly or Monthly), time, time zone and retention, save, and create a cloud schedule. Cloud schedules are server-managed, unlike browser-managed local schedules. You can also start a manual cloud backup and pause, resume or delete a schedule; deleting a schedule preserves existing backup history.",
    "Review run history for status and errors. A successful backup should be followed by a restore rehearsal in a safe environment. Keep provider credentials and backup passwords private."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Import from previous software: accepted files and current scope",summary:"Analyse a legacy backup before confirming an import.",steps:[
