@@ -12,6 +12,7 @@ import {
 } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { CustomerFormDialog } from "./CustomerFormDialog.js";
+import { TableExportActions } from "../../components/exports/TableExportActions.js";
 
 const PAGE_SIZE = 25;
 
@@ -117,12 +118,25 @@ export function CustomersPage() {
     }
   }
 
+  async function loadAllCustomersForExport(): Promise<Customer[]> {
+    const all: Customer[] = []; let pageNumber = 1; let totalPages = 1;
+    do {
+      const result = await listCustomers({ page: pageNumber, pageSize: 100, status: "all" }, { accessToken });
+      all.push(...result.data); totalPages = result.pagination.totalPages; pageNumber += 1;
+    } while (pageNumber <= totalPages);
+    return all;
+  }
   const customers = listQuery.data?.data ?? [];
   const pagination = listQuery.data?.pagination;
 
   return (
     <main>
       <h1>Customers</h1>
+      <TableExportActions title="Complete customer list" filename="laundryangel-customers" loadRows={loadAllCustomersForExport} columns={[
+        { header: "Customer name", value: (row) => row.name }, { header: "Phone", value: (row) => row.phone },
+        { header: "Email", value: (row) => row.email }, { header: "Address", value: (row) => row.address },
+        { header: "Status", value: (row) => row.lifecycleStatus }, { header: "Created", value: (row) => row.createdAt },
+      ]} />
 
       {offlineMessage && (
         <p role="status">

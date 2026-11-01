@@ -19,9 +19,9 @@ import { issueSensitiveAuthorization, revokeSensitiveAuthorizations } from "./se
 async function branchMemberships(userId: string) {
   const memberships = await prisma.userBranch.findMany({
     where: { userId },
-    include: { branch: { select: { id: true, name: true, businessId: true } } },
+    include: { branch: { select: { id: true, name: true, businessId: true, isActive: true } } },
   });
-  return memberships.map((m) => ({ id: m.branch.id, name: m.branch.name }));
+  return memberships.map((m) => ({ id: m.branch.id, name: m.branch.name, isActive: m.branch.isActive }));
 }
 
 const loginSchema = z.object({

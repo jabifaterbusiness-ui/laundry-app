@@ -28,6 +28,7 @@ import { SuspiciousActivityPage } from "./pages/security/SuspiciousActivityPage.
 import { BusinessSettingsPage } from "./pages/business/BusinessSettingsPage.js";
 import { BranchesPage } from "./pages/branches/BranchesPage.js";
 import { AccountPage } from "./pages/account/AccountPage.js";
+import { HelpCentrePage } from "./pages/help/HelpCentrePage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
@@ -66,6 +67,7 @@ function AuthenticatedLayout() {
           <Route path="/business/settings" element={<BusinessSettingsPage />} />
           <Route path="/branches" element={<BranchesPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/help" element={<HelpCentrePage />} />
         </Routes>
         </AppShell>
       </SensitiveAuthorizationProvider>

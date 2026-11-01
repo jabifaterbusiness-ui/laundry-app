@@ -100,8 +100,8 @@ const baseUser = {
 };
 
 const twoBranchMemberships = [
-  { id: "ub-1", userId: "user-1", branchId: "branch-1", createdAt: new Date(), branch: { id: "branch-1", name: "Main St", businessId: "biz-1" } },
-  { id: "ub-2", userId: "user-1", branchId: "branch-2", createdAt: new Date(), branch: { id: "branch-2", name: "Downtown", businessId: "biz-1" } },
+  { id: "ub-1", userId: "user-1", branchId: "branch-1", createdAt: new Date(), branch: { id: "branch-1", name: "Main St", businessId: "biz-1", isActive: true } },
+  { id: "ub-2", userId: "user-1", branchId: "branch-2", createdAt: new Date(), branch: { id: "branch-2", name: "Downtown", businessId: "biz-1", isActive: true } },
 ];
 
 function makeRes() {
@@ -395,8 +395,8 @@ describe("auth controller - multi-branch membership", () => {
 
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(payload.user.branches).toEqual([
-      { id: "branch-1", name: "Main St" },
-      { id: "branch-2", name: "Downtown" },
+      { id: "branch-1", name: "Main St", isActive: true },
+      { id: "branch-2", name: "Downtown", isActive: true },
     ]);
     expect(payload.user.permissions).toEqual([
       "orders.view",
