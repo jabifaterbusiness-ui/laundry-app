@@ -11,24 +11,25 @@ export function InboxPage() {
   const queryClient = useQueryClient();
   const inboxQuery = useQuery({ queryKey: ["business-inbox"], queryFn: () => getBusinessInbox(accessToken), enabled: Boolean(accessToken), refetchInterval: 60_000 });
   const [popupId, setPopupId] = useState<string | null>(null);
+  const [shownPopupIds, setShownPopupIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("");
   const activePopup = useMemo(() => inboxQuery.data?.messages.find((message) => !message.dismissedAt && !message.readAt && message.id === popupId) ?? null, [inboxQuery.data?.messages, popupId]);
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["business-inbox"] });
   const readMutation = useMutation({
     mutationFn: (id: string) => markBusinessInboxMessageRead(id, accessToken),
-    onSuccess: async () => { setFeedback("Message marked as read."); await refresh(); },
+    onSuccess: async () => { setPopupId(null); setFeedback("Message marked as read."); await refresh(); },
   });
   const dismissMutation = useMutation({
     mutationFn: (id: string) => dismissBusinessInboxMessage(id, accessToken),
     onSuccess: async () => { setPopupId(null); await refresh(); },
   });
   useEffect(() => {
-    const next = inboxQuery.data?.messages.find((message) => !message.readAt && !message.dismissedAt);
+    const next = inboxQuery.data?.messages.find((message) => !message.readAt && !message.dismissedAt && !shownPopupIds.includes(message.id));
     if (!popupId && next) setPopupId(next.id);
-  }, [inboxQuery.data?.messages, popupId]);
+  }, [inboxQuery.data?.messages, popupId, shownPopupIds]);
   useEffect(() => {
     if (!activePopup) return;
-    const timer = window.setTimeout(() => setPopupId(null), activePopup.displayDurationMinutes * 60_000);
+    const timer = window.setTimeout(() => { setShownPopupIds((current) => [...current, activePopup.id]); setPopupId(null); }, activePopup.displayDurationMinutes * 60_000);
     return () => window.clearTimeout(timer);
   }, [activePopup?.id, activePopup?.displayDurationMinutes]);
   const messages = inboxQuery.data?.messages ?? [];
