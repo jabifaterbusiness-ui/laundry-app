@@ -889,6 +889,23 @@ export async function permanentlyDeletePlatformBusiness(input: {
     throw new AppError(`Type DELETE ${business.slug} exactly to confirm permanent deletion`, 422);
   }
 
+  // Preserve financial and transactional history. Archiving remains available
+  // for businesses whose records are subject to retention requirements.
+  const retainedRecordCounts = await Promise.all([
+    prisma.order.count({ where: { businessId: business.id } }),
+    prisma.invoice.count({ where: { businessId: business.id } }),
+    prisma.payment.count({ where: { businessId: business.id } }),
+    prisma.customerAccountTransaction.count({ where: { businessId: business.id } }),
+    prisma.expense.count({ where: { businessId: business.id } }),
+    prisma.payrollRecord.count({ where: { businessId: business.id } }),
+    prisma.payrollPayment.count({ where: { businessId: business.id } }),
+    prisma.financialRepayment.count({ where: { businessId: business.id } }),
+    prisma.subscriptionPayment.count({ where: { businessId: business.id } }),
+  ]);
+  if (retainedRecordCounts.some((count) => count > 0)) {
+    throw new AppError("Permanent deletion is blocked because this business has financial or transactional records that must be retained. The archived business has not been changed.", 409);
+  }
+
   try {
     await prisma.business.delete({ where: { id: business.id } });
   } catch (error) {

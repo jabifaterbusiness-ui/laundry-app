@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db, audit, sensitiveAuth } = vi.hoisted(() => ({
   db: {
     business: { findUnique: vi.fn(), delete: vi.fn() },
+    order: { count: vi.fn() }, invoice: { count: vi.fn() }, payment: { count: vi.fn() },
+    customerAccountTransaction: { count: vi.fn() }, expense: { count: vi.fn() },
+    payrollRecord: { count: vi.fn() }, payrollPayment: { count: vi.fn() },
+    financialRepayment: { count: vi.fn() }, subscriptionPayment: { count: vi.fn() },
     sensitiveAuthorization: { update: vi.fn() },
   },
   audit: vi.fn(),
@@ -35,6 +39,7 @@ beforeEach(() => {
     archivedAt: new Date("2026-10-01T00:00:00.000Z"),
   });
   db.business.delete.mockResolvedValue({ id: "business-1" });
+  for (const model of [db.order, db.invoice, db.payment, db.customerAccountTransaction, db.expense, db.payrollRecord, db.payrollPayment, db.financialRepayment, db.subscriptionPayment]) model.count.mockResolvedValue(0);
   db.sensitiveAuthorization.update.mockResolvedValue({});
   audit.mockResolvedValue(undefined);
 });
