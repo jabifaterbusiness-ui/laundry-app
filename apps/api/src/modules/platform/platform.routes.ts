@@ -130,4 +130,5 @@ platformRouter.get("/messages", asyncHandler(listPlatformMessages));
 platformRouter.post("/messages", asyncHandler(createPlatformMessage));
 
 platformRouter.post("/businesses/:businessId/archive", asyncHandler(archiveBusiness));
-\nplatformRouter.delete("/businesses/:businessId/permanent", asyncHandler(permanentlyDeleteBusiness));\n
+
+platformRouter.delete("/businesses/:businessId/permanent", asyncHandler(permanentlyDeleteBusiness));

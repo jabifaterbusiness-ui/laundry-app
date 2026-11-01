@@ -15,6 +15,7 @@ import {
   suspendPlatformBusiness,
   clearPlatformBusinessSuspension,
   archivePlatformBusiness,
+  permanentlyDeletePlatformBusiness,
   createPlatformAnnouncement,
   listPlatformAnnouncements,
 } from "./platform.service.js";
