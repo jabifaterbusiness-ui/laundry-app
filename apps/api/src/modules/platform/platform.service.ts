@@ -81,6 +81,9 @@ export async function getPlatformOverview() {
             status: true,
             startsAt: true,
             endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
           },
         },
         users: {
@@ -414,6 +417,9 @@ export async function listPlatformBusinesses() {
           status: true,
           startsAt: true,
           endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
         },
       },
       users: {
@@ -480,6 +486,9 @@ export async function getPlatformBusinessDetails(businessId: string) {
           status: true,
           startsAt: true,
           endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
         },
       },
       _count: {

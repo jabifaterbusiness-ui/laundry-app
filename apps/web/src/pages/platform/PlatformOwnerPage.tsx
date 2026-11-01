@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
+  cancelPlatformBusinessSubscription,
   renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
@@ -196,6 +197,32 @@ export function PlatformOwnerPage() {
         error instanceof Error
           ? error.message
           : "Unable to create or renew the company subscription.",
+      );
+    },
+  });
+
+
+  const subscriptionCancellationMutation = useMutation({
+    mutationFn: async ({
+      businessId,
+      when,
+      reason,
+    }: {
+      businessId: string;
+      when: "IMMEDIATE" | "PERIOD_END";
+      reason: string;
+    }) => cancelPlatformBusinessSubscription(businessId, when, reason, accessToken),
+    onSuccess: async (_, variables) => {
+      setSubscriptionFeedback(
+        variables.when === "IMMEDIATE"
+          ? "Subscription cancelled immediately."
+          : "Subscription cancellation scheduled for the paid-through date.",
+      );
+      await refreshPlatformData();
+    },
+    onError: (error) => {
+      setSubscriptionFeedback(
+        error instanceof Error ? error.message : "Unable to cancel subscription.",
       );
     },
   });
@@ -575,6 +602,19 @@ const subscriptionPriceDeleteMutation = useMutation({
     }
 
     subscriptionMutation.mutate(businessId);
+  };
+
+
+  const handleSubscriptionCancellation = (
+    businessId: string,
+    businessName: string,
+    when: "IMMEDIATE" | "PERIOD_END",
+  ) => {
+    const timing = when === "IMMEDIATE" ? "immediately" : "at the end of the paid period";
+    if (!window.confirm(`Cancel ${businessName}'s subscription ${timing}?`)) return;
+    const reason = window.prompt("Enter the reason for this cancellation:");
+    if (!reason || reason.trim().length < 3) return;
+    subscriptionCancellationMutation.mutate({ businessId, when, reason: reason.trim() });
   };
 
   return (
@@ -1448,6 +1488,26 @@ const subscriptionPriceDeleteMutation = useMutation({
                             ? "Renew Monthly"
                             : "Create Monthly Subscription"}
                       </button>
+                      {business.subscription && business.subscription.status !== "CANCELLED" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            disabled={subscriptionCancellationMutation.isPending}
+                            onClick={() => handleSubscriptionCancellation(business.id, business.name, "PERIOD_END")}
+                          >
+                            Cancel at period end
+                          </button>
+                          <button
+                            type="button"
+                            className="button button-danger"
+                            disabled={subscriptionCancellationMutation.isPending}
+                            onClick={() => handleSubscriptionCancellation(business.id, business.name, "IMMEDIATE")}
+                          >
+                            Cancel now
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </article>

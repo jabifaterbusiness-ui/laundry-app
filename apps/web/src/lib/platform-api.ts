@@ -20,7 +20,10 @@ export interface PlatformBusiness {
   subscription: {
     id: string;
     plan: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-    status: "ACTIVE" | "EXPIRED";
+    status: "ACTIVE" | "EXPIRED" | "CANCELLED";
+    cancelAtPeriodEnd?: boolean;
+    cancelledAt?: string | null;
+    cancellationReason?: string | null;
     startsAt: string;
     endsAt: string;
   } | null;
@@ -536,6 +539,23 @@ export async function renewPlatformBusinessSubscription(
       method: "POST",
       accessToken,
       body: JSON.stringify({ plan }),
+    },
+  );
+}
+
+
+export async function cancelPlatformBusinessSubscription(
+  businessId: string,
+  when: "IMMEDIATE" | "PERIOD_END",
+  reason: string,
+  accessToken: string | null,
+) {
+  return apiFetch<NonNullable<PlatformBusiness["subscription"]>>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/subscription/cancel`,
+    {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ when, reason }),
     },
   );
 }
