@@ -13,6 +13,12 @@ import {
   type InventoryItem,
   type InventoryMovement,
   type InventoryUnit,
+  createInventorySupplier,
+  listInventorySuppliers,
+  createInventoryPurchaseOrder,
+  listInventoryPurchaseOrders,
+  receiveInventoryPurchaseOrder,
+  type InventoryPurchaseOrder,
 } from "../../lib/inventory-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -240,6 +246,61 @@ export function InventoryPage() {
       );
     },
   });
+
+
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierEmail, setSupplierEmail] = useState("");
+  const [poSupplierId, setPoSupplierId] = useState("");
+  const [poItemId, setPoItemId] = useState("");
+  const [poNumber, setPoNumber] = useState("");
+  const [poQuantity, setPoQuantity] = useState("1");
+  const [poUnitCost, setPoUnitCost] = useState("0");
+  const [receiveOrderId, setReceiveOrderId] = useState("");
+  const [receiveLineId, setReceiveLineId] = useState("");
+  const [receiveQuantity, setReceiveQuantity] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [procurementError, setProcurementError] = useState<string | null>(null);
+
+  const suppliersQuery = useQuery({
+    queryKey: ["inventory", "suppliers"],
+    queryFn: () => listInventorySuppliers({ page: 1, pageSize: 100 }, { accessToken }),
+  });
+  const purchaseOrdersQuery = useQuery({
+    queryKey: ["inventory", "purchase-orders", activeBranchId],
+    enabled: Boolean(activeBranchId),
+    queryFn: () => listInventoryPurchaseOrders({ page: 1, pageSize: 50 }, { accessToken }, activeBranchId),
+  });
+  const supplierMutation = useMutation({
+    mutationFn: () => createInventorySupplier({ name: supplierName.trim(), phone: supplierPhone.trim() || undefined, email: supplierEmail.trim() || undefined }, { accessToken }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "suppliers"] }); setSupplierName(""); setSupplierPhone(""); setSupplierEmail(""); setProcurementError(null); },
+    onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to save supplier."),
+  });
+  const purchaseOrderMutation = useMutation({
+    mutationFn: () => createInventoryPurchaseOrder({
+      supplierId: poSupplierId, orderNumber: poNumber.trim(),
+      lines: [{ inventoryItemId: poItemId, quantityOrdered: Number(poQuantity), unitCost: Number(poUnitCost) }],
+    }, { accessToken }, activeBranchId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoQuantity("1"); setPoUnitCost("0"); setProcurementError(null); },
+    onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to create purchase order."),
+  });
+  const receiveMutation = useMutation({
+    mutationFn: () => receiveInventoryPurchaseOrder(receiveOrderId, {
+      receiptNumber: receiptNumber.trim(),
+      lines: [{ purchaseOrderLineId: receiveLineId, quantity: Number(receiveQuantity) }],
+    }, { accessToken }, activeBranchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      setReceiveOrderId(""); setReceiveLineId(""); setReceiveQuantity(""); setReceiptNumber(""); setProcurementError(null);
+    },
+    onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to record goods receipt."),
+  });
+  const suppliers = suppliersQuery.data?.suppliers ?? [];
+  const purchaseOrders = purchaseOrdersQuery.data?.purchaseOrders ?? [];
+  const selectedReceiveOrder = purchaseOrders.find((order: InventoryPurchaseOrder) => order.id === receiveOrderId);
+  const outstandingReceiptLines = selectedReceiveOrder?.lines.filter((line) => line.quantityReceived < line.quantityOrdered) ?? [];
 
   const items = itemsQuery.data?.items ?? [];
   const itemPagination = itemsQuery.data?.pagination;
