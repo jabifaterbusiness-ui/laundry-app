@@ -12,6 +12,7 @@ import {
   listCloudBackupConnections,
 } from "../../lib/data-management-api.js";
 import { publishCloudBackupNotification } from "../../lib/cloud-backup-notifications.js";
+import { useSensitiveAuthorization } from "../auth/SensitiveAuthorizationProvider.js";
 import {
   executeQuickOperation,
 } from "../../lib/quick-operations-api.js";
@@ -136,6 +137,7 @@ export function QuickOperationLauncher({
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const user = useAuthStore((state) => state.user);
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const workspaces = useOrderWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useOrderWorkspaceStore(
@@ -469,7 +471,14 @@ export function QuickOperationLauncher({
         if (!destination) {
           throw new Error("No verified cloud destination is available. Connect and verify a cloud provider in Backup & Data Management before using MCB.");
         }
-        const run = await createCloudBackupRun(destination.id, { accessToken });
+        const authorization = await requestSensitiveAuthorization();
+        if (!authorization) {
+          throw new Error("Sensitive authorization was cancelled. No cloud backup was started.");
+        }
+        const run = await createCloudBackupRun(destination.id, {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        });
         publishCloudBackupNotification({
           status: run.status === "SUCCEEDED" ? "success" : "error",
           title: "Manual cloud backup",
