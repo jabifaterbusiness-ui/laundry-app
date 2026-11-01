@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
+import "./AppShell.css";
 import "../exports/TableExportActions.css";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useWorkstationModeStore } from "../../state/workstation-mode-store.js";
+import { getBusinessInbox } from "../../lib/inbox-api.js";
 import {
   CLOUD_BACKUP_NOTIFICATION_EVENT,
   type CloudBackupNotification,
@@ -120,8 +122,16 @@ export function AppShell({ children }: PropsWithChildren) {
   const clearSession = useAuthStore((state) => state.clearSession);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const setActiveBranch = useAuthStore((state) => state.setActiveBranch);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const queryClient = useQueryClient();
   const activeBranches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
+  const inboxQuery = useQuery({
+    queryKey: ["business-inbox"],
+    queryFn: () => getBusinessInbox(accessToken),
+    enabled: Boolean(accessToken && user?.businessId),
+    refetchInterval: 60_000,
+  });
+  const inboxUnreadCount = inboxQuery.data?.unreadCount ?? 0;
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
 
@@ -501,6 +511,11 @@ export function AppShell({ children }: PropsWithChildren) {
                 );
               })}
             </section>
+            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
+              <span className="nav-icon" aria-hidden="true">✉</span>
+              <span>Inbox</span>
+              {inboxUnreadCount > 0 ? <span className="inbox-unread-badge">{inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}</span> : null}
+            </Link>
 
             <section className="nav-section management-section">
               <h2>Management</h2>
