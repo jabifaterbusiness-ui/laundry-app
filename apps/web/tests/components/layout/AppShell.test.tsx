@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { AppShell } from "../../../src/components/layout/AppShell.js";
+import { SensitiveAuthorizationProvider } from "../../../src/components/auth/SensitiveAuthorizationProvider.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import { CLOUD_BACKUP_NOTIFICATION_EVENT } from "../../../src/lib/cloud-backup-notifications.js";
 
@@ -40,9 +41,11 @@ function renderShell(initialEntry = "/") {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialEntry]}>
-        <AppShell>
-          <div>Current page content</div>
-        </AppShell>
+        <SensitiveAuthorizationProvider>
+          <AppShell>
+            <div>Current page content</div>
+          </AppShell>
+        </SensitiveAuthorizationProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
