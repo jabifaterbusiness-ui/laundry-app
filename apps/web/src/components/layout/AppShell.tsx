@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
+import "../exports/TableExportActions.css";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { hasPermission } from "../../lib/permissions.js";
@@ -116,6 +118,10 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const user = useAuthStore((state) => state.user);
   const clearSession = useAuthStore((state) => state.clearSession);
+  const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const setActiveBranch = useAuthStore((state) => state.setActiveBranch);
+  const queryClient = useQueryClient();
+  const activeBranches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
 
@@ -127,6 +133,17 @@ export function AppShell({ children }: PropsWithChildren) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloudBackupNotification, setCloudBackupNotification] =
     useState<CloudBackupNotification | null>(null);
+
+  useEffect(() => {
+    const branches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
+    const currentIsValid = branches.some((branch) => branch.id === activeBranchId);
+    if (activeBranchId && !currentIsValid) setActiveBranch(branches.length === 1 ? branches[0]!.id : null);
+    else if (!activeBranchId && branches.length === 1) setActiveBranch(branches[0]!.id);
+  }, [user?.branches, activeBranchId, setActiveBranch]);
+
+  useEffect(() => {
+    void queryClient.invalidateQueries();
+  }, [activeBranchId, queryClient]);
 
   useEffect(() => {
     function handleQuickOperationOpen(event: Event) {
@@ -284,6 +301,15 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
 
           <div className="topbar-user">
+            {activeBranches.length > 0 ? (
+              <label className="branch-context-switcher">
+                <span>Branch</span>
+                <select aria-label="Active branch" value={activeBranchId ?? ""} onChange={(event) => setActiveBranch(event.target.value || null)}>
+                  {activeBranches.length > 1 ? <option value="">Choose branch…</option> : null}
+                  {activeBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+              </label>
+            ) : null}
             <div
               className="app-mode-switch"
               aria-label="Application mode"
@@ -583,6 +609,11 @@ export function AppShell({ children }: PropsWithChildren) {
               ) : null}
             </section>
           </nav>
+
+          <Link to="/help" className={`nav-item help-nav-item ${isActive("/help") ? "active" : ""}`} onClick={closeMobileNav}>
+            <span className="nav-icon" aria-hidden="true">?</span>
+            <span>Help Centre</span>
+          </Link>
 
           <div className="sidebar-footer">
             <div className="sidebar-footer-mark">LA</div>

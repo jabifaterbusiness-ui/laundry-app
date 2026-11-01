@@ -10,6 +10,7 @@ import {
   type Service,
 } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { TableExportActions } from "../../components/exports/TableExportActions.js";
 
 const EMPTY_FORM: CreateServiceInput = {
   name: "",
@@ -120,11 +121,19 @@ export function ServicesPage() {
     });
   }
 
+  async function loadAllServicesForExport(): Promise<Service[]> {
+    const result = await listServices({ status: "all" }, { accessToken }); return result.data;
+  }
   const services = servicesQuery.data?.data ?? [];
 
   return (
     <main>
       <h1>Services & Price List</h1>
+      <TableExportActions title="Complete services and price list" filename="laundryangel-price-list" loadRows={loadAllServicesForExport} columns={[
+        { header: "Service / item", value: (row) => row.name }, { header: "Pieces", value: (row) => row.pieces },
+        { header: "Unit price (NGN)", value: (row) => row.unitPrice }, { header: "Status", value: (row) => row.isActive ? "Active" : "Inactive" },
+        { header: "Last updated", value: (row) => row.updatedAt },
+      ]} />
 
       <div>
         <input

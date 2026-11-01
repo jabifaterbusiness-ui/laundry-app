@@ -14,7 +14,7 @@ beforeEach(() => {
       fullName: "Test User",
       role: "STAFF",
       businessId: "business-1",
-      branches: [{ id: "branch-1", name: "Main Branch" }],
+      branches: [{ id: "branch-1", name: "Main Branch", isActive: true }],
       permissions: [
         "customers.view",
         "orders.view",
@@ -66,6 +66,33 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("link", { name: "Services & Price List" }),
     ).toBeInTheDocument();
+  });
+
+
+  it("lets a user switch only between their active branch memberships", () => {
+    useAuthStore.setState({
+      user: {
+        id: "user-1",
+        email: "test@example.com",
+        fullName: "Test User",
+        role: "STAFF",
+        businessId: "business-1",
+        branches: [
+          { id: "branch-1", name: "Main Branch", isActive: true },
+          { id: "branch-2", name: "Downtown", isActive: true },
+          { id: "branch-3", name: "Closed Outlet", isActive: false },
+        ],
+        permissions: ["orders.view"],
+      },
+      activeBranchId: "branch-1",
+    });
+    renderShell();
+    const selector = screen.getByLabelText("Active branch");
+    expect(selector).toHaveValue("branch-1");
+    expect(screen.getByRole("option", { name: "Downtown" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Closed Outlet" })).not.toBeInTheDocument();
+    fireEvent.change(selector, { target: { value: "branch-2" } });
+    expect(useAuthStore.getState().activeBranchId).toBe("branch-2");
   });
 
   it("renders the current page content", () => {
