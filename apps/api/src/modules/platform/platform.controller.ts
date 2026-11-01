@@ -490,7 +490,8 @@ export async function createPlatformMessage(req: Request, res: Response) {
     title: body.title.trim(), body: body.body.trim(),
     businessId: typeof body.businessId === "string" ? body.businessId : null,
     publishedAt, expiresAt, displayDurationMinutes: duration,
-    actorUserId: req.user.id, correlationId: req.correlationId,
+    actorUserId: req.user.id,
+    ...(req.correlationId ? { correlationId: req.correlationId } : {}),
   });
   res.status(201).json(result);
 }
