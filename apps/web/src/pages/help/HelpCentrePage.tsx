@@ -96,7 +96,8 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Expenses move through controlled states such as Draft, Pending, Approved, Rejected and Void. Depending on your permission, you can create, approve/reject, recognise or void an expense. These are separate actions and should follow the evidence and approval process.",
    "Only recognised expenses are included in the financial statement. The expense list lets you filter by category and status and review the recognised date and approving/recognising user.",
    "The statement period controls the From and To dates. Financial overview shows gross invoiced revenue, refunds, net revenue, recognised expenses and profit/loss; the expense breakdown groups recognised costs by category.",
-   "Management can configure automatic daily and monthly financial statement delivery. Daily statements cover the previous local calendar day; monthly statements cover the previous month. Set the schedule time and enable Email and/or WhatsApp recipients where configured."
+   "Management can configure automatic daily and monthly financial statement delivery. Daily statements cover the previous local calendar day; monthly statements cover the previous month. Set the schedule time and enable Email and/or WhatsApp recipients where configured.",
+   "Only enabled recipients receive scheduled statements, and the active Business Owner must remain an authorised recipient.",
    "Review expenses alongside collections and revenue. Reconcile the application's records with bank/cash records and source documents regularly; summaries are an operational aid, not a replacement for accounting review."
   ],links:[{label:"Finance",href:"/finance"},{label:"Reports",href:"/reports"}]},
   {title:"Payroll: requests, approvals and payment",summary:"Process staff pay through controlled stages.",steps:[
