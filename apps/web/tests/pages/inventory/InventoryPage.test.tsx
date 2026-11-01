@@ -11,6 +11,7 @@ const mockListInventoryItems = vi.fn();
 const mockCreateInventoryItem = vi.fn();
 const mockUpdateInventoryItem = vi.fn();
 const mockListInventoryStock = vi.fn();
+const mockListInventoryMovements = vi.fn();
 const mockCreateInventoryMovement = vi.fn();
 const mockAdjustInventoryStock = vi.fn();
 
@@ -23,6 +24,8 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
     mockUpdateInventoryItem(...args),
   listInventoryStock: (...args: unknown[]) =>
     mockListInventoryStock(...args),
+  listInventoryMovements: (...args: unknown[]) =>
+    mockListInventoryMovements(...args),
   createInventoryMovement: (...args: unknown[]) =>
     mockCreateInventoryMovement(...args),
   adjustInventoryStock: (...args: unknown[]) =>
@@ -110,6 +113,23 @@ function mockSuccessfulQueries() {
       totalPages: 1,
     },
   });
+  mockListInventoryMovements.mockResolvedValue({
+    movements: [{
+      id: "movement-history-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      inventoryItemId: item.id,
+      quantity: 3,
+      type: "RECEIPT",
+      resultingQuantity: 12,
+      reason: "Supplier delivery",
+      reference: "PO-1001",
+      createdById: "user-1",
+      createdAt: "2026-09-07T10:00:00.000Z",
+      inventoryItem: item,
+    }],
+    pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+  });
 }
 
 beforeEach(() => {
@@ -172,6 +192,21 @@ describe("InventoryPage", () => {
           page: 1,
           pageSize: 25,
         },
+        { accessToken: "test-token" },
+        "branch-1",
+      );
+    });
+  });
+
+  it("shows the branch-scoped stock movement ledger", async () => {
+    renderPage();
+
+    expect(await screen.findByText("Stock Movement History")).toBeInTheDocument();
+    expect(await screen.findByText("Supplier delivery")).toBeInTheDocument();
+    expect(screen.getByText("PO-1001")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockListInventoryMovements).toHaveBeenCalledWith(
+        { inventoryItemId: undefined, page: 1, pageSize: 20 },
         { accessToken: "test-token" },
         "branch-1",
       );

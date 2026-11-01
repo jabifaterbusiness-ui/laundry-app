@@ -8,8 +8,10 @@ import {
   createInventoryMovement,
   listInventoryItems,
   listInventoryStock,
+  listInventoryMovements,
   updateInventoryItem,
   type InventoryItem,
+  type InventoryMovement,
   type InventoryUnit,
 } from "../../lib/inventory-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -38,8 +40,10 @@ function formatUnit(unit: InventoryUnit) {
   return unit.charAt(0) + unit.slice(1).toLowerCase();
 }
 
-function formatMovementType(type: MovementType) {
-  return type === "RECEIPT" ? "Receive" : "Issue";
+function formatMovementType(type: MovementType | "ADJUSTMENT") {
+  if (type === "RECEIPT") return "Receive";
+  if (type === "ISSUE") return "Issue";
+  return "Adjustment";
 }
 
 export function InventoryPage() {
@@ -59,6 +63,8 @@ export function InventoryPage() {
 
   const [stockPage, setStockPage] = useState(1);
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [movementHistoryPage, setMovementHistoryPage] = useState(1);
+  const [movementHistoryItemId, setMovementHistoryItemId] = useState("");
 
   const [movementType, setMovementType] =
     useState<MovementType>("RECEIPT");
@@ -160,6 +166,20 @@ export function InventoryPage() {
     },
   });
 
+  const movementHistoryQuery = useQuery({
+    queryKey: ["inventory", "movements", { activeBranchId, movementHistoryPage, movementHistoryItemId }],
+    enabled: Boolean(activeBranchId),
+    queryFn: () => listInventoryMovements(
+      {
+        inventoryItemId: movementHistoryItemId || undefined,
+        page: movementHistoryPage,
+        pageSize: 20,
+      },
+      { accessToken },
+      activeBranchId,
+    ),
+  });
+
   const movementMutation = useMutation({
     mutationFn: () =>
       createInventoryMovement(
@@ -176,6 +196,9 @@ export function InventoryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["inventory", "stock"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["inventory", "movements"],
       });
       resetMovementForm();
     },
@@ -203,6 +226,9 @@ export function InventoryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["inventory", "stock"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["inventory", "movements"],
       });
       resetAdjustmentForm();
     },
@@ -915,6 +941,96 @@ export function InventoryPage() {
             Clear
           </button>
         </form>
+      </section>
+
+      <section className="inventory-panel inventory-ledger" aria-label="Stock movement history">
+        <div className="inventory-ledger-heading">
+          <div>
+            <h2>Stock Movement History</h2>
+            <p>Auditable, branch-specific record of receipts, issues and adjustments.</p>
+          </div>
+          <label>
+            Filter by item
+            <select
+              aria-label="Filter movement history by item"
+              value={movementHistoryItemId}
+              onChange={(event) => {
+                setMovementHistoryItemId(event.target.value);
+                setMovementHistoryPage(1);
+              }}
+              disabled={!activeBranchId}
+            >
+              <option value="">All inventory items</option>
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {!activeBranchId ? (
+          <p>Select an active branch to view movement history.</p>
+        ) : movementHistoryQuery.isLoading ? (
+          <p>Loading movement history...</p>
+        ) : movementHistoryQuery.isError ? (
+          <p role="alert">
+            {movementHistoryQuery.error instanceof ApiError
+              ? movementHistoryQuery.error.message
+              : "Failed to load stock movement history."}
+          </p>
+        ) : movementHistoryQuery.data.movements.length === 0 ? (
+          <p>No stock movements have been recorded for this selection.</p>
+        ) : (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date &amp; time</th>
+                  <th>Item</th>
+                  <th>Movement</th>
+                  <th>Quantity</th>
+                  <th>Balance after</th>
+                  <th>Reason</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movementHistoryQuery.data.movements.map((movement: InventoryMovement) => (
+                  <tr key={movement.id}>
+                    <td>{new Date(movement.createdAt).toLocaleString()}</td>
+                    <td>{movement.inventoryItem?.name ?? "Inventory item"}</td>
+                    <td>{formatMovementType(movement.type)}</td>
+                    <td>{movement.quantity > 0 ? "+" : ""}{movement.quantity}</td>
+                    <td>{movement.resultingQuantity}</td>
+                    <td>{movement.reason ?? "—"}</td>
+                    <td>{movement.reference ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {movementHistoryQuery.data.pagination.totalPages > 1 ? (
+              <div className="inventory-ledger-pagination">
+                <button
+                  type="button"
+                  disabled={movementHistoryPage <= 1}
+                  onClick={() => setMovementHistoryPage((current) => current - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {movementHistoryQuery.data.pagination.page} of {movementHistoryQuery.data.pagination.totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={movementHistoryPage >= movementHistoryQuery.data.pagination.totalPages}
+                  onClick={() => setMovementHistoryPage((current) => current + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
       </section>
     </main>
   );
