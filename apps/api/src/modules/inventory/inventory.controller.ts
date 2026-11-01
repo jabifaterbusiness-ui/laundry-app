@@ -9,6 +9,7 @@ import {
   listInventoryStockQuerySchema,
   createInventoryMovementSchema,
   adjustInventoryStockSchema,
+  listInventoryMovementsQuerySchema,
 } from "./inventory.validation.js";
 import {
   createInventoryItem,
@@ -17,6 +18,7 @@ import {
   listInventoryStock,
   createInventoryMovement,
   adjustInventoryStock,
+  listInventoryMovements,
 } from "./inventory.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -269,4 +271,21 @@ export async function adjustStock(
   res.status(201).json({
     data: result,
   });
+}
+
+
+export async function listMovements(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const query = listInventoryMovementsQuerySchema.parse(req.query);
+  const result = await listInventoryMovements(
+    { businessId, branchId },
+    {
+      page: query.page,
+      pageSize: query.pageSize,
+      ...(query.inventoryItemId ? { inventoryItemId: query.inventoryItemId } : {}),
+      ...(query.type ? { type: query.type } : {}),
+    },
+  );
+  res.status(200).json(result);
 }
