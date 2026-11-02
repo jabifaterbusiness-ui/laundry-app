@@ -266,15 +266,13 @@ describe("Inventory routes - business-wide reporting", () => {
       .set("Authorization", `Bearer ${OWNER_A}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({
-      branches: [{
-        branchId: BRANCH_A,
-        branchName: "Main Branch",
-        itemCount: 1,
-        totalValuation: 3000,
-        lowStockItems: 0,
-      }],
-    });
+    expect(res.body.data).toMatchObject([{
+      branchId: BRANCH_A,
+      branchName: "Main Branch",
+      itemCount: 1,
+      totalValuation: 3000,
+      lowStockItems: 0,
+    }]);
     expect(prisma.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { businessId: "biz-A", isActive: true },
     }));
