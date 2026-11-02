@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -73,6 +73,7 @@ export function OrdersPage() {
   const queryClient = useQueryClient();
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
@@ -493,9 +494,12 @@ export function OrdersPage() {
   });
 
   useEffect(() => {
+    const navigationKey = orderIdFromUrl
+      ? `${location.key}:${orderIdFromUrl}`
+      : null;
     if (
       !orderIdFromUrl ||
-      openedOrderFromUrlRef.current === orderIdFromUrl
+      openedOrderFromUrlRef.current === navigationKey
     ) {
       return;
     }
@@ -505,14 +509,17 @@ export function OrdersPage() {
       return;
     }
 
-    openedOrderFromUrlRef.current = orderIdFromUrl;
+    openedOrderFromUrlRef.current = navigationKey;
     setSelectedOrder(order);
-  }, [orderIdFromUrl, orderFromUrlQuery.data]);
+  }, [location.key, orderIdFromUrl, orderFromUrlQuery.data]);
 
   useEffect(() => {
+    const navigationKey = customerIdFromUrl
+      ? `${location.key}:${customerIdFromUrl}`
+      : null;
     if (
       !customerIdFromUrl ||
-      openedCustomerFromUrlRef.current === customerIdFromUrl
+      openedCustomerFromUrlRef.current === navigationKey
     ) {
       return;
     }
@@ -522,9 +529,10 @@ export function OrdersPage() {
       return;
     }
 
-    openedCustomerFromUrlRef.current = customerIdFromUrl;
+    openedCustomerFromUrlRef.current = navigationKey;
     openCustomerWorkspace(customer);
   }, [
+    location.key,
     customerIdFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
