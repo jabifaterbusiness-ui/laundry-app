@@ -1332,6 +1332,50 @@ describe("listInventoryStock empty results", () => {
   });
 });
 
+describe("createInventoryItem catalogue metadata", () => {
+  it("stores optional SKU, category, location and reorder quantity within the business", async () => {
+    const created = {
+      id: "item-catalogue-1",
+      businessId: "biz-A",
+      name: "Fabric Softener",
+      sku: "FAB-002",
+      category: "Fabric Care",
+      storageLocation: "Shelf B2",
+      description: null,
+      unit: "BOTTLE",
+      reorderQuantity: 12,
+      lowStockThreshold: 4,
+      isActive: true,
+    };
+    prismaMock.inventoryItem.create.mockResolvedValue(created);
+
+    const result = await createInventoryItem({ businessId: "biz-A" }, {
+      name: " Fabric Softener ",
+      sku: " FAB-002 ",
+      category: " Fabric Care ",
+      storageLocation: " Shelf B2 ",
+      unit: "BOTTLE",
+      reorderQuantity: 12,
+      lowStockThreshold: 4,
+    });
+
+    expect(result).toEqual(created);
+    expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
+      data: {
+        businessId: "biz-A",
+        name: "Fabric Softener",
+        sku: "FAB-002",
+        category: "Fabric Care",
+        storageLocation: "Shelf B2",
+        description: null,
+        unit: "BOTTLE",
+        reorderQuantity: 12,
+        lowStockThreshold: 4,
+      },
+    });
+  });
+});
+
 describe("updateInventoryItem", () => {
     it("updates an inventory item within the authenticated business", async () => {
       prismaMock.inventoryItem.findFirst
