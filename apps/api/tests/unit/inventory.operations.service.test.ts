@@ -18,7 +18,7 @@ vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
   createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake, listInventoryStocktakes,
-  applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
+  submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
 } from "../../src/modules/inventory/inventory.service.js";
 
 const BUSINESS = "biz-1";
