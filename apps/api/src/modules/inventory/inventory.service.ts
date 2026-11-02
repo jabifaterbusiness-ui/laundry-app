@@ -346,7 +346,7 @@ export async function createInventoryMovement(
   scope: BranchScope,
   input: CreateInventoryMovementInput,
 ) {
-  if (["RETURN", "WASTE", "EXPIRED"].includes(input.type) && !input.reason?.trim()) {
+  if ((input.type === "RETURN" || input.type === "WASTE" || input.type === "EXPIRED") && !input.reason?.trim()) {
     throw new AppError(`${input.type} movements require an audit reason`, 422);
   }
   const result = await prisma.$transaction(async (tx) => {
