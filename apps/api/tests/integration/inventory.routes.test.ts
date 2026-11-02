@@ -328,6 +328,39 @@ describe("Inventory routes - business-wide reporting", () => {
   });
 });
 
+describe("Inventory movement history", () => {
+  it("lists movements scoped to the active business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    vi.mocked(prisma.inventoryMovement.findMany).mockResolvedValue([
+      {
+        id: "movement-history-1",
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        type: "RECEIPT",
+        quantity: 5,
+        resultingQuantity: 15,
+        inventoryItem: { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", name: "Detergent" },
+      },
+    ] as never);
+    vi.mocked(prisma.inventoryMovement.count).mockResolvedValue(1);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/movements?page=1&pageSize=25")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.movements).toHaveLength(1);
+    expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A", branchId: BRANCH_A },
+        include: { inventoryItem: true },
+      }),
+    );
+  });
+});
+
 describe("Inventory routes - authentication", () => {
   it("rejects an unauthenticated request", async () => {
     const res = await request(app).get("/api/v1/inventory");
