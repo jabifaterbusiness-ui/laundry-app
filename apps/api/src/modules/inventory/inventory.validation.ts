@@ -65,7 +65,11 @@ export const createInventoryMovementSchema = z.object({
   unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
   reason: z.string().trim().max(1000, "Movement reason is too long").optional(),
   reference: z.string().trim().max(200, "Movement reference is too long").optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (["RETURN", "WASTE", "EXPIRED"].includes(value.type) && !value.reason?.trim()) {
+    context.addIssue({ code: "custom", path: ["reason"], message: `${value.type} movements require an audit reason` });
+  }
+});
 
 export const adjustInventoryStockSchema = z.object({
   inventoryItemId: z.string().uuid("Invalid inventory item ID"),
