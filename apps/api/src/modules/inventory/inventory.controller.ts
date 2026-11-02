@@ -43,6 +43,7 @@ import {
   listInventoryStocktakes,
   approveInventoryStocktake,
   createInventoryReservation,
+  listInventoryReservations,
   releaseInventoryReservation,
   getInventoryReorderRecommendations,
   getInventoryReports,
@@ -468,6 +469,12 @@ export async function applyStocktake(req: Request, res: Response) {
   const stocktake = await applyInventoryStocktake({ businessId, branchId }, { stocktakeId: id, appliedById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_applied", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(200).json({ data: stocktake });
+}
+
+export async function listReservations(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const reservations = await listInventoryReservations({ businessId, branchId });
+  res.status(200).json({ data: reservations });
 }
 
 export async function createReservation(req: Request, res: Response) {
