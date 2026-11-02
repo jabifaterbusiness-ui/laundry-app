@@ -309,7 +309,8 @@ export interface InventoryTransfer {
   lines: Array<{ id: string; inventoryItemId: string; quantityDispatched: number; quantityReceived: number; unitCost: number; inventoryItem: InventoryItem }>;
 }
 export interface InventoryStocktake {
-  id: string; reference: string; status: "DRAFT" | "APPLIED" | "CANCELLED";
+  id: string; reference: string; status: "DRAFT" | "SUBMITTED" | "APPROVED" | "APPLIED" | "CANCELLED";
+  submittedAt?: string | null; approvedById?: string | null; approvedAt?: string | null;
   lines: Array<{ id: string; inventoryItemId: string; expectedQuantity: number; countedQuantity: number; variance: number; inventoryItem: InventoryItem }>;
 }
 export interface InventoryReservation { id: string; inventoryItemId: string; quantity: number; status: string; reference: string | null; }
@@ -328,6 +329,12 @@ export async function receiveInventoryTransfer(id: string, lines: Array<{ transf
 }
 export async function createInventoryStocktake(input: { reference: string; notes?: string; lines: Array<{ inventoryItemId: string; countedQuantity: number }> }, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryStocktake }>("/inventory/stocktakes", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+export async function submitInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/submit`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });
+}
+export async function approveInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/approve`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });
 }
 export async function applyInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/apply`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });

@@ -19,9 +19,10 @@ import {
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
   createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
-  createInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
+  createInventoryStocktake, submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
   releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports,
   type InventoryPurchaseOrder,
+  type InventoryStocktake,
 } from "../../lib/inventory-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
@@ -66,6 +67,7 @@ export function InventoryPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const userBranches = useAuthStore((state) => state.user?.branches ?? []);
+  const userPermissions = useAuthStore((state) => state.user?.permissions ?? []);
   const queryClient = useQueryClient();
 
   const [itemStatus, setItemStatus] =
@@ -175,7 +177,7 @@ export function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
     },
   });
-  const stocktakeCreateMutation = useMutation({
+  const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);\n  const stocktakeCreateMutation = useMutation({
     mutationFn: () => createInventoryStocktake({
       reference: stocktakeReference.trim(),
       lines: [{ inventoryItemId: stocktakeItemId, countedQuantity: Number(stocktakeCount) }],
@@ -187,6 +189,27 @@ export function InventoryPage() {
       setStocktakeReference(""); setStocktakeItemId(""); setStocktakeCount(""); setStocktakeError(null);
     },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to complete stocktake."),
+  });
+  const stocktakeSubmitMutation = useMutation({
+    mutationFn: () => submitInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
+    onSuccess: (result) => { setCurrentStocktake(result.data); setStocktakeError(null); },
+    onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to submit stocktake."),
+  });
+  const stocktakeApproveMutation = useMutation({
+    mutationFn: () => approveInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
+    onSuccess: (result) => { setCurrentStocktake(result.data); setStocktakeError(null); },
+    onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to approve stocktake."),
+  });
+  const stocktakeApplyMutation = useMutation({
+    mutationFn: () => applyInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
+    onSuccess: (result) => {
+      setCurrentStocktake(result.data);
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "reports"] });
+      setStocktakeError(null);
+    },
+    onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to apply approved stocktake."),
   });
   const reservationCreateMutation = useMutation({
     mutationFn: () => createInventoryReservation({
@@ -1328,7 +1351,7 @@ export function InventoryPage() {
             <label>Stocktake reference<input value={stocktakeReference} onChange={(event) => setStocktakeReference(event.target.value)} required maxLength={100} /></label>
             <label>Item<select value={stocktakeItemId} onChange={(event) => setStocktakeItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <label>Counted quantity<input type="number" min="0" step="1" value={stocktakeCount} onChange={(event) => setStocktakeCount(event.target.value)} required /></label>
-            <button type="submit" disabled={stocktakeCreateMutation.isPending || !activeBranchId}>{stocktakeCreateMutation.isPending ? "Applying count..." : "Reconcile stock"}</button>
+            <button type="submit" disabled={stocktakeCreateMutation.isPending || !activeBranchId}>{stocktakeCreateMutation.isPending ? "Saving count..." : "Save draft count"}</button>
             {stocktakeError && <p role="alert">{stocktakeError}</p>}
           </form>
         </div>
