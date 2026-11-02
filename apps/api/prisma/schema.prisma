@@ -567,6 +567,8 @@ model Color {
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, name])
+  @@unique([businessId, sku])
+  @@index([businessId, category])
   @@index([businessId, isActive])
   @@map("colors")
 }
@@ -1175,8 +1177,14 @@ model InventoryItem {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   name        String
+  sku         String?
+  category    String?
+  storageLocation String?
   description String?
   unit        InventoryUnit
+
+  // Reorder quantity is the suggested quantity to purchase when stock is low.
+  reorderQuantity Int @default(0)
 
   // A stock level at or below this value is considered low stock.
   lowStockThreshold Int @default(0)
