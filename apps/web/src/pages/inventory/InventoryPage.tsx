@@ -73,6 +73,13 @@ export function InventoryPage() {
   const userPermissions = useAuthStore((state) => state.user?.permissions ?? []);
   const queryClient = useQueryClient();
 
+  const invalidateStockViews = () => {
+    queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory", "reports"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory", "branch-comparison"] });
+  };
+
   const [itemStatus, setItemStatus] =
     useState<"active" | "inactive" | "all">("active");
   const [search, setSearch] = useState("");
@@ -170,8 +177,7 @@ export function InventoryPage() {
     }, { accessToken }, activeBranchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory", "transfers"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      invalidateStockViews();
       setTransferNumber(""); setTransferItemId(""); setTransferQuantity("1"); setTransferError(null);
     },
     onError: (error) => setTransferError(error instanceof ApiError ? error.message : "Unable to dispatch transfer."),
@@ -218,6 +224,7 @@ export function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
       queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
       queryClient.invalidateQueries({ queryKey: ["inventory", "reports"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "branch-comparison"] });
       setStocktakeError(null);
     },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to apply approved stocktake."),
@@ -229,7 +236,7 @@ export function InventoryPage() {
     }, { accessToken }, activeBranchId),
     onSuccess: (result) => {
       setReservationIdToRelease(result.data.id);
-      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      invalidateStockViews();
       setReservationError(null);
     },
     onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to reserve stock."),
@@ -237,7 +244,7 @@ export function InventoryPage() {
   const reservationReleaseMutation = useMutation({
     mutationFn: () => releaseInventoryReservation(reservationIdToRelease, false, { accessToken }, activeBranchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      invalidateStockViews();
       setReservationIdToRelease("");
     },
     onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to release reservation."),
@@ -320,12 +327,7 @@ export function InventoryPage() {
         activeBranchId,
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["inventory", "stock"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["inventory", "movements"],
-      });
+      invalidateStockViews();
       resetMovementForm();
     },
     onError: (error) => {
@@ -350,12 +352,7 @@ export function InventoryPage() {
         activeBranchId,
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["inventory", "stock"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["inventory", "movements"],
-      });
+      invalidateStockViews();
       resetAdjustmentForm();
     },
     onError: (error) => {
@@ -426,8 +423,7 @@ export function InventoryPage() {
     }, { accessToken }, activeBranchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      invalidateStockViews();
       setReceiveOrderId(""); setReceiveLineId(""); setReceiveQuantity(""); setReceiptNumber(""); setProcurementError(null);
     },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to record goods receipt."),
