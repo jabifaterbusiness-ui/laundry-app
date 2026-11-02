@@ -84,7 +84,11 @@ export async function createItem(
     correlationId: req.correlationId ?? null,
     metadata: {
       name: item.name,
+      sku: item.sku,
+      category: item.category,
+      storageLocation: item.storageLocation,
       unit: item.unit,
+      reorderQuantity: item.reorderQuantity,
     },
   });
 
@@ -129,7 +133,11 @@ export async function updateItem(
     correlationId: req.correlationId ?? null,
     metadata: {
       name: item.name,
+      sku: item.sku,
+      category: item.category,
+      storageLocation: item.storageLocation,
       unit: item.unit,
+      reorderQuantity: item.reorderQuantity,
       isActive: item.isActive,
     },
   });
