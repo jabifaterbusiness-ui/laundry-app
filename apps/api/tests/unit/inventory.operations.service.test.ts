@@ -114,6 +114,7 @@ describe("inventory operations", () => {
   });
 
   it("requires a submitted stocktake and a different user to approve it", async () => {
+    db.inventoryStocktake.update.mockResolvedValue({ id: "count-1", status: "SUBMITTED" });
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });
     await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();
     expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));
