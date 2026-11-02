@@ -398,6 +398,51 @@ describe("QuickOperationLauncher", () => {
     expect(await screen.findByText(/completed successfully/i)).toBeInTheDocument();
   });
 
+  it("does not start a cloud backup when no verified destination is available", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-unverified", displayName: "Unverified cloud", status: "CONNECTED", verifiedAt: null },
+      { id: "connection-disconnected", displayName: "Disconnected cloud", status: "DISCONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-unverified" });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText(/no verified cloud destination is available/i)).toBeInTheDocument();
+    expect(requestSensitiveAuthorizationMock).not.toHaveBeenCalled();
+    expect(createCloudBackupRunMock).not.toHaveBeenCalled();
+  });
+
+  it("does not start a cloud backup when sensitive authorization is cancelled", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-1", displayName: "Primary cloud", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-1" });
+    requestSensitiveAuthorizationMock.mockResolvedValueOnce(null);
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText(/sensitive authorization was cancelled/i)).toBeInTheDocument();
+    expect(createCloudBackupRunMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the first verified cloud destination when the configured one is unavailable", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-first", displayName: "Verified fallback", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+      { id: "connection-configured", displayName: "Configured but disconnected", status: "DISCONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-configured" });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => expect(createCloudBackupRunMock).toHaveBeenCalledWith(
+      "connection-first",
+      { accessToken: "access-token", sensitiveAuthorization: "sensitive-auth" },
+    ));
+  });
+
   it("renders the selected operation", () => {
     render(
       <QuickOperationLauncher
