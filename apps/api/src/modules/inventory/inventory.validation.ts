@@ -61,7 +61,8 @@ export const listInventoryMovementsQuerySchema = z.object({
 export const createInventoryMovementSchema = z.object({
   inventoryItemId: z.string().uuid("Invalid inventory item ID"),
   quantity: z.coerce.number().int().positive("Quantity must be a positive whole number"),
-  type: z.enum(["RECEIPT", "ISSUE"]),
+  type: z.enum(["RECEIPT", "ISSUE", "RETURN", "WASTE", "EXPIRED"]),
+  unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
   reason: z.string().trim().max(1000, "Movement reason is too long").optional(),
   reference: z.string().trim().max(200, "Movement reference is too long").optional(),
 }).strict();
