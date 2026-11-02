@@ -237,6 +237,8 @@ export function InventoryPage() {
     }, { accessToken }, activeBranchId),
     onSuccess: (result) => {
       setReservationIdToRelease(result.data.id);
+      setReservationExpiresAt("");
+      setReservationReference("");
       invalidateStockViews();
       setReservationError(null);
     },
