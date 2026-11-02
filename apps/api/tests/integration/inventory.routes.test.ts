@@ -281,6 +281,26 @@ describe("Inventory routes - business-wide reporting", () => {
     }));
   });
 
+  it("denies branch managers stocktake approval without the approval permission", async () => {
+    const managerToken = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-stocktake");
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-stocktake-approval",
+      businessId: "biz-A",
+      userId: "user-manager-stocktake",
+      permissionId: "permission-inventory.approve",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/inventory/stocktakes/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/approve")
+      .set("Authorization", `Bearer ${managerToken}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(prisma.inventoryStocktake.findFirst).not.toHaveBeenCalled();
+    expect(prisma.inventoryStock.update).not.toHaveBeenCalled();
+  });
+
   it("denies branch managers without the all-branches reporting permission", async () => {
     const managerToken = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-report");
     findUserOverride.mockResolvedValueOnce({
