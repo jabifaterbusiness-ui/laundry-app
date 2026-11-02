@@ -65,6 +65,7 @@ function formatMovementType(type: MovementType | "ADJUSTMENT") {
 export function InventoryPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const userBranches = useAuthStore((state) => state.user?.branches ?? []);
   const queryClient = useQueryClient();
 
   const [itemStatus, setItemStatus] =
@@ -1315,7 +1316,7 @@ export function InventoryPage() {
         <div className="inventory-procurement-grid">
           <form onSubmit={(event) => { event.preventDefault(); setTransferError(null); if (!activeBranchId || !transferDestination || !transferNumber.trim() || !transferItemId || !Number.isInteger(Number(transferQuantity)) || Number(transferQuantity) <= 0) { setTransferError("Select a destination branch and item, and enter a transfer reference and valid quantity."); return; } transferCreateMutation.mutate(); }}>
             <h3>Dispatch inter-branch transfer</h3>
-            <label>Destination branch<select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)} required><option value="">Select destination</option>{(useAuthStore.getState().user?.branches ?? []).filter((branch) => branch.isActive !== false && branch.id !== activeBranchId).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+            <label>Destination branch<select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)} required><option value="">Select destination</option>{userBranches.filter((branch) => branch.isActive !== false && branch.id !== activeBranchId).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
             <label>Transfer reference<input value={transferNumber} onChange={(event) => setTransferNumber(event.target.value)} required maxLength={100} /></label>
             <label>Item<select value={transferItemId} onChange={(event) => setTransferItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <label>Quantity<input type="number" min="1" step="1" value={transferQuantity} onChange={(event) => setTransferQuantity(event.target.value)} required /></label>
