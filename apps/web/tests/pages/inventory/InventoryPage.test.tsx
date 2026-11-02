@@ -20,6 +20,19 @@ const mockListInventoryPurchaseOrders = vi.fn();
 const mockCreateInventoryPurchaseOrder = vi.fn();
 const mockReceiveInventoryPurchaseOrder = vi.fn();
 const mockGetInventoryReports = vi.fn();
+const mockCreateInventoryTransfer = vi.fn();
+const mockListInventoryTransfers = vi.fn();
+const mockReceiveInventoryTransfer = vi.fn();
+const mockCreateInventoryStocktake = vi.fn();
+const mockListInventoryStocktakes = vi.fn();
+const mockSubmitInventoryStocktake = vi.fn();
+const mockApproveInventoryStocktake = vi.fn();
+const mockApplyInventoryStocktake = vi.fn();
+const mockCreateInventoryReservation = vi.fn();
+const mockReleaseInventoryReservation = vi.fn();
+const mockListInventoryReservations = vi.fn();
+const mockListInventoryReorderRecommendations = vi.fn();
+const mockGetInventoryBranchComparison = vi.fn();
 
 vi.mock("../../../src/lib/inventory-api.js", () => ({
   listInventoryItems: (...args: unknown[]) =>
@@ -42,6 +55,19 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
   createInventoryPurchaseOrder: (...args: unknown[]) => mockCreateInventoryPurchaseOrder(...args),
   receiveInventoryPurchaseOrder: (...args: unknown[]) => mockReceiveInventoryPurchaseOrder(...args),
   getInventoryReports: (...args: unknown[]) => mockGetInventoryReports(...args),
+  createInventoryTransfer: (...args: unknown[]) => mockCreateInventoryTransfer(...args),
+  listInventoryTransfers: (...args: unknown[]) => mockListInventoryTransfers(...args),
+  receiveInventoryTransfer: (...args: unknown[]) => mockReceiveInventoryTransfer(...args),
+  createInventoryStocktake: (...args: unknown[]) => mockCreateInventoryStocktake(...args),
+  listInventoryStocktakes: (...args: unknown[]) => mockListInventoryStocktakes(...args),
+  submitInventoryStocktake: (...args: unknown[]) => mockSubmitInventoryStocktake(...args),
+  approveInventoryStocktake: (...args: unknown[]) => mockApproveInventoryStocktake(...args),
+  applyInventoryStocktake: (...args: unknown[]) => mockApplyInventoryStocktake(...args),
+  createInventoryReservation: (...args: unknown[]) => mockCreateInventoryReservation(...args),
+  releaseInventoryReservation: (...args: unknown[]) => mockReleaseInventoryReservation(...args),
+  listInventoryReservations: (...args: unknown[]) => mockListInventoryReservations(...args),
+  listInventoryReorderRecommendations: (...args: unknown[]) => mockListInventoryReorderRecommendations(...args),
+  getInventoryBranchComparison: (...args: unknown[]) => mockGetInventoryBranchComparison(...args),
 }));
 
 vi.mock("../../../src/state/auth-store.js", () => ({
@@ -55,7 +81,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     selector({
       accessToken: "test-token",
       activeBranchId: "branch-1",
-      user: { branches: [{ id: "branch-1", name: "Main branch" }, { id: "branch-2", name: "Second branch" }] },
+      user: { branches: [{ id: "branch-1", name: "Main branch" }, { id: "branch-2", name: "Second branch" }], permissions: [] },
     }),
 }));
 
@@ -176,6 +202,19 @@ beforeEach(() => {
   mockCreateInventorySupplier.mockResolvedValue({ data: { id: "supplier-1", name: "Test Supplier", isActive: true } });
   mockCreateInventoryPurchaseOrder.mockResolvedValue({ data: {} });
   mockReceiveInventoryPurchaseOrder.mockResolvedValue({ data: {} });
+  mockCreateInventoryTransfer.mockResolvedValue({ data: {} });
+  mockListInventoryTransfers.mockResolvedValue({ transfers: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } });
+  mockReceiveInventoryTransfer.mockResolvedValue({ data: {} });
+  mockCreateInventoryStocktake.mockResolvedValue({ data: { id: "stocktake-1", reference: "COUNT-1", status: "DRAFT", lines: [] } });
+  mockListInventoryStocktakes.mockResolvedValue({ stocktakes: [] });
+  mockSubmitInventoryStocktake.mockResolvedValue({ data: {} });
+  mockApproveInventoryStocktake.mockResolvedValue({ data: {} });
+  mockApplyInventoryStocktake.mockResolvedValue({ data: {} });
+  mockCreateInventoryReservation.mockResolvedValue({ data: { id: "reservation-1" } });
+  mockReleaseInventoryReservation.mockResolvedValue({ data: {} });
+  mockListInventoryReservations.mockResolvedValue({ data: [] });
+  mockListInventoryReorderRecommendations.mockResolvedValue({ data: [] });
+  mockGetInventoryBranchComparison.mockResolvedValue({ data: [] });
   mockAdjustInventoryStock.mockResolvedValue({
     movement: {
       id: "movement-2",
@@ -196,6 +235,38 @@ beforeEach(() => {
 });
 
 describe("InventoryPage", () => {
+  it("dispatches an inter-branch transfer with the selected destination and quantity", async () => {
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
+    fireEvent.change(within(panel).getByLabelText("Destination branch"), { target: { value: "branch-2" } });
+    fireEvent.change(within(panel).getByLabelText("Transfer reference"), { target: { value: "TR-100" } });
+    fireEvent.change(within(panel).getByLabelText("Item"), { target: { value: item.id } });
+    fireEvent.change(within(panel).getByLabelText("Quantity"), { target: { value: "4" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Dispatch transfer" }));
+    await waitFor(() => {
+      expect(mockCreateInventoryTransfer).toHaveBeenCalledWith({
+        destinationBranchId: "branch-2",
+        transferNumber: "TR-100",
+        lines: [{ inventoryItemId: item.id, quantity: 4 }],
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+  });
+
+  it("creates a branch-scoped reservation and refreshes the reservation register", async () => {
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Stock reservations and reorder recommendations" });
+    fireEvent.change(within(panel).getByLabelText("Item"), { target: { value: item.id } });
+    fireEvent.change(within(panel).getByLabelText("Quantity"), { target: { value: "3" } });
+    fireEvent.change(within(panel).getByLabelText("Reference"), { target: { value: "ORDER-300" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Reserve stock" }));
+    await waitFor(() => {
+      expect(mockCreateInventoryReservation).toHaveBeenCalledWith({
+        inventoryItemId: item.id, quantity: 3, reference: "ORDER-300", expiresAt: undefined,
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+    expect(await within(panel).findByText(/Reservation created: reservation-1/)).toBeInTheDocument();
+  });
+
   it("loads and displays inventory items and branch stock", async () => {
     renderPage();
 
