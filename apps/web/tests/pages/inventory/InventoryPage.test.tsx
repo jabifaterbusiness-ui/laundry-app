@@ -33,6 +33,7 @@ const mockReleaseInventoryReservation = vi.fn();
 const mockListInventoryReservations = vi.fn();
 const mockListInventoryReorderRecommendations = vi.fn();
 const mockGetInventoryBranchComparison = vi.fn();
+const mockUserPermissions: string[] = [];
 
 vi.mock("../../../src/lib/inventory-api.js", () => ({
   listInventoryItems: (...args: unknown[]) =>
@@ -81,7 +82,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     selector({
       accessToken: "test-token",
       activeBranchId: "branch-1",
-      user: { branches: [{ id: "branch-1", name: "Main branch" }, { id: "branch-2", name: "Second branch" }], permissions: [] },
+      user: { branches: [{ id: "branch-1", name: "Main branch" }, { id: "branch-2", name: "Second branch" }], permissions: mockUserPermissions },
     }),
 }));
 
@@ -181,6 +182,7 @@ function mockSuccessfulQueries() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockUserPermissions.length = 0;
   mockSuccessfulQueries();
   mockCreateInventoryItem.mockResolvedValue(item);
   mockUpdateInventoryItem.mockResolvedValue(item);
@@ -237,6 +239,47 @@ beforeEach(() => {
 });
 
 describe("InventoryPage", () => {
+  it("enforces the stocktake submit, approve and apply workflow in the UI", async () => {
+    mockUserPermissions.push("inventory.approve");
+    const lines = [{
+      id: "stocktake-line-1", inventoryItemId: item.id, expectedQuantity: 12,
+      countedQuantity: 10, variance: -2, inventoryItem: item,
+    }];
+    const stocktake = (status: "DRAFT" | "SUBMITTED" | "APPROVED" | "APPLIED") => ({
+      data: { id: "stocktake-workflow", reference: "COUNT-WORKFLOW", status, lines },
+    });
+    mockCreateInventoryStocktake.mockResolvedValue(stocktake("DRAFT"));
+    mockSubmitInventoryStocktake.mockResolvedValue(stocktake("SUBMITTED"));
+    mockApproveInventoryStocktake.mockResolvedValue(stocktake("APPROVED"));
+    mockApplyInventoryStocktake.mockResolvedValue(stocktake("APPLIED"));
+
+    renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
+    const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
+    const stocktakeForm = within(panel).getByRole("heading", { name: "Physical stock count" }).closest("form")!;
+    fireEvent.change(within(stocktakeForm).getByLabelText("Stocktake reference"), { target: { value: "COUNT-WORKFLOW" } });
+    fireEvent.change(within(stocktakeForm).getByLabelText("Item"), { target: { value: item.id } });
+    fireEvent.change(within(stocktakeForm).getByLabelText("Counted quantity"), { target: { value: "10" } });
+    fireEvent.click(within(stocktakeForm).getByRole("button", { name: "Save draft count" }));
+
+    const review = await screen.findByRole("region", { name: "Stocktake approval workflow" });
+    fireEvent.click(within(review).getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(mockSubmitInventoryStocktake).toHaveBeenCalledWith(
+      "stocktake-workflow", { accessToken: "test-token" }, "branch-1",
+    ));
+
+    fireEvent.click(await within(review).findByRole("button", { name: "Approve stocktake" }));
+    await waitFor(() => expect(mockApproveInventoryStocktake).toHaveBeenCalledWith(
+      "stocktake-workflow", { accessToken: "test-token" }, "branch-1",
+    ));
+
+    fireEvent.click(await within(review).findByRole("button", { name: "Apply approved count" }));
+    await waitFor(() => expect(mockApplyInventoryStocktake).toHaveBeenCalledWith(
+      "stocktake-workflow", { accessToken: "test-token" }, "branch-1",
+    ));
+    expect(await within(review).findByRole("status")).toHaveTextContent("Stock reconciliation applied successfully.");
+  });
+
   it("creates a branch-scoped physical stocktake draft", async () => {
     mockCreateInventoryStocktake.mockResolvedValue({
       data: {
