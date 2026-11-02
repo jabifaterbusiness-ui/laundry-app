@@ -960,12 +960,27 @@ export async function createInventoryReservation(scope: BranchScope, input: {
 
 export async function releaseInventoryReservation(scope: BranchScope, input: { reservationId: string; consumed?: boolean }) {
   return prisma.$transaction(async (tx) => {
-    const reservation = await tx.inventoryReservation.findFirst({ where: { id: input.reservationId, businessId: scope.businessId, branchId: scope.branchId, status: "ACTIVE" } });
+    // Serialize release/consume requests on the reservation itself. Locking
+    // only the stock row allows two requests to read ACTIVE before either
+    // updates the reservation and both to decrement the same reserved units.
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "inventory_reservations"
+      WHERE "id" = ${input.reservationId}
+        AND "businessId" = ${scope.businessId}
+        AND "branchId" = ${scope.branchId}
+      FOR UPDATE
+    `);
+    const reservation = await tx.inventoryReservation.findFirst({
+      where: { id: input.reservationId, businessId: scope.businessId, branchId: scope.branchId, status: "ACTIVE" },
+    });
     if (!reservation) throw new AppError("Active reservation not found for this branch", 404);
     const stock = await tx.inventoryStock.findUnique({ where: { inventoryItemId_branchId: { inventoryItemId: reservation.inventoryItemId, branchId: scope.branchId } } });
     if (!stock) throw new AppError("Reserved stock balance not found", 409);
     await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
     const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+    if (locked.reservedQuantity < reservation.quantity || (input.consumed && locked.quantity < reservation.quantity)) {
+      throw new AppError("Reserved stock balance is inconsistent; reservation was not changed", 409);
+    }
     const nextStatus = input.consumed ? "CONSUMED" : "RELEASED";
     await tx.inventoryStock.update({ where: { id: stock.id }, data: {
       reservedQuantity: { decrement: reservation.quantity },
