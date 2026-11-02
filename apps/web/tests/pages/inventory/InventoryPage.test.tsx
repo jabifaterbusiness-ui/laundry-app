@@ -114,6 +114,8 @@ const stock: InventoryStock = {
   branchId: "branch-1",
   inventoryItemId: item.id,
   quantity: 12,
+  reservedQuantity: 0,
+  averageUnitCost: 0,
   createdAt: "2026-09-07T10:00:00.000Z",
   updatedAt: "2026-09-07T10:00:00.000Z",
   inventoryItem: item,
@@ -246,6 +248,7 @@ describe("InventoryPage", () => {
       },
     });
     renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
     const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
     const stocktakeForm = within(panel).getByRole("heading", { name: "Physical stock count" }).closest("form")!;
     fireEvent.change(within(stocktakeForm).getByLabelText("Stocktake reference"), { target: { value: "COUNT-NEW" } });
@@ -286,6 +289,7 @@ describe("InventoryPage", () => {
       }],
     });
     renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
     const panel = await screen.findByRole("region", { name: "Stock reservations and reorder recommendations" });
     fireEvent.click(await within(panel).findByRole("button", { name: "Consume" }));
     await waitFor(() => {
