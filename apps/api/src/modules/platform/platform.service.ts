@@ -719,6 +719,11 @@ export async function cancelPlatformBusinessSubscription(
         },
       });
 
+  await prisma.businessInboxMessage.updateMany({
+    where: { sourceSubscriptionId: subscription.id },
+    data: { expiresAt: now },
+  });
+
   await recordAuditEvent({
     action: when === "IMMEDIATE"
       ? "platform.subscription.cancelled_immediately"
