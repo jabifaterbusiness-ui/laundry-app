@@ -160,6 +160,9 @@ model Business {
   inventoryGoodsReceipts        InventoryGoodsReceipt[]
   inventoryStocks              InventoryStock[]
   inventoryMovements           InventoryMovement[]
+  inventoryTransfers           InventoryTransfer[]
+  inventoryStocktakes          InventoryStocktake[]
+  inventoryReservations        InventoryReservation[]
   businessRolePermissions      BusinessRolePermission[]
   userPermissionOverrides      UserPermissionOverride[]
   offlineSyncOperations        OfflineSyncOperation[]
@@ -207,6 +210,10 @@ model Branch {
   inventoryPurchaseOrders InventoryPurchaseOrder[]
   inventoryGoodsReceipts InventoryGoodsReceipt[]
   inventoryMovements    InventoryMovement[]
+  inventoryTransfersFrom InventoryTransfer[] @relation("InventoryTransferSource")
+  inventoryTransfersTo   InventoryTransfer[] @relation("InventoryTransferDestination")
+  inventoryStocktakes    InventoryStocktake[]
+  inventoryReservations  InventoryReservation[]
   offlineSyncOperations OfflineSyncOperation[]
 
   @@index([businessId])
@@ -265,6 +272,12 @@ model User {
   expensesRecognized            Expense[]                     @relation("ExpenseRecognizer")
   financialStatementRecipients  FinancialStatementRecipient[] @relation("FinancialStatementRecipientUser")
   inventoryMovementsCreated     InventoryMovement[]           @relation("InventoryMovementCreator")
+  inventoryTransfersCreated     InventoryTransfer[]            @relation("InventoryTransferCreator")
+  inventoryTransfersDispatched  InventoryTransfer[]            @relation("InventoryTransferDispatcher")
+  inventoryTransfersReceived    InventoryTransfer[]            @relation("InventoryTransferReceiver")
+  inventoryStocktakesCreated    InventoryStocktake[]             @relation("InventoryStocktakeCreator")
+  inventoryStocktakesApplied    InventoryStocktake[]             @relation("InventoryStocktakeApplier")
+  inventoryReservationsCreated  InventoryReservation[]           @relation("InventoryReservationCreator")
   inventoryPurchaseOrdersCreated InventoryPurchaseOrder[]      @relation("InventoryPurchaseOrderCreator")
   inventoryGoodsReceiptsReceived InventoryGoodsReceipt[]       @relation("InventoryGoodsReceiptReceiver")
   inboxMessages                BusinessInboxMessage[]          @relation("BusinessInboxRecipient")
@@ -1166,6 +1179,25 @@ enum InventoryMovementType {
   RECEIPT
   ISSUE
   ADJUSTMENT
+  RETURN
+  WASTE
+  EXPIRED
+  TRANSFER_IN
+  TRANSFER_OUT
+  STOCKTAKE
+}
+
+enum InventoryTransferStatus {
+  DISPATCHED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum InventoryStocktakeStatus {
+  DRAFT
+  APPLIED
+  CANCELLED
 }
 
 model InventoryItem {
@@ -1193,6 +1225,9 @@ model InventoryItem {
   movements InventoryMovement[]
   purchaseOrderLines InventoryPurchaseOrderLine[]
   goodsReceiptLines InventoryGoodsReceiptLine[]
+  transferLines InventoryTransferLine[]
+  stocktakeLines InventoryStocktakeLine[]
+  reservations InventoryReservation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1219,6 +1254,8 @@ model InventoryStock {
 
   // Current physical quantity held by this branch.
   quantity Int @default(0)
+  reservedQuantity Int @default(0)
+  averageUnitCost Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1249,6 +1286,7 @@ model InventoryMovement {
   quantity Int
 
   type InventoryMovementType
+  unitCost Int @default(0)
 
   // Stock balance immediately after this movement.
   resultingQuantity Int
@@ -1278,6 +1316,108 @@ enum InventoryPurchaseOrderStatus {
   RECEIVED
   CANCELLED
 }
+
+model InventoryTransfer {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sourceBranchId String
+  sourceBranch Branch @relation("InventoryTransferSource", fields: [sourceBranchId], references: [id], onDelete: Restrict)
+  destinationBranchId String
+  destinationBranch Branch @relation("InventoryTransferDestination", fields: [destinationBranchId], references: [id], onDelete: Restrict)
+  transferNumber String
+  status InventoryTransferStatus @default(DISPATCHED)
+  notes String?
+  createdById String
+  createdBy User @relation("InventoryTransferCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  dispatchedById String
+  dispatchedBy User @relation("InventoryTransferDispatcher", fields: [dispatchedById], references: [id], onDelete: Restrict)
+  receivedById String?
+  receivedBy User? @relation("InventoryTransferReceiver", fields: [receivedById], references: [id], onDelete: Restrict)
+  dispatchedAt DateTime @default(now())
+  receivedAt DateTime?
+  lines InventoryTransferLine[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, transferNumber])
+  @@index([businessId, sourceBranchId, status, createdAt])
+  @@index([businessId, destinationBranchId, status, createdAt])
+  @@map("inventory_transfers")
+}
+
+model InventoryTransferLine {
+  id String @id @default(uuid())
+  transferId String
+  transfer InventoryTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantityDispatched Int
+  quantityReceived Int @default(0)
+  unitCost Int @default(0)
+  createdAt DateTime @default(now())
+  @@unique([transferId, inventoryItemId])
+  @@index([inventoryItemId])
+  @@map("inventory_transfer_lines")
+}
+
+model InventoryStocktake {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  reference String
+  status InventoryStocktakeStatus @default(DRAFT)
+  notes String?
+  createdById String
+  createdBy User @relation("InventoryStocktakeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  appliedById String?
+  appliedBy User? @relation("InventoryStocktakeApplier", fields: [appliedById], references: [id], onDelete: Restrict)
+  appliedAt DateTime?
+  lines InventoryStocktakeLine[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([businessId, reference])
+  @@index([businessId, branchId, status, createdAt])
+  @@map("inventory_stocktakes")
+}
+
+model InventoryStocktakeLine {
+  id String @id @default(uuid())
+  stocktakeId String
+  stocktake InventoryStocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  expectedQuantity Int
+  countedQuantity Int
+  variance Int
+  createdAt DateTime @default(now())
+  @@unique([stocktakeId, inventoryItemId])
+  @@map("inventory_stocktake_lines")
+}
+
+model InventoryReservation {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity Int
+  reference String?
+  status String @default("ACTIVE")
+  createdById String
+  createdBy User @relation("InventoryReservationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  expiresAt DateTime?
+  releasedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([businessId, branchId, status, expiresAt])
+  @@index([inventoryItemId, branchId, status])
+  @@map("inventory_reservations")
+}
+
 
 model InventorySupplier {
   id String @id @default(uuid())
