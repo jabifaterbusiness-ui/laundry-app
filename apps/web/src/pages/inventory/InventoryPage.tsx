@@ -1431,7 +1431,7 @@ export function InventoryPage() {
           <div><h2>Inventory Valuation &amp; Performance</h2><p>Valuation, stock movement and supplier performance for this branch.</p></div>
           <button
             type="button"
-            className="secondary-button"
+            
             disabled={!inventoryReportQuery.data?.data}
             onClick={() => {
               const report = inventoryReportQuery.data?.data;
