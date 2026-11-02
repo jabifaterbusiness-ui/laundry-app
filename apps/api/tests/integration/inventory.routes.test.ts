@@ -146,10 +146,10 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
 
-  vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation(async () => {
+  vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
     const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
     return latestUpsert ? await latestUpsert : null;
-  });
+  }) as never);
 
   vi.mocked(prisma.$transaction).mockImplementation(
     async (
