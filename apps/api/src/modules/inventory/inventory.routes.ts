@@ -67,6 +67,13 @@ inventoryRouter.get(
   asyncHandler(listStock),
 );
 
+inventoryRouter.get(
+  "/movements",
+  requirePermission("inventory.view"),
+  asyncHandler(requireBranchContext),
+  asyncHandler(listMovements),
+);
+
 inventoryRouter.post(
   "/movements",
   requirePermission("inventory.manage"),
