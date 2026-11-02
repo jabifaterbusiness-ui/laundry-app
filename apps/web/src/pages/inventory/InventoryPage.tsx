@@ -48,18 +48,21 @@ const EMPTY_ITEM_FORM = {
   lowStockThreshold: 0,
 };
 
-type MovementType = "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
+type MovementType = Exclude<InventoryMovement["type"], "ADJUSTMENT" | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE">;
 
 function formatUnit(unit: InventoryUnit) {
   return unit.charAt(0) + unit.slice(1).toLowerCase();
 }
 
-function formatMovementType(type: MovementType | "ADJUSTMENT") {
+function formatMovementType(type: InventoryMovement["type"]) {
   if (type === "RECEIPT") return "Receive";
   if (type === "ISSUE") return "Issue";
   if (type === "RETURN") return "Return to stock";
   if (type === "WASTE") return "Waste";
   if (type === "EXPIRED") return "Expired";
+  if (type === "TRANSFER_IN") return "Transfer received";
+  if (type === "TRANSFER_OUT") return "Transfer dispatched";
+  if (type === "STOCKTAKE") return "Stocktake";
   return "Adjustment";
 }
 
