@@ -896,7 +896,10 @@ export function InventoryPage() {
                   <tr>
                     <th>Item</th>
                     <th>Unit</th>
-                    <th>Quantity</th>
+                    <th>On hand</th>
+                    <th>Reserved</th>
+                    <th>Available</th>
+                    <th>Average cost</th>
                     <th>Low Stock Threshold</th>
                   </tr>
                 </thead>
@@ -909,9 +912,10 @@ export function InventoryPage() {
                         {formatUnit(stock.inventoryItem.unit)}
                       </td>
                       <td>{stock.quantity}</td>
-                      <td>
-                        {stock.inventoryItem.lowStockThreshold}
-                      </td>
+                      <td>{stock.reservedQuantity}</td>
+                      <td>{stock.quantity - stock.reservedQuantity}</td>
+                      <td>{((stock.averageUnitCost ?? 0) / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td>
+                      <td>{stock.inventoryItem.lowStockThreshold}</td>
                     </tr>
                   ))}
                 </tbody>
