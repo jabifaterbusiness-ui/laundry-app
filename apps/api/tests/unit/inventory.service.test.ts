@@ -128,7 +128,7 @@ describe("inventory.service", () => {
       });
       expect(prismaMock.inventoryStock.update).toHaveBeenCalledWith({
         where: { id: "stock-1" },
-        data: { quantity: 15 },
+        data: { quantity: 15, averageUnitCost: 0 },
       });
       expect(prismaMock.inventoryMovement.create).toHaveBeenCalledWith({
         data: {
@@ -138,6 +138,7 @@ describe("inventory.service", () => {
           quantity: 5,
           type: "RECEIPT",
           resultingQuantity: 15,
+          unitCost: 0,
           reason: null,
           reference: null,
           createdById: "user-1",
