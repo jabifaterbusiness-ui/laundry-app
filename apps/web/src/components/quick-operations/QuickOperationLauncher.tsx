@@ -483,18 +483,16 @@ export function QuickOperationLauncher({
           accessToken,
           sensitiveAuthorization: authorization,
         });
-        publishCloudBackupNotification({
-          status: run.status === "SUCCEEDED" ? "success" : "error",
-          title: "Manual cloud backup",
-          message: run.status === "SUCCEEDED"
-            ? `Encrypted backup saved successfully to ${destination.displayName}.`
-            : (run.errorMessage || "The cloud backup did not complete successfully."),
-          source: "manual",
-          runId: run.id,
-        });
         if (run.status !== "SUCCEEDED") {
           throw new Error(run.errorMessage || "The cloud backup did not complete successfully.");
         }
+        publishCloudBackupNotification({
+          status: "success",
+          title: "Manual cloud backup",
+          message: `Encrypted backup saved successfully to ${destination.displayName}.`,
+          source: "manual",
+          runId: run.id,
+        });
         setSuccess(`Cloud backup completed successfully using ${destination.displayName}.`);
         return;
       }
