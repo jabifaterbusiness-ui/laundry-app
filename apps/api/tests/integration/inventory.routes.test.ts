@@ -424,7 +424,11 @@ describe("Inventory routes - business-scoped items", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .send({
         name: "Detergent",
+        sku: "DET-001",
+        category: "Chemicals",
+        storageLocation: "Store A / Shelf 2",
         unit: "LITRE",
+        reorderQuantity: 24,
         lowStockThreshold: 5,
       });
 
@@ -437,7 +441,15 @@ describe("Inventory routes - business-scoped items", () => {
       lowStockThreshold: 5,
       isActive: true,
     });
-    expect(prisma.inventoryItem.create).toHaveBeenCalled();
+    expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz-A",
+        sku: "DET-001",
+        category: "Chemicals",
+        storageLocation: "Store A / Shelf 2",
+        reorderQuantity: 24,
+      }),
+    }));
     expect(userBranchFindUnique).not.toHaveBeenCalled();
   });
 });
