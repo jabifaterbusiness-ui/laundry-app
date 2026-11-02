@@ -938,6 +938,15 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
   });
 }
 
+export async function listInventoryReservations(scope: BranchScope) {
+  return prisma.inventoryReservation.findMany({
+    where: { businessId: scope.businessId, branchId: scope.branchId },
+    include: { inventoryItem: { select: { id: true, name: true, unit: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+}
+
 export async function createInventoryReservation(scope: BranchScope, input: {
   inventoryItemId: string; quantity: number; createdById: string; reference?: string; expiresAt?: Date;
 }) {
