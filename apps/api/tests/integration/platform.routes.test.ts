@@ -1645,6 +1645,35 @@ describe("Platform Owner routes - timed business suspension", () => {
 
 
 describe("Platform Owner routes - announcements and business inbox delivery", () => {
+  it("returns complete delivery totals for broadcasts larger than the previous 250-row cap", async () => {
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{
+      broadcastId: "broadcast-large",
+      title: "Platform update",
+      body: "Important service notice",
+      publishedAt: new Date("2026-11-01T09:00:00.000Z"),
+      expiresAt: null,
+      displayDurationMinutes: 10,
+      recipientCount: 625,
+      readCount: 410,
+      dismissedCount: 125,
+      businessCount: 38,
+    }] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([expect.objectContaining({
+      broadcastId: "broadcast-large",
+      recipientCount: 625,
+      readCount: 410,
+      dismissedCount: 125,
+      businessCount: 38,
+    })]);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
   it("broadcasts a platform announcement to active business users and records delivery audit", async () => {
     vi.mocked(prisma.business.findMany).mockResolvedValue([
       { id: "biz-A" },
