@@ -327,8 +327,9 @@ describe("InventoryPage", () => {
     expect(screen.getByText("Shelf A1")).toBeInTheDocument();
 
     expect(screen.getAllByText("Bottle")).toHaveLength(2);
-    expect(screen.getByText("Current Stock")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    const currentStock = screen.getByRole("region", { name: "Current stock" });
+    expect(within(currentStock).getByText("Current Stock")).toBeInTheDocument();
+    expect(within(currentStock).getByText("12")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(mockListInventoryStock).toHaveBeenCalledWith(
