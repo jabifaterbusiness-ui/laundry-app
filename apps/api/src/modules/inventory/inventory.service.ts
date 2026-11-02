@@ -402,7 +402,10 @@ export async function createInventoryMovement(
     const change = input.type === "RECEIPT" || input.type === "RETURN" ? input.quantity : -input.quantity;
     const resultingQuantity = lockedStock.quantity + change;
 
-    if (resultingQuantity < 0 || (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - (lockedStock.reservedQuantity ?? 0) < input.quantity)) {
+    if (resultingQuantity < 0) {
+      throw new AppError("Insufficient inventory stock", 422);
+    }
+    if (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - (lockedStock.reservedQuantity ?? 0) < input.quantity) {
       throw new AppError("Insufficient available inventory stock", 422);
     }
 
@@ -422,7 +425,7 @@ export async function createInventoryMovement(
         quantity: input.quantity,
         type: input.type,
         resultingQuantity,
-        unitCost: input.unitCost ?? lockedStock.averageUnitCost,
+        unitCost: input.unitCost ?? lockedStock.averageUnitCost ?? 0,
         reason: input.reason?.trim() || null,
         reference: input.reference?.trim() || null,
         createdById: input.createdById,
@@ -496,6 +499,9 @@ export async function adjustInventoryStock(
     });
     const resultingQuantity = lockedStock.quantity + input.quantity;
 
+    if (resultingQuantity < 0) {
+      throw new AppError("Inventory adjustment cannot make stock negative", 422);
+    }
     if (resultingQuantity < (lockedStock.reservedQuantity ?? 0)) {
       throw new AppError("Inventory adjustment cannot reduce stock below reserved quantities", 422);
     }
@@ -711,7 +717,7 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
       const lockedStock = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
       const resultingQuantity = lockedStock.quantity + lineInput.quantity;
       const unitCost = lineInput.unitCost ?? orderLine.unitCost;
-      const averageUnitCost = Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (lineInput.quantity * unitCost)) / Math.max(1, resultingQuantity));
+      const averageUnitCost = Math.round(((lockedStock.quantity * (lockedStock.averageUnitCost ?? 0)) + (lineInput.quantity * unitCost)) / Math.max(1, resultingQuantity));
       await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity, averageUnitCost } });
       await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: orderLine.inventoryItemId,
