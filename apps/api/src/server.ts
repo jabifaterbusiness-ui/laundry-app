@@ -6,6 +6,7 @@ import { registerConfiguredSubscriptionPaymentProviders } from "./modules/subscr
 import { startFinancialStatementScheduler } from "./modules/reports/financial-statement-scheduler.service.js";
 import { startBackupCloudScheduler } from "./modules/migrations/backup-cloud-scheduler.service.js";
 import { startSubscriptionExpiryReminderScheduler } from "./modules/subscriptions/subscription-expiry-reminder-scheduler.service.js";
+import { startInventoryReservationExpiryScheduler } from "./modules/inventory/inventory-reservation-expiry-scheduler.service.js";
 
 async function startServer() {
   const identityBackfill = await backfillBusinessPaymentIdentities();
@@ -19,6 +20,7 @@ async function startServer() {
     startFinancialStatementScheduler();
     startBackupCloudScheduler();
     startSubscriptionExpiryReminderScheduler();
+    startInventoryReservationExpiryScheduler();
   } else {
     logger.info("Background schedulers disabled by ENABLE_BACKGROUND_SCHEDULERS=false.");
   }
