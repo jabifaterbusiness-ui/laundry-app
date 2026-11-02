@@ -947,14 +947,72 @@ export async function releaseInventoryReservation(scope: BranchScope, input: { r
 }
 
 export async function getInventoryReorderRecommendations(scope: BranchScope) {
-  const stocks = await prisma.inventoryStock.findMany({
-    where: { businessId: scope.businessId, branchId: scope.branchId, inventoryItem: { isActive: true } },
-    include: { inventoryItem: true }, orderBy: { quantity: "asc" },
+  const items = await prisma.inventoryItem.findMany({
+    where: { businessId: scope.businessId, isActive: true },
+    include: { stocks: { where: { businessId: scope.businessId, branchId: scope.branchId } } },
+    orderBy: { name: "asc" },
   });
-  return stocks.filter((stock) => stock.quantity - stock.reservedQuantity <= stock.inventoryItem.lowStockThreshold).map((stock) => ({
-    inventoryItem: stock.inventoryItem, quantity: stock.quantity, reservedQuantity: stock.reservedQuantity,
-    availableQuantity: stock.quantity - stock.reservedQuantity,
-    suggestedOrderQuantity: Math.max(stock.inventoryItem.reorderQuantity, stock.inventoryItem.lowStockThreshold + stock.inventoryItem.reorderQuantity - (stock.quantity - stock.reservedQuantity)),
-    averageUnitCost: stock.averageUnitCost, stockValue: stock.quantity * stock.averageUnitCost,
+  return items.map((item) => {
+    const stock = item.stocks[0];
+    const quantity = stock?.quantity ?? 0;
+    const reservedQuantity = stock?.reservedQuantity ?? 0;
+    const averageUnitCost = stock?.averageUnitCost ?? 0;
+    return {
+      inventoryItem: item, quantity, reservedQuantity,
+      availableQuantity: quantity - reservedQuantity,
+      suggestedOrderQuantity: Math.max(0, Math.max(item.reorderQuantity, item.lowStockThreshold + item.reorderQuantity - (quantity - reservedQuantity))),
+      averageUnitCost, stockValue: quantity * averageUnitCost,
+    };
+  }).filter((row) => row.availableQuantity <= row.inventoryItem.lowStockThreshold);
+}
+
+export async function getInventoryReports(scope: BranchScope) {
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
+  const [stocks, movements, purchaseOrders] = await prisma.$transaction([
+    prisma.inventoryStock.findMany({
+      where: { businessId: scope.businessId, branchId: scope.branchId },
+      include: { inventoryItem: true },
+      orderBy: { inventoryItem: { name: "asc" } },
+    }),
+    prisma.inventoryMovement.findMany({
+      where: { businessId: scope.businessId, branchId: scope.branchId, createdAt: { gte: since } },
+      include: { inventoryItem: true },
+      orderBy: { createdAt: "desc" },
+      take: 2000,
+    }),
+    prisma.inventoryPurchaseOrder.findMany({
+      where: { businessId: scope.businessId, branchId: scope.branchId, createdAt: { gte: since } },
+      include: { supplier: true, lines: true, receipts: true },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+    }),
+  ]);
+  const valuation = stocks.map((stock) => ({
+    inventoryItem: stock.inventoryItem, quantity: stock.quantity,
+    reservedQuantity: stock.reservedQuantity, availableQuantity: stock.quantity - stock.reservedQuantity,
+    averageUnitCost: stock.averageUnitCost, totalValue: stock.quantity * stock.averageUnitCost,
   }));
+  const totalValuation = valuation.reduce((sum, row) => sum + row.totalValue, 0);
+  const movementTotals = movements.reduce<Record<string, number>>((totals, movement) => {
+    totals[movement.type] = (totals[movement.type] ?? 0) + movement.quantity;
+    return totals;
+  }, {});
+  const supplierPerformance = new Map<string, { supplierId: string; supplierName: string; orderCount: number; orderedValue: number; receivedOrderCount: number }>();
+  for (const order of purchaseOrders) {
+    const row = supplierPerformance.get(order.supplierId) ?? {
+      supplierId: order.supplierId, supplierName: order.supplier.name, orderCount: 0, orderedValue: 0, receivedOrderCount: 0,
+    };
+    row.orderCount += 1;
+    row.orderedValue += order.lines.reduce((sum, line) => sum + line.quantityOrdered * line.unitCost, 0);
+    if (order.status === "RECEIVED") row.receivedOrderCount += 1;
+    supplierPerformance.set(order.supplierId, row);
+  }
+  return {
+    periodDays: 30, totalValuation, valuation,
+    movementTotals, movementCount: movements.length,
+    consumptionQuantity: (movementTotals.ISSUE ?? 0) + (movementTotals.WASTE ?? 0) + (movementTotals.EXPIRED ?? 0),
+    adjustmentQuantity: movementTotals.ADJUSTMENT ?? 0,
+    supplierPerformance: [...supplierPerformance.values()].sort((a, b) => b.orderedValue - a.orderedValue),
+  };
 }
