@@ -19,6 +19,14 @@ import {
   createPurchaseOrder,
   listPurchaseOrders,
   receivePurchaseOrder,
+  createTransfer,
+  receiveTransfer,
+  listTransfers,
+  createStocktake,
+  applyStocktake,
+  createReservation,
+  releaseReservation,
+  reorderRecommendations,
 } from "./inventory.controller.js";
 
 export const inventoryRouter = Router();
@@ -73,3 +81,13 @@ inventoryRouter.post("/suppliers", requirePermission("inventory.manage"), asyncH
 inventoryRouter.get("/purchase-orders", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(listPurchaseOrders));
 inventoryRouter.post("/purchase-orders", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createPurchaseOrder));
 inventoryRouter.post("/purchase-orders/:id/receive", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(receivePurchaseOrder));
+
+
+inventoryRouter.get("/transfers", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(listTransfers));
+inventoryRouter.post("/transfers", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createTransfer));
+inventoryRouter.post("/transfers/:id/receive", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(receiveTransfer));
+inventoryRouter.post("/stocktakes", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createStocktake));
+inventoryRouter.post("/stocktakes/:id/apply", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(applyStocktake));
+inventoryRouter.post("/reservations", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createReservation));
+inventoryRouter.post("/reservations/:id/release", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(releaseReservation));
+inventoryRouter.get("/reorder-recommendations", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(reorderRecommendations));
