@@ -80,16 +80,6 @@ export async function globalSearch(
             name: true,
             phone: true,
             email: true,
-            ...(canViewOrders
-              ? {
-                  orders: {
-                    where: { branchId },
-                    orderBy: { createdAt: "desc" as const },
-                    take: 1,
-                    select: { id: true, orderNumber: true, status: true },
-                  },
-                }
-              : {}),
           },
         })
       : Promise.resolve([]),
@@ -186,9 +176,9 @@ export async function globalSearch(
       id: customer.id,
       title: customer.name,
       subtitle: [customer.phone, customer.email].filter(Boolean).join(" · "),
-      href: customer.orders?.[0]?.id
-        ? `/orders?orderId=${encodeURIComponent(customer.orders[0].id)}`
-        : `/orders?customerId=${encodeURIComponent(customer.id)}`,
+      // Customer search must open the customer workspace, not silently
+      // jump into whichever order happens to be newest in this branch.
+      href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
     })),
 
     ...orders.map((order) => ({
@@ -204,7 +194,8 @@ export async function globalSearch(
       id: invoice.id,
       title: `Invoice #${invoice.invoiceNumber}`,
       subtitle: `${invoice.customerName} · ${invoice.status}`,
-      href: `/invoices`,
+      // InvoicesPage reads invoiceId from the URL and opens that exact invoice.
+      href: `/invoices?invoiceId=${encodeURIComponent(invoice.id)}`,
     })),
   ].slice(0, input.limit);
 }
