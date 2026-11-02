@@ -153,8 +153,13 @@ export async function updateInventoryItem(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      const target = Array.isArray(error.meta?.target)
+        ? error.meta.target.join(",").toLowerCase()
+        : String(error.meta?.target ?? "").toLowerCase();
       throw new AppError(
-        "An inventory item with this name already exists",
+        target.includes("sku")
+          ? "An inventory item with this SKU already exists"
+          : "An inventory item with this name already exists",
         409,
       );
     }
@@ -180,11 +185,13 @@ export async function listInventoryItems(
     where.isActive = input.isActive;
   }
 
-  if (input.search) {
-    where.name = {
-      contains: input.search.trim(),
-      mode: "insensitive",
-    };
+  const term = input.search?.trim();
+  if (term) {
+    where.OR = [
+      { name: { contains: term, mode: "insensitive" } },
+      { sku: { contains: term, mode: "insensitive" } },
+      { category: { contains: term, mode: "insensitive" } },
+    ];
   }
 
   const skip = (input.page - 1) * input.pageSize;
