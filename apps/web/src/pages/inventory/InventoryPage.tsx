@@ -523,6 +523,11 @@ export function InventoryPage() {
       return;
     }
 
+    if (["RETURN", "WASTE", "EXPIRED"].includes(movementType) && !movementReason.trim()) {
+      setMovementError("Add a reason to document this return, waste or expiry movement.");
+      return;
+    }
+
     movementMutation.mutate();
   }
 
@@ -1097,7 +1102,13 @@ export function InventoryPage() {
               ? "Saving..."
               : movementType === "RECEIPT"
                 ? "Receive Stock"
-                : "Issue Stock"}
+                : movementType === "ISSUE"
+                  ? "Issue Stock"
+                  : movementType === "RETURN"
+                    ? "Record Return"
+                    : movementType === "WASTE"
+                      ? "Record Waste"
+                      : "Record Expired Stock"}
           </button>
 
           <button
