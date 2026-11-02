@@ -342,7 +342,7 @@ export async function approveInventoryStocktake(id: string, auth: AuthOptions, b
 export async function applyInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/apply`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });
 }
-export async function createInventoryReservation(input: { inventoryItemId: string; quantity: number; reference?: string }, auth: AuthOptions, branchId: string | null) {
+export async function createInventoryReservation(input: { inventoryItemId: string; quantity: number; reference?: string; expiresAt?: string }, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryReservation }>("/inventory/reservations", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
 }
 export async function releaseInventoryReservation(id: string, consumed: boolean, auth: AuthOptions, branchId: string | null) {
