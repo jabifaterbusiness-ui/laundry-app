@@ -50,7 +50,11 @@ describe("subscription expiry reminder scheduler", () => {
     await processSubscriptionExpiryReminders(now);
     expect(prismaMock.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        OR: expect.arrayContaining([{ status: "ACTIVE", cancelAtPeriodEnd: false }]),
+        OR: expect.arrayContaining([
+          { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) } },
+          { status: "EXPIRED", endsAt: { lte: now } },
+        ]),
+        business: { isActive: true, archivedAt: null },
       }),
     }));
   });
