@@ -947,13 +947,15 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
       });
       await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
       const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
-      const variance = line.countedQuantity - locked.quantity;
-      if ((locked.reservedQuantity ?? 0) > line.countedQuantity) throw new AppError("Stocktake count is below the quantity already reserved", 422);
-      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: line.countedQuantity } });
-      await tx.inventoryStocktakeLine.update({ where: { id: line.id }, data: { expectedQuantity: locked.quantity, variance } });
+      // The count is a snapshot. Apply its recorded variance to the latest
+      // balance so receipts/issues posted after the count are not overwritten.
+      const variance = line.countedQuantity - line.expectedQuantity;
+      const resultingQuantity = locked.quantity + variance;
+      if ((locked.reservedQuantity ?? 0) > resultingQuantity) throw new AppError("Stocktake variance would reduce stock below reserved quantities", 422);
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity } });
       if (variance !== 0) await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
-        quantity: Math.abs(variance), type: "STOCKTAKE", resultingQuantity: line.countedQuantity,
+        quantity: Math.abs(variance), type: "STOCKTAKE", resultingQuantity,
         reason: variance > 0 ? "Stocktake surplus" : "Stocktake shortage",
         reference: stocktake.reference, createdById: input.appliedById,
       } });

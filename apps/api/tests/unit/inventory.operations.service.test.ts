@@ -289,16 +289,20 @@ describe("inventory operations", () => {
     expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
   });
 
-  it("applies an approved stocktake and records the applied actor", async () => {
-    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", reference: "COUNT-1", status: "APPROVED", lines: [{ id: "line-1", inventoryItemId: ITEM, countedQuantity: 6 }] });
+  it("applies the recorded stocktake variance to the latest balance and preserves the count snapshot", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({
+      id: "count-1", reference: "COUNT-1", status: "APPROVED",
+      lines: [{ id: "line-1", inventoryItemId: ITEM, expectedQuantity: 4, countedQuantity: 6, variance: 2 }],
+    });
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
-    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 4, reservedQuantity: 0 });
-    db.inventoryStock.update.mockResolvedValue({ id: "stock-1", quantity: 6 });
-    db.inventoryStocktakeLine.update.mockResolvedValue({});
+    // A receipt of one unit occurred after the count was taken.
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 5, reservedQuantity: 0 });
+    db.inventoryStock.update.mockResolvedValue({ id: "stock-1", quantity: 7 });
     db.inventoryStocktake.update.mockResolvedValue({ id: "count-1", status: "APPLIED", appliedById: "manager-2" });
     await applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" });
-    expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 6 } });
-    expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "STOCKTAKE", quantity: 2, resultingQuantity: 6 }) });
+    expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 7 } });
+    expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "STOCKTAKE", quantity: 2, resultingQuantity: 7 }) });
+    expect(db.inventoryStocktakeLine.update).not.toHaveBeenCalled();
     expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "APPLIED", appliedById: "manager-2" }) }));
   });
 
