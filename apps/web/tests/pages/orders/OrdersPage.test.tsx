@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import type { Customer, Order } from "@laundry-app/shared";
 import { SensitiveAuthorizationProvider } from "../../../src/components/auth/SensitiveAuthorizationProvider.js";
 import { OrdersPage } from "../../../src/pages/orders/OrdersPage.js";
@@ -183,6 +183,21 @@ function renderPage(initialEntries: string[] = ["/orders"]) {
         </SensitiveAuthorizationProvider>
       </MemoryRouter>
     </QueryClientProvider>,
+  );
+}
+
+function SearchNavigationHarness() {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <button type="button" onClick={() => navigate(`/orders?customerId=${customerB.id}`)}>
+        Search customer B
+      </button>
+      <button type="button" onClick={() => navigate(`/orders?customerId=${customerA.id}`)}>
+        Search customer A
+      </button>
+    </>
   );
 }
 
@@ -496,6 +511,49 @@ describe("OrdersPage quick customer switching", () => {
         name: /change customer/i,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("switches back to an already-open customer workspace when the same search result is selected again", async () => {
+    vi.mocked(getCustomer).mockImplementation(async (id: string) =>
+      id === customerA.id ? customerA : customerB,
+    );
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/orders?customerId=${customerA.id}`]}>
+          <SensitiveAuthorizationProvider>
+            <SearchNavigationHarness />
+            <OrdersPage />
+          </SensitiveAuthorizationProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(
+        `customer:${customerA.id}`,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Search customer B" }));
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(
+        `customer:${customerB.id}`,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Search customer A" }));
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(
+        `customer:${customerA.id}`,
+      );
+    });
+
+    expect(useOrderWorkspaceStore.getState().workspaces).toHaveLength(2);
   });
 
   it("opens three customer workspaces", async () => {

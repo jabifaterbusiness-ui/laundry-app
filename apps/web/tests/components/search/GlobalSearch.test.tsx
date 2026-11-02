@@ -73,6 +73,25 @@ describe("GlobalSearch", () => {
     dispatchSpy.mockRestore();
   });
 
+  it("does not offer quick operations the current user is not permitted to run", async () => {
+    const operation = {
+      code: "MCB", name: "Manual Cloud Backup", description: "Create an encrypted cloud backup.",
+      permission: "migrations.manage", requiresConfirmation: false, sensitive: false,
+    };
+    searchQuickOperationsMock.mockReturnValue([operation]);
+    hasPermissionMock.mockImplementation((_user: unknown, permission: string) =>
+      permission !== "migrations.manage" && permission !== "customers.create",
+    );
+
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), {
+      target: { value: "manual cloud backup" },
+    });
+
+    await screen.findByText("No results found.");
+    expect(screen.queryByText("MCB")).not.toBeInTheDocument();
+  });
+
   it("clears the search query when the current route changes", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "CUSTOMER", id: "customer-1", title: "Ada Laundry",

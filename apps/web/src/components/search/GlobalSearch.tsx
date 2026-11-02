@@ -131,7 +131,9 @@ export function GlobalSearch() {
   }
 
   const groups = groupResults(results);
-  const quickOperations = searchQuickOperations(query);
+  const quickOperations = searchQuickOperations(query).filter((operation) =>
+    hasPermission(user, operation.permission),
+  );
   const canCreateCustomer = hasPermission(user, "customers.create");
 
   function addCustomerFromSearch() {
@@ -171,7 +173,7 @@ export function GlobalSearch() {
     >
       <input
         aria-label="Global search"
-        placeholder="Search customer name, email, phone, order number..."
+        placeholder="Search name, phone, email, order/invoice number, or an operation..."
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
