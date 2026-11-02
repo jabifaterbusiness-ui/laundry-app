@@ -251,6 +251,9 @@ describe("InventoryPage", () => {
         target: { value: "Fabric Softener" },
       },
     );
+    fireEvent.change(screen.getByLabelText("SKU"), { target: { value: "FAB-002" } });
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "Fabric Care" } });
+    fireEvent.change(screen.getByLabelText("Storage Location"), { target: { value: "Shelf B2" } });
 
     const selects = screen.getAllByRole("combobox");
     const unitSelect = selects[1];
@@ -269,9 +272,9 @@ describe("InventoryPage", () => {
       expect(mockCreateInventoryItem).toHaveBeenCalledWith(
         {
           name: "Fabric Softener",
-          sku: undefined,
-          category: undefined,
-          storageLocation: undefined,
+          sku: "FAB-002",
+          category: "Fabric Care",
+          storageLocation: "Shelf B2",
           description: undefined,
           unit: "BOTTLE",
           reorderQuantity: 0,
