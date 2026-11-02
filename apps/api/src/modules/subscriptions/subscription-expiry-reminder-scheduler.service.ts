@@ -13,9 +13,10 @@ export async function processSubscriptionExpiryReminders(now = new Date()) {
   const windowEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
   const subscriptions = await prisma.subscription.findMany({
     where: {
-      status: "ACTIVE",
-      cancelAtPeriodEnd: false,
-      endsAt: { lte: windowEnd },
+      OR: [
+        { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { lte: windowEnd } },
+        { status: "EXPIRED", endsAt: { lte: now } },
+      ],
       business: { isActive: true, archivedAt: null },
     },
     select: { id: true, businessId: true, endsAt: true, business: { select: {
