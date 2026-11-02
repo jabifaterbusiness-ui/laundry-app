@@ -239,6 +239,31 @@ describe("inventory operations", () => {
     expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "TRANSFER_IN", branchId: DESTINATION, resultingQuantity: 5 }) });
   });
 
+  it("rejects transfers to a destination branch outside the active business", async () => {
+    db.branch.findFirst
+      .mockResolvedValueOnce({ id: SOURCE, isActive: true })
+      .mockResolvedValueOnce(null);
+    await expect(createInventoryTransfer(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { destinationBranchId: "foreign-business-branch", transferNumber: "TR-FOREIGN", createdById: USER, lines: [{ inventoryItemId: ITEM, quantity: 1 }] },
+    )).rejects.toMatchObject({ statusCode: 404 });
+    expect(db.inventoryItem.findMany).not.toHaveBeenCalled();
+    expect(db.inventoryTransfer.create).not.toHaveBeenCalled();
+  });
+
+  it("allows a transfer receipt only from its destination branch", async () => {
+    db.inventoryTransfer.findFirst.mockResolvedValue(null);
+    await expect(receiveInventoryTransfer(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { transferId: "transfer-owned-by-another-branch", receivedById: USER, lines: [{ transferLineId: "line-1", quantity: 1 }] },
+    )).rejects.toMatchObject({ statusCode: 404 });
+    expect(db.inventoryTransfer.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "transfer-owned-by-another-branch", businessId: BUSINESS, destinationBranchId: SOURCE },
+    }));
+    expect(db.inventoryStock.upsert).not.toHaveBeenCalled();
+    expect(db.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
   it("creates a stocktake snapshot with expected and counted quantities", async () => {
     db.branch.findFirst.mockResolvedValue({ id: SOURCE, isActive: true });
     db.inventoryItem.findMany.mockResolvedValue([{ id: ITEM }]);
