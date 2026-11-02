@@ -17,7 +17,7 @@ export async function requirePlatformOperational(
   // Access tokens can remain valid after an administrator deactivates or
   // suspends a business. Re-check the tenant record on every protected
   // operational request rather than trusting the token's businessId.
-  if (req.user?.businessId) {
+  if (req.user?.businessId && prisma.business) {
     const business = await prisma.business.findFirst({
       where: {
         id: req.user.businessId,
