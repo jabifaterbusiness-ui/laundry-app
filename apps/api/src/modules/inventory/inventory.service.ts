@@ -402,7 +402,7 @@ export async function createInventoryMovement(
     const change = input.type === "RECEIPT" || input.type === "RETURN" ? input.quantity : -input.quantity;
     const resultingQuantity = lockedStock.quantity + change;
 
-    if (resultingQuantity < 0 || (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - lockedStock.reservedQuantity < input.quantity)) {
+    if (resultingQuantity < 0 || (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - (lockedStock.reservedQuantity ?? 0) < input.quantity)) {
       throw new AppError("Insufficient available inventory stock", 422);
     }
 
@@ -410,7 +410,7 @@ export async function createInventoryMovement(
       where: { id: stock.id },
       data: {
         quantity: resultingQuantity,
-        ...(["RECEIPT", "RETURN"].includes(input.type) ? { averageUnitCost: Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (input.quantity * (input.unitCost ?? lockedStock.averageUnitCost))) / Math.max(1, resultingQuantity)) } : {}),
+        ...(["RECEIPT", "RETURN"].includes(input.type) ? { averageUnitCost: Math.round(((lockedStock.quantity * (lockedStock.averageUnitCost ?? 0)) + (input.quantity * (input.unitCost ?? lockedStock.averageUnitCost ?? 0))) / Math.max(1, resultingQuantity)) } : {}),
       },
     });
 
@@ -496,7 +496,7 @@ export async function adjustInventoryStock(
     });
     const resultingQuantity = lockedStock.quantity + input.quantity;
 
-    if (resultingQuantity < lockedStock.reservedQuantity) {
+    if (resultingQuantity < (lockedStock.reservedQuantity ?? 0)) {
       throw new AppError("Inventory adjustment cannot reduce stock below reserved quantities", 422);
     }
 
