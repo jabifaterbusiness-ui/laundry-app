@@ -174,6 +174,27 @@ describe("inventory operations", () => {
     expect(db.inventoryReservation.create).not.toHaveBeenCalled();
   });
 
+  it("does not change stock when the reservation balance is inconsistent", async () => {
+    db.inventoryReservation.findFirst.mockResolvedValue({ id: "reservation-2", inventoryItemId: ITEM, quantity: 3, reference: null, createdById: USER });
+    db.inventoryStock.findUnique.mockResolvedValue({ id: "stock-2" });
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-2", quantity: 5, reservedQuantity: 2 });
+    await expect(releaseInventoryReservation(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { reservationId: "reservation-2", consumed: true },
+    )).rejects.toMatchObject({ statusCode: 409 });
+    expect(db.inventoryStock.update).not.toHaveBeenCalled();
+    expect(db.inventoryReservation.update).not.toHaveBeenCalled();
+  });
+
+  it("does not release a reservation that is no longer active", async () => {
+    db.inventoryReservation.findFirst.mockResolvedValue(null);
+    await expect(releaseInventoryReservation(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { reservationId: "reservation-3" },
+    )).rejects.toMatchObject({ statusCode: 404 });
+    expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
+  });
+
   it("consumes an active reservation atomically and writes an issue movement", async () => {
     db.inventoryReservation.findFirst.mockResolvedValue({ id: "reservation-1", inventoryItemId: ITEM, quantity: 2, reference: "ORDER-1", createdById: USER });
     db.inventoryStock.findUnique.mockResolvedValue({ id: "stock-1" });
