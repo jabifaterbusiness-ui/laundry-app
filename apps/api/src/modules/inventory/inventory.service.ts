@@ -938,6 +938,9 @@ export async function createInventoryReservation(scope: BranchScope, input: {
 }) {
   return prisma.$transaction(async (tx) => {
     if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) throw new AppError("Reservation quantity must be a positive whole number", 422);
+    if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
+      throw new AppError("Reservation expiry must be in the future", 422);
+    }
     const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, businessId: scope.businessId, isActive: true } });
     if (!item) throw new AppError("Inventory item not found or inactive", 404);
     const stock = await tx.inventoryStock.upsert({
