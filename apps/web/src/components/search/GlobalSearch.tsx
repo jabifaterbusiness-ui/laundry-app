@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   globalSearch,
@@ -45,14 +45,14 @@ export function GlobalSearch() {
   // Search belongs to the current page, user, and branch. Clear it whenever
   // navigation or the authenticated tenant context changes so an old email,
   // phone number, or customer query is never left in the global header.
-  useEffect(() => {
+  useLayoutEffect(() => {
     requestIdRef.current += 1;
     setQuery("");
     setResults([]);
     setIsOpen(false);
     setIsLoading(false);
     setError(null);
-  }, [location.key, user?.id, user?.businessId, accessToken, activeBranchId]);
+  }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -99,6 +99,9 @@ export function GlobalSearch() {
 
     return () => {
       window.clearTimeout(timer);
+      // Invalidate in-flight requests as soon as the query/context effect is
+      // cleaned up, not only when the next request eventually starts.
+      if (requestId === requestIdRef.current) requestIdRef.current += 1;
     };
   }, [query, accessToken, activeBranchId]);
 

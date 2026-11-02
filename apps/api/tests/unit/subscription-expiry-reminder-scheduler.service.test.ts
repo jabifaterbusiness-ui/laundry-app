@@ -29,7 +29,12 @@ describe("subscription expiry reminder scheduler", () => {
 
     expect(result).toEqual({ subscriptionsScanned: 1, remindersCreated: 1 });
     expect(prismaMock.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ status: "ACTIVE", cancelAtPeriodEnd: false }),
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) } },
+          { status: "EXPIRED", endsAt: { lte: now } },
+        ]),
+      }),
     }));
     expect(prismaMock.businessInboxMessage.createMany).toHaveBeenCalledWith(expect.objectContaining({
       skipDuplicates: true,
@@ -44,7 +49,13 @@ describe("subscription expiry reminder scheduler", () => {
     const now = new Date("2026-11-01T10:00:00.000Z");
     await processSubscriptionExpiryReminders(now);
     expect(prismaMock.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ cancelAtPeriodEnd: false }),
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) } },
+          { status: "EXPIRED", endsAt: { lte: now } },
+        ]),
+        business: { isActive: true, archivedAt: null },
+      }),
     }));
   });
 
