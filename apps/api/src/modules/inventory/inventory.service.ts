@@ -13,8 +13,12 @@ type BranchScope = {
 
 type CreateInventoryItemInput = {
   name: string;
+  sku?: string;
+  category?: string;
+  storageLocation?: string;
   description?: string;
   unit: "PIECE" | "PACK" | "BOTTLE" | "LITRE" | "KILOGRAM" | "BOX" | "ROLL" | "OTHER";
+  reorderQuantity?: number;
   lowStockThreshold?: number;
 };
 
@@ -33,8 +37,12 @@ export async function createInventoryItem(
       data: {
         businessId: scope.businessId,
         name,
+        sku: input.sku?.trim() || null,
+        category: input.category?.trim() || null,
+        storageLocation: input.storageLocation?.trim() || null,
         description: input.description?.trim() || null,
         unit: input.unit,
+        reorderQuantity: input.reorderQuantity ?? 0,
         lowStockThreshold: input.lowStockThreshold ?? 0,
       },
     });
@@ -55,8 +63,12 @@ export async function createInventoryItem(
 
 export type UpdateInventoryItemInput = {
   name?: string;
+  sku?: string;
+  category?: string;
+  storageLocation?: string;
   description?: string;
   unit?: "PIECE" | "PACK" | "BOTTLE" | "LITRE" | "KILOGRAM" | "BOX" | "ROLL" | "OTHER";
+  reorderQuantity?: number;
   lowStockThreshold?: number;
   isActive?: boolean;
 };
@@ -106,6 +118,9 @@ export async function updateInventoryItem(
     data.name = name;
   }
 
+  if (input.sku !== undefined) data.sku = input.sku.trim() || null;
+  if (input.category !== undefined) data.category = input.category.trim() || null;
+  if (input.storageLocation !== undefined) data.storageLocation = input.storageLocation.trim() || null;
   if (input.description !== undefined) {
     data.description = input.description.trim() || null;
   }
@@ -114,6 +129,7 @@ export async function updateInventoryItem(
     data.unit = input.unit;
   }
 
+  if (input.reorderQuantity !== undefined) data.reorderQuantity = input.reorderQuantity;
   if (input.lowStockThreshold !== undefined) {
     data.lowStockThreshold = input.lowStockThreshold;
   }
