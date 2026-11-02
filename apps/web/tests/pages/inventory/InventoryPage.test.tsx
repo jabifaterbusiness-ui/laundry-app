@@ -19,6 +19,7 @@ const mockCreateInventorySupplier = vi.fn();
 const mockListInventoryPurchaseOrders = vi.fn();
 const mockCreateInventoryPurchaseOrder = vi.fn();
 const mockReceiveInventoryPurchaseOrder = vi.fn();
+const mockGetInventoryReports = vi.fn();
 
 vi.mock("../../../src/lib/inventory-api.js", () => ({
   listInventoryItems: (...args: unknown[]) =>
@@ -40,6 +41,7 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
   listInventoryPurchaseOrders: (...args: unknown[]) => mockListInventoryPurchaseOrders(...args),
   createInventoryPurchaseOrder: (...args: unknown[]) => mockCreateInventoryPurchaseOrder(...args),
   receiveInventoryPurchaseOrder: (...args: unknown[]) => mockReceiveInventoryPurchaseOrder(...args),
+  getInventoryReports: (...args: unknown[]) => mockGetInventoryReports(...args),
 }));
 
 vi.mock("../../../src/state/auth-store.js", () => ({
@@ -110,6 +112,18 @@ function renderPage() {
 }
 
 function mockSuccessfulQueries() {
+  mockGetInventoryReports.mockResolvedValue({
+    data: {
+      periodDays: 30,
+      totalValuation: 0,
+      movementCount: 0,
+      consumptionQuantity: 0,
+      adjustmentQuantity: 0,
+      valuation: [],
+      movementTotals: {},
+      supplierPerformance: [],
+    },
+  });
   mockListInventorySuppliers.mockResolvedValue({ suppliers: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } });
   mockListInventoryPurchaseOrders.mockResolvedValue({ purchaseOrders: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } });
   mockListInventoryItems.mockResolvedValue({
@@ -251,7 +265,7 @@ describe("InventoryPage", () => {
     );
 
     fireEvent.change(
-      screen.getByLabelText("Item name"),
+      screen.getByLabelText("Item"),
       {
         target: { value: "Fabric Softener" },
       },
