@@ -1034,8 +1034,8 @@ export async function getInventoryBranchComparison(scope: BusinessScope) {
 
   return branches.map((branch) => {
     const stocks = branch.inventoryStocks;
-    const totalUnits = stocks.reduce((sum, stock) => sum + stock.quantity, 0);
-    const reservedUnits = stocks.reduce((sum, stock) => sum + stock.reservedQuantity, 0);
+    // Quantities from different inventory units (kg, bottles, pieces, etc.)
+    // must not be added together; valuation and item counts are comparable.
     const totalValuation = stocks.reduce((sum, stock) => sum + stock.quantity * stock.averageUnitCost, 0);
     const lowStockItems = stocks.filter((stock) =>
       stock.quantity - stock.reservedQuantity <= stock.inventoryItem.lowStockThreshold
@@ -1044,9 +1044,6 @@ export async function getInventoryBranchComparison(scope: BusinessScope) {
       branchId: branch.id,
       branchName: branch.name,
       itemCount: stocks.length,
-      totalUnits,
-      reservedUnits,
-      availableUnits: totalUnits - reservedUnits,
       totalValuation,
       lowStockItems,
     };
