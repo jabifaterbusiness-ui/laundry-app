@@ -51,8 +51,13 @@ export async function createInventoryItem(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      const target = Array.isArray(error.meta?.target)
+        ? error.meta.target.join(",").toLowerCase()
+        : String(error.meta?.target ?? "").toLowerCase();
       throw new AppError(
-        "An inventory item with this name already exists",
+        target.includes("sku")
+          ? "An inventory item with this SKU already exists"
+          : "An inventory item with this name already exists",
         409,
       );
     }
