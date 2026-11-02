@@ -35,8 +35,12 @@ const UNITS: InventoryUnit[] = [
 
 const EMPTY_ITEM_FORM = {
   name: "",
+  sku: "",
+  category: "",
+  storageLocation: "",
   description: "",
   unit: "PIECE" as InventoryUnit,
+  reorderQuantity: 0,
   lowStockThreshold: 0,
 };
 
@@ -130,8 +134,12 @@ export function InventoryPage() {
     mutationFn: async () => {
       const input = {
         name: itemForm.name.trim(),
+        sku: itemForm.sku.trim() || undefined,
+        category: itemForm.category.trim() || undefined,
+        storageLocation: itemForm.storageLocation.trim() || undefined,
         description: itemForm.description.trim() || undefined,
         unit: itemForm.unit,
+        reorderQuantity: itemForm.reorderQuantity,
         lowStockThreshold: itemForm.lowStockThreshold,
       };
 
@@ -328,8 +336,12 @@ export function InventoryPage() {
     setEditingItem(item);
     setItemForm({
       name: item.name,
+      sku: item.sku ?? "",
+      category: item.category ?? "",
+      storageLocation: item.storageLocation ?? "",
       description: item.description ?? "",
       unit: item.unit,
+      reorderQuantity: item.reorderQuantity,
       lowStockThreshold: item.lowStockThreshold,
     });
     setItemFormError(null);
@@ -342,6 +354,11 @@ export function InventoryPage() {
 
     if (!itemForm.name.trim()) {
       setItemFormError("Inventory item name is required.");
+      return;
+    }
+
+    if (!Number.isInteger(itemForm.reorderQuantity) || itemForm.reorderQuantity < 0) {
+      setItemFormError("Reorder quantity must be zero or greater.");
       return;
     }
 
@@ -495,7 +512,9 @@ export function InventoryPage() {
           <table>
             <thead>
               <tr>
-                <th>Item</th>
+                <th>Item / SKU</th>
+                <th>Category</th>
+                <th>Location</th>
                 <th>Unit</th>
                 <th>Low Stock Threshold</th>
                 <th>Status</th>
@@ -513,7 +532,10 @@ export function InventoryPage() {
                     >
                       {item.name}
                     </button>
+                    <small className="inventory-item-sku">{item.sku || "No SKU"}</small>
                   </td>
+                  <td>{item.category || "—"}</td>
+                  <td>{item.storageLocation || "—"}</td>
                   <td>{formatUnit(item.unit)}</td>
                   <td>{item.lowStockThreshold}</td>
                   <td>
@@ -599,6 +621,42 @@ export function InventoryPage() {
 
             <div>
               <label>
+                SKU
+                <input
+                  value={itemForm.sku}
+                  onChange={(event) => setItemForm((current) => ({ ...current, sku: event.target.value }))}
+                  maxLength={100}
+                  placeholder="Optional stock keeping code"
+                />
+              </label>
+            </div>
+
+            <div>
+              <label>
+                Category
+                <input
+                  value={itemForm.category}
+                  onChange={(event) => setItemForm((current) => ({ ...current, category: event.target.value }))}
+                  maxLength={120}
+                  placeholder="e.g. Chemicals, Packaging"
+                />
+              </label>
+            </div>
+
+            <div>
+              <label>
+                Storage Location
+                <input
+                  value={itemForm.storageLocation}
+                  onChange={(event) => setItemForm((current) => ({ ...current, storageLocation: event.target.value }))}
+                  maxLength={160}
+                  placeholder="e.g. Store A / Shelf 2"
+                />
+              </label>
+            </div>
+
+            <div>
+              <label>
                 Description
                 <textarea
                   value={itemForm.description}
@@ -630,6 +688,19 @@ export function InventoryPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+
+            <div>
+              <label>
+                Reorder Quantity
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={itemForm.reorderQuantity}
+                  onChange={(event) => setItemForm((current) => ({ ...current, reorderQuantity: Number(event.target.value) }))}
+                />
               </label>
             </div>
 
