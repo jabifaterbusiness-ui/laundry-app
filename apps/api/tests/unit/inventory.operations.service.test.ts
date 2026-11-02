@@ -57,6 +57,23 @@ describe("inventory operations", () => {
   });
 
 
+  it("rejects invalid purchase receipt quantities and costs before opening a transaction", async () => {
+    const invalidLines = [
+      { purchaseOrderLineId: "line-1", quantity: 0 },
+      { purchaseOrderLineId: "line-1", quantity: -2 },
+      { purchaseOrderLineId: "line-1", quantity: 1.5 },
+      { purchaseOrderLineId: "line-1", quantity: 1, unitCost: -1 },
+      { purchaseOrderLineId: "line-1", quantity: 1, unitCost: 1.25 },
+    ];
+    for (const line of invalidLines) {
+      await expect(receiveInventoryPurchaseOrder(
+        { businessId: BUSINESS, branchId: SOURCE },
+        { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: USER, lines: [line] },
+      )).rejects.toMatchObject({ statusCode: 422 });
+    }
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it("requires an audit reason for returns, waste and expiry movements", async () => {
     for (const type of ["RETURN", "WASTE", "EXPIRED"] as const) {
       await expect(createInventoryMovement(
