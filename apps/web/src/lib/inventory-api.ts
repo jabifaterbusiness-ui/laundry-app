@@ -11,9 +11,8 @@ export type InventoryUnit =
   | "OTHER";
 
 export type InventoryMovementType =
-  | "RECEIPT"
-  | "ISSUE"
-  | "ADJUSTMENT";
+  | "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "EXPIRED"
+  | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE";
 
 export interface InventoryItem {
   id: string;
@@ -37,6 +36,8 @@ export interface InventoryStock {
   branchId: string;
   inventoryItemId: string;
   quantity: number;
+  reservedQuantity: number;
+  averageUnitCost: number;
   createdAt: string;
   updatedAt: string;
   inventoryItem: InventoryItem;
@@ -299,4 +300,44 @@ export async function createInventoryPurchaseOrder(input: CreateInventoryPurchas
 }
 export async function receiveInventoryPurchaseOrder(id: string, input: ReceiveInventoryPurchaseOrderInput, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: unknown }>(`/inventory/purchase-orders/${id}/receive`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+
+export interface InventoryTransfer {
+  id: string; transferNumber: string; status: "DISPATCHED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
+  sourceBranchId: string; destinationBranchId: string; sourceBranch: { id: string; name: string };
+  destinationBranch: { id: string; name: string };
+  lines: Array<{ id: string; inventoryItemId: string; quantityDispatched: number; quantityReceived: number; unitCost: number; inventoryItem: InventoryItem }>;
+}
+export interface InventoryStocktake {
+  id: string; reference: string; status: "DRAFT" | "APPLIED" | "CANCELLED";
+  lines: Array<{ id: string; inventoryItemId: string; expectedQuantity: number; countedQuantity: number; variance: number; inventoryItem: InventoryItem }>;
+}
+export interface InventoryReservation { id: string; inventoryItemId: string; quantity: number; status: string; reference: string | null; }
+export interface InventoryReorderRecommendation {
+  inventoryItem: InventoryItem; quantity: number; reservedQuantity: number; availableQuantity: number;
+  suggestedOrderQuantity: number; averageUnitCost: number; stockValue: number;
+}
+export async function createInventoryTransfer(input: { destinationBranchId: string; transferNumber: string; notes?: string; lines: Array<{ inventoryItemId: string; quantity: number }> }, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryTransfer }>("/inventory/transfers", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+export async function listInventoryTransfers(auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ transfers: InventoryTransfer[]; pagination: Pagination }>("/inventory/transfers", { accessToken: auth.accessToken, branchId });
+}
+export async function receiveInventoryTransfer(id: string, lines: Array<{ transferLineId: string; quantity: number }>, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryTransfer }>(`/inventory/transfers/${id}/receive`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({ lines }) });
+}
+export async function createInventoryStocktake(input: { reference: string; notes?: string; lines: Array<{ inventoryItemId: string; countedQuantity: number }> }, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryStocktake }>("/inventory/stocktakes", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+export async function applyInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/apply`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });
+}
+export async function createInventoryReservation(input: { inventoryItemId: string; quantity: number; reference?: string }, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryReservation }>("/inventory/reservations", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+}
+export async function releaseInventoryReservation(id: string, consumed: boolean, auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryReservation }>(`/inventory/reservations/${id}/release`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({ consumed }) });
+}
+export async function listInventoryReorderRecommendations(auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryReorderRecommendation[] }>("/inventory/reorder-recommendations", { accessToken: auth.accessToken, branchId });
 }
