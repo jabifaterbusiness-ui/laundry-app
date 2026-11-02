@@ -14,15 +14,23 @@ export const inventoryMovementIdParamSchema = z.object({
 
 export const createInventoryItemSchema = z.object({
   name: z.string().trim().min(1, "Inventory item name is required").max(200, "Inventory item name is too long"),
+  sku: z.string().trim().max(100, "SKU is too long").optional(),
+  category: z.string().trim().max(120, "Category is too long").optional(),
+  storageLocation: z.string().trim().max(160, "Storage location is too long").optional(),
   description: z.string().trim().max(1000, "Inventory item description is too long").optional(),
   unit: z.enum(["PIECE", "PACK", "BOTTLE", "LITRE", "KILOGRAM", "BOX", "ROLL", "OTHER"]),
+  reorderQuantity: z.coerce.number().int().min(0, "Reorder quantity cannot be negative").default(0),
   lowStockThreshold: z.coerce.number().int().min(0, "Low stock threshold cannot be negative").default(0),
 }).strict();
 
 export const updateInventoryItemSchema = z.object({
   name: z.string().trim().min(1, "Inventory item name is required").max(200, "Inventory item name is too long").optional(),
+  sku: z.string().trim().max(100, "SKU is too long").optional(),
+  category: z.string().trim().max(120, "Category is too long").optional(),
+  storageLocation: z.string().trim().max(160, "Storage location is too long").optional(),
   description: z.string().trim().max(1000, "Inventory item description is too long").optional(),
   unit: z.enum(["PIECE", "PACK", "BOTTLE", "LITRE", "KILOGRAM", "BOX", "ROLL", "OTHER"]).optional(),
+  reorderQuantity: z.coerce.number().int().min(0, "Reorder quantity cannot be negative").optional(),
   lowStockThreshold: z.coerce.number().int().min(0, "Low stock threshold cannot be negative").optional(),
   isActive: z.boolean().optional(),
 }).strict();
