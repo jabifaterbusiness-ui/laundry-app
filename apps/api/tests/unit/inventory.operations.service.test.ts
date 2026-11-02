@@ -107,7 +107,22 @@ describe("inventory operations", () => {
     }));
   });
 
-  it("lists stocktakes within the active business and branch", async () => {\n    db.inventoryStocktake.findMany.mockResolvedValue([{ id: "count-1" }]);\n    await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });\n    expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE } }));\n  });\n\n  it("requires a submitted stocktake and a different user to approve it", async () => {\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });\n    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();\n    expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });\n    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });\n    expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);\n  });\n\n  it("prevents reservations beyond available stock", async () => {
+  it("lists stocktakes within the active business and branch", async () => {
+    db.inventoryStocktake.findMany.mockResolvedValue([{ id: "count-1" }]);
+    await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });
+    expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE } }));
+  });
+
+  it("requires a submitted stocktake and a different user to approve it", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });
+    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();
+    expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));
+    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });
+    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });
+    expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("prevents reservations beyond available stock", async () => {
     db.inventoryItem.findFirst.mockResolvedValue({ id: ITEM, isActive: true });
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 5, reservedQuantity: 4 });
