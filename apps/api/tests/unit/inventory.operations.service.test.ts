@@ -88,18 +88,26 @@ describe("inventory operations", () => {
   it("compares stock only across active branches in the requested business", async () => {
     db.branch.findMany.mockResolvedValue([
       { id: SOURCE, name: "Central", inventoryStocks: [
-        { quantity: 10, reservedQuantity: 2, averageUnitCost: 50, inventoryItem: { lowStockThreshold: 3 } },
-        { quantity: 1, reservedQuantity: 0, averageUnitCost: 25, inventoryItem: { lowStockThreshold: 2 } },
+        { inventoryItemId: "item-1", quantity: 10, reservedQuantity: 2, averageUnitCost: 50, inventoryItem: { lowStockThreshold: 3 } },
+        { inventoryItemId: "item-2", quantity: 1, reservedQuantity: 0, averageUnitCost: 25, inventoryItem: { lowStockThreshold: 2 } },
       ] },
       { id: DESTINATION, name: "North", inventoryStocks: [
-        { quantity: 4, reservedQuantity: 1, averageUnitCost: 100, inventoryItem: { lowStockThreshold: 2 } },
+        { inventoryItemId: "item-1", quantity: 4, reservedQuantity: 1, averageUnitCost: 100, inventoryItem: { lowStockThreshold: 2 } },
       ] },
     ]);
+    db.inventoryItem.findMany.mockResolvedValue([
+      { id: "item-1", lowStockThreshold: 3 },
+      { id: "item-2", lowStockThreshold: 2 },
+      { id: "item-3", lowStockThreshold: 0 },
+    ]);
     await expect(getInventoryBranchComparison({ businessId: BUSINESS })).resolves.toEqual([
-      { branchId: SOURCE, branchName: "Central", itemCount: 2, totalValuation: 525, lowStockItems: 1 },
-      { branchId: DESTINATION, branchName: "North", itemCount: 1, totalValuation: 400, lowStockItems: 0 },
+      { branchId: SOURCE, branchName: "Central", itemCount: 3, totalValuation: 525, lowStockItems: 2 },
+      { branchId: DESTINATION, branchName: "North", itemCount: 3, totalValuation: 400, lowStockItems: 2 },
     ]);
     expect(db.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: BUSINESS, isActive: true },
+    }));
+    expect(db.inventoryItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { businessId: BUSINESS, isActive: true },
     }));
   });
