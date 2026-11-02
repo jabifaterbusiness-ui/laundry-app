@@ -1003,6 +1003,41 @@ export async function getInventoryReorderRecommendations(scope: BranchScope) {
   }).filter((row) => row.availableQuantity <= row.inventoryItem.lowStockThreshold);
 }
 
+export async function getInventoryBranchComparison(scope: BusinessScope) {
+  const branches = await prisma.branch.findMany({
+    where: { businessId: scope.businessId, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      inventoryStocks: {
+        where: { businessId: scope.businessId },
+        include: { inventoryItem: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return branches.map((branch) => {
+    const stocks = branch.inventoryStocks;
+    const totalUnits = stocks.reduce((sum, stock) => sum + stock.quantity, 0);
+    const reservedUnits = stocks.reduce((sum, stock) => sum + stock.reservedQuantity, 0);
+    const totalValuation = stocks.reduce((sum, stock) => sum + stock.quantity * stock.averageUnitCost, 0);
+    const lowStockItems = stocks.filter((stock) =>
+      stock.quantity - stock.reservedQuantity <= stock.inventoryItem.lowStockThreshold
+    ).length;
+    return {
+      branchId: branch.id,
+      branchName: branch.name,
+      itemCount: stocks.length,
+      totalUnits,
+      reservedUnits,
+      availableUnits: totalUnits - reservedUnits,
+      totalValuation,
+      lowStockItems,
+    };
+  });
+}
+
 export async function getInventoryReports(scope: BranchScope) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
