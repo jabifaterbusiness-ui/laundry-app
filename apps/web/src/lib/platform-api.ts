@@ -11,12 +11,22 @@ export interface PlatformBusiness {
   address: string | null;
   logoUrl: string | null;
   isActive: boolean;
+  suspendedUntil?: string | null;
+  suspensionReason?: string | null;
+  archivedAt?: string | null;
+  owner?: {
+    fullName: string;
+    email: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
   subscription: {
     id: string;
     plan: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-    status: "ACTIVE" | "EXPIRED";
+    status: "ACTIVE" | "EXPIRED" | "CANCELLED";
+    cancelAtPeriodEnd?: boolean;
+    cancelledAt?: string | null;
+    cancellationReason?: string | null;
     startsAt: string;
     endsAt: string;
   } | null;
@@ -532,6 +542,63 @@ export async function renewPlatformBusinessSubscription(
       method: "POST",
       accessToken,
       body: JSON.stringify({ plan }),
+    },
+  );
+}
+
+
+export async function cancelPlatformBusinessSubscription(
+  businessId: string,
+  when: "IMMEDIATE" | "PERIOD_END",
+  reason: string,
+  accessToken: string | null,
+) {
+  return apiFetch<NonNullable<PlatformBusiness["subscription"]>>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/subscription/cancel`,
+    {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ when, reason }),
+    },
+  );
+}
+
+
+export async function suspendPlatformBusiness(businessId: string, durationDays: number, reason: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; suspendedUntil: string; suspensionReason: string; updatedAt: string }>(`/platform/businesses/${encodeURIComponent(businessId)}/suspend`, { method: "POST", accessToken, body: JSON.stringify({ durationDays, reason }) });
+}
+
+export async function clearPlatformBusinessSuspension(businessId: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; suspendedUntil: null; suspensionReason: null; updatedAt: string }>(`/platform/businesses/${encodeURIComponent(businessId)}/suspension/clear`, { method: "POST", accessToken });
+}
+
+export interface PlatformAnnouncement { broadcastId: string; title: string; body: string; publishedAt: string; expiresAt: string | null; displayDurationMinutes: number; recipientCount: number; readCount: number; dismissedCount: number; businessCount: number; }
+export async function getPlatformMessages(accessToken: string | null) { return apiFetch<PlatformAnnouncement[]>("/platform/messages", { accessToken }); }
+export async function createPlatformMessage(input: { title: string; body: string; businessId?: string; publishedAt?: string; expiresAt?: string; displayDurationMinutes: number }, accessToken: string | null) {
+ return apiFetch<{ broadcastId: string; recipientCount: number; businessCount: number; publishedAt: string; expiresAt: string | null }>("/platform/messages", { method: "POST", accessToken, body: JSON.stringify(input) });
+}
+
+export async function archivePlatformBusiness(businessId: string, accessToken: string | null) {
+  return apiFetch<{ id: string; name: string; isActive: boolean; archivedAt: string; updatedAt: string }>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/archive`,
+    { method: "POST", accessToken },
+  );
+}
+
+
+export async function permanentlyDeletePlatformBusiness(
+  businessId: string,
+  confirmation: string,
+  authorizationToken: string,
+  accessToken: string | null,
+) {
+  return apiFetch<{ deleted: true; businessId: string; businessName: string }>(
+    `/platform/businesses/${encodeURIComponent(businessId)}/permanent`,
+    {
+      method: "DELETE",
+      accessToken,
+      sensitiveAuthorization: authorizationToken,
+      body: JSON.stringify({ confirmation }),
     },
   );
 }

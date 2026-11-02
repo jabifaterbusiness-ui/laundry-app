@@ -11,6 +11,13 @@ const {
   useIsMutatingMock,
   getCustomerMock,
   getOrderMock,
+  exportBackupMock,
+  listCloudBackupConnectionsMock,
+  getCloudBackupSettingsMock,
+  createCloudBackupRunMock,
+  requestSensitiveAuthorizationMock,
+  createManualLocalBackupMock,
+  publishCloudBackupNotificationMock,
 } = vi.hoisted(() => ({
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
@@ -19,6 +26,34 @@ const {
   useIsMutatingMock: vi.fn(() => 0),
   getCustomerMock: vi.fn(),
   getOrderMock: vi.fn(),
+  exportBackupMock: vi.fn(),
+  listCloudBackupConnectionsMock: vi.fn(),
+  getCloudBackupSettingsMock: vi.fn(),
+  createCloudBackupRunMock: vi.fn(),
+  requestSensitiveAuthorizationMock: vi.fn().mockResolvedValue("sensitive-auth"),
+  createManualLocalBackupMock: vi.fn(),
+  publishCloudBackupNotificationMock: vi.fn(),
+}));
+
+vi.mock("../../../src/components/data-management/LocalBackupManager.js", () => ({
+  createManualLocalBackup: createManualLocalBackupMock,
+}));
+
+vi.mock("../../../src/lib/data-management-api.js", () => ({
+  exportBackup: exportBackupMock,
+  listCloudBackupConnections: listCloudBackupConnectionsMock,
+  getCloudBackupSettings: getCloudBackupSettingsMock,
+  createCloudBackupRun: createCloudBackupRunMock,
+}));
+
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.tsx", () => ({
+  useSensitiveAuthorization: () => ({
+    requestSensitiveAuthorization: requestSensitiveAuthorizationMock,
+  }),
+}));
+
+vi.mock("../../../src/lib/cloud-backup-notifications.js", () => ({
+  publishCloudBackupNotification: publishCloudBackupNotificationMock,
 }));
 
 vi.mock("../../../src/lib/quick-operations-api.js", () => ({
@@ -44,6 +79,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     user: {
       id: string;
       businessId: string | null;
+      securityRole: string;
     } | null;
   }) => unknown) =>
     selector({
@@ -52,6 +88,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
       user: {
         id: "user-1",
         businessId: "business-1",
+        securityRole: "BUSINESS_OWNER",
       },
     }),
 }));
@@ -103,6 +140,22 @@ vi.mock("../../../src/lib/offline-sync-queue.js", () => ({
 }));
 
 const operations: Record<string, QuickOperationDefinition> = {
+  MCB: {
+    code: "MCB",
+    name: "Manual Cloud Backup",
+    description: "Create an encrypted cloud backup.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  MLB: {
+    code: "MLB",
+    name: "Manual Local Backup",
+    description: "Download an encrypted local backup.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
   MU: {
     code: "MU",
     name: "Manual Update",
@@ -246,6 +299,23 @@ describe("QuickOperationLauncher", () => {
     });
 
     getOrderMock.mockReset();
+    exportBackupMock.mockReset();
+    exportBackupMock.mockResolvedValue(new Blob(["backup"]));
+    createManualLocalBackupMock.mockReset();
+    createManualLocalBackupMock.mockResolvedValue({
+      fileName: "LaundryAngel_Backup_test.laundry-backup",
+      destination: "Backups",
+    });
+    listCloudBackupConnectionsMock.mockReset();
+    listCloudBackupConnectionsMock.mockResolvedValue([]);
+    getCloudBackupSettingsMock.mockReset();
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: null });
+    createCloudBackupRunMock.mockReset();
+    createCloudBackupRunMock.mockResolvedValue({ id: "run-1", status: "SUCCEEDED" });
+    publishCloudBackupNotificationMock.mockReset();
+    requestSensitiveAuthorizationMock.mockReset();
+    requestSensitiveAuthorizationMock.mockResolvedValue("sensitive-auth");
+
     getOrderMock.mockResolvedValue({
       id: "order-2",
       businessId: "business-1",
@@ -264,6 +334,138 @@ describe("QuickOperationLauncher", () => {
       createdAt: "",
       updatedAt: "",
     });
+  });
+
+  it("requires a strong encryption password for a manual local backup", async () => {
+    render(
+      <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(
+      await screen.findByText(/at least 12 characters/i),
+    ).toBeInTheDocument();
+    expect(exportBackupMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a manual local backup using the remembered destination", async () => {
+    render(
+      <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
+    );
+
+    fireEvent.change(
+      screen.getByLabelText(/backup encryption password/i),
+      { target: { value: "a-strong-backup-password" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(createManualLocalBackupMock).toHaveBeenCalledWith(
+        "business-1",
+        "a-strong-backup-password",
+        { accessToken: "access-token" },
+      );
+    });
+    expect(await screen.findByText(/in Backups/i)).toBeInTheDocument();
+  });
+
+  it("starts a manual cloud backup on the verified configured destination", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      {
+        id: "connection-1",
+        displayName: "Primary cloud",
+        status: "CONNECTED",
+        verifiedAt: "2026-11-01T00:00:00.000Z",
+      },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({
+      destinationConnectionId: "connection-1",
+    });
+
+    render(
+      <QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => {
+      expect(createCloudBackupRunMock).toHaveBeenCalledWith(
+        "connection-1",
+        {
+          accessToken: "access-token",
+          sensitiveAuthorization: "sensitive-auth",
+        },
+      );
+    });
+    expect(requestSensitiveAuthorizationMock).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/completed successfully/i)).toBeInTheDocument();
+  });
+
+  it("does not start a cloud backup when no verified destination is available", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-unverified", displayName: "Unverified cloud", status: "CONNECTED", verifiedAt: null },
+      { id: "connection-disconnected", displayName: "Disconnected cloud", status: "DISCONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-unverified" });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText(/no verified cloud destination is available/i)).toBeInTheDocument();
+    expect(requestSensitiveAuthorizationMock).not.toHaveBeenCalled();
+    expect(createCloudBackupRunMock).not.toHaveBeenCalled();
+  });
+
+  it("does not start a cloud backup when sensitive authorization is cancelled", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-1", displayName: "Primary cloud", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-1" });
+    requestSensitiveAuthorizationMock.mockResolvedValueOnce(null);
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText(/sensitive authorization was cancelled/i)).toBeInTheDocument();
+    expect(createCloudBackupRunMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the first verified cloud destination when the configured one is unavailable", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-first", displayName: "Verified fallback", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+      { id: "connection-configured", displayName: "Configured but disconnected", status: "DISCONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-configured" });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    await waitFor(() => expect(createCloudBackupRunMock).toHaveBeenCalledWith(
+      "connection-first",
+      { accessToken: "access-token", sensitiveAuthorization: "sensitive-auth" },
+    ));
+  });
+
+  it("publishes a single failure notification when a cloud backup run fails", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-1", displayName: "Primary cloud", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-1" });
+    createCloudBackupRunMock.mockResolvedValue({
+      id: "run-failed", status: "FAILED", errorMessage: "Cloud upload failed.",
+    });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText("Cloud upload failed.")).toBeInTheDocument();
+    expect(publishCloudBackupNotificationMock).toHaveBeenCalledTimes(2);
+    expect(publishCloudBackupNotificationMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      status: "progress", source: "manual",
+    }));
+    expect(publishCloudBackupNotificationMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      status: "error", message: "Cloud upload failed.", source: "manual",
+    }));
   });
 
   it("renders the selected operation", () => {

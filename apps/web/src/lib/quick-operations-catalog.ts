@@ -9,6 +9,22 @@ export interface QuickOperationDefinition {
 
 export const QUICK_OPERATIONS: QuickOperationDefinition[] = [
   {
+    code: "MCB",
+    name: "Manual Cloud Backup",
+    description: "Create an encrypted backup immediately using the last verified cloud destination.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  {
+    code: "MLB",
+    name: "Manual Local Backup",
+    description: "Create an encrypted backup immediately and download it to this device.",
+    permission: "migrations.manage",
+    requiresConfirmation: false,
+    sensitive: false,
+  },
+  {
     code: "MU",
     name: "Manual Update",
     description: "Make an authorized manual update to a supported business record.",

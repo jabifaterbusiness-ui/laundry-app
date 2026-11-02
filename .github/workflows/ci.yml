@@ -21,6 +21,20 @@ jobs:
     name: Test, lint, typecheck, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: laundryangel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d laundryangel_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/laundryangel_ci?schema=public
       JWT_ACCESS_SECRET: ci-only-access-secret-at-least-32-characters
@@ -40,6 +54,8 @@ jobs:
         run: npm run build:shared
       - name: Generate Prisma Client
         run: npm run db:generate
+      - name: Apply database migrations
+        run: npm run db:migrate:deploy --workspace=apps/api
       - name: Run test suites
         run: npm test
       - name: Lint API and web

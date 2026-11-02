@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     $queryRaw: vi.fn(),
+    businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     business: {
       count: vi.fn(),
       findMany: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
     },
     payment: {
       aggregate: vi.fn(),
@@ -150,6 +152,7 @@ beforeEach(() => {
         startsAt: new Date("2026-01-01T00:00:00.000Z"),
         endsAt: new Date("2099-01-01T00:00:00.000Z"),
       },
+      users: [{ fullName: "Owner A", email: "owner@a.example" }],
       _count: {
         users: 5,
         customers: 20,
@@ -879,6 +882,7 @@ describe("Platform Owner routes - company visibility", () => {
         id: "biz-A",
         name: "Laundry A",
         isActive: true,
+        owner: { fullName: "Owner A", email: "owner@a.example" },
         subscription: expect.objectContaining({
           plan: "MONTHLY",
           status: "ACTIVE",
@@ -1166,7 +1170,7 @@ describe("Platform Owner routes - company status controls", () => {
 
     expect(prisma.business.update).toHaveBeenCalledWith({
       where: { id: "biz-A" },
-      data: { isActive: true },
+      data: { isActive: true, archivedAt: null },
     });
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -1235,6 +1239,95 @@ describe("Platform Owner routes - company status controls", () => {
     expect(response.status).toBe(403);
     expect(prisma.business.findUnique).not.toHaveBeenCalled();
     expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - subscription cancellation", () => {
+  const subscription = {
+    id: "sub-A",
+    businessId: "biz-A",
+    plan: "MONTHLY",
+    status: "ACTIVE",
+    startsAt: new Date("2026-10-01T00:00:00.000Z"),
+    endsAt: new Date("2026-11-30T00:00:00.000Z"),
+    business: { name: "Laundry A" },
+  };
+
+  it("cancels immediately and records the reason", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(subscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({
+      ...subscription,
+      status: "CANCELLED",
+      cancelAtPeriodEnd: false,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "IMMEDIATE", reason: "Business closure requested" });
+
+    expect(response.status).toBe(200);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: expect.objectContaining({
+        status: "CANCELLED",
+        cancelAtPeriodEnd: false,
+        cancellationReason: "Business closure requested",
+      }),
+    }));
+    expect(prisma.businessInboxMessage.updateMany).toHaveBeenCalledWith({
+      where: { sourceSubscriptionId: "sub-A" },
+      data: { expiresAt: expect.any(Date) },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("schedules cancellation at the paid-through date without shortening access", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(subscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({
+      ...subscription,
+      cancelAtPeriodEnd: true,
+    } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "PERIOD_END", reason: "Customer chose not to renew" });
+
+    expect(response.status).toBe(200);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: expect.objectContaining({
+        cancelAtPeriodEnd: true,
+        cancellationReason: "Customer chose not to renew",
+      }),
+    }));
+    expect(prisma.businessInboxMessage.updateMany).toHaveBeenCalledWith({
+      where: { sourceSubscriptionId: "sub-A" },
+      data: { expiresAt: expect.any(Date) },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects invalid cancellation timing and missing reason", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "LATER", reason: "" });
+
+    expect(response.status).toBe(422);
+    expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects tenant users from subscription cancellation", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ when: "IMMEDIATE", reason: "Requested" });
+
+    expect(response.status).toBe(403);
+    expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
   });
 });
 
@@ -1360,6 +1453,78 @@ describe("Platform Owner routes - audit visibility", () => {
   });
 
 
+
+describe("Platform Owner routes - subscription cancellation", () => {
+  const existingSubscription = {
+    id: "sub-A", businessId: "biz-A", plan: "MONTHLY", status: "ACTIVE",
+    startsAt: new Date("2026-10-01T00:00:00.000Z"),
+    endsAt: new Date("2026-12-01T00:00:00.000Z"),
+    cancelAtPeriodEnd: false, cancelledAt: null, cancellationReason: null,
+    business: { name: "Laundry A" },
+  };
+
+  it("cancels immediately and records an audit event", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(existingSubscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, status: "CANCELLED", cancellationReason: "Account closure requested" } as never);
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "IMMEDIATE", reason: "Account closure requested" });
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      status: "CANCELLED", cancelAtPeriodEnd: false,
+      cancellationReason: "Account closure requested",
+    });
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: expect.objectContaining({ status: "CANCELLED", cancelAtPeriodEnd: false }),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("schedules cancellation at period end without ending access early", async () => {
+    vi.mocked(prisma.subscription.findUnique).mockResolvedValue(existingSubscription as never);
+    vi.mocked(prisma.subscription.update).mockResolvedValue({ ...existingSubscription, cancelAtPeriodEnd: true, cancellationReason: "Do not renew" } as never);
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "PERIOD_END", reason: "Do not renew" });
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      status: "ACTIVE", cancelAtPeriodEnd: true, cancellationReason: "Do not renew",
+    });
+    expect(prisma.subscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "sub-A" },
+      data: { cancelAtPeriodEnd: true, cancellationReason: "Do not renew" },
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects invalid timing and a missing reason", async () => {
+    const invalidTiming = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "LATER", reason: "No longer needed" });
+    const missingReason = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ when: "IMMEDIATE", reason: "  " });
+    expect(invalidTiming.status).toBe(422);
+    expect(missingReason.status).toBe(422);
+    expect(prisma.subscription.update).not.toHaveBeenCalled();
+  });
+
+  it("denies tenant users access to platform cancellation controls", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/subscription/cancel")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ when: "IMMEDIATE", reason: "Requested" });
+    expect(response.status).toBe(403);
+    expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
+    expect(prisma.subscription.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("Platform Owner routes - configuration", () => {
   it("returns platform configuration to PLATFORM_ADMIN", async () => {
     const response = await request(app)
@@ -1455,4 +1620,163 @@ describe("Platform Owner routes - configuration", () => {
   });
 });
 
+});
+
+
+describe("Platform Owner routes - timed business suspension", () => {
+  const business = { id: "biz-A", name: "Laundry A", isActive: true, suspendedUntil: null, suspensionReason: null };
+  it("applies a timed suspension and records an audit event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue(business as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({ ...business, suspendedUntil: new Date(Date.now() + 3 * 86400000), suspensionReason: "Policy review", updatedAt: new Date() } as never);
+    const response = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ durationDays: 3, reason: "Policy review" });
+    expect(response.status).toBe(200);
+    expect(response.body.suspensionReason).toBe("Policy review");
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "biz-A" }, data: expect.objectContaining({ suspensionReason: "Policy review" }) }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+  it("clears an existing timed suspension and records an audit event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({ ...business, suspendedUntil: new Date(Date.now() + 86400000), suspensionReason: "Policy review" } as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({ ...business, updatedAt: new Date() } as never);
+    const response = await request(app).post("/api/v1/platform/businesses/biz-A/suspension/clear").set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    expect(response.status).toBe(200);
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "biz-A" }, data: { suspendedUntil: null, suspensionReason: null } }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+  it("rejects invalid duration and tenant access", async () => {
+    const invalid = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ durationDays: 0, reason: "Policy review" });
+    const denied = await request(app).post("/api/v1/platform/businesses/biz-A/suspend").set("Authorization", `Bearer ${OWNER_A}`).send({ durationDays: 3, reason: "Policy review" });
+    expect(invalid.status).toBe(422);
+    expect(denied.status).toBe(403);
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - announcements and business inbox delivery", () => {
+  it("returns complete delivery totals for broadcasts larger than the previous 250-row cap", async () => {
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{
+      broadcastId: "broadcast-large",
+      title: "Platform update",
+      body: "Important service notice",
+      publishedAt: new Date("2026-11-01T09:00:00.000Z"),
+      expiresAt: null,
+      displayDurationMinutes: 10,
+      recipientCount: 625,
+      readCount: 410,
+      dismissedCount: 125,
+      businessCount: 38,
+    }] as never);
+
+    const response = await request(app)
+      .get("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([expect.objectContaining({
+      broadcastId: "broadcast-large",
+      recipientCount: 625,
+      readCount: 410,
+      dismissedCount: 125,
+      businessCount: 38,
+    })]);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("broadcasts a platform announcement to active business users and records delivery audit", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValue([
+      { id: "biz-A" },
+      { id: "biz-B" },
+    ] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      { id: "owner-A", businessId: "biz-A" },
+      { id: "staff-A", businessId: "biz-A" },
+      { id: "owner-B", businessId: "biz-B" },
+    ] as never);
+    vi.mocked(prisma.businessInboxMessage.createMany).mockResolvedValue({ count: 3 } as never);
+
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "Service update", body: "Scheduled maintenance tonight.", displayDurationMinutes: 10 });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(expect.objectContaining({
+      recipientCount: 3,
+      businessCount: 2,
+    }));
+    expect(prisma.businessInboxMessage.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.arrayContaining([
+        expect.objectContaining({ businessId: "biz-A", userId: "owner-A", title: "Service update" }),
+        expect.objectContaining({ businessId: "biz-B", userId: "owner-B", title: "Service update" }),
+      ]),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("allows a platform admin to target one business and rejects tenant users", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValue([{ id: "biz-A" }] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([{ id: "owner-A", businessId: "biz-A" }] as never);
+    vi.mocked(prisma.businessInboxMessage.createMany).mockResolvedValue({ count: 1 } as never);
+
+    const denied = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .send({ title: "Notice", body: "For your business only." });
+    expect(denied.status).toBe(403);
+
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "Direct notice", body: "For Laundry A.", businessId: "biz-A" });
+    expect(response.status).toBe(201);
+    expect(prisma.business.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "biz-A" },
+    }));
+  });
+
+  it("rejects invalid message content and popup duration", async () => {
+    const response = await request(app)
+      .post("/api/v1/platform/messages")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ title: "x", body: "Notice", displayDurationMinutes: 120 });
+    expect(response.status).toBe(422);
+    expect(prisma.businessInboxMessage.createMany).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - business archive", () => {
+  it("requires deactivation before archiving and records the archive event", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: false, archivedAt: null,
+    } as never);
+    vi.mocked(prisma.business.update).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: false,
+      archivedAt: new Date(), updatedAt: new Date(),
+    } as never);
+    const response = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    expect(response.status).toBe(200);
+    expect(response.body.archivedAt).toBeTruthy();
+    expect(prisma.business.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "biz-A" }, data: expect.objectContaining({ archivedAt: expect.any(Date) }),
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects archiving an active business and denies tenant users", async () => {
+    vi.mocked(prisma.business.findUnique).mockResolvedValue({
+      id: "biz-A", name: "Laundry A", isActive: true, archivedAt: null,
+    } as never);
+    const active = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    const denied = await request(app)
+      .post("/api/v1/platform/businesses/biz-A/archive")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+    expect(active.status).toBe(409);
+    expect(denied.status).toBe(403);
+    expect(prisma.business.update).not.toHaveBeenCalled();
+  });
 });

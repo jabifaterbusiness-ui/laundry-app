@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    businessInboxMessage: { updateMany: vi.fn() },
     subscription: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -40,6 +41,12 @@ describe("subscription service", () => {
     const endsAt = new Date("2026-10-01T00:00:00.000Z");
 
     expect(getSubscriptionStatus(endsAt, "ACTIVE", now)).toBe("EXPIRED");
+  });
+
+  it("marks a scheduled cancellation as cancelled at the paid-through date", () => {
+    const end = new Date("2026-10-01T00:00:00.000Z");
+    expect(getSubscriptionStatus(end, "ACTIVE", end, true)).toBe("CANCELLED");
+    expect(getSubscriptionStatus(end, "ACTIVE", new Date(end.getTime() - 1), true)).toBe("ACTIVE");
   });
 
   it("preserves an explicitly expired status", () => {
@@ -223,6 +230,24 @@ describe("subscription service", () => {
     expect(update).toHaveBeenCalledWith({
       where: { id: "sub-1" },
       data: { status: "EXPIRED" },
+    });
+  });
+
+  it("persists a scheduled cancellation when the paid-through date has passed", async () => {
+    const end = new Date(Date.now() - 1000);
+    const scheduled = {
+      id: "sub-scheduled", businessId: "biz-1", plan: "MONTHLY",
+      status: "ACTIVE", cancelAtPeriodEnd: true,
+      startsAt: new Date("2026-08-01T00:00:00.000Z"), endsAt: end,
+    };
+    findUnique.mockResolvedValue(scheduled as never);
+    update.mockResolvedValue({ ...scheduled, status: "CANCELLED" } as never);
+
+    await getBusinessSubscription("biz-1");
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "sub-scheduled" },
+      data: { status: "CANCELLED" },
     });
   });
 

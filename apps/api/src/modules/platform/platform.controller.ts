@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { AppError } from "../../middleware/error-handler.js";
 import {
   getPlatformOverview,
   getPlatformRevenueAnalytics,
@@ -10,6 +11,13 @@ import {
   getPlatformBusinessDetails,
   renewPlatformBusinessSubscription,
   setPlatformBusinessActiveStatus,
+  cancelPlatformBusinessSubscription,
+  suspendPlatformBusiness,
+  clearPlatformBusinessSuspension,
+  archivePlatformBusiness,
+  permanentlyDeletePlatformBusiness,
+  createPlatformAnnouncement,
+  listPlatformAnnouncements,
 } from "./platform.service.js";
 import { createSubscriptionSchema } from "../subscriptions/subscriptions.validation.js";
 import { updatePlatformConfigSchema } from "./platform-config.validation.js";
@@ -414,4 +422,106 @@ export async function deletePaymentMethod(
       req.correlationId,
     ),
   );
+}
+
+
+export async function cancelBusinessSubscription(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) {
+    res.status(400).json({ message: "Business ID is required" });
+    return;
+  }
+  if (!req.user) {
+    res.status(401).json({ message: "Authentication required" });
+    return;
+  }
+
+  const body = req.body as { when?: unknown; reason?: unknown };
+  if (body.when !== "IMMEDIATE" && body.when !== "PERIOD_END") {
+    res.status(422).json({ message: "Cancellation timing must be IMMEDIATE or PERIOD_END" });
+    return;
+  }
+  if (typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 1000) {
+    res.status(422).json({ message: "A cancellation reason between 3 and 1000 characters is required" });
+    return;
+  }
+
+  res.status(200).json(await cancelPlatformBusinessSubscription(
+    businessId,
+    body.when,
+    body.reason.trim(),
+    req.user.id,
+    req.correlationId,
+  ));
+}
+
+
+export async function suspendBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) { res.status(400).json({ message: "Business ID is required" }); return; }
+  if (!req.user) { res.status(401).json({ message: "Authentication required" }); return; }
+  const body = req.body as { durationDays?: unknown; reason?: unknown };
+  if (typeof body.durationDays !== "number" || !Number.isInteger(body.durationDays) || body.durationDays < 1 || body.durationDays > 365) { res.status(422).json({ message: "Suspension duration must be a whole number from 1 to 365 days" }); return; }
+  if (typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.trim().length > 1000) { res.status(422).json({ message: "A suspension reason between 3 and 1000 characters is required" }); return; }
+  const until = new Date(Date.now() + body.durationDays * 86400000);
+  res.status(200).json(await suspendPlatformBusiness(businessId, until, body.reason.trim(), req.user.id, req.correlationId));
+}
+
+export async function clearBusinessSuspension(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) { res.status(400).json({ message: "Business ID is required" }); return; }
+  if (!req.user) { res.status(401).json({ message: "Authentication required" }); return; }
+  res.status(200).json(await clearPlatformBusinessSuspension(businessId, req.user.id, req.correlationId));
+}
+
+ 
+export async function createPlatformMessage(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const body = req.body as { title?: unknown; body?: unknown; businessId?: unknown; publishedAt?: unknown; expiresAt?: unknown; displayDurationMinutes?: unknown };
+  if (typeof body.title !== "string" || body.title.trim().length < 3 || body.title.trim().length > 160) throw new AppError("Message title must be between 3 and 160 characters", 422);
+  if (typeof body.body !== "string" || body.body.trim().length < 3 || body.body.trim().length > 5000) throw new AppError("Message body must be between 3 and 5000 characters", 422);
+  if (body.businessId !== undefined && (typeof body.businessId !== "string" || !body.businessId.trim())) throw new AppError("Business ID must be a non-empty string when provided", 422);
+  const duration = body.displayDurationMinutes ?? 10;
+  if (typeof duration !== "number" || !Number.isInteger(duration) || duration < 1 || duration > 60) throw new AppError("Popup duration must be a whole number from 1 to 60 minutes", 422);
+  const publishedAt = body.publishedAt === undefined ? new Date() : new Date(String(body.publishedAt));
+  if (!Number.isFinite(publishedAt.getTime())) throw new AppError("A valid publication date is required", 422);
+  const expiresAt = body.expiresAt === undefined || body.expiresAt === null ? null : new Date(String(body.expiresAt));
+  if (expiresAt && (!Number.isFinite(expiresAt.getTime()) || expiresAt <= publishedAt)) throw new AppError("Expiry must be a valid date after publication", 422);
+  const result = await createPlatformAnnouncement({
+    title: body.title.trim(), body: body.body.trim(),
+    businessId: typeof body.businessId === "string" ? body.businessId : null,
+    publishedAt, expiresAt, displayDurationMinutes: duration,
+    actorUserId: req.user.id,
+    ...(req.correlationId ? { correlationId: req.correlationId } : {}),
+  });
+  res.status(201).json(result);
+}
+
+export async function listPlatformMessages(_req: Request, res: Response) {
+  res.status(200).json(await listPlatformAnnouncements());
+}
+
+
+export async function archiveBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) throw new AppError("Business ID is required", 400);
+  if (!req.user) throw new AppError("Authentication required", 401);
+  res.status(200).json(await archivePlatformBusiness(businessId, req.user.id, req.correlationId));
+}
+
+
+export async function permanentlyDeleteBusiness(req: Request, res: Response) {
+  const businessId = req.params.businessId;
+  if (!businessId) throw new AppError("Business ID is required", 400);
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const authorizationHeader = req.headers["x-sensitive-authorization"];
+  const authorizationToken = Array.isArray(authorizationHeader) ? authorizationHeader[0] : authorizationHeader;
+  if (!authorizationToken) throw new AppError("Recent password re-authorization is required", 403);
+  const body = req.body as { confirmation?: unknown };
+  if (typeof body.confirmation !== "string") throw new AppError("Permanent deletion confirmation is required", 422);
+  res.status(200).json(await permanentlyDeletePlatformBusiness({
+    businessId, confirmation: body.confirmation, authorizationToken,
+    actorUserId: req.user.id,
+    ...(req.correlationId ? { correlationId: req.correlationId } : {}),
+  }));
 }

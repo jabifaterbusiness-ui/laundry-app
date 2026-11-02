@@ -45,6 +45,8 @@ export const PERMISSIONS: PermissionDefinition[] = [
 
   { code: "inventory.view", module: "inventory", action: "view", description: "View inventory" },
   { code: "inventory.manage", module: "inventory", action: "manage", description: "Manage inventory" },
+  { code: "inventory.approve", module: "inventory", action: "approve", description: "Approve stocktake adjustments" },
+  { code: "inventory.reports_all_branches", module: "inventory", action: "reports_all_branches", description: "View inventory comparisons across all business branches" },
   { code: "reports.view", module: "reports", action: "view", description: "View reports" },
   { code: "reports.manage", module: "reports", action: "manage", description: "Manage financial reporting and statement delivery" },
 
@@ -96,6 +98,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
   BUSINESS_OWNER: PERMISSIONS.map((permission) => permission.code),
   BRANCH_MANAGER: PERMISSIONS.filter((permission) =>
     !permission.code.startsWith("business.") &&
+    permission.code !== "inventory.approve" &&
+    permission.code !== "inventory.reports_all_branches" &&
     !permission.code.startsWith("users.manage_permissions") &&
     permission.code !== "branches.manage_users" &&
     permission.code !== "payroll.approve" &&

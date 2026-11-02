@@ -6,6 +6,14 @@ import { getOrder } from "../../lib/orders-api.js";
 import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { listOfflineSyncOperations } from "../../lib/offline-sync-queue.js";
 import {
+  createCloudBackupRun,
+  getCloudBackupSettings,
+  listCloudBackupConnections,
+} from "../../lib/data-management-api.js";
+import { publishCloudBackupNotification } from "../../lib/cloud-backup-notifications.js";
+import { useSensitiveAuthorization } from "../auth/SensitiveAuthorizationProvider.js";
+import { createManualLocalBackup } from "../data-management/LocalBackupManager.js";
+import {
   executeQuickOperation,
 } from "../../lib/quick-operations-api.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
@@ -19,6 +27,8 @@ interface Props {
 }
 
 const IMPLEMENTED_OPERATIONS = [
+  "MCB",
+  "MLB",
   "MU",
   "TI",
   "TC",
@@ -127,6 +137,7 @@ export function QuickOperationLauncher({
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const user = useAuthStore((state) => state.user);
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const workspaces = useOrderWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useOrderWorkspaceStore(
@@ -157,6 +168,7 @@ export function QuickOperationLauncher({
   const [method, setMethod] = useState("CASH");
   const [receiptType, setReceiptType] = useState("CUSTOMER");
   const [channel, setChannel] = useState("EMAIL");
+  const [backupPassword, setBackupPassword] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +186,7 @@ export function QuickOperationLauncher({
     setMethod("CASH");
     setReceiptType("CUSTOMER");
     setChannel("EMAIL");
+    setBackupPassword("");
     setConfirmed(false);
     setIsSubmitting(false);
     setError(null);
@@ -201,7 +214,7 @@ export function QuickOperationLauncher({
   const implemented = isImplemented(activeOperation.code);
 
   function validate(): Record<string, unknown> | null {
-    if (activeOperation.code === "SOS") {
+    if (activeOperation.code === "MCB" || activeOperation.code === "MLB" || activeOperation.code === "SOS") {
       return {};
     }
 
@@ -381,6 +394,11 @@ export function QuickOperationLauncher({
       return;
     }
 
+    if (activeOperation.code === "MLB" && backupPassword.length < 12) {
+      setError("Use an encryption password of at least 12 characters for this local backup.");
+      return;
+    }
+
     if (
       activeOperation.sensitive &&
       !reason.trim()
@@ -418,6 +436,67 @@ export function QuickOperationLauncher({
     setIsSubmitting(true);
 
     try {
+      if (activeOperation.code === "MLB" || activeOperation.code === "MCB") {
+        if (user?.securityRole !== "BUSINESS_OWNER") {
+          throw new Error("Only the Business Owner can run manual backups.");
+        }
+      }
+
+      if (activeOperation.code === "MLB") {
+        if (!user?.businessId) {
+          throw new Error("A business account is required to create a local backup.");
+        }
+        const backup = await createManualLocalBackup(
+          user.businessId,
+          backupPassword,
+          { accessToken },
+        );
+        setSuccess(`Encrypted local backup saved as ${backup.fileName} in ${backup.destination}.`);
+        return;
+      }
+
+      if (activeOperation.code === "MCB") {
+        publishCloudBackupNotification({
+          status: "progress",
+          title: "Manual cloud backup",
+          message: "Preparing your encrypted backup and checking the configured cloud destination.",
+          source: "manual",
+        });
+        const [connections, settings] = await Promise.all([
+          listCloudBackupConnections({ accessToken }),
+          getCloudBackupSettings({ accessToken }),
+        ]);
+        const verified = connections.filter(
+          (connection) => connection.status === "CONNECTED" && Boolean(connection.verifiedAt),
+        );
+        const destination =
+          verified.find((connection) => connection.id === settings.destinationConnectionId) ??
+          verified[0];
+        if (!destination) {
+          throw new Error("No verified cloud destination is available. Connect and verify a cloud provider in Backup & Data Management before using MCB.");
+        }
+        const authorization = await requestSensitiveAuthorization();
+        if (!authorization) {
+          throw new Error("Sensitive authorization was cancelled. No cloud backup was started.");
+        }
+        const run = await createCloudBackupRun(destination.id, {
+          accessToken,
+          sensitiveAuthorization: authorization,
+        });
+        if (run.status !== "SUCCEEDED") {
+          throw new Error(run.errorMessage || "The cloud backup did not complete successfully.");
+        }
+        publishCloudBackupNotification({
+          status: "success",
+          title: "Manual cloud backup",
+          message: `Encrypted backup saved successfully to ${destination.displayName}.`,
+          source: "manual",
+          runId: run.id,
+        });
+        setSuccess(`Cloud backup completed successfully using ${destination.displayName}.`);
+        return;
+      }
+
       if (activeOperation.code === "SOS") {
         if (!user?.businessId || !activeBranchId) {
           throw new Error(
@@ -538,19 +617,26 @@ export function QuickOperationLauncher({
         );
       }
     } catch (err: unknown) {
-      setError(
-        err instanceof ApiError
+      const message = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
           ? err.message
-          : err instanceof Error
-            ? err.message
-            : "The operation could not be completed. Please try again.",
-      );
+          : "The operation could not be completed. Please try again.";
+      if (activeOperation.code === "MCB") {
+        publishCloudBackupNotification({
+          status: "error",
+          title: "Manual cloud backup",
+          message,
+          source: "manual",
+        });
+      }
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  const showRecordId = activeOperation.code !== "SOS";
+  const showRecordId = activeOperation.code !== "SOS" && activeOperation.code !== "MCB" && activeOperation.code !== "MLB";
 
   return (
     <div
@@ -649,7 +735,24 @@ export function QuickOperationLauncher({
             </div>
           ) : (
             <>
-              {showRecordId ? (
+              {activeOperation.code === "MLB" ? (
+        <Field
+          label="Backup encryption password (minimum 12 characters)"
+          value={backupPassword}
+          onChange={setBackupPassword}
+          type="password"
+          placeholder="Enter a strong backup password"
+          disabled={isSubmitting}
+        />
+      ) : null}
+
+      {activeOperation.code === "MCB" ? (
+        <div style={{ padding: 14, borderRadius: 8, background: "#eef6ff", color: "#174a78", lineHeight: 1.5, fontSize: 13 }}>
+          LaundryAngel will use your last selected verified cloud destination, or the first verified destination if none is selected. Your backup remains encrypted before upload.
+        </div>
+      ) : null}
+
+      {showRecordId ? (
                 <Field
                   label={fieldLabel(activeOperation.code)}
                   value={recordId}

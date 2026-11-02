@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -6,6 +7,7 @@ import {
   createOrRenewSubscription,
 } from "../subscriptions/subscriptions.service.js";
 import type { CreateSubscriptionInput } from "../subscriptions/subscriptions.validation.js";
+import { requireSensitiveAuthorization } from "../auth/sensitive-authorization.service.js";
 
 export async function getPlatformHealth() {
   const checkedAt = new Date();
@@ -81,7 +83,16 @@ export async function getPlatformOverview() {
             status: true,
             startsAt: true,
             endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
           },
+        },
+        users: {
+          where: { securityRole: "BUSINESS_OWNER", isActive: true },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { fullName: true, email: true },
         },
         _count: {
           select: {
@@ -122,7 +133,10 @@ export async function getPlatformOverview() {
       paymentCount: revenue._count._all,
       totalCollected: revenue._sum.amount ?? 0,
     },
-    recentBusinesses,
+    recentBusinesses: recentBusinesses.map(({ users, ...business }) => ({
+      ...business,
+      owner: users?.[0] ?? null,
+    })),
   };
 }
 
@@ -384,7 +398,7 @@ export async function getPlatformGlobalStatistics() {
 }
 
 export async function listPlatformBusinesses() {
-  return prisma.business.findMany({
+  const businesses = await prisma.business.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -396,6 +410,9 @@ export async function listPlatformBusinesses() {
       address: true,
       logoUrl: true,
       isActive: true,
+      suspendedUntil: true,
+      suspensionReason: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       subscription: {
@@ -405,7 +422,16 @@ export async function listPlatformBusinesses() {
           status: true,
           startsAt: true,
           endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
         },
+      },
+      users: {
+        where: { securityRole: "BUSINESS_OWNER", isActive: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { fullName: true, email: true },
       },
       _count: {
         select: {
@@ -417,6 +443,10 @@ export async function listPlatformBusinesses() {
       },
     },
   });
+  return businesses.map(({ users, ...business }) => ({
+    ...business,
+    owner: users?.[0] ?? null,
+  }));
 }
 
 export async function listPlatformAuditLogs(limit = 100) {
@@ -452,6 +482,8 @@ export async function getPlatformBusinessDetails(businessId: string) {
       address: true,
       logoUrl: true,
       isActive: true,
+      suspendedUntil: true,
+      suspensionReason: true,
       createdAt: true,
       updatedAt: true,
       subscription: {
@@ -461,6 +493,9 @@ export async function getPlatformBusinessDetails(businessId: string) {
           status: true,
           startsAt: true,
           endsAt: true,
+          cancelAtPeriodEnd: true,
+          cancelledAt: true,
+          cancellationReason: true,
         },
       },
       _count: {
@@ -569,7 +604,7 @@ export async function setPlatformBusinessActiveStatus(
 
   await prisma.business.update({
     where: { id: businessId },
-    data: { isActive },
+    data: { isActive, ...(isActive ? { archivedAt: null } : {}) },
   });
 
   await recordAuditEvent({
@@ -641,4 +676,264 @@ export async function renewPlatformBusinessSubscription(
   });
 
   return subscription;
+}
+
+
+export async function cancelPlatformBusinessSubscription(
+  businessId: string,
+  when: "IMMEDIATE" | "PERIOD_END",
+  reason: string,
+  actorUserId: string,
+  correlationId?: string,
+) {
+  const subscription = await prisma.subscription.findUnique({
+    where: { businessId },
+    include: { business: { select: { name: true } } },
+  });
+
+  if (!subscription) {
+    throw new AppError("Business subscription not found", 404);
+  }
+
+  if (subscription.status === "CANCELLED") {
+    throw new AppError("Subscription is already cancelled", 409);
+  }
+
+  const now = new Date();
+  const updated = when === "IMMEDIATE"
+    ? await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: "CANCELLED",
+          endsAt: now,
+          cancelAtPeriodEnd: false,
+          cancelledAt: now,
+          cancellationReason: reason,
+        },
+      })
+    : await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          cancelAtPeriodEnd: true,
+          cancellationReason: reason,
+        },
+      });
+
+  await prisma.businessInboxMessage.updateMany({
+    where: { sourceSubscriptionId: subscription.id },
+    data: { expiresAt: now },
+  });
+
+  await recordAuditEvent({
+    action: when === "IMMEDIATE"
+      ? "platform.subscription.cancelled_immediately"
+      : "platform.subscription.cancellation_scheduled",
+    entityType: "SUBSCRIPTION",
+    entityId: subscription.id,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: {
+      businessName: subscription.business.name,
+      cancellationTiming: when,
+      effectiveAt: when === "IMMEDIATE" ? now : subscription.endsAt,
+      reason,
+    },
+  });
+
+  return updated;
+}
+
+
+export async function suspendPlatformBusiness(businessId: string, suspendedUntil: Date, reason: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, isActive: true, suspendedUntil: true } });
+  if (!business) throw new AppError("Business not found", 404);
+  if (!business.isActive) throw new AppError("Reactivate the business before applying a timed suspension", 409);
+  if (suspendedUntil <= new Date()) throw new AppError("Suspension expiry must be in the future", 422);
+  if (suspendedUntil.getTime() > Date.now() + 365 * 24 * 60 * 60 * 1000) throw new AppError("Timed suspension cannot exceed 365 days", 422);
+  const updated = await prisma.business.update({ where: { id: businessId }, data: { suspendedUntil, suspensionReason: reason }, select: { id: true, name: true, isActive: true, suspendedUntil: true, suspensionReason: true, updatedAt: true } });
+  await recordAuditEvent({ action: "platform.business.suspended", entityType: "Business", entityId: businessId, businessId, actorUserId, ...(correlationId !== undefined ? { correlationId } : {}), metadata: { businessName: business.name, suspendedUntil, reason, previousSuspendedUntil: business.suspendedUntil } });
+  return updated;
+}
+
+export async function clearPlatformBusinessSuspension(businessId: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, suspendedUntil: true, suspensionReason: true } });
+  if (!business) throw new AppError("Business not found", 404);
+  if (!business.suspendedUntil) throw new AppError("Business has no timed suspension", 409);
+  const updated = await prisma.business.update({ where: { id: businessId }, data: { suspendedUntil: null, suspensionReason: null }, select: { id: true, name: true, isActive: true, suspendedUntil: true, suspensionReason: true, updatedAt: true } });
+  await recordAuditEvent({ action: "platform.business.suspension_cleared", entityType: "Business", entityId: businessId, businessId, actorUserId, ...(correlationId !== undefined ? { correlationId } : {}), metadata: { businessName: business.name, previousSuspendedUntil: business.suspendedUntil, previousReason: business.suspensionReason } });
+  return updated;
+}
+
+
+export async function createPlatformAnnouncement(input: {
+  title: string; body: string; businessId: string | null; publishedAt: Date;
+  expiresAt: Date | null; displayDurationMinutes: number; actorUserId: string;
+  correlationId?: string;
+}) {
+  const targetBusinesses = await prisma.business.findMany({
+    where: input.businessId ? { id: input.businessId } : { isActive: true },
+    select: { id: true },
+  });
+  if (input.businessId && targetBusinesses.length === 0) throw new AppError("Target business not found", 404);
+  const businessIds = targetBusinesses.map((business) => business.id);
+  const recipients = businessIds.length ? await prisma.user.findMany({
+    where: { businessId: { in: businessIds }, isActive: true, deletedAt: null },
+    select: { id: true, businessId: true },
+  }) : [];
+  if (recipients.length === 0) throw new AppError("No active business users are available to receive this message", 409);
+  const broadcastId = randomUUID();
+  await prisma.businessInboxMessage.createMany({
+    data: recipients.map((recipient) => ({
+      broadcastId, businessId: recipient.businessId!, userId: recipient.id,
+      title: input.title, body: input.body,
+      displayDurationMinutes: input.displayDurationMinutes,
+      publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+      createdByPlatformAdminId: input.actorUserId,
+    })),
+  });
+  await recordAuditEvent({
+    action: input.businessId ? "platform.message.sent_to_business" : "platform.message.broadcast",
+    entityType: "BUSINESS_INBOX_MESSAGE", entityId: broadcastId,
+    ...(input.businessId ? { businessId: input.businessId } : {}),
+    actorUserId: input.actorUserId,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    metadata: {
+      title: input.title, recipientCount: recipients.length,
+      businessCount: new Set(recipients.map((recipient) => recipient.businessId)).size,
+      publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+      displayDurationMinutes: input.displayDurationMinutes,
+    },
+  });
+  return {
+    broadcastId, recipientCount: recipients.length,
+    businessCount: new Set(recipients.map((recipient) => recipient.businessId)).size,
+    publishedAt: input.publishedAt, expiresAt: input.expiresAt,
+  };
+}
+
+export async function listPlatformAnnouncements() {
+  // Aggregate every recipient row before limiting the number of broadcasts.
+  // Limiting raw inbox rows would silently under-report large broadcasts.
+  return prisma.$queryRaw<Array<{
+    broadcastId: string;
+    title: string;
+    body: string;
+    publishedAt: Date;
+    expiresAt: Date | null;
+    displayDurationMinutes: number;
+    recipientCount: number;
+    readCount: number;
+    dismissedCount: number;
+    businessCount: number;
+  }>>`
+    SELECT
+      "broadcastId" AS "broadcastId",
+      MIN("title") AS "title",
+      MIN("body") AS "body",
+      MIN("publishedAt") AS "publishedAt",
+      MIN("expiresAt") AS "expiresAt",
+      MIN("displayDurationMinutes")::int AS "displayDurationMinutes",
+      COUNT(*)::int AS "recipientCount",
+      COUNT(*) FILTER (WHERE "readAt" IS NOT NULL)::int AS "readCount",
+      COUNT(*) FILTER (WHERE "dismissedAt" IS NOT NULL)::int AS "dismissedCount",
+      COUNT(DISTINCT "businessId")::int AS "businessCount"
+    FROM "business_inbox_messages"
+    GROUP BY "broadcastId"
+    ORDER BY MAX("createdAt") DESC
+    LIMIT 250
+  `;
+}
+
+
+export async function archivePlatformBusiness(businessId: string, actorUserId: string, correlationId?: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, name: true, isActive: true, archivedAt: true },
+  });
+  if (!business) throw new AppError("Business not found", 404);
+  if (business.isActive) throw new AppError("Deactivate the business before archiving it", 409);
+  if (business.archivedAt) throw new AppError("Business is already archived", 409);
+  const archivedAt = new Date();
+  const updated = await prisma.business.update({
+    where: { id: businessId },
+    data: { archivedAt },
+    select: { id: true, name: true, isActive: true, archivedAt: true, updatedAt: true },
+  });
+  await recordAuditEvent({
+    action: "platform.business.archived",
+    entityType: "Business",
+    entityId: businessId,
+    businessId,
+    actorUserId,
+    ...(correlationId !== undefined ? { correlationId } : {}),
+    metadata: { businessName: business.name, archivedAt },
+  });
+  return updated;
+}
+
+
+export async function permanentlyDeletePlatformBusiness(input: {
+  businessId: string;
+  confirmation: string;
+  authorizationToken: string;
+  actorUserId: string;
+  correlationId?: string;
+}) {
+  const authorization = await requireSensitiveAuthorization({
+    token: input.authorizationToken,
+    userId: input.actorUserId,
+    businessId: null,
+  });
+  const business = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: { id: true, name: true, slug: true, isActive: true, archivedAt: true },
+  });
+  if (!business) throw new AppError("Business not found", 404);
+  if (business.isActive || !business.archivedAt) {
+    throw new AppError("Deactivate and archive the business before permanent deletion", 409);
+  }
+  if (input.confirmation !== `DELETE ${business.slug}`) {
+    throw new AppError(`Type DELETE ${business.slug} exactly to confirm permanent deletion`, 422);
+  }
+
+  // Preserve financial and transactional history. Archiving remains available
+  // for businesses whose records are subject to retention requirements.
+  const retainedRecordCounts = await Promise.all([
+    prisma.order.count({ where: { businessId: business.id } }),
+    prisma.invoice.count({ where: { businessId: business.id } }),
+    prisma.payment.count({ where: { businessId: business.id } }),
+    prisma.customerAccountTransaction.count({ where: { businessId: business.id } }),
+    prisma.expense.count({ where: { businessId: business.id } }),
+    prisma.payrollRecord.count({ where: { businessId: business.id } }),
+    prisma.payrollPayment.count({ where: { businessId: business.id } }),
+    prisma.financialRepayment.count({ where: { businessId: business.id } }),
+    prisma.subscriptionPayment.count({ where: { businessId: business.id } }),
+  ]);
+  if (retainedRecordCounts.some((count) => count > 0)) {
+    throw new AppError("Permanent deletion is blocked because this business has financial or transactional records that must be retained. The archived business has not been changed.", 409);
+  }
+
+  try {
+    await prisma.business.delete({ where: { id: business.id } });
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2003") {
+      throw new AppError("This business has records protected by data-retention constraints. It remains archived and was not deleted.", 409);
+    }
+    throw error;
+  }
+
+  await prisma.sensitiveAuthorization.update({
+    where: { id: authorization.id },
+    data: { revokedAt: new Date() },
+  });
+  await recordAuditEvent({
+    action: "platform.business.permanently_deleted",
+    entityType: "Business",
+    entityId: business.id,
+    actorUserId: input.actorUserId,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    metadata: { businessName: business.name, businessSlug: business.slug, archivedAt: business.archivedAt },
+  });
+  return { deleted: true as const, businessId: business.id, businessName: business.name };
 }

@@ -28,8 +28,17 @@ export function getSubscriptionStatus(
   endsAt: Date,
   status: SubscriptionStatus,
   now = new Date(),
+  cancelAtPeriodEnd = false,
 ): SubscriptionStatus {
-  if (status === "EXPIRED" || endsAt <= now) {
+  if (status === "CANCELLED") {
+    return "CANCELLED";
+  }
+
+  if (endsAt <= now) {
+    return cancelAtPeriodEnd ? "CANCELLED" : "EXPIRED";
+  }
+
+  if (status === "EXPIRED") {
     return "EXPIRED";
   }
 
@@ -48,6 +57,8 @@ export async function getBusinessSubscription(businessId: string) {
   const effectiveStatus = getSubscriptionStatus(
     subscription.endsAt,
     subscription.status,
+    new Date(),
+    subscription.cancelAtPeriodEnd,
   );
 
   if (effectiveStatus !== subscription.status) {
@@ -82,7 +93,7 @@ export async function createOrRenewSubscription(
 
   const endsAt = addPlanDuration(startsAt, input.plan);
 
-  return prisma.subscription.upsert({
+  const renewed = await prisma.subscription.upsert({
     where: { businessId },
     create: {
       businessId,
@@ -90,14 +101,29 @@ export async function createOrRenewSubscription(
       status: "ACTIVE",
       startsAt,
       endsAt,
+      cancelAtPeriodEnd: false,
+      cancelledAt: null,
+      cancellationReason: null,
     },
     update: {
       plan: input.plan,
       status: "ACTIVE",
       startsAt,
       endsAt,
+      cancelAtPeriodEnd: false,
+      cancelledAt: null,
+      cancellationReason: null,
     },
   });
+
+  if (existing) {
+    await prisma.businessInboxMessage.updateMany({
+      where: { sourceSubscriptionId: existing.id },
+      data: { expiresAt: now },
+    });
+  }
+
+  return renewed;
 }
 
 export async function requireActiveSubscription(businessId: string) {

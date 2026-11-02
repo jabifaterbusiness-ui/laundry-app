@@ -29,6 +29,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       }),
     },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn().mockResolvedValue([]),
     inventoryItem: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -41,12 +42,22 @@ vi.mock("../../src/lib/prisma.js", () => ({
       count: vi.fn(),
       upsert: vi.fn(),
       update: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
     },
     inventoryMovement: {
       create: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+    },
+    inventoryReservation: {
+      findMany: vi.fn(),
+    },
+    inventoryStocktake: {
+      findFirst: vi.fn(),
     },
     branch: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -142,6 +153,11 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
 
+  vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
+    const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
+    return latestUpsert ? await latestUpsert : null;
+  }) as never);
+
   vi.mocked(prisma.$transaction).mockImplementation(
     async (
       input:
@@ -235,6 +251,80 @@ describe("Inventory routes - permissions", () => {
 
     expect(res.status).toBe(403);
     expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("Inventory routes - business-wide reporting", () => {
+  it("allows a business owner to compare only active branches in their business", async () => {
+    vi.mocked(prisma.branch.findMany).mockResolvedValue([{
+      id: BRANCH_A,
+      name: "Main Branch",
+      inventoryStocks: [{
+        inventoryItemId: "item-1",
+        quantity: 12,
+        reservedQuantity: 2,
+        averageUnitCost: 250,
+        inventoryItem: { id: "item-1", lowStockThreshold: 5 },
+      }],
+    }] as never);
+    vi.mocked(prisma.inventoryItem.findMany).mockResolvedValue([{
+      id: "item-1",
+      lowStockThreshold: 5,
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reports/branch-comparison")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject([{
+      branchId: BRANCH_A,
+      branchName: "Main Branch",
+      catalogueItemCount: 1,
+      totalValuation: 3000,
+      lowStockItems: 0,
+    }]);
+    expect(prisma.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", isActive: true },
+    }));
+  });
+
+  it("denies branch managers stocktake approval without the approval permission", async () => {
+    const managerToken = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-stocktake");
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-stocktake-approval",
+      businessId: "biz-A",
+      userId: "user-manager-stocktake",
+      permissionId: "permission-inventory.approve",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .post("/api/v1/inventory/stocktakes/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/approve")
+      .set("Authorization", `Bearer ${managerToken}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(403);
+    expect(prisma.inventoryStocktake.findFirst).not.toHaveBeenCalled();
+    expect(prisma.inventoryStock.update).not.toHaveBeenCalled();
+  });
+
+  it("denies branch managers without the all-branches reporting permission", async () => {
+    const managerToken = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-report");
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-report",
+      businessId: "biz-A",
+      userId: "user-manager-report",
+      permissionId: "permission-inventory.reports_all_branches",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reports/branch-comparison")
+      .set("Authorization", `Bearer ${managerToken}`);
+
+    expect(res.status).toBe(403);
+    expect(prisma.branch.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -415,7 +505,11 @@ describe("Inventory routes - business-scoped items", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .send({
         name: "Detergent",
+        sku: "DET-001",
+        category: "Chemicals",
+        storageLocation: "Store A / Shelf 2",
         unit: "LITRE",
+        reorderQuantity: 24,
         lowStockThreshold: 5,
       });
 
@@ -428,8 +522,47 @@ describe("Inventory routes - business-scoped items", () => {
       lowStockThreshold: 5,
       isActive: true,
     });
-    expect(prisma.inventoryItem.create).toHaveBeenCalled();
+    expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: "biz-A",
+        sku: "DET-001",
+        category: "Chemicals",
+        storageLocation: "Store A / Shelf 2",
+        reorderQuantity: 24,
+      }),
+    }));
     expect(userBranchFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("Inventory routes - reservation register", () => {
+  it("lists reservations only for the selected business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    vi.mocked(prisma.inventoryReservation.findMany).mockResolvedValue([{
+      id: "reservation-1",
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      inventoryItemId: "item-1",
+      quantity: 2,
+      status: "ACTIVE",
+      reference: "ORDER-100",
+      expiresAt: null,
+      releasedAt: null,
+      createdAt: new Date("2026-11-02T10:00:00.000Z"),
+      inventoryItem: { id: "item-1", name: "Detergent", unit: "LITRE" },
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reservations")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(prisma.inventoryReservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", branchId: BRANCH_A },
+      take: 100,
+    }));
   });
 });
 
@@ -600,6 +733,27 @@ describe("Inventory routes - branch-scoped stock", () => {
     expect(res.status).toBe(422);
     expect(res.body.error.message).toBe("Insufficient inventory stock");
     expect(prisma.inventoryStock.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("requires an audit reason for return, waste and expired-stock movements", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    vi.mocked(prisma.branch.findFirst).mockResolvedValue({
+      id: BRANCH_A, businessId: "biz-A", name: "Main Branch",
+    } as never);
+    for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
+      const res = await request(app)
+        .post("/api/v1/inventory/movements")
+        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("X-Branch-Id", BRANCH_A)
+        .send({
+          inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          quantity: 1,
+          type,
+        });
+      expect(res.status).toBe(422);
+    }
+    expect(prisma.inventoryStock.upsert).not.toHaveBeenCalled();
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
   });
 

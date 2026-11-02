@@ -108,6 +108,62 @@ describe("globalSearch", () => {
     expect(permissionCheck).toHaveBeenCalledTimes(3);
   });
 
+  it("searches customer email and opens the latest order in the active branch", async () => {
+    customerFindMany.mockResolvedValue([
+      {
+        id: "customer-2",
+        name: "Aaron Daniel",
+        phone: "08059489393",
+        email: "aaron@example.com",
+        orders: [
+          {
+            id: "latest-order",
+            orderNumber: "00005",
+            status: "RECEIVED",
+          },
+        ],
+      },
+    ] as never);
+
+    const results = await globalSearch(
+      USER_A,
+      "STAFF",
+      BUSINESS_A,
+      BRANCH_A,
+      { q: "aaron@example.com", limit: 10 },
+    );
+
+    expect(customerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              email: expect.objectContaining({
+                contains: "aaron@example.com",
+                mode: "insensitive",
+              }),
+            }),
+          ]),
+        }),
+        select: expect.objectContaining({
+          email: true,
+          orders: expect.objectContaining({
+            where: { branchId: BRANCH_A },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          }),
+        }),
+      }),
+    );
+    expect(results[0]).toMatchObject({
+      type: "CUSTOMER",
+      id: "customer-2",
+      title: "Aaron Daniel",
+      subtitle: "08059489393 · aaron@example.com",
+      href: "/orders?orderId=latest-order",
+    });
+  });
+
   it("only returns categories the user can view", async () => {
     permissionCheck.mockImplementation(
       async (_userId, _businessId, _role, permissionCode) =>

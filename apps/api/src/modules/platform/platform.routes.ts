@@ -9,6 +9,13 @@ import {
   renewBusinessSubscription,
   activateBusiness,
   deactivateBusiness,
+  cancelBusinessSubscription,
+  suspendBusiness,
+  clearBusinessSuspension,
+  archiveBusiness,
+  permanentlyDeleteBusiness,
+  createPlatformMessage,
+  listPlatformMessages,
   overview,
   revenue,
   growth,
@@ -103,6 +110,10 @@ platformRouter.post(
   asyncHandler(renewBusinessSubscription),
 );
 platformRouter.post(
+  "/businesses/:businessId/subscription/cancel",
+  asyncHandler(cancelBusinessSubscription),
+);
+platformRouter.post(
   "/businesses/:businessId/activate",
   asyncHandler(activateBusiness),
 );
@@ -111,3 +122,13 @@ platformRouter.post(
   asyncHandler(deactivateBusiness),
 );
 platformRouter.get("/audit-logs", asyncHandler(auditLogs));
+
+platformRouter.post("/businesses/:businessId/suspend", asyncHandler(suspendBusiness));
+platformRouter.post("/businesses/:businessId/suspension/clear", asyncHandler(clearBusinessSuspension));
+
+platformRouter.get("/messages", asyncHandler(listPlatformMessages));
+platformRouter.post("/messages", asyncHandler(createPlatformMessage));
+
+platformRouter.post("/businesses/:businessId/archive", asyncHandler(archiveBusiness));
+
+platformRouter.delete("/businesses/:businessId/permanent", asyncHandler(permanentlyDeleteBusiness));

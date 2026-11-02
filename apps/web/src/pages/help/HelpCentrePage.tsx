@@ -129,7 +129,8 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
   {title:"Instant Local Backup",summary:"Create a backup immediately in a folder on this device.",steps:[
    "Open Backup & Data Migration and locate Instant Local Backup. Choose a local folder when prompted, then use the manual backup action to create a backup immediately.",
    "The browser must support the File System Access API and the site must use secure HTTPS (localhost is also treated as secure by modern browsers). The selected folder must remain accessible.",
-   "Enter a backup encryption password of at least 12 characters, select a folder and run the manual backup. Instant Local Backup is user-triggered: it runs now and saves to the selected device folder. It is not a cloud backup and does not run while the browser/page is closed."
+   "Enter a backup encryption password of at least 12 characters, select a folder and run the manual backup. Instant Local Backup is user-triggered: it runs now and saves to the selected device folder. It is not a cloud backup and does not run while the browser/page is closed.",
+   "For a shortcut from anywhere in the app, search for MLB (Manual Local Backup) in the top search field or open it from Help Centre Quick Operations. It uses your remembered folder when browser permission is still granted; otherwise it downloads to the browser's default Downloads location. You must enter the backup encryption password again."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Local backup schedules",summary:"Run browser-managed backups on a recurring timetable.",steps:[
    "Select a local folder and provide the backup password (at least 12 characters), then add a schedule. Local schedules support Daily, Weekly and Monthly intervals; choose the time and, where required, the weekday or day of month. Up to 10 local schedules can be stored on this device.",
@@ -140,6 +141,7 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Connect a supported provider shown in the cloud backup section: Google Drive, Dropbox or OneDrive. Complete provider authorization/configuration and then run connection verification.",
    "A destination is selectable only when its status is Connected and it has a verification timestamp. A saved but unverified or errored connection is not a usable destination.",
    "Choose the destination, configure frequency (Daily, Weekly or Monthly), time, time zone and retention, save, and create a cloud schedule. Cloud schedules are server-managed, unlike browser-managed local schedules. You can also start a manual cloud backup and pause, resume or delete a schedule; deleting a schedule preserves existing backup history.",
+   "Use MCB (Manual Cloud Backup) from the top search field or Help Centre Quick Operations to run an immediate encrypted backup without opening this page. It uses the last selected verified destination, or the first verified destination if no selection is saved, and asks for sensitive authorization before starting.",
    "Review run history for status and errors. A successful backup should be followed by a restore rehearsal in a safe environment. Keep provider credentials and backup passwords private."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Import from previous software: accepted files and current scope",summary:"Analyse a legacy backup before confirming an import.",steps:[

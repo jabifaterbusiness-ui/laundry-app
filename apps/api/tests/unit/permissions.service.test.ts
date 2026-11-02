@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Role } from "@prisma/client";
+import { DEFAULT_ROLE_PERMISSIONS } from "../../src/modules/permissions/permissions.catalog.js";
 
 const {
   findPermission,
@@ -744,5 +745,13 @@ describe("permission administration helpers", () => {
         "customers.view",
       ),
     ).rejects.toThrow("User permission override not found");
+  });
+});
+
+describe("inventory cross-branch reporting permissions", () => {
+  it("grants branch comparison to business owners but not branch-manager defaults", () => {
+    expect(DEFAULT_ROLE_PERMISSIONS.BUSINESS_OWNER).toContain("inventory.reports_all_branches");
+    expect(DEFAULT_ROLE_PERMISSIONS.BRANCH_MANAGER).not.toContain("inventory.reports_all_branches");
+    expect(DEFAULT_ROLE_PERMISSIONS.STAFF).not.toContain("inventory.reports_all_branches");
   });
 });

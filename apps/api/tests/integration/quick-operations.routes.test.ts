@@ -28,6 +28,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       }),
     },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn().mockResolvedValue([]),
     userBranch: {
       findUnique: vi.fn(),
     },
@@ -64,6 +65,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     inventoryStock: {
       upsert: vi.fn(),
       update: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
     },
     inventoryMovement: {
       create: vi.fn(),
@@ -196,6 +198,10 @@ function mockTransaction() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
+  vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
+    const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
+    return latestUpsert ? await latestUpsert : null;
+  }) as never);
   allowPermission();
   getCustomerReceiptMock.mockReset();
   getCompanyReceiptMock.mockReset();

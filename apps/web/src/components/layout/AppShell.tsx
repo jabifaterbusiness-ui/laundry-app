@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GlobalSearch } from "../search/GlobalSearch.js";
+import "./AppShell.css";
 import "../exports/TableExportActions.css";
 import { QuickOperationLauncher } from "../quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useWorkstationModeStore } from "../../state/workstation-mode-store.js";
+import { dismissBusinessInboxMessage, getBusinessInbox, markBusinessInboxMessageRead } from "../../lib/inbox-api.js";
 import {
   CLOUD_BACKUP_NOTIFICATION_EVENT,
   type CloudBackupNotification,
@@ -120,8 +122,16 @@ export function AppShell({ children }: PropsWithChildren) {
   const clearSession = useAuthStore((state) => state.clearSession);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const setActiveBranch = useAuthStore((state) => state.setActiveBranch);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const queryClient = useQueryClient();
   const activeBranches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
+  const inboxQuery = useQuery({
+    queryKey: ["business-inbox"],
+    queryFn: () => getBusinessInbox(accessToken),
+    enabled: Boolean(accessToken && user?.businessId),
+    refetchInterval: 60_000,
+  });
+  const inboxUnreadCount = inboxQuery.data?.unreadCount ?? 0;
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
 
@@ -133,6 +143,49 @@ export function AppShell({ children }: PropsWithChildren) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloudBackupNotification, setCloudBackupNotification] =
     useState<CloudBackupNotification | null>(null);
+  const [activeInboxPopupId, setActiveInboxPopupId] = useState<string | null>(null);
+  const [shownInboxPopupIds, setShownInboxPopupIds] = useState<string[]>([]);
+  const activeInboxPopup = inboxQuery.data?.messages.find((message) =>
+    message.id === activeInboxPopupId && !message.readAt && !message.dismissedAt
+  ) ?? null;
+
+  useEffect(() => {
+    if (activeInboxPopupId) return;
+    const next = inboxQuery.data?.messages.find((message) =>
+      !message.readAt && !message.dismissedAt && !shownInboxPopupIds.includes(message.id)
+    );
+    if (next) setActiveInboxPopupId(next.id);
+  }, [inboxQuery.data?.messages, activeInboxPopupId, shownInboxPopupIds]);
+
+  useEffect(() => {
+    if (!activeInboxPopup) return;
+    const timer = window.setTimeout(() => {
+      setShownInboxPopupIds((current) => [...current, activeInboxPopup.id]);
+      setActiveInboxPopupId(null);
+      if (accessToken) {
+        void dismissBusinessInboxMessage(activeInboxPopup.id, accessToken)
+          .then(() => queryClient.invalidateQueries({ queryKey: ["business-inbox"] }))
+          .catch(() => undefined);
+      }
+    }, activeInboxPopup.displayDurationMinutes * 60_000);
+    return () => window.clearTimeout(timer);
+  }, [activeInboxPopup?.id, activeInboxPopup?.displayDurationMinutes, accessToken, queryClient]);
+
+  async function dismissActiveInboxPopup() {
+    if (!activeInboxPopup || !accessToken) return;
+    await dismissBusinessInboxMessage(activeInboxPopup.id, accessToken);
+    setActiveInboxPopupId(null);
+    await queryClient.invalidateQueries({ queryKey: ["business-inbox"] });
+  }
+
+  async function openActiveInboxMessage() {
+    if (!activeInboxPopup || !accessToken) return;
+    await markBusinessInboxMessageRead(activeInboxPopup.id, accessToken);
+    setActiveInboxPopupId(null);
+    await queryClient.invalidateQueries({ queryKey: ["business-inbox"] });
+    navigate("/inbox");
+  }
+
 
   useEffect(() => {
     const branches = (user?.branches ?? []).filter((branch) => branch.isActive !== false);
@@ -501,6 +554,11 @@ export function AppShell({ children }: PropsWithChildren) {
                 );
               })}
             </section>
+            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
+              <span className="nav-icon" aria-hidden="true">✉</span>
+              <span>Inbox</span>
+              {inboxUnreadCount > 0 ? <span className="inbox-unread-badge">{inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}</span> : null}
+            </Link>
 
             <section className="nav-section management-section">
               <h2>Management</h2>
@@ -644,6 +702,20 @@ export function AppShell({ children }: PropsWithChildren) {
               </button>
             </section>
           )}
+          {activeInboxPopup ? (
+            <div className="global-inbox-popup-backdrop" role="presentation">
+              <section className="global-inbox-popup" role="dialog" aria-modal="true" aria-labelledby="global-inbox-popup-title">
+                <span className="global-inbox-popup-eyebrow">LAUNDRYANGEL ANNOUNCEMENT</span>
+                <h2 id="global-inbox-popup-title">{activeInboxPopup.title}</h2>
+                <p>{activeInboxPopup.body}</p>
+                <small>This notice stays visible for up to {activeInboxPopup.displayDurationMinutes} minutes.</small>
+                <div className="global-inbox-popup-actions">
+                  <button type="button" className="button button-primary" onClick={() => void openActiveInboxMessage()}>Read message</button>
+                  <button type="button" className="button button-secondary" onClick={() => void dismissActiveInboxPopup()}>Dismiss</button>
+                </div>
+              </section>
+            </div>
+          ) : null}
           <div className="page-container">{children}</div>
         </main>
       </div>

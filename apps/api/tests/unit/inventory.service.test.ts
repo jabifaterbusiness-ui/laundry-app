@@ -15,11 +15,14 @@ const { prismaMock } = vi.hoisted(() => ({
     inventoryStock: {
       upsert: vi.fn(),
       update: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
     },
     inventoryMovement: {
       create: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     branch: {
       findFirst: vi.fn(),
@@ -60,6 +63,10 @@ function mockTransaction() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
+  prismaMock.inventoryStock.findUniqueOrThrow.mockImplementation(async () => {
+    const latestUpsert = prismaMock.inventoryStock.upsert.mock.results.at(-1)?.value;
+    return latestUpsert ? await latestUpsert : null;
+  });
 });
 
 describe("inventory.service", () => {
@@ -121,7 +128,7 @@ describe("inventory.service", () => {
       });
       expect(prismaMock.inventoryStock.update).toHaveBeenCalledWith({
         where: { id: "stock-1" },
-        data: { quantity: 15 },
+        data: { quantity: 15, averageUnitCost: 0 },
       });
       expect(prismaMock.inventoryMovement.create).toHaveBeenCalledWith({
         data: {
@@ -131,6 +138,7 @@ describe("inventory.service", () => {
           quantity: 5,
           type: "RECEIPT",
           resultingQuantity: 15,
+          unitCost: 0,
           reason: null,
           reference: null,
           createdById: "user-1",
@@ -360,7 +368,7 @@ describe("inventory.service", () => {
       });
       expect(prismaMock.inventoryStock.update).toHaveBeenCalledWith({
         where: { id: "stock-2" },
-        data: { quantity: 20 },
+        data: { quantity: 20, averageUnitCost: 0 },
       });
     });
 
@@ -700,6 +708,10 @@ describe("inventory.service", () => {
           description: "5 litre detergent",
           unit: "LITRE",
           lowStockThreshold: 10,
+          sku: null,
+          category: null,
+          storageLocation: null,
+          reorderQuantity: 0,
         },
       });
     });
@@ -730,6 +742,10 @@ describe("inventory.service", () => {
           description: null,
           unit: "LITRE",
           lowStockThreshold: 0,
+          sku: null,
+          category: null,
+          storageLocation: null,
+          reorderQuantity: 0,
         },
       });
     });
@@ -814,10 +830,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
-        name: {
-          contains: "detergent",
-          mode: "insensitive",
-        },
+        OR: [
+          { name: { contains: "detergent", mode: "insensitive" } },
+          { sku: { contains: "detergent", mode: "insensitive" } },
+          { category: { contains: "detergent", mode: "insensitive" } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -829,10 +846,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
-        name: {
-          contains: "detergent",
-          mode: "insensitive",
-        },
+        OR: [
+          { name: { contains: "detergent", mode: "insensitive" } },
+          { sku: { contains: "detergent", mode: "insensitive" } },
+          { category: { contains: "detergent", mode: "insensitive" } },
+        ],
       },
     });
   });
@@ -1151,6 +1169,14 @@ describe("listInventoryStock", () => {
 
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
 
+    const stockQuery = prismaMock.$queryRaw.mock.calls[0]?.[0] as Prisma.Sql;
+    expect(stockQuery.sql).toContain('"inventoryItemId"');
+    expect(stockQuery.sql).toContain('"businessId"');
+    expect(stockQuery.sql).toContain('"branchId"');
+    expect(stockQuery.sql).toContain('"lowStockThreshold"');
+    expect(stockQuery.sql).not.toContain("inventory_item_id");
+    expect(stockQuery.sql).not.toContain("low_stock_threshold");
+
     expect(prismaMock.inventoryStock.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
@@ -1315,6 +1341,50 @@ describe("listInventoryStock empty results", () => {
   });
 });
 
+describe("createInventoryItem catalogue metadata", () => {
+  it("stores optional SKU, category, location and reorder quantity within the business", async () => {
+    const created = {
+      id: "item-catalogue-1",
+      businessId: "biz-A",
+      name: "Fabric Softener",
+      sku: "FAB-002",
+      category: "Fabric Care",
+      storageLocation: "Shelf B2",
+      description: null,
+      unit: "BOTTLE",
+      reorderQuantity: 12,
+      lowStockThreshold: 4,
+      isActive: true,
+    };
+    prismaMock.inventoryItem.create.mockResolvedValue(created);
+
+    const result = await createInventoryItem({ businessId: "biz-A" }, {
+      name: " Fabric Softener ",
+      sku: " FAB-002 ",
+      category: " Fabric Care ",
+      storageLocation: " Shelf B2 ",
+      unit: "BOTTLE",
+      reorderQuantity: 12,
+      lowStockThreshold: 4,
+    });
+
+    expect(result).toEqual(created);
+    expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
+      data: {
+        businessId: "biz-A",
+        name: "Fabric Softener",
+        sku: "FAB-002",
+        category: "Fabric Care",
+        storageLocation: "Shelf B2",
+        description: null,
+        unit: "BOTTLE",
+        reorderQuantity: 12,
+        lowStockThreshold: 4,
+      },
+    });
+  });
+});
+
 describe("updateInventoryItem", () => {
     it("updates an inventory item within the authenticated business", async () => {
       prismaMock.inventoryItem.findFirst
@@ -1332,8 +1402,12 @@ describe("updateInventoryItem", () => {
         id: "item-1",
         businessId: "biz-A",
         name: "Fabric Softener",
+        sku: "FAB-002",
+        category: "Care",
+        storageLocation: "Shelf B2",
         description: "New description",
         unit: "BOTTLE",
+        reorderQuantity: 12,
         lowStockThreshold: 5,
         isActive: false,
       });
@@ -1342,8 +1416,12 @@ describe("updateInventoryItem", () => {
         businessId: "biz-A",
       }, "item-1", {
         name: " Fabric Softener ",
+        sku: " FAB-002 ",
+        category: " Care ",
+        storageLocation: " Shelf B2 ",
         description: " New description ",
         unit: "BOTTLE",
+        reorderQuantity: 12,
         lowStockThreshold: 5,
         isActive: false,
       });
@@ -1352,8 +1430,12 @@ describe("updateInventoryItem", () => {
         id: "item-1",
         businessId: "biz-A",
         name: "Fabric Softener",
+        sku: "FAB-002",
+        category: "Care",
+        storageLocation: "Shelf B2",
         description: "New description",
         unit: "BOTTLE",
+        reorderQuantity: 12,
         lowStockThreshold: 5,
         isActive: false,
       });
@@ -1361,8 +1443,12 @@ describe("updateInventoryItem", () => {
         where: { id: "item-1" },
         data: {
           name: "Fabric Softener",
+          sku: "FAB-002",
+          category: "Care",
+          storageLocation: "Shelf B2",
           description: "New description",
           unit: "BOTTLE",
+          reorderQuantity: 12,
           lowStockThreshold: 5,
           isActive: false,
         },

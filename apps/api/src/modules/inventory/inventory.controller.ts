@@ -9,6 +9,17 @@ import {
   listInventoryStockQuerySchema,
   createInventoryMovementSchema,
   adjustInventoryStockSchema,
+  listInventoryMovementsQuerySchema,
+  createInventorySupplierSchema,
+  listInventorySuppliersQuerySchema,
+  createInventoryPurchaseOrderSchema,
+  listInventoryPurchaseOrdersQuerySchema,
+  receiveInventoryPurchaseOrderSchema,
+  createInventoryTransferSchema,
+  receiveInventoryTransferSchema,
+  createInventoryStocktakeSchema,
+  createInventoryReservationSchema,
+  inventoryOperationIdParamSchema,
 } from "./inventory.validation.js";
 import {
   createInventoryItem,
@@ -17,6 +28,26 @@ import {
   listInventoryStock,
   createInventoryMovement,
   adjustInventoryStock,
+  listInventoryMovements,
+  createInventorySupplier,
+  listInventorySuppliers,
+  createInventoryPurchaseOrder,
+  listInventoryPurchaseOrders,
+  receiveInventoryPurchaseOrder,
+  createInventoryTransfer,
+  receiveInventoryTransfer,
+  listInventoryTransfers,
+  createInventoryStocktake,
+  applyInventoryStocktake,
+  submitInventoryStocktake,
+  listInventoryStocktakes,
+  approveInventoryStocktake,
+  createInventoryReservation,
+  listInventoryReservations,
+  releaseInventoryReservation,
+  getInventoryReorderRecommendations,
+  getInventoryReports,
+  getInventoryBranchComparison,
 } from "./inventory.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -52,10 +83,12 @@ export async function createItem(
     { businessId },
     {
       name: input.name,
-      ...(input.description !== undefined && {
-        description: input.description,
-      }),
+      ...(input.sku !== undefined && { sku: input.sku }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...(input.storageLocation !== undefined && { storageLocation: input.storageLocation }),
+      ...(input.description !== undefined && { description: input.description }),
       unit: input.unit,
+      reorderQuantity: input.reorderQuantity,
       lowStockThreshold: input.lowStockThreshold,
     },
   );
@@ -70,7 +103,11 @@ export async function createItem(
     correlationId: req.correlationId ?? null,
     metadata: {
       name: item.name,
+      sku: item.sku,
+      category: item.category,
+      storageLocation: item.storageLocation,
       unit: item.unit,
+      reorderQuantity: item.reorderQuantity,
     },
   });
 
@@ -92,13 +129,13 @@ export async function updateItem(
     id,
     {
       ...(input.name !== undefined && { name: input.name }),
-      ...(input.description !== undefined && {
-        description: input.description,
-      }),
+      ...(input.sku !== undefined && { sku: input.sku }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...(input.storageLocation !== undefined && { storageLocation: input.storageLocation }),
+      ...(input.description !== undefined && { description: input.description }),
       ...(input.unit !== undefined && { unit: input.unit }),
-      ...(input.lowStockThreshold !== undefined && {
-        lowStockThreshold: input.lowStockThreshold,
-      }),
+      ...(input.reorderQuantity !== undefined && { reorderQuantity: input.reorderQuantity }),
+      ...(input.lowStockThreshold !== undefined && { lowStockThreshold: input.lowStockThreshold }),
       ...(input.isActive !== undefined && {
         isActive: input.isActive,
       }),
@@ -115,7 +152,11 @@ export async function updateItem(
     correlationId: req.correlationId ?? null,
     metadata: {
       name: item.name,
+      sku: item.sku,
+      category: item.category,
+      storageLocation: item.storageLocation,
       unit: item.unit,
+      reorderQuantity: item.reorderQuantity,
       isActive: item.isActive,
     },
   });
@@ -194,6 +235,7 @@ export async function createMovement(
       inventoryItemId: input.inventoryItemId,
       quantity: input.quantity,
       type: input.type,
+      ...(input.unitCost !== undefined && { unitCost: input.unitCost }),
       createdById: req.user!.id,
       ...(input.reason !== undefined && {
         reason: input.reason,
@@ -269,4 +311,201 @@ export async function adjustStock(
   res.status(201).json({
     data: result,
   });
+}
+
+
+export async function listMovements(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const query = listInventoryMovementsQuerySchema.parse(req.query);
+  const result = await listInventoryMovements(
+    { businessId, branchId },
+    {
+      page: query.page,
+      pageSize: query.pageSize,
+      ...(query.inventoryItemId ? { inventoryItemId: query.inventoryItemId } : {}),
+      ...(query.type ? { type: query.type } : {}),
+    },
+  );
+  res.status(200).json(result);
+}
+
+
+export async function createSupplier(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const input = createInventorySupplierSchema.parse(req.body);
+  const supplier = await createInventorySupplier({ businessId }, {
+    name: input.name,
+    ...(input.contactName !== undefined ? { contactName: input.contactName } : {}),
+    ...(input.email !== undefined ? { email: input.email } : {}),
+    ...(input.phone !== undefined ? { phone: input.phone } : {}),
+    ...(input.address !== undefined ? { address: input.address } : {}),
+    ...(input.taxId !== undefined ? { taxId: input.taxId } : {}),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
+  });
+  await recordAuditEvent({ action: "inventory.supplier_created", entityType: "InventorySupplier", entityId: supplier.id,
+    businessId, branchId: req.branchId ?? null, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { name: supplier.name } });
+  res.status(201).json({ data: supplier });
+}
+
+export async function listSuppliers(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const query = listInventorySuppliersQuerySchema.parse(req.query);
+  res.status(200).json(await listInventorySuppliers({ businessId }, {
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.search !== undefined ? { search: query.search } : {}),
+  }));
+}
+
+export async function createPurchaseOrder(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const input = createInventoryPurchaseOrderSchema.parse(req.body);
+  const order = await createInventoryPurchaseOrder({ businessId, branchId }, {
+    supplierId: input.supplierId,
+    orderNumber: input.orderNumber,
+    createdById: req.user!.id,
+    lines: input.lines,
+    ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt } : {}),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
+  });
+  await recordAuditEvent({ action: "inventory.purchase_order_created", entityType: "InventoryPurchaseOrder", entityId: order.id,
+    businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length } });
+  res.status(201).json({ data: order });
+}
+
+export async function listPurchaseOrders(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const query = listInventoryPurchaseOrdersQuerySchema.parse(req.query);
+  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId }, {
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.status !== undefined ? { status: query.status } : {}),
+  }));
+}
+
+export async function receivePurchaseOrder(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = inventoryItemIdParamSchema.parse({ id: req.params.id });
+  const input = receiveInventoryPurchaseOrderSchema.parse(req.body);
+  const result = await receiveInventoryPurchaseOrder({ businessId, branchId }, {
+    purchaseOrderId: id,
+    receiptNumber: input.receiptNumber,
+    receivedById: req.user!.id,
+    lines: input.lines.map((line) => ({
+      purchaseOrderLineId: line.purchaseOrderLineId,
+      quantity: line.quantity,
+      ...(line.unitCost !== undefined ? { unitCost: line.unitCost } : {}),
+    })),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
+  });
+  await recordAuditEvent({ action: "inventory.goods_received", entityType: "InventoryGoodsReceipt", entityId: result.receipt.id,
+    businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
+    metadata: { receiptNumber: result.receipt.receiptNumber, purchaseOrderId: id, lineCount: result.receipt.lines.length, status: result.status } });
+  res.status(201).json({ data: result });
+}
+
+
+export async function createTransfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryTransferSchema.parse(req.body);
+  const transfer = await createInventoryTransfer({ businessId, branchId }, { destinationBranchId: input.destinationBranchId, transferNumber: input.transferNumber, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.transfer_dispatched", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, destinationBranchId: transfer.destinationBranchId, lineCount: transfer.lines.length } });
+  res.status(201).json({ data: transfer });
+}
+
+export async function receiveTransfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const input = receiveInventoryTransferSchema.parse(req.body);
+  const transfer = await receiveInventoryTransfer({ businessId, branchId }, { transferId: id, receivedById: req.user!.id, lines: input.lines });
+  await recordAuditEvent({ action: "inventory.transfer_received", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, status: transfer.status } });
+  res.status(200).json({ data: transfer });
+}
+
+export async function listTransfers(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const result = await listInventoryTransfers({ businessId, branchId }, { page: 1, pageSize: 100 });
+  res.status(200).json(result);
+}
+
+export async function createStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryStocktakeSchema.parse(req.body);
+  const stocktake = await createInventoryStocktake({ businessId, branchId }, { reference: input.reference, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
+  res.status(201).json({ data: stocktake });
+}
+
+export async function listStocktakes(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  res.status(200).json(await listInventoryStocktakes({ businessId, branchId }));
+}
+
+export async function submitStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await submitInventoryStocktake({ businessId, branchId }, { stocktakeId: id, submittedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_submitted", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
+  res.status(200).json({ data: stocktake });
+}
+
+export async function approveStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await approveInventoryStocktake({ businessId, branchId }, { stocktakeId: id, approvedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_approved", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
+  res.status(200).json({ data: stocktake });
+}
+
+export async function applyStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await applyInventoryStocktake({ businessId, branchId }, { stocktakeId: id, appliedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_applied", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
+  res.status(200).json({ data: stocktake });
+}
+
+export async function listReservations(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const reservations = await listInventoryReservations({ businessId, branchId });
+  res.status(200).json({ data: reservations });
+}
+
+export async function createReservation(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryReservationSchema.parse(req.body);
+  const reservation = await createInventoryReservation({ businessId, branchId }, { inventoryItemId: input.inventoryItemId, quantity: input.quantity, ...(input.reference !== undefined ? { reference: input.reference } : {}), ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}), createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stock_reserved", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { inventoryItemId: reservation.inventoryItemId, quantity: reservation.quantity } });
+  res.status(201).json({ data: reservation });
+}
+
+export async function releaseReservation(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const consumed = req.body?.consumed === true;
+  const reservation = await releaseInventoryReservation({ businessId, branchId }, { reservationId: id, consumed, actedById: req.user!.id });
+  await recordAuditEvent({ action: consumed ? "inventory.reservation_consumed" : "inventory.reservation_released", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { status: reservation.status } });
+  res.status(200).json({ data: reservation });
+}
+
+export async function reorderRecommendations(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  res.status(200).json({ data: await getInventoryReorderRecommendations({ businessId, branchId }) });
+}
+
+export async function inventoryReports(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  res.status(200).json({ data: await getInventoryReports({ businessId, branchId }) });
+}
+
+
+export async function inventoryBranchComparison(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  res.status(200).json({ data: await getInventoryBranchComparison({ businessId }) });
 }

@@ -155,7 +155,7 @@ export function GlobalSearch() {
     >
       <input
         aria-label="Global search"
-        placeholder="Search customers, orders, invoices..."
+        placeholder="Search customer name, email, phone, order number..."
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);

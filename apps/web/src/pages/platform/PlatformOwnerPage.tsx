@@ -3,6 +3,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   activatePlatformBusiness,
   deactivatePlatformBusiness,
+  cancelPlatformBusinessSubscription,
+  suspendPlatformBusiness,
+  clearPlatformBusinessSuspension,
+  archivePlatformBusiness,
+  permanentlyDeletePlatformBusiness,
+  getPlatformMessages,
+  createPlatformMessage,
   renewPlatformBusinessSubscription,
   getPlatformAuditLogs,
   getPlatformBusinesses,
@@ -28,6 +35,8 @@ import {
   deletePlatformPaymentMethod,
 } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
+import "./PlatformOwnerPage.css";
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat().format(value);
@@ -49,6 +58,7 @@ function formatDate(value: string): string {
 
 export function PlatformOwnerPage() {
   const { user, accessToken } = useAuthStore();
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const isPlatformAdmin = user?.securityRole === "PLATFORM_ADMIN";
 
   const overviewQuery = useQuery({
@@ -109,6 +119,8 @@ export function PlatformOwnerPage() {
     enabled: isPlatformAdmin && Boolean(accessToken),
   });
 
+  const messagesQuery = useQuery({ queryKey: ["platform", "messages"], queryFn: () => getPlatformMessages(accessToken), enabled: isPlatformAdmin && Boolean(accessToken) });
+
   const auditQuery = useQuery({
     queryKey: ["platform", "audit-logs"],
     queryFn: () => getPlatformAuditLogs(accessToken),
@@ -134,6 +146,23 @@ export function PlatformOwnerPage() {
   });
 
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [messageForm, setMessageForm] = useState({ title: "", body: "", businessId: "", publishedAt: "", expiresAt: "", displayDurationMinutes: "10" });
+  const [messageFeedback, setMessageFeedback] = useState<string | null>(null);
+  const messageMutation = useMutation({
+    mutationFn: () => createPlatformMessage({
+      title: messageForm.title, body: messageForm.body,
+      ...(messageForm.businessId ? { businessId: messageForm.businessId } : {}),
+      ...(messageForm.publishedAt ? { publishedAt: new Date(messageForm.publishedAt).toISOString() } : {}),
+      ...(messageForm.expiresAt ? { expiresAt: new Date(messageForm.expiresAt).toISOString() } : {}),
+      displayDurationMinutes: Number(messageForm.displayDurationMinutes),
+    }, accessToken),
+    onSuccess: async (result) => {
+      setMessageFeedback(`Message queued for ${result.recipientCount} recipients across ${result.businessCount} businesses.`);
+      setMessageForm({ title: "", body: "", businessId: "", publishedAt: "", expiresAt: "", displayDurationMinutes: "10" });
+      await messagesQuery.refetch();
+    },
+    onError: (error) => setMessageFeedback(error instanceof Error ? error.message : "Unable to publish platform message."),
+  });
   const [subscriptionFeedback, setSubscriptionFeedback] =
     useState<string | null>(null);
 
@@ -198,6 +227,59 @@ export function PlatformOwnerPage() {
           : "Unable to create or renew the company subscription.",
       );
     },
+  });
+
+
+  const subscriptionCancellationMutation = useMutation({
+    mutationFn: async ({
+      businessId,
+      when,
+      reason,
+    }: {
+      businessId: string;
+      when: "IMMEDIATE" | "PERIOD_END";
+      reason: string;
+    }) => cancelPlatformBusinessSubscription(businessId, when, reason, accessToken),
+    onSuccess: async (_, variables) => {
+      setSubscriptionFeedback(
+        variables.when === "IMMEDIATE"
+          ? "Subscription cancelled immediately."
+          : "Subscription cancellation scheduled for the paid-through date.",
+      );
+      await refreshPlatformData();
+    },
+    onError: (error) => {
+      setSubscriptionFeedback(
+        error instanceof Error ? error.message : "Unable to cancel subscription.",
+      );
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (businessId: string) => archivePlatformBusiness(businessId, accessToken),
+    onSuccess: async () => { setStatusFeedback("Business archived. It can be reactivated to restore access."); await refreshPlatformData(); },
+    onError: (error) => setStatusFeedback(error instanceof Error ? error.message : "Unable to archive business."),
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: ({ businessId, confirmation, authorizationToken }: { businessId: string; confirmation: string; authorizationToken: string }) =>
+      permanentlyDeletePlatformBusiness(businessId, confirmation, authorizationToken, accessToken),
+    onSuccess: async (result) => {
+      setStatusFeedback(`Business ${result.businessName} was permanently deleted.`);
+      await refreshPlatformData();
+    },
+    onError: (error) => setStatusFeedback(error instanceof Error ? error.message : "Unable to permanently delete business."),
+  });
+
+  const suspensionMutation = useMutation({
+    mutationFn: (input: { businessId: string; durationDays: number; reason: string }) => suspendPlatformBusiness(input.businessId, input.durationDays, input.reason, accessToken),
+    onSuccess: async () => { setSubscriptionFeedback("Timed business suspension applied."); await refreshPlatformData(); },
+    onError: (error) => setSubscriptionFeedback(error instanceof Error ? error.message : "Unable to suspend business."),
+  });
+  const clearSuspensionMutation = useMutation({
+    mutationFn: (businessId: string) => clearPlatformBusinessSuspension(businessId, accessToken),
+    onSuccess: async () => { setSubscriptionFeedback("Business suspension lifted."); await refreshPlatformData(); },
+    onError: (error) => setSubscriptionFeedback(error instanceof Error ? error.message : "Unable to lift suspension."),
   });
 
   const [configurationFeedback, setConfigurationFeedback] =
@@ -575,6 +657,30 @@ const subscriptionPriceDeleteMutation = useMutation({
     }
 
     subscriptionMutation.mutate(businessId);
+  };
+
+
+  const handleSubscriptionCancellation = (
+    businessId: string,
+    businessName: string,
+    when: "IMMEDIATE" | "PERIOD_END",
+  ) => {
+    const timing = when === "IMMEDIATE" ? "immediately" : "at the end of the paid period";
+    if (!window.confirm(`Cancel ${businessName}'s subscription ${timing}?`)) return;
+    const reason = window.prompt("Enter the reason for this cancellation:");
+    if (!reason || reason.trim().length < 3) return;
+    subscriptionCancellationMutation.mutate({ businessId, when, reason: reason.trim() });
+  };
+
+  const handleTimedSuspension = (businessId: string, businessName: string) => {
+    const rawDays = window.prompt("Suspend " + businessName + " for how many days? (1–365)");
+    if (rawDays === null) return;
+    const durationDays = Number(rawDays);
+    if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365) { setSubscriptionFeedback("Enter a whole number of days between 1 and 365."); return; }
+    const reason = window.prompt("Enter the reason for this suspension:");
+    if (!reason || reason.trim().length < 3) return;
+    if (!window.confirm("Temporarily suspend " + businessName + " for " + durationDays + " days?")) return;
+    suspensionMutation.mutate({ businessId, durationDays, reason: reason.trim() });
   };
 
   return (
@@ -1368,6 +1474,10 @@ const subscriptionPriceDeleteMutation = useMutation({
                   </button>
 
                   <div className="platform-business-stats">
+                    <span className="platform-business-owner">
+                      <strong>{business.owner?.fullName ?? "Owner not assigned"}</strong>
+                      <small>{business.owner?.email ?? "No owner email on record"}</small>
+                    </span>
                     <span>
                       {formatNumber(business._count.users)} users
                     </span>
@@ -1389,10 +1499,15 @@ const subscriptionPriceDeleteMutation = useMutation({
                         {business.isActive ? "Active" : "Inactive"}
                       </span>
                       {business.subscription ? (
-                        <span className="platform-subscription">
-                          {business.subscription.plan} ·{" "}
-                          {business.subscription.status}
-                        </span>
+                        <>
+                          <span className="platform-subscription">
+                            {business.subscription.plan} ·{" "}
+                            {business.subscription.status}
+                          </span>
+                          <small className="platform-subscription-dates">
+                            {formatDate(business.subscription.startsAt)} – {formatDate(business.subscription.endsAt)}
+                          </small>
+                        </>
                       ) : (
                         <span className="platform-subscription">
                           No subscription
@@ -1419,6 +1534,37 @@ const subscriptionPriceDeleteMutation = useMutation({
                             : "Activate"}
                       </button>
 
+                      {!business.isActive && !business.archivedAt ? (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={archiveMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm("Archive " + business.name + "? The business must be deactivated first.")) archiveMutation.mutate(business.id);
+                          }}
+                        >
+                          {archiveMutation.isPending ? "Archiving…" : "Archive business"}
+                        </button>
+                      ) : business.archivedAt ? (
+                        <>
+                          <span className="platform-status inactive">Archived {formatDate(business.archivedAt)}</span>
+                          <button
+                            type="button"
+                            className="button button-danger"
+                            disabled={permanentDeleteMutation.isPending}
+                            onClick={async () => {
+                              const confirmation = window.prompt(`Permanent deletion cannot be undone. Type DELETE ${business.slug} to continue.`);
+                              if (confirmation !== `DELETE ${business.slug}`) return;
+                              const authorizationToken = await requestSensitiveAuthorization();
+                              if (!authorizationToken) return;
+                              permanentDeleteMutation.mutate({ businessId: business.id, confirmation, authorizationToken });
+                            }}
+                          >
+                            {permanentDeleteMutation.isPending ? "Deleting..." : "Permanently delete"}
+                          </button>
+                        </>
+                      ) : null}
+
                       <button
                         type="button"
                         className="button button-secondary"
@@ -1439,6 +1585,35 @@ const subscriptionPriceDeleteMutation = useMutation({
                             ? "Renew Monthly"
                             : "Create Monthly Subscription"}
                       </button>
+                      {business.suspendedUntil && new Date(business.suspendedUntil) > new Date() ? (
+                        <button type="button" className="button button-secondary" disabled={clearSuspensionMutation.isPending} onClick={() => { if (window.confirm("Lift the timed suspension for " + business.name + "?")) clearSuspensionMutation.mutate(business.id); }}>
+                          Lift timed suspension
+                        </button>
+                      ) : business.isActive ? (
+                        <button type="button" className="button button-secondary" disabled={suspensionMutation.isPending} onClick={() => handleTimedSuspension(business.id, business.name)}>
+                          Timed suspension
+                        </button>
+                      ) : null}
+                      {business.subscription && business.subscription.status !== "CANCELLED" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            disabled={subscriptionCancellationMutation.isPending}
+                            onClick={() => handleSubscriptionCancellation(business.id, business.name, "PERIOD_END")}
+                          >
+                            Cancel at period end
+                          </button>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            disabled={subscriptionCancellationMutation.isPending}
+                            onClick={() => handleSubscriptionCancellation(business.id, business.name, "IMMEDIATE")}
+                          >
+                            Cancel now
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -1486,6 +1661,26 @@ const subscriptionPriceDeleteMutation = useMutation({
           )}
         </section>
       </div>
+
+      <section className="platform-panel platform-control-panel" id="platform-announcements">
+        <div className="platform-panel-header"><div><div className="platform-eyebrow">BUSINESS COMMUNICATIONS</div><h2>Announcements & inbox</h2></div><span>{messagesQuery.data?.length ?? 0} recent broadcasts</span></div>
+        <p className="platform-feedback">Send an announcement to one business or every active business. Scheduled messages appear in the inbox at the selected publication time.</p>
+        <form className="platform-message-form" onSubmit={(event) => { event.preventDefault(); messageMutation.mutate(); }}>
+          <label>Message title<input className="platform-input" value={messageForm.title} maxLength={160} required onChange={(event) => setMessageForm((current) => ({ ...current, title: event.target.value }))} /></label>
+          <label>Recipients<select className="platform-input" value={messageForm.businessId} onChange={(event) => setMessageForm((current) => ({ ...current, businessId: event.target.value }))}><option value="">All active businesses</option>{businesses.map((business) => <option key={business.id} value={business.id}>Business: {business.name}</option>)}</select></label>
+          <label className="platform-message-form-wide">Message<textarea className="platform-input" rows={4} maxLength={5000} required value={messageForm.body} onChange={(event) => setMessageForm((current) => ({ ...current, body: event.target.value }))} /></label>
+          <label>Publish at (optional)<input className="platform-input" type="datetime-local" value={messageForm.publishedAt} onChange={(event) => setMessageForm((current) => ({ ...current, publishedAt: event.target.value }))} /></label>
+          <label>Expire at (optional)<input className="platform-input" type="datetime-local" value={messageForm.expiresAt} onChange={(event) => setMessageForm((current) => ({ ...current, expiresAt: event.target.value }))} /></label>
+          <label>Popup duration (minutes)<input className="platform-input" type="number" min="1" max="60" value={messageForm.displayDurationMinutes} onChange={(event) => setMessageForm((current) => ({ ...current, displayDurationMinutes: event.target.value }))} /></label>
+          <div className="platform-message-form-actions"><button type="submit" className="button button-primary" disabled={messageMutation.isPending || !messageForm.title.trim() || !messageForm.body.trim()}>{messageMutation.isPending ? "Publishing…" : "Publish announcement"}</button></div>
+        </form>
+        {messageFeedback ? <p className="platform-feedback" role="status">{messageFeedback}</p> : null}
+        <div className="platform-announcement-list"><h3>Delivery & read tracking</h3>
+          {messagesQuery.isLoading ? <p className="platform-feedback">Loading announcements…</p> : messagesQuery.isError ? <p className="platform-feedback">Announcement history is unavailable.</p> : messagesQuery.data?.length ? messagesQuery.data.map((message) => (
+            <article className="platform-announcement-row" key={message.broadcastId}><div><strong>{message.title}</strong><span>{message.businessCount} businesses · {message.recipientCount} recipients · {message.readCount} read</span></div><div className="platform-announcement-metrics"><span>{message.recipientCount ? Math.round(message.readCount / message.recipientCount * 100) : 0}% read</span><small>{formatDate(message.publishedAt)}</small></div></article>
+          )) : <p className="platform-feedback">No announcements have been sent yet.</p>}
+        </div>
+      </section>
 
       <section className="platform-panel platform-control-panel" id="platform-billing-configuration">
         <div className="platform-panel-header">

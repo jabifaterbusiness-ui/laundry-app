@@ -113,6 +113,47 @@ function downloadBackup(blob: Blob) {
   return anchor.download;
 }
 
+export async function createManualLocalBackup(
+  businessId: string,
+  password: string,
+  auth: { accessToken: string | null },
+): Promise<{ fileName: string; destination: string }> {
+  const blob = await exportBackup(password, auth);
+  let fileName = "";
+  let destination = "your browser's default Downloads folder";
+
+  try {
+    const handle = await readFolderHandle(folderStorageKey(businessId));
+    const permission = await handle?.queryPermission?.({ mode: "readwrite" });
+    if (handle && permission === "granted") {
+      fileName = await writeBackupToFolder(handle, blob);
+      destination = handle.name;
+    }
+  } catch {
+    // A remembered folder can become unavailable; safely fall back to download.
+  }
+
+  if (!fileName) {
+    fileName = downloadBackup(blob);
+  }
+
+  try {
+    const key = historyStorageKey(businessId);
+    const history = readHistory(key);
+    const entry: LocalBackupHistory = {
+      id: `manual-${Date.now()}`,
+      fileName,
+      savedAt: new Date().toISOString(),
+      trigger: "MANUAL",
+    };
+    window.localStorage.setItem(key, JSON.stringify([entry, ...history].slice(0, 100)));
+  } catch {
+    // A history-storage issue must not turn a successfully saved backup into a failure.
+  }
+
+  return { fileName, destination };
+}
+
 function readHistory(key: string): LocalBackupHistory[] {
   try {
     const value = window.localStorage.getItem(key);
