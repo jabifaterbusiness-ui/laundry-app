@@ -367,9 +367,6 @@ export interface InventoryBranchComparisonRow {
   branchId: string;
   branchName: string;
   itemCount: number;
-  totalUnits: number;
-  reservedUnits: number;
-  availableUnits: number;
   totalValuation: number;
   lowStockItems: number;
 }
