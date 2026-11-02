@@ -229,6 +229,7 @@ export async function createMovement(
       inventoryItemId: input.inventoryItemId,
       quantity: input.quantity,
       type: input.type,
+      ...(input.unitCost !== undefined && { unitCost: input.unitCost }),
       createdById: req.user!.id,
       ...(input.reason !== undefined && {
         reason: input.reason,
