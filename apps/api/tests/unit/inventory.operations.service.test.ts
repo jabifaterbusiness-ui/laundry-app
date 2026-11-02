@@ -100,9 +100,11 @@ describe("inventory operations", () => {
       { businessId: BUSINESS, branchId: SOURCE },
       { reference: "COUNT-1", createdById: USER, lines: [{ inventoryItemId: ITEM, countedQuantity: 5 }] },
     );
-    expect(db.inventoryStocktake.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      lines: { create: [{ inventoryItemId: ITEM, expectedQuantity: 7, countedQuantity: 5, variance: -2 }] },
-    }) });
+    expect(db.inventoryStocktake.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        lines: { create: [{ inventoryItemId: ITEM, expectedQuantity: 7, countedQuantity: 5, variance: -2 }] },
+      }),
+    }));
   });
 
   it("prevents reservations beyond available stock", async () => {
