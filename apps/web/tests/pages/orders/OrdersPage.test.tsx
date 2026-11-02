@@ -695,6 +695,7 @@ describe("OrdersPage quick customer switching", () => {
 
   it("opens the exact order from a global-search orderId deep link in Order Management", async () => {
     vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
 
     renderPage([`/orders?orderId=${orderA.id}`]);
 
