@@ -177,15 +177,14 @@ export function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
     },
   });
-  const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);\n  const stocktakeCreateMutation = useMutation({
+  const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);
+  const stocktakeCreateMutation = useMutation({
     mutationFn: () => createInventoryStocktake({
       reference: stocktakeReference.trim(),
       lines: [{ inventoryItemId: stocktakeItemId, countedQuantity: Number(stocktakeCount) }],
     }, { accessToken }, activeBranchId),
-    onSuccess: async (result) => {
-      await applyInventoryStocktake(result.data.id, { accessToken }, activeBranchId);
-      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+    onSuccess: (result) => {
+      setCurrentStocktake(result.data);
       setStocktakeReference(""); setStocktakeItemId(""); setStocktakeCount(""); setStocktakeError(null);
     },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to complete stocktake."),
@@ -1355,6 +1354,15 @@ export function InventoryPage() {
             {stocktakeError && <p role="alert">{stocktakeError}</p>}
           </form>
         </div>
+        {currentStocktake && <section className="inventory-stocktake-review" aria-label="Stocktake approval workflow">
+          <h3>Stocktake {currentStocktake.reference}</h3>
+          <p>Status: <strong>{currentStocktake.status.replaceAll("_", " ")}</strong></p>
+          <p>{currentStocktake.lines.map((line) => `${line.inventoryItem.name}: expected ${line.expectedQuantity}, counted ${line.countedQuantity}, variance ${line.variance}`).join(" · ")}</p>
+          {currentStocktake.status === "DRAFT" && <button type="button" disabled={stocktakeSubmitMutation.isPending} onClick={() => stocktakeSubmitMutation.mutate()}>Submit for approval</button>}
+          {currentStocktake.status === "SUBMITTED" && userPermissions.includes("inventory.approve") && <button type="button" disabled={stocktakeApproveMutation.isPending} onClick={() => stocktakeApproveMutation.mutate()}>Approve stocktake</button>}
+          {currentStocktake.status === "APPROVED" && <button type="button" disabled={stocktakeApplyMutation.isPending} onClick={() => stocktakeApplyMutation.mutate()}>Apply approved count</button>}
+          {currentStocktake.status === "APPLIED" && <p role="status">Stock reconciliation applied successfully.</p>}
+        </section>}
         <h3>Recent transfers</h3>
         {advancedTransfersQuery.data?.transfers?.length ? <table><thead><tr><th>Reference</th><th>Route</th><th>Status</th><th>Items</th><th>Action</th></tr></thead><tbody>
           {advancedTransfersQuery.data.transfers.map((transfer) => {
