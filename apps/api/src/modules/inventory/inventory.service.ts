@@ -267,7 +267,7 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
-            AND s.quantity <= i."lowStockThreshold"
+            AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
         `,
       ),
     ]);
