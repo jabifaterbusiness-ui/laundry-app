@@ -902,7 +902,9 @@ export async function approveInventoryStocktake(scope: BranchScope, input: { sto
     const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId } });
     if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
     if (stocktake.status !== "SUBMITTED") throw new AppError("Only submitted stocktakes can be approved", 422);
-    if (stocktake.createdById === input.approvedById) throw new AppError("Stocktake creator cannot approve their own stocktake", 403);
+    if (stocktake.createdById === input.approvedById || stocktake.submittedById === input.approvedById) {
+      throw new AppError("Stocktake creator or submitter cannot approve this stocktake", 403);
+    }
     return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "APPROVED", approvedById: input.approvedById, approvedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
   });
 }
