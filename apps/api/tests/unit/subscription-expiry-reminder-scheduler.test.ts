@@ -36,9 +36,10 @@ describe("processSubscriptionExpiryReminders", () => {
 
     expect(subscriptionFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        status: "ACTIVE",
-        cancelAtPeriodEnd: false,
-        endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) } },
+          { status: "EXPIRED", endsAt: { lte: now } },
+        ],
       }),
     }));
     expect(messageCreateMany).toHaveBeenCalledOnce();
@@ -53,6 +54,32 @@ describe("processSubscriptionExpiryReminders", () => {
     expect(payload.data[0]?.body).toContain("Renew now");
     expect(payload.data[0]?.expiresAt.getTime()).toBeGreaterThan(endsAt.getTime());
     expect(result).toEqual({ subscriptionsScanned: 1, remindersCreated: 1 });
+  });
+
+  it("selects already-EXPIRED subscriptions so their owners receive the expiry notice", async () => {
+    const now = new Date("2026-11-02T12:00:00.000Z");
+    const endsAt = new Date("2026-10-30T12:00:00.000Z");
+    subscriptionFindMany.mockResolvedValue([{
+      id: "subscription-expired",
+      businessId: "business-1",
+      endsAt,
+      business: { name: "Ada Laundry", timezone: "Africa/Lagos", users: [{ id: "owner-1" }] },
+    }] as never);
+
+    await processSubscriptionExpiryReminders(now);
+
+    const query = vi.mocked(subscriptionFindMany).mock.calls[0]?.[0] as {
+      where: { OR: Array<Record<string, unknown>> };
+    };
+    expect(query.where.OR).toContainEqual({ status: "EXPIRED", endsAt: { lte: now } });
+    const payload = vi.mocked(messageCreateMany).mock.calls[0]?.[0] as {
+      data: Array<{ title: string; notificationKey: string; expiresAt: Date }>;
+    };
+    expect(payload.data[0]).toMatchObject({
+      title: "Your LaundryAngel subscription has expired",
+      notificationKey: "subscription-expired:subscription-expired:owner-1",
+    });
+    expect(payload.data[0]?.expiresAt.getTime()).toBeGreaterThan(now.getTime());
   });
 
   it("keeps the pre-expiry reminder for subscriptions ending within five days", async () => {
