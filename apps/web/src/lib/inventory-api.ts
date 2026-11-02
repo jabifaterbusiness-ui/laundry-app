@@ -313,7 +313,14 @@ export interface InventoryStocktake {
   submittedById?: string | null; submittedAt?: string | null; approvedById?: string | null; approvedAt?: string | null;
   lines: Array<{ id: string; inventoryItemId: string; expectedQuantity: number; countedQuantity: number; variance: number; inventoryItem: InventoryItem }>;
 }
-export interface InventoryReservation { id: string; inventoryItemId: string; quantity: number; status: string; reference: string | null; }
+export interface InventoryReservation {
+  id: string; inventoryItemId: string; quantity: number; status: string; reference: string | null;
+  expiresAt: string | null; releasedAt: string | null; createdAt: string;
+  inventoryItem: { id: string; name: string; unit: InventoryUnit };
+}
+export async function listInventoryReservations(auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryReservation[] }>("/inventory/reservations", { accessToken: auth.accessToken, branchId });
+}
 export interface InventoryReorderRecommendation {
   inventoryItem: InventoryItem; quantity: number; reservedQuantity: number; availableQuantity: number;
   suggestedOrderQuantity: number; averageUnitCost: number; stockValue: number;
