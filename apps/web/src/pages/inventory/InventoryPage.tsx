@@ -1439,8 +1439,8 @@ export function InventoryPage() {
             {inventoryReportQuery.data.data.valuation.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{(row.averageUnitCost / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td><td>{(row.totalValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
           </tbody></table>
           <h3>Supplier performance (last 30 days)</h3>
-          {inventoryReportQuery.data.data.supplierPerformance.length ? <table><thead><tr><th>Supplier</th><th>Orders</th><th>Received</th><th>Ordered value</th></tr></thead><tbody>
-            {inventoryReportQuery.data.data.supplierPerformance.map((row) => <tr key={row.supplierId}><td>{row.supplierName}</td><td>{row.orderCount}</td><td>{row.receivedOrderCount}</td><td>{(row.orderedValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
+          {inventoryReportQuery.data.data.supplierPerformance.length ? <table><thead><tr><th>Supplier</th><th>Orders</th><th>Received</th><th>Partial</th><th>Open</th><th>First receipt lead time</th><th>Ordered value</th></tr></thead><tbody>
+            {inventoryReportQuery.data.data.supplierPerformance.map((row) => <tr key={row.supplierId}><td>{row.supplierName}</td><td>{row.orderCount}</td><td>{row.receivedOrderCount}</td><td>{row.partiallyReceivedOrderCount}</td><td>{row.openOrderCount}</td><td>{row.averageFirstReceiptLeadTimeDays === null ? "—" : `${row.averageFirstReceiptLeadTimeDays} days`}</td><td>{(row.orderedValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
           </tbody></table> : <p>No supplier orders in the last 30 days.</p>}
         </>}
       </section>
