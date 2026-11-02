@@ -135,3 +135,28 @@
 @media (max-width: 900px) { .inventory-workspace .inventory-po-line { grid-template-columns: 1fr 1fr; } .inventory-workspace .inventory-po-line > strong { grid-column: 1 / -1; } }
 
 .inventory-workspace .inventory-item-sku { display: block; margin-top: 4px; color: var(--inventory-muted); font-size: 10px; font-weight: 650; letter-spacing: .04em; }
+
+.inventory-workspace .inventory-report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 12px;
+  margin: 14px 0 22px;
+}
+.inventory-workspace .inventory-report-summary article {
+  display: grid;
+  gap: 7px;
+  padding: 15px 17px;
+  border: 1px solid var(--inventory-line);
+  border-radius: 13px;
+  background: #faf9ff;
+}
+.inventory-workspace .inventory-report-summary span {
+  color: var(--inventory-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.inventory-workspace .inventory-report-summary strong {
+  color: var(--inventory-ink);
+  font-size: 20px;
+  letter-spacing: -.025em;
+}
