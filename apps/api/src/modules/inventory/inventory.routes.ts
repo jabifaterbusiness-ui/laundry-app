@@ -102,4 +102,3 @@ inventoryRouter.get("/reorder-recommendations", requirePermission("inventory.vie
 
 inventoryRouter.get("/reports", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(inventoryReports));
 inventoryRouter.get("/reports/branch-comparison", requirePermission("inventory.reports_all_branches"), asyncHandler(inventoryBranchComparison));
-inventoryRouter.get("/reports/branch-comparison", requirePermission("inventory.reports_all_branches"), asyncHandler(inventoryBranchComparison));
