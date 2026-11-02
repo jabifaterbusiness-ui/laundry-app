@@ -15,6 +15,11 @@ import {
   createInventoryPurchaseOrderSchema,
   listInventoryPurchaseOrdersQuerySchema,
   receiveInventoryPurchaseOrderSchema,
+  createInventoryTransferSchema,
+  receiveInventoryTransferSchema,
+  createInventoryStocktakeSchema,
+  createInventoryReservationSchema,
+  inventoryOperationIdParamSchema,
 } from "./inventory.validation.js";
 import {
   createInventoryItem,
@@ -29,6 +34,14 @@ import {
   createInventoryPurchaseOrder,
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
+  createInventoryTransfer,
+  receiveInventoryTransfer,
+  listInventoryTransfers,
+  createInventoryStocktake,
+  applyInventoryStocktake,
+  createInventoryReservation,
+  releaseInventoryReservation,
+  getInventoryReorderRecommendations,
 } from "./inventory.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -388,4 +401,66 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
     businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
     metadata: { receiptNumber: result.receipt.receiptNumber, purchaseOrderId: id, lineCount: result.receipt.lines.length, status: result.status } });
   res.status(201).json({ data: result });
+}
+
+
+export async function createTransfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryTransferSchema.parse(req.body);
+  const transfer = await createInventoryTransfer({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.transfer_dispatched", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, destinationBranchId: transfer.destinationBranchId, lineCount: transfer.lines.length } });
+  res.status(201).json({ data: transfer });
+}
+
+export async function receiveTransfer(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const input = receiveInventoryTransferSchema.parse(req.body);
+  const transfer = await receiveInventoryTransfer({ businessId, branchId }, { transferId: id, receivedById: req.user!.id, lines: input.lines });
+  await recordAuditEvent({ action: "inventory.transfer_received", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, status: transfer.status } });
+  res.status(200).json({ data: transfer });
+}
+
+export async function listTransfers(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const result = await listInventoryTransfers({ businessId, branchId }, { page: 1, pageSize: 100 });
+  res.status(200).json(result);
+}
+
+export async function createStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryStocktakeSchema.parse(req.body);
+  const stocktake = await createInventoryStocktake({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
+  res.status(201).json({ data: stocktake });
+}
+
+export async function applyStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await applyInventoryStocktake({ businessId, branchId }, { stocktakeId: id, appliedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_applied", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
+  res.status(200).json({ data: stocktake });
+}
+
+export async function createReservation(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const input = createInventoryReservationSchema.parse(req.body);
+  const reservation = await createInventoryReservation({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stock_reserved", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { inventoryItemId: reservation.inventoryItemId, quantity: reservation.quantity } });
+  res.status(201).json({ data: reservation });
+}
+
+export async function releaseReservation(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const consumed = req.body?.consumed === true;
+  const reservation = await releaseInventoryReservation({ businessId, branchId }, { reservationId: id, consumed });
+  await recordAuditEvent({ action: consumed ? "inventory.reservation_consumed" : "inventory.reservation_released", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { status: reservation.status } });
+  res.status(200).json({ data: reservation });
+}
+
+export async function reorderRecommendations(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  res.status(200).json({ data: await getInventoryReorderRecommendations({ businessId, branchId }) });
 }
