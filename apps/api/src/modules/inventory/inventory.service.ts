@@ -534,7 +534,7 @@ export async function listInventoryMovements(
   scope: BranchScope,
   input: {
     inventoryItemId?: string;
-    type?: "RECEIPT" | "ISSUE" | "ADJUSTMENT";
+    type?: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "EXPIRED" | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE";
     page: number;
     pageSize: number;
   },
