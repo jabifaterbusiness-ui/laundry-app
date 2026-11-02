@@ -808,33 +808,36 @@ export async function createPlatformAnnouncement(input: {
 }
 
 export async function listPlatformAnnouncements() {
-  const messages = await prisma.businessInboxMessage.findMany({
-    orderBy: { createdAt: "desc" }, take: 250,
-    select: {
-      broadcastId: true, title: true, body: true, publishedAt: true,
-      expiresAt: true, displayDurationMinutes: true, readAt: true,
-      dismissedAt: true, businessId: true, business: { select: { name: true } },
-    },
-  });
-  const grouped = new Map<string, {
-    broadcastId: string; title: string; body: string; publishedAt: Date;
-    expiresAt: Date | null; displayDurationMinutes: number; recipientCount: number;
-    readCount: number; dismissedCount: number; businesses: Set<string>;
-  }>();
-  for (const message of messages) {
-    const entry = grouped.get(message.broadcastId) ?? {
-      broadcastId: message.broadcastId, title: message.title, body: message.body,
-      publishedAt: message.publishedAt, expiresAt: message.expiresAt,
-      displayDurationMinutes: message.displayDurationMinutes, recipientCount: 0,
-      readCount: 0, dismissedCount: 0, businesses: new Set<string>(),
-    };
-    entry.recipientCount += 1;
-    if (message.readAt) entry.readCount += 1;
-    if (message.dismissedAt) entry.dismissedCount += 1;
-    entry.businesses.add(message.business.name);
-    grouped.set(message.broadcastId, entry);
-  }
-  return [...grouped.values()].map(({ businesses, ...entry }) => ({ ...entry, businessCount: businesses.size }));
+  // Aggregate every recipient row before limiting the number of broadcasts.
+  // Limiting raw inbox rows would silently under-report large broadcasts.
+  return prisma.$queryRaw<Array<{
+    broadcastId: string;
+    title: string;
+    body: string;
+    publishedAt: Date;
+    expiresAt: Date | null;
+    displayDurationMinutes: number;
+    recipientCount: number;
+    readCount: number;
+    dismissedCount: number;
+    businessCount: number;
+  }>>`
+    SELECT
+      "broadcastId" AS "broadcastId",
+      MIN("title") AS "title",
+      MIN("body") AS "body",
+      MIN("publishedAt") AS "publishedAt",
+      MIN("expiresAt") AS "expiresAt",
+      MIN("displayDurationMinutes")::int AS "displayDurationMinutes",
+      COUNT(*)::int AS "recipientCount",
+      COUNT(*) FILTER (WHERE "readAt" IS NOT NULL)::int AS "readCount",
+      COUNT(*) FILTER (WHERE "dismissedAt" IS NOT NULL)::int AS "dismissedCount",
+      COUNT(DISTINCT "businessId")::int AS "businessCount"
+    FROM "business_inbox_messages"
+    GROUP BY "broadcastId"
+    ORDER BY MAX("createdAt") DESC
+    LIMIT 250
+  `;
 }
 
 
