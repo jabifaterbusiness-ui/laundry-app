@@ -346,6 +346,12 @@ export async function createInventoryMovement(
   scope: BranchScope,
   input: CreateInventoryMovementInput,
 ) {
+  if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
+    throw new AppError("Movement quantity must be a positive whole number", 422);
+  }
+  if (input.unitCost !== undefined && (!Number.isSafeInteger(input.unitCost) || input.unitCost < 0 || input.unitCost > 2147483647)) {
+    throw new AppError("Movement unit cost must be a non-negative whole number", 422);
+  }
   if ((input.type === "RETURN" || input.type === "WASTE" || input.type === "EXPIRED") && !input.reason?.trim()) {
     throw new AppError(`${input.type} movements require an audit reason`, 422);
   }
@@ -446,6 +452,12 @@ export async function adjustInventoryStock(
   scope: BranchScope,
   input: AdjustInventoryStockInput,
 ) {
+  if (!Number.isSafeInteger(input.quantity) || input.quantity === 0) {
+    throw new AppError("Adjustment quantity must be a non-zero whole number", 422);
+  }
+  if (!input.reason.trim()) {
+    throw new AppError("Adjustment reason is required", 422);
+  }
   const result = await prisma.$transaction(async (tx) => {
     const item = await tx.inventoryItem.findFirst({
       where: {

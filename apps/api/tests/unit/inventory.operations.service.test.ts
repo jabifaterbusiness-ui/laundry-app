@@ -19,7 +19,7 @@ const { db } = vi.hoisted(() => ({
 vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
-  createInventoryMovement, createInventoryTransfer, receiveInventoryTransfer, receiveInventoryPurchaseOrder, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
+  createInventoryMovement, adjustInventoryStock, createInventoryTransfer, receiveInventoryTransfer, receiveInventoryPurchaseOrder, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
   submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation, getInventoryReports,
 } from "../../src/modules/inventory/inventory.service.js";
 
@@ -137,6 +137,39 @@ describe("inventory operations", () => {
       await expect(receiveInventoryPurchaseOrder(
         { businessId: BUSINESS, branchId: SOURCE },
         { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: USER, lines: [line] },
+      )).rejects.toMatchObject({ statusCode: 422 });
+    }
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid movement quantities and unit costs before opening a transaction", async () => {
+    const invalidInputs = [
+      { quantity: 0 },
+      { quantity: -1 },
+      { quantity: 1.5 },
+      { quantity: Number.MAX_SAFE_INTEGER + 1 },
+      { quantity: 1, unitCost: -1 },
+      { quantity: 1, unitCost: 1.25 },
+      { quantity: 1, unitCost: 2147483648 },
+    ];
+    for (const invalid of invalidInputs) {
+      await expect(createInventoryMovement(
+        { businessId: BUSINESS, branchId: SOURCE },
+        { inventoryItemId: ITEM, type: "RECEIPT", createdById: USER, ...invalid },
+      )).rejects.toMatchObject({ statusCode: 422 });
+    }
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects zero, fractional and reasonless adjustments before opening a transaction", async () => {
+    for (const input of [
+      { quantity: 0, reason: "Count correction" },
+      { quantity: 1.5, reason: "Count correction" },
+      { quantity: 2, reason: "   " },
+    ]) {
+      await expect(adjustInventoryStock(
+        { businessId: BUSINESS, branchId: SOURCE },
+        { inventoryItemId: ITEM, createdById: USER, ...input },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
     expect(db.$transaction).not.toHaveBeenCalled();
