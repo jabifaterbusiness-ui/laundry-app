@@ -257,6 +257,7 @@ describe("Inventory routes - business-wide reporting", () => {
       id: BRANCH_A,
       name: "Main Branch",
       inventoryStocks: [{
+        inventoryItemId: "item-1",
         quantity: 12,
         reservedQuantity: 2,
         averageUnitCost: 250,
