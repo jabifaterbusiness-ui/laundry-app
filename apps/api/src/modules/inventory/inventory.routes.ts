@@ -28,6 +28,7 @@ import {
   listStocktakes,
   approveStocktake,
   createReservation,
+  listReservations,
   releaseReservation,
   reorderRecommendations,
   inventoryReports,
@@ -96,6 +97,7 @@ inventoryRouter.post("/stocktakes", requirePermission("inventory.manage"), async
 inventoryRouter.post("/stocktakes/:id/submit", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(submitStocktake));
 inventoryRouter.post("/stocktakes/:id/approve", requirePermission("inventory.approve"), asyncHandler(requireBranchContext), asyncHandler(approveStocktake));
 inventoryRouter.post("/stocktakes/:id/apply", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(applyStocktake));
+inventoryRouter.get("/reservations", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(listReservations));
 inventoryRouter.post("/reservations", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createReservation));
 inventoryRouter.post("/reservations/:id/release", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(releaseReservation));
 inventoryRouter.get("/reorder-recommendations", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(reorderRecommendations));
