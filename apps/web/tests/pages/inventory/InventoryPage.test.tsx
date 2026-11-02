@@ -253,6 +253,23 @@ describe("InventoryPage", () => {
     });
   });
 
+  it("consumes an active reservation from the branch reservation register", async () => {
+    mockListInventoryReservations.mockResolvedValue({
+      data: [{
+        id: "reservation-active", quantity: 2, reference: "ORDER-200", status: "ACTIVE",
+        expiresAt: null, inventoryItem: { id: item.id, name: item.name, unit: item.unit },
+      }],
+    });
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Stock reservations and reorder recommendations" });
+    fireEvent.click(await within(panel).findByRole("button", { name: "Consume" }));
+    await waitFor(() => {
+      expect(mockReleaseInventoryReservation).toHaveBeenCalledWith(
+        "reservation-active", true, { accessToken: "test-token" }, "branch-1",
+      );
+    });
+  });
+
   it("creates a branch-scoped reservation and refreshes the reservation register", async () => {
     renderPage();
     const panel = await screen.findByRole("region", { name: "Stock reservations and reorder recommendations" });
