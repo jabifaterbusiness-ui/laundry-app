@@ -18,7 +18,7 @@ const { db } = vi.hoisted(() => ({
 vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
-  createInventoryMovement, createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
+  createInventoryMovement, createInventoryTransfer, receiveInventoryTransfer, receiveInventoryPurchaseOrder, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
   submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
 } from "../../src/modules/inventory/inventory.service.js";
 
