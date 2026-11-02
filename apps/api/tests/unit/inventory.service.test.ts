@@ -1158,6 +1158,14 @@ describe("listInventoryStock", () => {
 
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
 
+    const stockQuery = prismaMock.$queryRaw.mock.calls[0]?.[0] as Prisma.Sql;
+    expect(stockQuery.sql).toContain('"inventoryItemId"');
+    expect(stockQuery.sql).toContain('"businessId"');
+    expect(stockQuery.sql).toContain('"branchId"');
+    expect(stockQuery.sql).toContain('"lowStockThreshold"');
+    expect(stockQuery.sql).not.toContain("inventory_item_id");
+    expect(stockQuery.sql).not.toContain("low_stock_threshold");
+
     expect(prismaMock.inventoryStock.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
