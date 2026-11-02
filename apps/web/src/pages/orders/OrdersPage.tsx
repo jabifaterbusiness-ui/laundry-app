@@ -510,7 +510,9 @@ export function OrdersPage() {
     }
 
     openedOrderFromUrlRef.current = navigationKey;
-    setSelectedOrder(order);
+    // A search deep-link must open the complete Order Management workspace,
+    // not merely set the page's selectedOrder state.
+    void openOrderManagement(order);
   }, [location.key, orderIdFromUrl, orderFromUrlQuery.data]);
 
   useEffect(() => {

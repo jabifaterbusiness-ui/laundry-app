@@ -16,9 +16,9 @@ const RESULT_GROUPS: {
   type: GlobalSearchResultType;
   label: string;
 }[] = [
-  { type: "CUSTOMER", label: "Customers" },
   { type: "ORDER", label: "Orders" },
   { type: "INVOICE", label: "Invoices" },
+  { type: "CUSTOMER", label: "Customers" },
 ];
 
 function groupResults(results: GlobalSearchResult[]) {

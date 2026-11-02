@@ -126,6 +126,7 @@ export async function globalSearch(
           take: input.limit,
           select: {
             id: true,
+            customerId: true,
             orderNumber: true,
             status: true,
             customer: {
@@ -171,7 +172,13 @@ export async function globalSearch(
   ]);
 
   return [
-    ...customers.map((customer) => ({
+    // When a customer query also finds one or more of that customer's
+    // existing orders, show the order results instead of a customer shortcut
+    // that would start a new order. This keeps name/phone/email searches in
+    // Order Management whenever matching orders exist.
+    ...customers
+      .filter((customer) => !orders.some((order) => order.customerId === customer.id))
+      .map((customer) => ({
       type: "CUSTOMER" as const,
       id: customer.id,
       title: customer.name,

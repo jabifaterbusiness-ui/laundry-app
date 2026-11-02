@@ -41,7 +41,7 @@ describe("globalSearch", () => {
     invoiceFindMany.mockResolvedValue([]);
   });
 
-  it("searches customers, orders, and invoices", async () => {
+  it("prioritizes existing orders and invoices over customer shortcuts", async () => {
     customerFindMany.mockResolvedValue([
       {
         id: "customer-1",
@@ -53,6 +53,7 @@ describe("globalSearch", () => {
     orderFindMany.mockResolvedValue([
       {
         id: "order-1",
+        customerId: "customer-1",
         orderNumber: "00001",
         status: "RECEIVED",
         customer: {
@@ -83,13 +84,6 @@ describe("globalSearch", () => {
 
     expect(results).toEqual([
       {
-        type: "CUSTOMER",
-        id: "customer-1",
-        title: "John Doe",
-        subtitle: "08012345678",
-        href: "/orders?customerId=customer-1",
-      },
-      {
         type: "ORDER",
         id: "order-1",
         title: "Order #00001",
@@ -108,7 +102,7 @@ describe("globalSearch", () => {
     expect(permissionCheck).toHaveBeenCalledTimes(3);
   });
 
-  it("searches customer email and opens the customer workspace even when the customer has orders", async () => {
+  it("opens matching orders directly for customer email searches instead of starting a new order", async () => {
     customerFindMany.mockResolvedValue([
       {
         id: "customer-2",
@@ -122,6 +116,16 @@ describe("globalSearch", () => {
             status: "RECEIVED",
           },
         ],
+      },
+    ] as never);
+
+    orderFindMany.mockResolvedValue([
+      {
+        id: "latest-order",
+        customerId: "customer-2",
+        orderNumber: "00005",
+        status: "RECEIVED",
+        customer: { name: "Aaron Daniel" },
       },
     ] as never);
 
@@ -150,13 +154,15 @@ describe("globalSearch", () => {
         }),
       }),
     );
-    expect(results[0]).toMatchObject({
-      type: "CUSTOMER",
-      id: "customer-2",
-      title: "Aaron Daniel",
-      subtitle: "08059489393 · aaron@example.com",
-      href: "/orders?customerId=customer-2",
-    });
+    expect(results).toEqual([
+      {
+        type: "ORDER",
+        id: "latest-order",
+        title: "Order #00005",
+        subtitle: "Aaron Daniel · RECEIVED",
+        href: "/orders?orderId=latest-order",
+      },
+    ]);
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -192,6 +198,7 @@ describe("globalSearch", () => {
     orderFindMany.mockResolvedValue([
       {
         id: "order-1",
+        customerId: "customer-1",
         orderNumber: "00001",
         status: "RECEIVED",
         customer: {
@@ -211,10 +218,7 @@ describe("globalSearch", () => {
       },
     );
 
-    expect(results.map((result) => result.type)).toEqual([
-      "CUSTOMER",
-      "ORDER",
-    ]);
+    expect(results.map((result) => result.type)).toEqual(["ORDER"]);
 
     expect(invoiceFindMany).not.toHaveBeenCalled();
   });
@@ -334,5 +338,38 @@ describe("globalSearch", () => {
         }),
       }),
     );
+  });
+});
+
+
+describe("globalSearch customer fallback", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    permissionCheck.mockResolvedValue(true);
+    customerFindMany.mockResolvedValue([
+      { id: "customer-without-orders", name: "Grace", phone: "08011111111", email: null },
+    ] as never);
+    orderFindMany.mockResolvedValue([]);
+    invoiceFindMany.mockResolvedValue([]);
+  });
+
+  it("keeps a customer shortcut when the search has no matching existing orders", async () => {
+    const results = await globalSearch(
+      USER_A,
+      "STAFF",
+      BUSINESS_A,
+      BRANCH_A,
+      { q: "Grace", limit: 10 },
+    );
+
+    expect(results).toEqual([
+      {
+        type: "CUSTOMER",
+        id: "customer-without-orders",
+        title: "Grace",
+        subtitle: "08011111111",
+        href: "/orders?customerId=customer-without-orders",
+      },
+    ]);
   });
 });

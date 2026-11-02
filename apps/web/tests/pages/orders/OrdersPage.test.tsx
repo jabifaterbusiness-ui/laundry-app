@@ -133,6 +133,7 @@ vi.mock("../../../src/lib/orders-api.js", () => ({
   listAllOrders: vi.fn(),
   createOrderWithOfflineQueue: vi.fn(),
   updateOrderStatusWithOfflineQueue: vi.fn(),
+  getOrder: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
@@ -152,6 +153,7 @@ vi.mock("../../../src/lib/colors-api.js", () => ({
 
 import {
   createOrderWithOfflineQueue,
+  getOrder,
   listAllOrders,
   listOrders,
 } from "../../../src/lib/orders-api.js";
@@ -689,6 +691,37 @@ describe("OrdersPage quick customer switching", () => {
         name: /John Doe — New order/i,
       }),
     ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("opens the exact order from a global-search orderId deep link in Order Management", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+
+    renderPage([`/orders?orderId=${orderA.id}`]);
+
+    await waitFor(() => {
+      expect(vi.mocked(getOrder)).toHaveBeenCalledWith(
+        orderA.id,
+        { accessToken: "test-token" },
+        "branch-a",
+      );
+    });
+
+    const orderHeading = await screen.findByRole("heading", {
+      name: /00001/i,
+    });
+    expect(orderHeading).toBeInTheDocument();
+
+    const orderManagement = screen.getByRole("region", {
+      name: "Order Management",
+    });
+    expect(within(orderManagement).getByText("Jane Doe")).toBeInTheDocument();
+
+    const workspace = useOrderWorkspaceStore.getState().workspaces.find(
+      (item) => item.customer.id === customerA.id,
+    );
+    expect(workspace?.activeOrder?.id).toBe(orderA.id);
+    expect(workspace?.mode).toBe("view");
   });
 
   it("opens an existing order in Order Management from its folder", async () => {
