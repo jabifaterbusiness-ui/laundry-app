@@ -27,6 +27,7 @@ import {
   createReservation,
   releaseReservation,
   reorderRecommendations,
+  inventoryReports,
 } from "./inventory.controller.js";
 
 export const inventoryRouter = Router();
@@ -91,3 +92,5 @@ inventoryRouter.post("/stocktakes/:id/apply", requirePermission("inventory.manag
 inventoryRouter.post("/reservations", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createReservation));
 inventoryRouter.post("/reservations/:id/release", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(releaseReservation));
 inventoryRouter.get("/reorder-recommendations", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(reorderRecommendations));
+
+inventoryRouter.get("/reports", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(inventoryReports));
