@@ -211,7 +211,7 @@ export async function listInventoryStock(
 
   if (input.lowStockOnly) {
     const itemFilter = input.inventoryItemId
-      ? Prisma.sql`AND s.inventory_item_id = ${input.inventoryItemId}`
+      ? Prisma.sql`AND s."inventoryItemId" = ${input.inventoryItemId}`
       : Prisma.empty;
 
     const [stockRows, countRows] = await prisma.$transaction([
@@ -220,11 +220,11 @@ export async function listInventoryStock(
           SELECT s.id
           FROM "inventory_stocks" AS s
           INNER JOIN "inventory_items" AS i
-            ON i.id = s.inventory_item_id
-          WHERE s.business_id = ${scope.businessId}
-            AND s.branch_id = ${scope.branchId}
+            ON i.id = s."inventoryItemId"
+          WHERE s."businessId" = ${scope.businessId}
+            AND s."branchId" = ${scope.branchId}
             ${itemFilter}
-            AND s.quantity <= i.low_stock_threshold
+            AND s.quantity <= i."lowStockThreshold"
           ORDER BY i.name ASC, s.id ASC
           LIMIT ${input.pageSize}
           OFFSET ${skip}
@@ -235,11 +235,11 @@ export async function listInventoryStock(
           SELECT COUNT(*)::bigint AS count
           FROM "inventory_stocks" AS s
           INNER JOIN "inventory_items" AS i
-            ON i.id = s.inventory_item_id
-          WHERE s.business_id = ${scope.businessId}
-            AND s.branch_id = ${scope.branchId}
+            ON i.id = s."inventoryItemId"
+          WHERE s."businessId" = ${scope.businessId}
+            AND s."branchId" = ${scope.branchId}
             ${itemFilter}
-            AND s.quantity <= i.low_stock_threshold
+            AND s.quantity <= i."lowStockThreshold"
         `,
       ),
     ]);
