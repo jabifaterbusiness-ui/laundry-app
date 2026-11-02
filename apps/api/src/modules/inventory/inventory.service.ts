@@ -718,3 +718,236 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
       purchaseOrder: await tx.inventoryPurchaseOrder.update({ where: { id: order.id }, data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED" } }) };
   });
 }
+
+
+export async function createInventoryTransfer(scope: BranchScope, input: {
+  destinationBranchId: string; transferNumber: string; createdById: string; notes?: string;
+  lines: Array<{ inventoryItemId: string; quantity: number }>;
+}) {
+  return prisma.$transaction(async (tx) => {
+    if (input.destinationBranchId === scope.branchId) throw new AppError("Source and destination branches must be different", 422);
+    const [source, destination] = await Promise.all([
+      tx.branch.findFirst({ where: { id: scope.branchId, businessId: scope.businessId, isActive: true } }),
+      tx.branch.findFirst({ where: { id: input.destinationBranchId, businessId: scope.businessId, isActive: true } }),
+    ]);
+    if (!source || !destination) throw new AppError("Both transfer branches must be active branches in this business", 404);
+    if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) {
+      throw new AppError("Transfer must contain unique inventory items", 422);
+    }
+    const ids = input.lines.map((line) => line.inventoryItemId);
+    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const transferLines: Array<{ inventoryItemId: string; quantity: number; unitCost: number }> = [];
+    for (const line of input.lines) {
+      if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) throw new AppError("Transfer quantities must be positive whole numbers", 422);
+      const stock = await tx.inventoryStock.upsert({
+        where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
+        create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId, quantity: 0 },
+        update: {},
+      });
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+      const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+      const available = locked.quantity - locked.reservedQuantity;
+      if (available < line.quantity) throw new AppError("Insufficient available stock for transfer", 422);
+      const remaining = locked.quantity - line.quantity;
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: remaining } });
+      transferLines.push({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, unitCost: locked.averageUnitCost });
+    }
+    const transfer = await tx.inventoryTransfer.create({ data: {
+      businessId: scope.businessId, sourceBranchId: scope.branchId, destinationBranchId: destination.id,
+      transferNumber: input.transferNumber.trim(), status: "DISPATCHED", notes: input.notes?.trim() || null,
+      createdById: input.createdById, dispatchedById: input.createdById,
+      lines: { create: transferLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityDispatched: line.quantity, unitCost: line.unitCost })) },
+    }, include: { lines: { include: { inventoryItem: true } }, sourceBranch: true, destinationBranch: true } });
+    for (const line of transferLines) {
+      const stock = await tx.inventoryStock.findUniqueOrThrow({ where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } } });
+      await tx.inventoryMovement.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
+        quantity: line.quantity, type: "TRANSFER_OUT", unitCost: line.unitCost,
+        resultingQuantity: stock.quantity, reason: "Inter-branch transfer dispatched",
+        reference: transfer.transferNumber, createdById: input.createdById,
+      } });
+    }
+    return transfer;
+  });
+}
+
+export async function receiveInventoryTransfer(scope: BranchScope, input: {
+  transferId: string; receivedById: string; lines: Array<{ transferLineId: string; quantity: number }>;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_transfers" WHERE "id" = ${input.transferId} AND "businessId" = ${scope.businessId} AND "destinationBranchId" = ${scope.branchId} FOR UPDATE`);
+    const transfer = await tx.inventoryTransfer.findFirst({
+      where: { id: input.transferId, businessId: scope.businessId, destinationBranchId: scope.branchId },
+      include: { lines: true },
+    });
+    if (!transfer) throw new AppError("Transfer not found for this receiving branch", 404);
+    if (transfer.status !== "DISPATCHED" && transfer.status !== "PARTIALLY_RECEIVED") throw new AppError("This transfer cannot receive more stock", 422);
+    if (!input.lines.length || new Set(input.lines.map((line) => line.transferLineId)).size !== input.lines.length) throw new AppError("Receipt must contain unique transfer lines", 422);
+    for (const received of input.lines) {
+      const line = transfer.lines.find((candidate) => candidate.id === received.transferLineId);
+      if (!line) throw new AppError("A transfer line does not belong to this transfer", 422);
+      if (!Number.isSafeInteger(received.quantity) || received.quantity <= 0 || received.quantity > line.quantityDispatched - line.quantityReceived) {
+        throw new AppError("Received quantity exceeds the outstanding transfer quantity", 422);
+      }
+      const stock = await tx.inventoryStock.upsert({
+        where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
+        create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId, quantity: 0 },
+        update: {},
+      });
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+      const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+      const nextQuantity = locked.quantity + received.quantity;
+      const nextAverage = nextQuantity === 0 ? 0 : Math.round(((locked.quantity * locked.averageUnitCost) + (received.quantity * line.unitCost)) / nextQuantity);
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: nextQuantity, averageUnitCost: nextAverage } });
+      await tx.inventoryTransferLine.update({ where: { id: line.id }, data: { quantityReceived: { increment: received.quantity } } });
+      await tx.inventoryMovement.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
+        quantity: received.quantity, type: "TRANSFER_IN", unitCost: line.unitCost,
+        resultingQuantity: nextQuantity, reason: "Inter-branch transfer received",
+        reference: transfer.transferNumber, createdById: input.receivedById,
+      } });
+    }
+    const updatedLines = await tx.inventoryTransferLine.findMany({ where: { transferId: transfer.id } });
+    const complete = updatedLines.every((line) => line.quantityReceived === line.quantityDispatched);
+    return tx.inventoryTransfer.update({
+      where: { id: transfer.id },
+      data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED", ...(complete ? { receivedById: input.receivedById, receivedAt: new Date() } : {}) },
+      include: { lines: { include: { inventoryItem: true } }, sourceBranch: true, destinationBranch: true },
+    });
+  });
+}
+
+export async function listInventoryTransfers(scope: BranchScope, input: { page: number; pageSize: number }) {
+  const where: Prisma.InventoryTransferWhereInput = {
+    businessId: scope.businessId,
+    OR: [{ sourceBranchId: scope.branchId }, { destinationBranchId: scope.branchId }],
+  };
+  const [transfers, total] = await prisma.$transaction([
+    prisma.inventoryTransfer.findMany({ where, include: { sourceBranch: true, destinationBranch: true, lines: { include: { inventoryItem: true } } }, orderBy: { createdAt: "desc" }, skip: (input.page - 1) * input.pageSize, take: input.pageSize }),
+    prisma.inventoryTransfer.count({ where }),
+  ]);
+  return { transfers, pagination: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+}
+
+export async function createInventoryStocktake(scope: BranchScope, input: {
+  reference: string; createdById: string; notes?: string;
+  lines: Array<{ inventoryItemId: string; countedQuantity: number }>;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const branch = await tx.branch.findFirst({ where: { id: scope.branchId, businessId: scope.businessId, isActive: true } });
+    if (!branch) throw new AppError("Branch not found or inactive", 404);
+    if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) throw new AppError("Stocktake requires unique inventory items", 422);
+    const ids = input.lines.map((line) => line.inventoryItemId);
+    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const lines = [];
+    for (const line of input.lines) {
+      if (!Number.isSafeInteger(line.countedQuantity) || line.countedQuantity < 0) throw new AppError("Counted quantities cannot be negative", 422);
+      const stock = await tx.inventoryStock.upsert({
+        where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
+        create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId, quantity: 0 },
+        update: {},
+      });
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+      const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+      lines.push({ inventoryItemId: line.inventoryItemId, expectedQuantity: locked.quantity, countedQuantity: line.countedQuantity, variance: line.countedQuantity - locked.quantity });
+    }
+    return tx.inventoryStocktake.create({ data: {
+      businessId: scope.businessId, branchId: scope.branchId, reference: input.reference.trim(),
+      notes: input.notes?.trim() || null, createdById: input.createdById,
+      lines: { create: lines },
+    }, include: { lines: { include: { inventoryItem: true } } } });
+  });
+}
+
+export async function applyInventoryStocktake(scope: BranchScope, input: { stocktakeId: string; appliedById: string }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocktakes" WHERE "id" = ${input.stocktakeId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);
+    const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId }, include: { lines: true } });
+    if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
+    if (stocktake.status !== "DRAFT") throw new AppError("Only draft stocktakes can be applied", 422);
+    for (const line of stocktake.lines) {
+      const stock = await tx.inventoryStock.upsert({
+        where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
+        create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId, quantity: 0 },
+        update: {},
+      });
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+      const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+      const variance = line.countedQuantity - locked.quantity;
+      if (locked.reservedQuantity > line.countedQuantity) throw new AppError("Stocktake count is below the quantity already reserved", 422);
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: line.countedQuantity } });
+      if (variance !== 0) await tx.inventoryMovement.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
+        quantity: Math.abs(variance), type: "STOCKTAKE", resultingQuantity: line.countedQuantity,
+        reason: variance > 0 ? "Stocktake surplus" : "Stocktake shortage",
+        reference: stocktake.reference, createdById: input.appliedById,
+      } });
+    }
+    return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "APPLIED", appliedById: input.appliedById, appliedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
+  });
+}
+
+export async function createInventoryReservation(scope: BranchScope, input: {
+  inventoryItemId: string; quantity: number; createdById: string; reference?: string; expiresAt?: Date;
+}) {
+  return prisma.$transaction(async (tx) => {
+    if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) throw new AppError("Reservation quantity must be a positive whole number", 422);
+    const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, businessId: scope.businessId, isActive: true } });
+    if (!item) throw new AppError("Inventory item not found or inactive", 404);
+    const stock = await tx.inventoryStock.upsert({
+      where: { inventoryItemId_branchId: { inventoryItemId: input.inventoryItemId, branchId: scope.branchId } },
+      create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: input.inventoryItemId, quantity: 0 },
+      update: {},
+    });
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+    const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+    if (locked.quantity - locked.reservedQuantity < input.quantity) throw new AppError("Insufficient available stock to reserve", 422);
+    const reservation = await tx.inventoryReservation.create({ data: {
+      businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: input.inventoryItemId,
+      quantity: input.quantity, reference: input.reference?.trim() || null, createdById: input.createdById,
+      expiresAt: input.expiresAt,
+    } });
+    await tx.inventoryStock.update({ where: { id: stock.id }, data: { reservedQuantity: { increment: input.quantity } } });
+    return reservation;
+  });
+}
+
+export async function releaseInventoryReservation(scope: BranchScope, input: { reservationId: string; consumed?: boolean }) {
+  return prisma.$transaction(async (tx) => {
+    const reservation = await tx.inventoryReservation.findFirst({ where: { id: input.reservationId, businessId: scope.businessId, branchId: scope.branchId, status: "ACTIVE" } });
+    if (!reservation) throw new AppError("Active reservation not found for this branch", 404);
+    const stock = await tx.inventoryStock.findUnique({ where: { inventoryItemId_branchId: { inventoryItemId: reservation.inventoryItemId, branchId: scope.branchId } } });
+    if (!stock) throw new AppError("Reserved stock balance not found", 409);
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+    const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+    const nextStatus = input.consumed ? "CONSUMED" : "RELEASED";
+    await tx.inventoryStock.update({ where: { id: stock.id }, data: {
+      reservedQuantity: { decrement: reservation.quantity },
+      ...(input.consumed ? { quantity: { decrement: reservation.quantity } } : {}),
+    } });
+    if (input.consumed) {
+      const resultingQuantity = locked.quantity - reservation.quantity;
+      await tx.inventoryMovement.create({ data: {
+        businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: reservation.inventoryItemId,
+        quantity: reservation.quantity, type: "ISSUE", resultingQuantity,
+        reason: "Reserved inventory consumed", reference: reservation.reference, createdById: reservation.createdById,
+      } });
+    }
+    return tx.inventoryReservation.update({ where: { id: reservation.id }, data: { status: nextStatus, releasedAt: new Date() } });
+  });
+}
+
+export async function getInventoryReorderRecommendations(scope: BranchScope) {
+  const stocks = await prisma.inventoryStock.findMany({
+    where: { businessId: scope.businessId, branchId: scope.branchId, inventoryItem: { isActive: true } },
+    include: { inventoryItem: true }, orderBy: { quantity: "asc" },
+  });
+  return stocks.filter((stock) => stock.quantity - stock.reservedQuantity <= stock.inventoryItem.lowStockThreshold).map((stock) => ({
+    inventoryItem: stock.inventoryItem, quantity: stock.quantity, reservedQuantity: stock.reservedQuantity,
+    availableQuantity: stock.quantity - stock.reservedQuantity,
+    suggestedOrderQuantity: Math.max(stock.inventoryItem.reorderQuantity, stock.inventoryItem.lowStockThreshold + stock.inventoryItem.reorderQuantity - (stock.quantity - stock.reservedQuantity)),
+    averageUnitCost: stock.averageUnitCost, stockValue: stock.quantity * stock.averageUnitCost,
+  }));
+}
