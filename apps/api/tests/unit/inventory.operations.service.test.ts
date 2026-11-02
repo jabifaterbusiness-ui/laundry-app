@@ -332,7 +332,7 @@ describe("inventory operations", () => {
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-2", quantity: 5, reservedQuantity: 2 });
     await expect(releaseInventoryReservation(
       { businessId: BUSINESS, branchId: SOURCE },
-      { reservationId: "reservation-2", consumed: true },
+      { reservationId: "reservation-2", consumed: true, actedById: "consumer-2" },
     )).rejects.toMatchObject({ statusCode: 409 });
     expect(db.inventoryStock.update).not.toHaveBeenCalled();
     expect(db.inventoryReservation.update).not.toHaveBeenCalled();
@@ -342,7 +342,7 @@ describe("inventory operations", () => {
     db.inventoryReservation.findFirst.mockResolvedValue(null);
     await expect(releaseInventoryReservation(
       { businessId: BUSINESS, branchId: SOURCE },
-      { reservationId: "reservation-3" },
+      { reservationId: "reservation-3", actedById: "manager-2" },
     )).rejects.toMatchObject({ statusCode: 404 });
     expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
   });
@@ -356,9 +356,9 @@ describe("inventory operations", () => {
     db.inventoryReservation.update.mockResolvedValue({ id: "reservation-1", status: "CONSUMED" });
     await releaseInventoryReservation(
       { businessId: BUSINESS, branchId: SOURCE },
-      { reservationId: "reservation-1", consumed: true },
+      { reservationId: "reservation-1", consumed: true, actedById: "consumer-2" },
     );
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { reservedQuantity: { decrement: 2 }, quantity: { decrement: 2 } } });
-    expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "ISSUE", quantity: 2, resultingQuantity: 3 }) });
+    expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "ISSUE", quantity: 2, resultingQuantity: 3, createdById: "consumer-2" }) });
   });
 });

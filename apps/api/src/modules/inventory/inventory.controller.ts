@@ -489,7 +489,7 @@ export async function releaseReservation(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
   const consumed = req.body?.consumed === true;
-  const reservation = await releaseInventoryReservation({ businessId, branchId }, { reservationId: id, consumed });
+  const reservation = await releaseInventoryReservation({ businessId, branchId }, { reservationId: id, consumed, actedById: req.user!.id });
   await recordAuditEvent({ action: consumed ? "inventory.reservation_consumed" : "inventory.reservation_released", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { status: reservation.status } });
   res.status(200).json({ data: reservation });
 }

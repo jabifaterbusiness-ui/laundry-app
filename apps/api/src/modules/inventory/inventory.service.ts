@@ -1001,7 +1001,7 @@ export async function createInventoryReservation(scope: BranchScope, input: {
   });
 }
 
-export async function releaseInventoryReservation(scope: BranchScope, input: { reservationId: string; consumed?: boolean }) {
+export async function releaseInventoryReservation(scope: BranchScope, input: { reservationId: string; consumed?: boolean; actedById: string }) {
   return prisma.$transaction(async (tx) => {
     // Serialize release/consume requests on the reservation itself. Locking
     // only the stock row allows two requests to read ACTIVE before either
@@ -1034,7 +1034,7 @@ export async function releaseInventoryReservation(scope: BranchScope, input: { r
       await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: reservation.inventoryItemId,
         quantity: reservation.quantity, type: "ISSUE", resultingQuantity,
-        reason: "Reserved inventory consumed", reference: reservation.reference, createdById: reservation.createdById,
+        reason: "Reserved inventory consumed", reference: reservation.reference, createdById: input.actedById,
       } });
     }
     return tx.inventoryReservation.update({ where: { id: reservation.id }, data: { status: nextStatus, releasedAt: new Date() } });
