@@ -36,7 +36,8 @@ describe("processSubscriptionExpiryReminders", () => {
 
     expect(subscriptionFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        status: { not: "CANCELLED" },
+        status: "ACTIVE",
+        cancelAtPeriodEnd: false,
         endsAt: { lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) },
       }),
     }));
