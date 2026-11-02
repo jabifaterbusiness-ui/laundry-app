@@ -252,7 +252,7 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
-            AND s.quantity <= i."lowStockThreshold"
+            AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
           ORDER BY i.name ASC, s.id ASC
           LIMIT ${input.pageSize}
           OFFSET ${skip}
@@ -744,7 +744,7 @@ export async function createInventoryTransfer(scope: BranchScope, input: {
     const ids = input.lines.map((line) => line.inventoryItemId);
     const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
     if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
-    const transferLines: Array<{ inventoryItemId: string; quantity: number; unitCost: number }> = [];
+    const transferLines: Array<{ inventoryItemId: string; quantity: number; unitCost: number; resultingQuantity: number }> = [];
     for (const line of input.lines) {
       if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) throw new AppError("Transfer quantities must be positive whole numbers", 422);
       const stock = await tx.inventoryStock.upsert({
@@ -758,7 +758,7 @@ export async function createInventoryTransfer(scope: BranchScope, input: {
       if (available < line.quantity) throw new AppError("Insufficient available stock for transfer", 422);
       const remaining = locked.quantity - line.quantity;
       await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: remaining } });
-      transferLines.push({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, unitCost: locked.averageUnitCost });
+      transferLines.push({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, unitCost: locked.averageUnitCost, resultingQuantity: remaining });
     }
     const transfer = await tx.inventoryTransfer.create({ data: {
       businessId: scope.businessId, sourceBranchId: scope.branchId, destinationBranchId: destination.id,
@@ -767,11 +767,10 @@ export async function createInventoryTransfer(scope: BranchScope, input: {
       lines: { create: transferLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityDispatched: line.quantity, unitCost: line.unitCost })) },
     }, include: { lines: { include: { inventoryItem: true } }, sourceBranch: true, destinationBranch: true } });
     for (const line of transferLines) {
-      const stock = await tx.inventoryStock.findUniqueOrThrow({ where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } } });
       await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
         quantity: line.quantity, type: "TRANSFER_OUT", unitCost: line.unitCost,
-        resultingQuantity: stock.quantity, reason: "Inter-branch transfer dispatched",
+        resultingQuantity: line.resultingQuantity, reason: "Inter-branch transfer dispatched",
         reference: transfer.transferNumber, createdById: input.createdById,
       } });
     }
@@ -883,8 +882,9 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
       await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
       const locked = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
       const variance = line.countedQuantity - locked.quantity;
-      if (locked.reservedQuantity > line.countedQuantity) throw new AppError("Stocktake count is below the quantity already reserved", 422);
+      if ((locked.reservedQuantity ?? 0) > line.countedQuantity) throw new AppError("Stocktake count is below the quantity already reserved", 422);
       await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: line.countedQuantity } });
+      await tx.inventoryStocktakeLine.update({ where: { id: line.id }, data: { expectedQuantity: locked.quantity, variance } });
       if (variance !== 0) await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: line.inventoryItemId,
         quantity: Math.abs(variance), type: "STOCKTAKE", resultingQuantity: line.countedQuantity,
