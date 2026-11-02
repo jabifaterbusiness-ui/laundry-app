@@ -263,6 +263,10 @@ describe("Inventory routes - business-wide reporting", () => {
         inventoryItem: { id: "item-1", lowStockThreshold: 5 },
       }],
     }] as never);
+    vi.mocked(prisma.inventoryItem.findMany).mockResolvedValue([{
+      id: "item-1",
+      lowStockThreshold: 5,
+    }] as never);
 
     const res = await request(app)
       .get("/api/v1/inventory/reports/branch-comparison")
@@ -272,7 +276,7 @@ describe("Inventory routes - business-wide reporting", () => {
     expect(res.body.data).toMatchObject([{
       branchId: BRANCH_A,
       branchName: "Main Branch",
-      itemCount: 1,
+      catalogueItemCount: 1,
       totalValuation: 3000,
       lowStockItems: 0,
     }]);
