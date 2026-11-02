@@ -251,7 +251,7 @@ describe("InventoryPage", () => {
     );
 
     fireEvent.change(
-      screen.getByLabelText("Item"),
+      screen.getByLabelText("Item name"),
       {
         target: { value: "Fabric Softener" },
       },
@@ -566,7 +566,7 @@ describe("InventoryPage", () => {
     );
 
     expect(
-      await screen.findByRole("alert"),
+      await screen.findByText("Adjustment reason is required.", { selector: 'p[role="alert"]' }),
     ).toHaveTextContent(
       "Adjustment reason is required.",
     );
