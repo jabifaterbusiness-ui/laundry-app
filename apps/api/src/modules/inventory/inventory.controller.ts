@@ -64,10 +64,12 @@ export async function createItem(
     { businessId },
     {
       name: input.name,
-      ...(input.description !== undefined && {
-        description: input.description,
-      }),
+      ...(input.sku !== undefined && { sku: input.sku }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...(input.storageLocation !== undefined && { storageLocation: input.storageLocation }),
+      ...(input.description !== undefined && { description: input.description }),
       unit: input.unit,
+      reorderQuantity: input.reorderQuantity,
       lowStockThreshold: input.lowStockThreshold,
     },
   );
@@ -104,13 +106,13 @@ export async function updateItem(
     id,
     {
       ...(input.name !== undefined && { name: input.name }),
-      ...(input.description !== undefined && {
-        description: input.description,
-      }),
+      ...(input.sku !== undefined && { sku: input.sku }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...(input.storageLocation !== undefined && { storageLocation: input.storageLocation }),
+      ...(input.description !== undefined && { description: input.description }),
       ...(input.unit !== undefined && { unit: input.unit }),
-      ...(input.lowStockThreshold !== undefined && {
-        lowStockThreshold: input.lowStockThreshold,
-      }),
+      ...(input.reorderQuantity !== undefined && { reorderQuantity: input.reorderQuantity }),
+      ...(input.lowStockThreshold !== undefined && { lowStockThreshold: input.lowStockThreshold }),
       ...(input.isActive !== undefined && {
         isActive: input.isActive,
       }),
