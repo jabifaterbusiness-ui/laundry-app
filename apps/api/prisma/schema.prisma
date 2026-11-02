@@ -276,6 +276,8 @@ model User {
   inventoryTransfersDispatched  InventoryTransfer[]            @relation("InventoryTransferDispatcher")
   inventoryTransfersReceived    InventoryTransfer[]            @relation("InventoryTransferReceiver")
   inventoryStocktakesCreated    InventoryStocktake[]             @relation("InventoryStocktakeCreator")
+  inventoryStocktakesSubmitted  InventoryStocktake[]             @relation("InventoryStocktakeSubmitter")
+  inventoryStocktakesApproved   InventoryStocktake[]             @relation("InventoryStocktakeApprover")
   inventoryStocktakesApplied    InventoryStocktake[]             @relation("InventoryStocktakeApplier")
   inventoryReservationsCreated  InventoryReservation[]           @relation("InventoryReservationCreator")
   inventoryPurchaseOrdersCreated InventoryPurchaseOrder[]      @relation("InventoryPurchaseOrderCreator")
@@ -1374,8 +1376,10 @@ model InventoryStocktake {
   createdById String
   createdBy User @relation("InventoryStocktakeCreator", fields: [createdById], references: [id], onDelete: Restrict)
   submittedById String?
+  submittedBy User? @relation("InventoryStocktakeSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
   submittedAt DateTime?
   approvedById String?
+  approvedBy User? @relation("InventoryStocktakeApprover", fields: [approvedById], references: [id], onDelete: Restrict)
   approvedAt DateTime?
   appliedById String?
   appliedBy User? @relation("InventoryStocktakeApplier", fields: [appliedById], references: [id], onDelete: Restrict)
