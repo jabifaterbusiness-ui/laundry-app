@@ -57,6 +57,16 @@ describe("inventory operations", () => {
   });
 
 
+  it("requires an audit reason for returns, waste and expiry movements", async () => {
+    for (const type of ["RETURN", "WASTE", "EXPIRED"] as const) {
+      await expect(createInventoryMovement(
+        { businessId: BUSINESS, branchId: SOURCE },
+        { inventoryItemId: ITEM, quantity: 1, type, createdById: USER },
+      )).rejects.toMatchObject({ statusCode: 422 });
+    }
+    expect(db.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
   it("rejects transfers to the same branch", async () => {
     await expect(createInventoryTransfer(
       { businessId: BUSINESS, branchId: SOURCE },
