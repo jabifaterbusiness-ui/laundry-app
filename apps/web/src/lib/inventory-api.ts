@@ -310,7 +310,7 @@ export interface InventoryTransfer {
 }
 export interface InventoryStocktake {
   id: string; reference: string; status: "DRAFT" | "SUBMITTED" | "APPROVED" | "APPLIED" | "CANCELLED";
-  submittedAt?: string | null; approvedById?: string | null; approvedAt?: string | null;
+  submittedById?: string | null; submittedAt?: string | null; approvedById?: string | null; approvedAt?: string | null;
   lines: Array<{ id: string; inventoryItemId: string; expectedQuantity: number; countedQuantity: number; variance: number; inventoryItem: InventoryItem }>;
 }
 export interface InventoryReservation { id: string; inventoryItemId: string; quantity: number; status: string; reference: string | null; }

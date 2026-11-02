@@ -879,7 +879,7 @@ export async function submitInventoryStocktake(scope: BranchScope, input: { stoc
     const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId } });
     if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
     if (stocktake.status !== "DRAFT") throw new AppError("Only draft stocktakes can be submitted", 422);
-    return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "SUBMITTED", submittedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
+    return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "SUBMITTED", submittedById: input.submittedById, submittedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
   });
 }
 

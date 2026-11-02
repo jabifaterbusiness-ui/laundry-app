@@ -1373,6 +1373,7 @@ model InventoryStocktake {
   notes String?
   createdById String
   createdBy User @relation("InventoryStocktakeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  submittedById String?
   submittedAt DateTime?
   approvedById String?
   approvedAt DateTime?
