@@ -20,7 +20,7 @@ import {
   receiveInventoryPurchaseOrder,
   createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
   createInventoryStocktake, listInventoryStocktakes, submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
-  releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports,
+  releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports, getInventoryBranchComparison,
   type InventoryPurchaseOrder,
   type InventoryStocktake,
 } from "../../lib/inventory-api.js";
@@ -157,6 +157,11 @@ export function InventoryPage() {
     queryKey: ["inventory", "reports", activeBranchId],
     enabled: Boolean(activeBranchId),
     queryFn: () => getInventoryReports({ accessToken }, activeBranchId),
+  });
+  const branchComparisonQuery = useQuery({
+    queryKey: ["inventory", "branch-comparison"],
+    enabled: userPermissions.includes("inventory.reports_all_branches"),
+    queryFn: () => getInventoryBranchComparison({ accessToken }),
   });
   const transferCreateMutation = useMutation({
     mutationFn: () => createInventoryTransfer({
@@ -1419,6 +1424,13 @@ export function InventoryPage() {
           </tbody></table> : <p>No supplier orders in the last 30 days.</p>}
         </>}
       </section>
+      {userPermissions.includes("inventory.reports_all_branches") && <section className="inventory-panel" aria-label="Business-wide branch inventory comparison">
+        <h2>Branch Inventory Comparison</h2>
+        <p>Business-wide stock visibility requires the dedicated cross-branch reporting permission. Figures include active branches only.</p>
+        {branchComparisonQuery.isLoading ? <p>Loading branch comparison...</p> : branchComparisonQuery.isError ? <p role="alert">Unable to load branch comparison.</p> : branchComparisonQuery.data?.data.length ? <div className="inventory-table-wrap"><table><thead><tr><th>Branch</th><th>Items stocked</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Low-stock items</th><th>Valuation</th></tr></thead><tbody>
+          {branchComparisonQuery.data.data.map((row) => <tr key={row.branchId}><td>{row.branchName}</td><td>{row.itemCount}</td><td>{row.totalUnits.toLocaleString()}</td><td>{row.reservedUnits.toLocaleString()}</td><td>{row.availableUnits.toLocaleString()}</td><td>{row.lowStockItems}</td><td>{(row.totalValuation / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
+        </tbody></table></div> : <p>No active branches have inventory balances yet.</p>}
+      </section>}
     </main>
   );
 }
