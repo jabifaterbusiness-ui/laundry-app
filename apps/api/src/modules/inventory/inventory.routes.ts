@@ -100,3 +100,4 @@ inventoryRouter.post("/reservations/:id/release", requirePermission("inventory.m
 inventoryRouter.get("/reorder-recommendations", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(reorderRecommendations));
 
 inventoryRouter.get("/reports", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(inventoryReports));
+inventoryRouter.get("/reports/branch-comparison", requirePermission("inventory.reports_all_branches"), asyncHandler(inventoryBranchComparison));
