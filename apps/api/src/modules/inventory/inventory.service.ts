@@ -873,12 +873,33 @@ export async function createInventoryStocktake(scope: BranchScope, input: {
   });
 }
 
+export async function submitInventoryStocktake(scope: BranchScope, input: { stocktakeId: string; submittedById: string }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocktakes" WHERE "id" = ${input.stocktakeId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);
+    const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId } });
+    if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
+    if (stocktake.status !== "DRAFT") throw new AppError("Only draft stocktakes can be submitted", 422);
+    return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "SUBMITTED", submittedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
+  });
+}
+
+export async function approveInventoryStocktake(scope: BranchScope, input: { stocktakeId: string; approvedById: string }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocktakes" WHERE "id" = ${input.stocktakeId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);
+    const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId } });
+    if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
+    if (stocktake.status !== "SUBMITTED") throw new AppError("Only submitted stocktakes can be approved", 422);
+    if (stocktake.createdById === input.approvedById) throw new AppError("Stocktake creator cannot approve their own stocktake", 403);
+    return tx.inventoryStocktake.update({ where: { id: stocktake.id }, data: { status: "APPROVED", approvedById: input.approvedById, approvedAt: new Date() }, include: { lines: { include: { inventoryItem: true } } } });
+  });
+}
+
 export async function applyInventoryStocktake(scope: BranchScope, input: { stocktakeId: string; appliedById: string }) {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocktakes" WHERE "id" = ${input.stocktakeId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);
     const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId }, include: { lines: true } });
     if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
-    if (stocktake.status !== "DRAFT") throw new AppError("Only draft stocktakes can be applied", 422);
+    if (stocktake.status !== "APPROVED") throw new AppError("Only approved stocktakes can be applied", 422);
     for (const line of stocktake.lines) {
       const stock = await tx.inventoryStock.upsert({
         where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },

@@ -39,6 +39,8 @@ import {
   listInventoryTransfers,
   createInventoryStocktake,
   applyInventoryStocktake,
+  submitInventoryStocktake,
+  approveInventoryStocktake,
   createInventoryReservation,
   releaseInventoryReservation,
   getInventoryReorderRecommendations,
@@ -435,6 +437,22 @@ export async function createStocktake(req: Request, res: Response) {
   const stocktake = await createInventoryStocktake({ businessId, branchId }, { reference: input.reference, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(201).json({ data: stocktake });
+}
+
+export async function submitStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await submitInventoryStocktake({ businessId, branchId }, { stocktakeId: id, submittedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_submitted", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
+  res.status(200).json({ data: stocktake });
+}
+
+export async function approveStocktake(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  const { id } = inventoryOperationIdParamSchema.parse(req.params);
+  const stocktake = await approveInventoryStocktake({ businessId, branchId }, { stocktakeId: id, approvedById: req.user!.id });
+  await recordAuditEvent({ action: "inventory.stocktake_approved", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
+  res.status(200).json({ data: stocktake });
 }
 
 export async function applyStocktake(req: Request, res: Response) {

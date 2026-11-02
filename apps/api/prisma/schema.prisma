@@ -1196,6 +1196,8 @@ enum InventoryTransferStatus {
 
 enum InventoryStocktakeStatus {
   DRAFT
+  SUBMITTED
+  APPROVED
   APPLIED
   CANCELLED
 }
@@ -1371,6 +1373,9 @@ model InventoryStocktake {
   notes String?
   createdById String
   createdBy User @relation("InventoryStocktakeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  submittedAt DateTime?
+  approvedById String?
+  approvedAt DateTime?
   appliedById String?
   appliedBy User? @relation("InventoryStocktakeApplier", fields: [appliedById], references: [id], onDelete: Restrict)
   appliedAt DateTime?
