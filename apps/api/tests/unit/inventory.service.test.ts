@@ -15,6 +15,7 @@ const { prismaMock } = vi.hoisted(() => ({
     inventoryStock: {
       upsert: vi.fn(),
       update: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
     },
@@ -62,6 +63,10 @@ function mockTransaction() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction();
+  prismaMock.inventoryStock.findUniqueOrThrow.mockImplementation(async () => {
+    const latestUpsert = prismaMock.inventoryStock.upsert.mock.results.at(-1)?.value;
+    return latestUpsert ? await latestUpsert : null;
+  });
 });
 
 describe("inventory.service", () => {
