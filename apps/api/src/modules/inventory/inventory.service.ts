@@ -1080,7 +1080,7 @@ export async function getInventoryBranchComparison(scope: BusinessScope) {
     return {
       branchId: branch.id,
       branchName: branch.name,
-      itemCount: catalogueItems.length,
+      catalogueItemCount: catalogueItems.length,
       totalValuation,
       lowStockItems,
     };
