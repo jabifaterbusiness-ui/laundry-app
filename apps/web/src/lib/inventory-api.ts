@@ -112,7 +112,7 @@ export interface UpdateInventoryItemInput {
 export interface CreateInventoryMovementInput {
   inventoryItemId: string;
   quantity: number;
-  type: "RECEIPT" | "ISSUE";
+  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
   reason?: string;
   reference?: string;
 }
