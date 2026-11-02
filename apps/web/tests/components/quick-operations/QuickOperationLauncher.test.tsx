@@ -17,6 +17,7 @@ const {
   createCloudBackupRunMock,
   requestSensitiveAuthorizationMock,
   createManualLocalBackupMock,
+  publishCloudBackupNotificationMock,
 } = vi.hoisted(() => ({
   executeQuickOperationMock: vi.fn(),
   saveOrderWorkspaceStateMock: vi.fn(),
@@ -31,6 +32,7 @@ const {
   createCloudBackupRunMock: vi.fn(),
   requestSensitiveAuthorizationMock: vi.fn().mockResolvedValue("sensitive-auth"),
   createManualLocalBackupMock: vi.fn(),
+  publishCloudBackupNotificationMock: vi.fn(),
 }));
 
 vi.mock("../../../src/components/data-management/LocalBackupManager.js", () => ({
@@ -51,7 +53,7 @@ vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.tsx", () =>
 }));
 
 vi.mock("../../../src/lib/cloud-backup-notifications.js", () => ({
-  publishCloudBackupNotification: vi.fn(),
+  publishCloudBackupNotification: publishCloudBackupNotificationMock,
 }));
 
 vi.mock("../../../src/lib/quick-operations-api.js", () => ({
@@ -310,6 +312,7 @@ describe("QuickOperationLauncher", () => {
     getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: null });
     createCloudBackupRunMock.mockReset();
     createCloudBackupRunMock.mockResolvedValue({ id: "run-1", status: "SUCCEEDED" });
+    publishCloudBackupNotificationMock.mockReset();
     requestSensitiveAuthorizationMock.mockReset();
     requestSensitiveAuthorizationMock.mockResolvedValue("sensitive-auth");
 
@@ -441,6 +444,28 @@ describe("QuickOperationLauncher", () => {
       "connection-first",
       { accessToken: "access-token", sensitiveAuthorization: "sensitive-auth" },
     ));
+  });
+
+  it("publishes a single failure notification when a cloud backup run fails", async () => {
+    listCloudBackupConnectionsMock.mockResolvedValue([
+      { id: "connection-1", displayName: "Primary cloud", status: "CONNECTED", verifiedAt: "2026-11-01T00:00:00.000Z" },
+    ]);
+    getCloudBackupSettingsMock.mockResolvedValue({ destinationConnectionId: "connection-1" });
+    createCloudBackupRunMock.mockResolvedValue({
+      id: "run-failed", status: "FAILED", errorMessage: "Cloud upload failed.",
+    });
+
+    render(<QuickOperationLauncher operation={operations.MCB} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /execute/i }));
+
+    expect(await screen.findByText("Cloud upload failed.")).toBeInTheDocument();
+    expect(publishCloudBackupNotificationMock).toHaveBeenCalledTimes(2);
+    expect(publishCloudBackupNotificationMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      status: "progress", source: "manual",
+    }));
+    expect(publishCloudBackupNotificationMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      status: "error", message: "Cloud upload failed.", source: "manual",
+    }));
   });
 
   it("renders the selected operation", () => {
