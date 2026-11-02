@@ -873,6 +873,16 @@ export async function createInventoryStocktake(scope: BranchScope, input: {
   });
 }
 
+export async function listInventoryStocktakes(scope: BranchScope) {
+  const stocktakes = await prisma.inventoryStocktake.findMany({
+    where: { businessId: scope.businessId, branchId: scope.branchId },
+    include: { lines: { include: { inventoryItem: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return { stocktakes };
+}
+
 export async function submitInventoryStocktake(scope: BranchScope, input: { stocktakeId: string; submittedById: string }) {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocktakes" WHERE "id" = ${input.stocktakeId} AND "businessId" = ${scope.businessId} AND "branchId" = ${scope.branchId} FOR UPDATE`);

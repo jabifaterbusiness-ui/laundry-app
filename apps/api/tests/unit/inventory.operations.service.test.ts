@@ -9,7 +9,7 @@ const { db } = vi.hoisted(() => ({
     inventoryTransfer: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     inventoryTransferLine: { findMany: vi.fn(), update: vi.fn() },
     inventoryMovement: { create: vi.fn() },
-    inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     inventoryReservation: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
@@ -17,7 +17,7 @@ const { db } = vi.hoisted(() => ({
 vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
-  createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake,
+  createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake, listInventoryStocktakes,
   applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
 } from "../../src/modules/inventory/inventory.service.js";
 
@@ -107,7 +107,7 @@ describe("inventory operations", () => {
     }));
   });
 
-  it("requires a submitted stocktake and a different user to approve it", async () => {\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });\n    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();\n    expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });\n    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });\n    expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);\n  });\n\n  it("prevents reservations beyond available stock", async () => {
+  it("lists stocktakes within the active business and branch", async () => {\n    db.inventoryStocktake.findMany.mockResolvedValue([{ id: "count-1" }]);\n    await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });\n    expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE } }));\n  });\n\n  it("requires a submitted stocktake and a different user to approve it", async () => {\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });\n    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();\n    expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));\n    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });\n    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });\n    expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);\n  });\n\n  it("prevents reservations beyond available stock", async () => {
     db.inventoryItem.findFirst.mockResolvedValue({ id: ITEM, isActive: true });
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 5, reservedQuantity: 4 });

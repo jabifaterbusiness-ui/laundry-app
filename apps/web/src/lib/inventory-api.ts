@@ -330,6 +330,9 @@ export async function receiveInventoryTransfer(id: string, lines: Array<{ transf
 export async function createInventoryStocktake(input: { reference: string; notes?: string; lines: Array<{ inventoryItemId: string; countedQuantity: number }> }, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryStocktake }>("/inventory/stocktakes", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
 }
+export async function listInventoryStocktakes(auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ stocktakes: InventoryStocktake[] }>("/inventory/stocktakes", { accessToken: auth.accessToken, branchId });
+}
 export async function submitInventoryStocktake(id: string, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryStocktake }>(`/inventory/stocktakes/${id}/submit`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify({}) });
 }

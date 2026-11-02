@@ -19,7 +19,7 @@ import {
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
   createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
-  createInventoryStocktake, submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
+  createInventoryStocktake, listInventoryStocktakes, submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
   releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports,
   type InventoryPurchaseOrder,
   type InventoryStocktake,
@@ -178,6 +178,7 @@ export function InventoryPage() {
     },
   });
   const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);
+  const stocktakesQuery = useQuery({ queryKey: ["inventory", "stocktakes", activeBranchId], queryFn: () => listInventoryStocktakes({ accessToken }, activeBranchId), enabled: Boolean(accessToken && activeBranchId) });
   const stocktakeCreateMutation = useMutation({
     mutationFn: () => createInventoryStocktake({
       reference: stocktakeReference.trim(),
@@ -191,7 +192,7 @@ export function InventoryPage() {
   });
   const stocktakeSubmitMutation = useMutation({
     mutationFn: () => submitInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
-    onSuccess: (result) => { setCurrentStocktake(result.data); setStocktakeError(null); },
+    onSuccess: (result) => { setCurrentStocktake(result.data); queryClient.invalidateQueries({ queryKey: ["inventory", "stocktakes"] }); setStocktakeError(null); },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to submit stocktake."),
   });
   const stocktakeApproveMutation = useMutation({
@@ -203,6 +204,7 @@ export function InventoryPage() {
     mutationFn: () => applyInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
     onSuccess: (result) => {
       setCurrentStocktake(result.data);
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stocktakes"] });
       queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
       queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
       queryClient.invalidateQueries({ queryKey: ["inventory", "reports"] });
@@ -1363,6 +1365,13 @@ export function InventoryPage() {
           {currentStocktake.status === "APPROVED" && <button type="button" disabled={stocktakeApplyMutation.isPending} onClick={() => stocktakeApplyMutation.mutate()}>Apply approved count</button>}
           {currentStocktake.status === "APPLIED" && <p role="status">Stock reconciliation applied successfully.</p>}
         </section>}
+        <h3>Stocktake register</h3>
+        {stocktakesQuery.isLoading ? <p>Loading stocktakes…</p> : stocktakesQuery.data?.stocktakes.length ? <div className="inventory-stocktake-register">
+          {stocktakesQuery.data.stocktakes.map((stocktake) => <button type="button" key={stocktake.id} className="inventory-stocktake-register-row" onClick={() => setCurrentStocktake(stocktake)}>
+            <span><strong>{stocktake.reference}</strong><small>{stocktake.lines.length} counted item(s)</small></span>
+            <span>{stocktake.status.replaceAll("_", " ")}</span>
+          </button>)}
+        </div> : <p>No stocktakes have been recorded for this branch yet.</p>}
         <h3>Recent transfers</h3>
         {advancedTransfersQuery.data?.transfers?.length ? <table><thead><tr><th>Reference</th><th>Route</th><th>Status</th><th>Items</th><th>Action</th></tr></thead><tbody>
           {advancedTransfersQuery.data.transfers.map((transfer) => {

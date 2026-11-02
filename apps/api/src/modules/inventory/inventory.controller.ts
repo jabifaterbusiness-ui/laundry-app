@@ -40,6 +40,7 @@ import {
   createInventoryStocktake,
   applyInventoryStocktake,
   submitInventoryStocktake,
+  listInventoryStocktakes,
   approveInventoryStocktake,
   createInventoryReservation,
   releaseInventoryReservation,
@@ -437,6 +438,11 @@ export async function createStocktake(req: Request, res: Response) {
   const stocktake = await createInventoryStocktake({ businessId, branchId }, { reference: input.reference, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(201).json({ data: stocktake });
+}
+
+export async function listStocktakes(req: Request, res: Response) {
+  const businessId = requireBusinessId(req), branchId = requireBranchId(req);
+  res.status(200).json(await listInventoryStocktakes({ businessId, branchId }));
 }
 
 export async function submitStocktake(req: Request, res: Response) {
