@@ -113,6 +113,21 @@ export async function globalSearch(
                   },
                 },
               },
+              {
+                customer: {
+                  phone: {
+                    contains: query,
+                  },
+                },
+              },
+              {
+                customer: {
+                  email: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+              },
             ],
           },
           orderBy: {
