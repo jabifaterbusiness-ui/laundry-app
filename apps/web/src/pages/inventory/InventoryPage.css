@@ -160,3 +160,20 @@
   font-size: 20px;
   letter-spacing: -.025em;
 }
+
+
+.inventory-workspace .inventory-report-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.inventory-workspace .inventory-report-heading h2 { margin: 0; }
+.inventory-workspace .inventory-report-heading p {
+  margin: 5px 0 0;
+  color: var(--inventory-muted);
+  font-size: 12px;
+}
+.inventory-workspace .inventory-report-heading button { flex: 0 0 auto; }
