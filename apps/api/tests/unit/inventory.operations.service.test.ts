@@ -154,6 +154,17 @@ describe("inventory operations", () => {
     expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);
   });
 
+  it("prevents the stocktake submitter from approving their own submission", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({
+      id: "count-2", status: "SUBMITTED", createdById: "creator-1", submittedById: "submitter-2",
+    });
+    await expect(approveInventoryStocktake(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { stocktakeId: "count-2", approvedById: "submitter-2" },
+    )).rejects.toMatchObject({ statusCode: 403 });
+    expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
+  });
+
   it("does not apply a stocktake before independent approval", async () => {
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", lines: [] });
     await expect(applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" })).rejects.toMatchObject({ statusCode: 422 });
