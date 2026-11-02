@@ -101,14 +101,14 @@ describe("globalSearch", () => {
         id: "invoice-1",
         title: "Invoice #INV-00001",
         subtitle: "John Doe · ISSUED",
-        href: "/invoices",
+        href: "/invoices?invoiceId=invoice-1",
       },
     ]);
 
     expect(permissionCheck).toHaveBeenCalledTimes(3);
   });
 
-  it("searches customer email and opens the latest order in the active branch", async () => {
+  it("searches customer email and opens the customer workspace even when the customer has orders", async () => {
     customerFindMany.mockResolvedValue([
       {
         id: "customer-2",
@@ -147,11 +147,6 @@ describe("globalSearch", () => {
         }),
         select: expect.objectContaining({
           email: true,
-          orders: expect.objectContaining({
-            where: { branchId: BRANCH_A },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-          }),
         }),
       }),
     );
@@ -160,7 +155,7 @@ describe("globalSearch", () => {
       id: "customer-2",
       title: "Aaron Daniel",
       subtitle: "08059489393 · aaron@example.com",
-      href: "/orders?orderId=latest-order",
+      href: "/orders?customerId=customer-2",
     });
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
