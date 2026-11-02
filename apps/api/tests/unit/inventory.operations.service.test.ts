@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db } = vi.hoisted(() => ({
   db: {
     $transaction: vi.fn(), $queryRaw: vi.fn(),
-    branch: { findFirst: vi.fn() },
+    branch: { findFirst: vi.fn(), findMany: vi.fn() },
     inventoryItem: { findMany: vi.fn(), findFirst: vi.fn() },
     inventoryStock: { upsert: vi.fn(), findUniqueOrThrow: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     inventoryTransfer: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn(), count: vi.fn() },
@@ -17,7 +17,7 @@ const { db } = vi.hoisted(() => ({
 vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
-  createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake, listInventoryStocktakes,
+  createInventoryTransfer, receiveInventoryTransfer, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
   submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
 } from "../../src/modules/inventory/inventory.service.js";
 
@@ -36,6 +36,26 @@ beforeEach(() => {
 });
 
 describe("inventory operations", () => {
+  it("compares stock only across active branches in the requested business", async () => {
+    db.branch.findMany.mockResolvedValue([
+      { id: SOURCE, name: "Central", inventoryStocks: [
+        { quantity: 10, reservedQuantity: 2, averageUnitCost: 50, inventoryItem: { lowStockThreshold: 3 } },
+        { quantity: 1, reservedQuantity: 0, averageUnitCost: 25, inventoryItem: { lowStockThreshold: 2 } },
+      ] },
+      { id: DESTINATION, name: "North", inventoryStocks: [
+        { quantity: 4, reservedQuantity: 1, averageUnitCost: 100, inventoryItem: { lowStockThreshold: 2 } },
+      ] },
+    ]);
+    await expect(getInventoryBranchComparison({ businessId: BUSINESS })).resolves.toEqual([
+      { branchId: SOURCE, branchName: "Central", itemCount: 2, totalUnits: 11, reservedUnits: 2, availableUnits: 9, totalValuation: 525, lowStockItems: 1 },
+      { branchId: DESTINATION, branchName: "North", itemCount: 1, totalUnits: 4, reservedUnits: 1, availableUnits: 3, totalValuation: 400, lowStockItems: 0 },
+    ]);
+    expect(db.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: BUSINESS, isActive: true },
+    }));
+  });
+
+
   it("rejects transfers to the same branch", async () => {
     await expect(createInventoryTransfer(
       { businessId: BUSINESS, branchId: SOURCE },
