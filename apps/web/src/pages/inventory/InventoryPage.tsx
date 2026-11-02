@@ -523,7 +523,7 @@ export function InventoryPage() {
       return;
     }
 
-    if (["RETURN", "WASTE", "EXPIRED"].includes(movementType) && !movementReason.trim()) {
+    if ((movementType === "RETURN" || movementType === "WASTE" || movementType === "EXPIRED") && !movementReason.trim()) {
       setMovementError("Add a reason to document this return, waste or expiry movement.");
       return;
     }
