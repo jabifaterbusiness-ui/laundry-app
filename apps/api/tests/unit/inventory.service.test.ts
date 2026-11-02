@@ -368,7 +368,7 @@ describe("inventory.service", () => {
       });
       expect(prismaMock.inventoryStock.update).toHaveBeenCalledWith({
         where: { id: "stock-2" },
-        data: { quantity: 20 },
+        data: { quantity: 20, averageUnitCost: 0 },
       });
     });
 
