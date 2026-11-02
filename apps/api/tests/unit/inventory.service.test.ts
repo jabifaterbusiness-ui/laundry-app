@@ -707,6 +707,10 @@ describe("inventory.service", () => {
           description: "5 litre detergent",
           unit: "LITRE",
           lowStockThreshold: 10,
+          sku: null,
+          category: null,
+          storageLocation: null,
+          reorderQuantity: 0,
         },
       });
     });
@@ -737,6 +741,10 @@ describe("inventory.service", () => {
           description: null,
           unit: "LITRE",
           lowStockThreshold: 0,
+          sku: null,
+          category: null,
+          storageLocation: null,
+          reorderQuantity: 0,
         },
       });
     });
