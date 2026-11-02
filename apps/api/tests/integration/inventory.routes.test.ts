@@ -51,6 +51,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     branch: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -244,6 +245,57 @@ describe("Inventory routes - permissions", () => {
 
     expect(res.status).toBe(403);
     expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("Inventory routes - business-wide reporting", () => {
+  it("allows a business owner to compare only active branches in their business", async () => {
+    vi.mocked(prisma.branch.findMany).mockResolvedValue([{
+      id: BRANCH_A,
+      name: "Main Branch",
+      inventoryStocks: [{
+        quantity: 12,
+        reservedQuantity: 2,
+        averageUnitCost: 250,
+        inventoryItem: { id: "item-1", lowStockThreshold: 5 },
+      }],
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reports/branch-comparison")
+      .set("Authorization", `Bearer ${OWNER_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      branches: [{
+        branchId: BRANCH_A,
+        branchName: "Main Branch",
+        itemCount: 1,
+        totalValuation: 3000,
+        lowStockItems: 0,
+      }],
+    });
+    expect(prisma.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", isActive: true },
+    }));
+  });
+
+  it("denies branch managers without the all-branches reporting permission", async () => {
+    const managerToken = tokenFor("BRANCH_MANAGER", "biz-A", "user-manager-report");
+    findUserOverride.mockResolvedValueOnce({
+      id: "override-report",
+      businessId: "biz-A",
+      userId: "user-manager-report",
+      permissionId: "permission-inventory.reports_all_branches",
+      allowed: false,
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reports/branch-comparison")
+      .set("Authorization", `Bearer ${managerToken}`);
+
+    expect(res.status).toBe(403);
+    expect(prisma.branch.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -621,6 +673,23 @@ describe("Inventory routes - branch-scoped stock", () => {
     expect(res.status).toBe(422);
     expect(res.body.error.message).toBe("Insufficient inventory stock");
     expect(prisma.inventoryStock.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("requires an audit reason for return, waste and expired-stock movements", async () => {
+    for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
+      const res = await request(app)
+        .post("/api/v1/inventory/movements")
+        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("X-Branch-Id", BRANCH_A)
+        .send({
+          inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          quantity: 1,
+          type,
+        });
+      expect(res.status).toBe(422);
+    }
+    expect(prisma.inventoryStock.upsert).not.toHaveBeenCalled();
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
   });
 
