@@ -133,3 +133,5 @@
 .inventory-workspace .inventory-po-add { margin: 4px 0 14px; background: #f3edff; color: #6030b1; border: 1px solid #e4d8fa; }
 .inventory-workspace .inventory-po-remove { background: transparent; color: #a33b55; border: 1px solid #f0d5dd; }
 @media (max-width: 900px) { .inventory-workspace .inventory-po-line { grid-template-columns: 1fr 1fr; } .inventory-workspace .inventory-po-line > strong { grid-column: 1 / -1; } }
+
+.inventory-workspace .inventory-item-sku { display: block; margin-top: 4px; color: var(--inventory-muted); font-size: 10px; font-weight: 650; letter-spacing: .04em; }
