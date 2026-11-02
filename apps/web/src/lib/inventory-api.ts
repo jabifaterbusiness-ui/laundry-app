@@ -364,7 +364,11 @@ export interface InventoryReport {
   consumptionQuantity: number; adjustmentQuantity: number;
   valuation: Array<{ inventoryItem: InventoryItem; quantity: number; reservedQuantity: number; availableQuantity: number; averageUnitCost: number; totalValue: number }>;
   movementTotals: Record<string, number>;
-  supplierPerformance: Array<{ supplierId: string; supplierName: string; orderCount: number; orderedValue: number; receivedOrderCount: number }>;
+  supplierPerformance: Array<{
+    supplierId: string; supplierName: string; orderCount: number; orderedValue: number;
+    receivedOrderCount: number; partiallyReceivedOrderCount: number; openOrderCount: number;
+    averageFirstReceiptLeadTimeDays: number | null;
+  }>;
 }
 export async function getInventoryReports(auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryReport }>("/inventory/reports", { accessToken: auth.accessToken, branchId });
