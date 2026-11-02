@@ -66,7 +66,7 @@ export const createInventoryMovementSchema = z.object({
   reason: z.string().trim().max(1000, "Movement reason is too long").optional(),
   reference: z.string().trim().max(200, "Movement reference is too long").optional(),
 }).strict().superRefine((value, context) => {
-  if (["RETURN", "WASTE", "EXPIRED"].includes(value.type) && !value.reason?.trim()) {
+  if ((value.type === "RETURN" || value.type === "WASTE" || value.type === "EXPIRED") && !value.reason?.trim()) {
     context.addIssue({ code: "custom", path: ["reason"], message: `${value.type} movements require an audit reason` });
   }
 });
