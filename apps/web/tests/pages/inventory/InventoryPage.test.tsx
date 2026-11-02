@@ -75,7 +75,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     selector: (state: {
       accessToken: string | null;
       activeBranchId: string | null;
-      user: { branches: Array<{ id: string; name: string; isActive?: boolean }> };
+      user: { branches: Array<{ id: string; name: string; isActive?: boolean }>; permissions: string[] };
     }) => unknown,
   ) =>
     selector({
