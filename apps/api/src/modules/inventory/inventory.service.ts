@@ -951,6 +951,7 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
       // balance so receipts/issues posted after the count are not overwritten.
       const variance = line.countedQuantity - line.expectedQuantity;
       const resultingQuantity = locked.quantity + variance;
+      if (resultingQuantity < 0) throw new AppError("Stocktake variance would make stock negative", 422);
       if ((locked.reservedQuantity ?? 0) > resultingQuantity) throw new AppError("Stocktake variance would reduce stock below reserved quantities", 422);
       await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity } });
       if (variance !== 0) await tx.inventoryMovement.create({ data: {

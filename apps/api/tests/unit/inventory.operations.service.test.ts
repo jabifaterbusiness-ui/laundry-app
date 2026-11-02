@@ -289,6 +289,22 @@ describe("inventory operations", () => {
     expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
   });
 
+  it("rejects a stocktake variance that would make the latest balance negative", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({
+      id: "count-negative", reference: "COUNT-NEG", status: "APPROVED",
+      lines: [{ id: "line-1", inventoryItemId: ITEM, expectedQuantity: 5, countedQuantity: 1, variance: -4 }],
+    });
+    db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 2, reservedQuantity: 0 });
+    await expect(applyInventoryStocktake(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { stocktakeId: "count-negative", appliedById: "manager-2" },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.inventoryStock.update).not.toHaveBeenCalled();
+    expect(db.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
+  });
+
   it("applies the recorded stocktake variance to the latest balance and preserves the count snapshot", async () => {
     db.inventoryStocktake.findFirst.mockResolvedValue({
       id: "count-1", reference: "COUNT-1", status: "APPROVED",
