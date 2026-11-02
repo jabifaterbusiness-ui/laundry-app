@@ -265,6 +265,7 @@ describe("InventoryPage", () => {
 
   it("dispatches an inter-branch transfer with the selected destination and quantity", async () => {
     renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
     const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
     const transferForm = within(panel).getByRole("heading", { name: "Dispatch inter-branch transfer" }).closest("form")!;
     fireEvent.change(within(transferForm).getByLabelText("Destination branch"), { target: { value: "branch-2" } });
@@ -301,6 +302,7 @@ describe("InventoryPage", () => {
 
   it("creates a branch-scoped reservation and refreshes the reservation register", async () => {
     renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
     const panel = await screen.findByRole("region", { name: "Stock reservations and reorder recommendations" });
     fireEvent.change(within(panel).getByLabelText("Item"), { target: { value: item.id } });
     fireEvent.change(within(panel).getByLabelText("Quantity"), { target: { value: "3" } });
