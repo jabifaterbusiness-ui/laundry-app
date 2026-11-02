@@ -341,3 +341,14 @@ export async function releaseInventoryReservation(id: string, consumed: boolean,
 export async function listInventoryReorderRecommendations(auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryReorderRecommendation[] }>("/inventory/reorder-recommendations", { accessToken: auth.accessToken, branchId });
 }
+
+export interface InventoryReport {
+  periodDays: number; totalValuation: number; movementCount: number;
+  consumptionQuantity: number; adjustmentQuantity: number;
+  valuation: Array<{ inventoryItem: InventoryItem; quantity: number; reservedQuantity: number; availableQuantity: number; averageUnitCost: number; totalValue: number }>;
+  movementTotals: Record<string, number>;
+  supplierPerformance: Array<{ supplierId: string; supplierName: string; orderCount: number; orderedValue: number; receivedOrderCount: number }>;
+}
+export async function getInventoryReports(auth: AuthOptions, branchId: string | null) {
+  return apiFetch<{ data: InventoryReport }>("/inventory/reports", { accessToken: auth.accessToken, branchId });
+}
