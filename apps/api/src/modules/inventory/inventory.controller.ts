@@ -409,7 +409,7 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
 export async function createTransfer(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryTransferSchema.parse(req.body);
-  const transfer = await createInventoryTransfer({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  const transfer = await createInventoryTransfer({ businessId, branchId }, { ...input, ...(input.notes !== undefined ? { notes: input.notes } : {}), createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.transfer_dispatched", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, destinationBranchId: transfer.destinationBranchId, lineCount: transfer.lines.length } });
   res.status(201).json({ data: transfer });
 }
@@ -432,7 +432,7 @@ export async function listTransfers(req: Request, res: Response) {
 export async function createStocktake(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryStocktakeSchema.parse(req.body);
-  const stocktake = await createInventoryStocktake({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  const stocktake = await createInventoryStocktake({ businessId, branchId }, { ...input, ...(input.notes !== undefined ? { notes: input.notes } : {}), createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(201).json({ data: stocktake });
 }
@@ -448,7 +448,7 @@ export async function applyStocktake(req: Request, res: Response) {
 export async function createReservation(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryReservationSchema.parse(req.body);
-  const reservation = await createInventoryReservation({ businessId, branchId }, { ...input, createdById: req.user!.id });
+  const reservation = await createInventoryReservation({ businessId, branchId }, { ...input, ...(input.reference !== undefined ? { reference: input.reference } : {}), ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}), createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stock_reserved", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { inventoryItemId: reservation.inventoryItemId, quantity: reservation.quantity } });
   res.status(201).json({ data: reservation });
 }

@@ -920,7 +920,7 @@ export async function createInventoryReservation(scope: BranchScope, input: {
     const reservation = await tx.inventoryReservation.create({ data: {
       businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: input.inventoryItemId,
       quantity: input.quantity, reference: input.reference?.trim() || null, createdById: input.createdById,
-      expiresAt: input.expiresAt,
+      ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
     } });
     await tx.inventoryStock.update({ where: { id: stock.id }, data: { reservedQuantity: { increment: input.quantity } } });
     return reservation;
