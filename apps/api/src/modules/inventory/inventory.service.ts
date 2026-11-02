@@ -330,6 +330,7 @@ export type CreateInventoryMovementInput = {
   type: "RECEIPT" | "ISSUE";
   reason?: string;
   reference?: string;
+  unitCost?: number;
   createdById: string;
 };
 
@@ -401,13 +402,16 @@ export async function createInventoryMovement(
     const change = input.type === "RECEIPT" ? input.quantity : -input.quantity;
     const resultingQuantity = lockedStock.quantity + change;
 
-    if (resultingQuantity < 0) {
-      throw new AppError("Insufficient inventory stock", 422);
+    if (resultingQuantity < 0 || (input.type === "ISSUE" && lockedStock.quantity - lockedStock.reservedQuantity < input.quantity)) {
+      throw new AppError("Insufficient available inventory stock", 422);
     }
 
     const updatedStock = await tx.inventoryStock.update({
       where: { id: stock.id },
-      data: { quantity: resultingQuantity },
+      data: {
+        quantity: resultingQuantity,
+        ...(input.type === "RECEIPT" ? { averageUnitCost: Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (input.quantity * (input.unitCost ?? lockedStock.averageUnitCost))) / Math.max(1, resultingQuantity)) } : {}),
+      },
     });
 
     const movement = await tx.inventoryMovement.create({
@@ -418,6 +422,7 @@ export async function createInventoryMovement(
         quantity: input.quantity,
         type: input.type,
         resultingQuantity,
+        unitCost: input.unitCost ?? lockedStock.averageUnitCost,
         reason: input.reason?.trim() || null,
         reference: input.reference?.trim() || null,
         createdById: input.createdById,
@@ -491,8 +496,8 @@ export async function adjustInventoryStock(
     });
     const resultingQuantity = lockedStock.quantity + input.quantity;
 
-    if (resultingQuantity < 0) {
-      throw new AppError("Inventory adjustment cannot make stock negative", 422);
+    if (resultingQuantity < lockedStock.reservedQuantity) {
+      throw new AppError("Inventory adjustment cannot reduce stock below reserved quantities", 422);
     }
 
     const updatedStock = await tx.inventoryStock.update({
