@@ -10,6 +10,7 @@ const { db } = vi.hoisted(() => ({
     inventoryTransferLine: { findMany: vi.fn(), update: vi.fn() },
     inventoryMovement: { create: vi.fn() },
     inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    inventoryStocktakeLine: { update: vi.fn() },
     inventoryReservation: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
@@ -141,6 +142,25 @@ describe("inventory operations", () => {
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });
     await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });
     expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply a stocktake before independent approval", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", lines: [] });
+    await expect(applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" })).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
+  });
+
+  it("applies an approved stocktake and records the applied actor", async () => {
+    db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", reference: "COUNT-1", status: "APPROVED", lines: [{ id: "line-1", inventoryItemId: ITEM, countedQuantity: 6 }] });
+    db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 4, reservedQuantity: 0 });
+    db.inventoryStock.update.mockResolvedValue({ id: "stock-1", quantity: 6 });
+    db.inventoryStocktakeLine.update.mockResolvedValue({});
+    db.inventoryStocktake.update.mockResolvedValue({ id: "count-1", status: "APPLIED", appliedById: "manager-2" });
+    await applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" });
+    expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 6 } });
+    expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "STOCKTAKE", quantity: 2, resultingQuantity: 6 }) });
+    expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "APPLIED", appliedById: "manager-2" }) }));
   });
 
   it("prevents reservations beyond available stock", async () => {
