@@ -119,3 +119,25 @@ export const receiveInventoryPurchaseOrderSchema = z.object({
     unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
   }).strict()).min(1).max(200),
 }).strict();
+
+export const createInventoryTransferSchema = z.object({
+  destinationBranchId: z.string().uuid(),
+  transferNumber: z.string().trim().min(1).max(100),
+  notes: z.string().trim().max(2000).optional(),
+  lines: z.array(z.object({ inventoryItemId: z.string().uuid(), quantity: z.coerce.number().int().positive().max(100000000) }).strict()).min(1).max(200),
+}).strict();
+export const receiveInventoryTransferSchema = z.object({
+  lines: z.array(z.object({ transferLineId: z.string().uuid(), quantity: z.coerce.number().int().positive().max(100000000) }).strict()).min(1).max(200),
+}).strict();
+export const createInventoryStocktakeSchema = z.object({
+  reference: z.string().trim().min(1).max(100),
+  notes: z.string().trim().max(2000).optional(),
+  lines: z.array(z.object({ inventoryItemId: z.string().uuid(), countedQuantity: z.coerce.number().int().min(0).max(100000000) }).strict()).min(1).max(500),
+}).strict();
+export const inventoryOperationIdParamSchema = z.object({ id: z.string().uuid() });
+export const createInventoryReservationSchema = z.object({
+  inventoryItemId: z.string().uuid(),
+  quantity: z.coerce.number().int().positive().max(100000000),
+  reference: z.string().trim().max(200).optional(),
+  expiresAt: z.coerce.date().optional(),
+}).strict();
