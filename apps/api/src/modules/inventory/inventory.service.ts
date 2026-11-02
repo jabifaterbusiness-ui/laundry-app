@@ -327,7 +327,7 @@ export async function listInventoryStock(
 export type CreateInventoryMovementInput = {
   inventoryItemId: string;
   quantity: number;
-  type: "RECEIPT" | "ISSUE";
+  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
   reason?: string;
   reference?: string;
   unitCost?: number;
@@ -399,10 +399,10 @@ export async function createInventoryMovement(
       where: { id: stock.id },
     });
 
-    const change = input.type === "RECEIPT" ? input.quantity : -input.quantity;
+    const change = input.type === "RECEIPT" || input.type === "RETURN" ? input.quantity : -input.quantity;
     const resultingQuantity = lockedStock.quantity + change;
 
-    if (resultingQuantity < 0 || (input.type === "ISSUE" && lockedStock.quantity - lockedStock.reservedQuantity < input.quantity)) {
+    if (resultingQuantity < 0 || (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - lockedStock.reservedQuantity < input.quantity)) {
       throw new AppError("Insufficient available inventory stock", 422);
     }
 
@@ -410,7 +410,7 @@ export async function createInventoryMovement(
       where: { id: stock.id },
       data: {
         quantity: resultingQuantity,
-        ...(input.type === "RECEIPT" ? { averageUnitCost: Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (input.quantity * (input.unitCost ?? lockedStock.averageUnitCost))) / Math.max(1, resultingQuantity)) } : {}),
+        ...(["RECEIPT", "RETURN"].includes(input.type) ? { averageUnitCost: Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (input.quantity * (input.unitCost ?? lockedStock.averageUnitCost))) / Math.max(1, resultingQuantity)) } : {}),
       },
     });
 
