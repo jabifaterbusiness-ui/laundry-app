@@ -235,6 +235,31 @@ beforeEach(() => {
 });
 
 describe("InventoryPage", () => {
+  it("creates a branch-scoped physical stocktake draft", async () => {
+    mockCreateInventoryStocktake.mockResolvedValue({
+      data: {
+        id: "stocktake-new", reference: "COUNT-NEW", status: "DRAFT",
+        lines: [{
+          id: "stocktake-line-1", inventoryItemId: item.id, expectedQuantity: 12,
+          countedQuantity: 10, variance: -2, inventoryItem: item,
+        }],
+      },
+    });
+    renderPage();
+    const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
+    const stocktakeForm = within(panel).getByRole("heading", { name: "Physical stock count" }).closest("form")!;
+    fireEvent.change(within(stocktakeForm).getByLabelText("Stocktake reference"), { target: { value: "COUNT-NEW" } });
+    fireEvent.change(within(stocktakeForm).getByLabelText("Item"), { target: { value: item.id } });
+    fireEvent.change(within(stocktakeForm).getByLabelText("Counted quantity"), { target: { value: "10" } });
+    fireEvent.click(within(stocktakeForm).getByRole("button", { name: "Save draft count" }));
+    await waitFor(() => {
+      expect(mockCreateInventoryStocktake).toHaveBeenCalledWith({
+        reference: "COUNT-NEW", lines: [{ inventoryItemId: item.id, countedQuantity: 10 }],
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+    expect(await screen.findByRole("region", { name: "Stocktake approval workflow" })).toHaveTextContent("COUNT-NEW");
+  });
+
   it("dispatches an inter-branch transfer with the selected destination and quantity", async () => {
     renderPage();
     const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
