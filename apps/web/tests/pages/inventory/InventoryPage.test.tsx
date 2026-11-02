@@ -186,6 +186,9 @@ describe("InventoryPage", () => {
     expect(
       await screen.findByRole("button", { name: "Detergent" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("DET-001")).toBeInTheDocument();
+    expect(screen.getByText("Chemicals")).toBeInTheDocument();
+    expect(screen.getByText("Shelf A1")).toBeInTheDocument();
 
     expect(screen.getAllByText("Bottle")).toHaveLength(2);
     expect(screen.getByText("Current Stock")).toBeInTheDocument();
