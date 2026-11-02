@@ -1111,14 +1111,26 @@ export async function getInventoryReports(scope: BranchScope) {
     totals[movement.type] = (totals[movement.type] ?? 0) + movement.quantity;
     return totals;
   }, {});
-  const supplierPerformance = new Map<string, { supplierId: string; supplierName: string; orderCount: number; orderedValue: number; receivedOrderCount: number }>();
+  const supplierPerformance = new Map<string, {
+    supplierId: string; supplierName: string; orderCount: number; orderedValue: number;
+    receivedOrderCount: number; partiallyReceivedOrderCount: number; openOrderCount: number;
+    receiptLeadTimeDays: number[];
+  }>();
   for (const order of purchaseOrders) {
     const row = supplierPerformance.get(order.supplierId) ?? {
-      supplierId: order.supplierId, supplierName: order.supplier.name, orderCount: 0, orderedValue: 0, receivedOrderCount: 0,
+      supplierId: order.supplierId, supplierName: order.supplier.name, orderCount: 0, orderedValue: 0,
+      receivedOrderCount: 0, partiallyReceivedOrderCount: 0, openOrderCount: 0, receiptLeadTimeDays: [],
     };
     row.orderCount += 1;
     row.orderedValue += order.lines.reduce((sum, line) => sum + line.quantityOrdered * line.unitCost, 0);
     if (order.status === "RECEIVED") row.receivedOrderCount += 1;
+    else if (order.status === "PARTIALLY_RECEIVED") row.partiallyReceivedOrderCount += 1;
+    else if (order.status === "ORDERED") row.openOrderCount += 1;
+    if (order.receipts.length) {
+      const firstReceiptAt = Math.min(...order.receipts.map((receipt) => receipt.receivedAt.getTime()));
+      const orderedAt = (order.orderedAt ?? order.createdAt).getTime();
+      row.receiptLeadTimeDays.push(Math.max(0, (firstReceiptAt - orderedAt) / 86400000));
+    }
     supplierPerformance.set(order.supplierId, row);
   }
   return {
@@ -1126,6 +1138,11 @@ export async function getInventoryReports(scope: BranchScope) {
     movementTotals, movementCount: movements.length,
     consumptionQuantity: (movementTotals.ISSUE ?? 0) + (movementTotals.WASTE ?? 0) + (movementTotals.EXPIRED ?? 0),
     adjustmentQuantity: movementTotals.ADJUSTMENT ?? 0,
-    supplierPerformance: [...supplierPerformance.values()].sort((a, b) => b.orderedValue - a.orderedValue),
+    supplierPerformance: [...supplierPerformance.values()].map(({ receiptLeadTimeDays, ...row }) => ({
+      ...row,
+      averageFirstReceiptLeadTimeDays: receiptLeadTimeDays.length
+        ? Math.round((receiptLeadTimeDays.reduce((sum, days) => sum + days, 0) / receiptLeadTimeDays.length) * 10) / 10
+        : null,
+    })).sort((a, b) => b.orderedValue - a.orderedValue),
   };
 }
