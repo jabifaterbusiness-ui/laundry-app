@@ -567,8 +567,6 @@ model Color {
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, name])
-  @@unique([businessId, sku])
-  @@index([businessId, category])
   @@index([businessId, isActive])
   @@map("colors")
 }
