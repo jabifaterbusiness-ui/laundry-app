@@ -12,7 +12,7 @@ function localDayKey(date: Date, timezone: string) {
 export async function processSubscriptionExpiryReminders(now = new Date()) {
   const windowEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
   const subscriptions = await prisma.subscription.findMany({
-    where: { status: "ACTIVE", endsAt: { gt: now, lte: windowEnd }, business: { isActive: true } },
+    where: { status: "ACTIVE", cancelAtPeriodEnd: false, endsAt: { gt: now, lte: windowEnd }, business: { isActive: true } },
     select: { id: true, businessId: true, endsAt: true, business: { select: {
       name: true, timezone: true,
       users: { where: { securityRole: "BUSINESS_OWNER", isActive: true, deletedAt: null }, select: { id: true } },
