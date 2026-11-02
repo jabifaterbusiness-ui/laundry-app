@@ -46,6 +46,7 @@ import {
   releaseInventoryReservation,
   getInventoryReorderRecommendations,
   getInventoryReports,
+  getInventoryBranchComparison,
 } from "./inventory.service.js";
 
 function requireBusinessId(req: Request): string {
@@ -494,4 +495,10 @@ export async function reorderRecommendations(req: Request, res: Response) {
 export async function inventoryReports(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   res.status(200).json({ data: await getInventoryReports({ businessId, branchId }) });
+}
+
+
+export async function inventoryBranchComparison(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  res.status(200).json({ data: await getInventoryBranchComparison({ businessId }) });
 }
