@@ -7,7 +7,7 @@ const { globalSearchMock, navigateMock, hasPermissionMock, searchQuickOperations
   navigateMock: vi.fn(),
   hasPermissionMock: vi.fn(),
   searchQuickOperationsMock: vi.fn(),
-  locationState: { key: "location-1" },
+  locationState: { key: "location-1", pathname: "/dashboard", search: "", hash: "" },
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -84,10 +84,34 @@ describe("GlobalSearch", () => {
     expect(await screen.findByRole("option", { name: /Ada Laundry/ })).toBeInTheDocument();
 
     locationState.key = "location-2";
+    locationState.pathname = "/orders";
     rerender(<GlobalSearch />);
     await waitFor(() => expect(input).toHaveValue(""));
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     locationState.key = "location-1";
+    locationState.pathname = "/dashboard";
+  });
+
+  it("does not restore results from an in-flight search after navigation", async () => {
+    let resolveSearch!: (value: Array<{ type: "CUSTOMER"; id: string; title: string; subtitle: string; href: string }>) => void;
+    globalSearchMock.mockImplementation(() => new Promise((resolve) => { resolveSearch = resolve; }));
+    const { rerender } = render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "private customer" } });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalledOnce());
+
+    locationState.key = "location-3";
+    locationState.pathname = "/reports";
+    rerender(<GlobalSearch />);
+    await waitFor(() => expect(input).toHaveValue(""));
+    resolveSearch([{
+      type: "CUSTOMER", id: "customer-private", title: "Private Customer",
+      subtitle: "08000000000", href: "/customers/customer-private",
+    }]);
+    await waitFor(() => expect(screen.queryByText("Private Customer")).not.toBeInTheDocument());
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    locationState.key = "location-1";
+    locationState.pathname = "/dashboard";
   });
 
   it("closes the result panel when Escape is pressed", async () => {
