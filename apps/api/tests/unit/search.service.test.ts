@@ -198,6 +198,7 @@ describe("globalSearch", () => {
     orderFindMany.mockResolvedValue([
       {
         id: "order-1",
+        customerId: "customer-1",
         orderNumber: "00001",
         status: "RECEIVED",
         customer: {
