@@ -47,7 +47,7 @@ const EMPTY_ITEM_FORM = {
   lowStockThreshold: 0,
 };
 
-type MovementType = "RECEIPT" | "ISSUE";
+type MovementType = "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
 
 function formatUnit(unit: InventoryUnit) {
   return unit.charAt(0) + unit.slice(1).toLowerCase();
@@ -56,6 +56,9 @@ function formatUnit(unit: InventoryUnit) {
 function formatMovementType(type: MovementType | "ADJUSTMENT") {
   if (type === "RECEIPT") return "Receive";
   if (type === "ISSUE") return "Issue";
+  if (type === "RETURN") return "Return to stock";
+  if (type === "WASTE") return "Waste";
+  if (type === "EXPIRED") return "Expired";
   return "Adjustment";
 }
 
@@ -967,6 +970,9 @@ export function InventoryPage() {
                 <option value="ISSUE">
                   {formatMovementType("ISSUE")}
                 </option>
+                <option value="RETURN">{formatMovementType("RETURN")}</option>
+                <option value="WASTE">{formatMovementType("WASTE")}</option>
+                <option value="EXPIRED">{formatMovementType("EXPIRED")}</option>
               </select>
             </label>
           </div>
