@@ -64,9 +64,9 @@ describe("inventory report CSV export", () => {
       ...report,
       valuation: [{
         ...report.valuation[0],
-        inventoryItem: { ...report.valuation[0].inventoryItem, name: "\\t=HYPERLINK(\\"https://bad.example\\")" },
+        inventoryItem: { ...report.valuation[0].inventoryItem, name: `${String.fromCharCode(9)}=HYPERLINK("https://bad.example")` },
       }],
     };
-    expect(buildInventoryReportCsv(unsafeReport)).toContain("'\\t=HYPERLINK");
+    expect(buildInventoryReportCsv(unsafeReport)).toContain(`'${String.fromCharCode(9)}=HYPERLINK`);
   });
 });
