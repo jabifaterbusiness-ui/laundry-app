@@ -1103,7 +1103,16 @@ export async function getInventoryReports(scope: BranchScope) {
       take: 2000,
     }),
     prisma.inventoryPurchaseOrder.findMany({
-      where: { businessId: scope.businessId, branchId: scope.branchId, createdAt: { gte: since } },
+      where: {
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        status: { in: ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+        OR: [
+          { createdAt: { gte: since } },
+          { orderedAt: { gte: since } },
+          { receipts: { some: { receivedAt: { gte: since } } } },
+        ],
+      },
       include: { supplier: true, lines: true, receipts: true },
       orderBy: { createdAt: "desc" },
       take: 500,
