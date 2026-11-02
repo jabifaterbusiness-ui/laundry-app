@@ -76,7 +76,7 @@ describe("inventory procurement service", () => {
     expect(db.inventoryPurchaseOrderLine.update).toHaveBeenCalledWith({
       where: { id: "line-1" }, data: { quantityReceived: { increment: 4 } },
     });
-    expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 4 } });
+    expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 4, averageUnitCost: 250 } });
     expect(db.inventoryMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ businessId: "biz-A", branchId: "branch-A", inventoryItemId: "item-1", quantity: 4, type: "RECEIPT", resultingQuantity: 4, reference: "GRN-1" }),
     });
