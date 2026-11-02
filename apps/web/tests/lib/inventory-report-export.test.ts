@@ -15,6 +15,7 @@ const report: InventoryReport = {
       name: 'Detergent, "Premium"',
       sku: "=IMPORT(1)",
       category: "Cleaning",
+      storageLocation: "Store room",
       unit: "LITRE",
       lowStockThreshold: 2,
       reorderQuantity: 4,
@@ -47,7 +48,7 @@ describe("inventory report CSV export", () => {
     expect(csv).toContain("Total stock valuation (NGN),1250");
     expect(csv).toContain("ISSUE,3");
     expect(csv).toContain('"Detergent, ""Premium"""');
-    expect(csv).toContain("250,250");
+    expect(csv).toContain(",25,250");
     expect(csv).toContain("Reliable Supplies,3,1,1,1,3,1000");
     expect(csv.charCodeAt(0)).toBe(0xfeff);
   });
