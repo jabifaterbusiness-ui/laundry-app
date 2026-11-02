@@ -162,6 +162,22 @@ describe("globalSearch", () => {
       subtitle: "08059489393 · aaron@example.com",
       href: "/orders?orderId=latest-order",
     });
+    expect(orderFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              customer: expect.objectContaining({
+                email: expect.objectContaining({
+                  contains: "aaron@example.com",
+                  mode: "insensitive",
+                }),
+              }),
+            }),
+          ]),
+        }),
+      }),
+    );
   });
 
   it("only returns categories the user can view", async () => {

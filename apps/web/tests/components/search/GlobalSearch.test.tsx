@@ -2,14 +2,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalSearch } from "../../../src/components/search/GlobalSearch.js";
 
-const { globalSearchMock, navigateMock, hasPermissionMock, searchQuickOperationsMock } = vi.hoisted(() => ({
+const { globalSearchMock, navigateMock, hasPermissionMock, searchQuickOperationsMock, locationState } = vi.hoisted(() => ({
   globalSearchMock: vi.fn(),
   navigateMock: vi.fn(),
   hasPermissionMock: vi.fn(),
   searchQuickOperationsMock: vi.fn(),
+  locationState: { key: "location-1" },
 }));
 
-vi.mock("react-router-dom", () => ({ useNavigate: () => navigateMock }));
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => navigateMock,
+  useLocation: () => locationState,
+}));
 vi.mock("../../../src/lib/search-api.js", () => ({ globalSearch: globalSearchMock }));
 vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({
@@ -67,6 +71,23 @@ describe("GlobalSearch", () => {
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "quick-operation:open", detail: operation }));
     expect(navigateMock).not.toHaveBeenCalled();
     dispatchSpy.mockRestore();
+  });
+
+  it("clears the search query when the current route changes", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "CUSTOMER", id: "customer-1", title: "Ada Laundry",
+      subtitle: "08012345678", href: "/orders?customerId=customer-1",
+    }]);
+    const { rerender } = render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "Ada" } });
+    expect(await screen.findByRole("option", { name: /Ada Laundry/ })).toBeInTheDocument();
+
+    locationState.key = "location-2";
+    rerender(<GlobalSearch />);
+    await waitFor(() => expect(input).toHaveValue(""));
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    locationState.key = "location-1";
   });
 
   it("closes the result panel when Escape is pressed", async () => {

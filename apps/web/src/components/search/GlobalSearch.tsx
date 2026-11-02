@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   globalSearch,
   type GlobalSearchResult,
@@ -30,6 +30,7 @@ function groupResults(results: GlobalSearchResult[]) {
 
 export function GlobalSearch() {
   const navigate = useNavigate();
+  const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const user = useAuthStore((state) => state.user);
@@ -40,6 +41,18 @@ export function GlobalSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+
+  // Search belongs to the current page, user, and branch. Clear it whenever
+  // navigation or the authenticated tenant context changes so an old email,
+  // phone number, or customer query is never left in the global header.
+  useEffect(() => {
+    requestIdRef.current += 1;
+    setQuery("");
+    setResults([]);
+    setIsOpen(false);
+    setIsLoading(false);
+    setError(null);
+  }, [location.key, user?.id, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
