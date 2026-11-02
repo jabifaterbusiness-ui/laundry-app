@@ -163,6 +163,15 @@ describe("inventory operations", () => {
     expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "APPLIED", appliedById: "manager-2" }) }));
   });
 
+  it("rejects reservations that expire in the past", async () => {
+    await expect(createInventoryReservation(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { inventoryItemId: ITEM, quantity: 1, createdById: USER, expiresAt: new Date(Date.now() - 1) },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.inventoryReservation.create).not.toHaveBeenCalled();
+    expect(db.inventoryStock.upsert).not.toHaveBeenCalled();
+  });
+
   it("prevents reservations beyond available stock", async () => {
     db.inventoryItem.findFirst.mockResolvedValue({ id: ITEM, isActive: true });
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
