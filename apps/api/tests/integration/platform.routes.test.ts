@@ -1276,6 +1276,10 @@ describe("Platform Owner routes - subscription cancellation", () => {
         cancellationReason: "Business closure requested",
       }),
     }));
+    expect(prisma.businessInboxMessage.updateMany).toHaveBeenCalledWith({
+      where: { sourceSubscriptionId: "sub-A" },
+      data: { expiresAt: expect.any(Date) },
+    });
     expect(prisma.auditLog.create).toHaveBeenCalled();
   });
 
@@ -1299,6 +1303,10 @@ describe("Platform Owner routes - subscription cancellation", () => {
         cancellationReason: "Customer chose not to renew",
       }),
     }));
+    expect(prisma.businessInboxMessage.updateMany).toHaveBeenCalledWith({
+      where: { sourceSubscriptionId: "sub-A" },
+      data: { expiresAt: expect.any(Date) },
+    });
     expect(prisma.auditLog.create).toHaveBeenCalled();
   });
 
