@@ -304,7 +304,15 @@ export async function listMovements(req: Request, res: Response) {
 export async function createSupplier(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const input = createInventorySupplierSchema.parse(req.body);
-  const supplier = await createInventorySupplier({ businessId }, input);
+  const supplier = await createInventorySupplier({ businessId }, {
+    name: input.name,
+    ...(input.contactName !== undefined ? { contactName: input.contactName } : {}),
+    ...(input.email !== undefined ? { email: input.email } : {}),
+    ...(input.phone !== undefined ? { phone: input.phone } : {}),
+    ...(input.address !== undefined ? { address: input.address } : {}),
+    ...(input.taxId !== undefined ? { taxId: input.taxId } : {}),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
+  });
   await recordAuditEvent({ action: "inventory.supplier_created", entityType: "InventorySupplier", entityId: supplier.id,
     businessId, branchId: req.branchId ?? null, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
     metadata: { name: supplier.name } });
@@ -314,7 +322,11 @@ export async function createSupplier(req: Request, res: Response) {
 export async function listSuppliers(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const query = listInventorySuppliersQuerySchema.parse(req.query);
-  res.status(200).json(await listInventorySuppliers({ businessId }, query));
+  res.status(200).json(await listInventorySuppliers({ businessId }, {
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.search !== undefined ? { search: query.search } : {}),
+  }));
 }
 
 export async function createPurchaseOrder(req: Request, res: Response) {
@@ -322,7 +334,12 @@ export async function createPurchaseOrder(req: Request, res: Response) {
   const branchId = requireBranchId(req);
   const input = createInventoryPurchaseOrderSchema.parse(req.body);
   const order = await createInventoryPurchaseOrder({ businessId, branchId }, {
-    ...input, createdById: req.user!.id,
+    supplierId: input.supplierId,
+    orderNumber: input.orderNumber,
+    createdById: req.user!.id,
+    lines: input.lines,
+    ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt } : {}),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
   });
   await recordAuditEvent({ action: "inventory.purchase_order_created", entityType: "InventoryPurchaseOrder", entityId: order.id,
     businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
@@ -334,7 +351,11 @@ export async function listPurchaseOrders(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const query = listInventoryPurchaseOrdersQuerySchema.parse(req.query);
-  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId }, query));
+  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId }, {
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.status !== undefined ? { status: query.status } : {}),
+  }));
 }
 
 export async function receivePurchaseOrder(req: Request, res: Response) {
@@ -343,7 +364,15 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
   const { id } = inventoryItemIdParamSchema.parse({ id: req.params.id });
   const input = receiveInventoryPurchaseOrderSchema.parse(req.body);
   const result = await receiveInventoryPurchaseOrder({ businessId, branchId }, {
-    purchaseOrderId: id, ...input, receivedById: req.user!.id,
+    purchaseOrderId: id,
+    receiptNumber: input.receiptNumber,
+    receivedById: req.user!.id,
+    lines: input.lines.map((line) => ({
+      purchaseOrderLineId: line.purchaseOrderLineId,
+      quantity: line.quantity,
+      ...(line.unitCost !== undefined ? { unitCost: line.unitCost } : {}),
+    })),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
   });
   await recordAuditEvent({ action: "inventory.goods_received", entityType: "InventoryGoodsReceipt", entityId: result.receipt.id,
     businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
