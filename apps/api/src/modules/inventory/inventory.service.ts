@@ -671,6 +671,18 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
   purchaseOrderId: string; receiptNumber: string; receivedById: string; notes?: string;
   lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
 }) {
+  // Keep service invariants even when called outside the HTTP/Zod boundary.
+  if (!input.lines.length || new Set(input.lines.map((line) => line.purchaseOrderLineId)).size !== input.lines.length) {
+    throw new AppError("Receipt must contain unique purchase order lines", 422);
+  }
+  for (const line of input.lines) {
+    if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) {
+      throw new AppError("Received quantities must be positive whole numbers", 422);
+    }
+    if (line.unitCost !== undefined && (!Number.isSafeInteger(line.unitCost) || line.unitCost < 0 || line.unitCost > 2147483647)) {
+      throw new AppError("Receipt unit cost must be a non-negative whole number", 422);
+    }
+  }
   return prisma.$transaction(async (tx) => {
     // Serialize receipts for the same purchase order. This prevents concurrent
     // deliveries on different lines from calculating a stale final order status.
