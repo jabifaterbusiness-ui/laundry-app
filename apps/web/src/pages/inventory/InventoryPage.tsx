@@ -233,6 +233,7 @@ export function InventoryPage() {
     mutationFn: () => createInventoryReservation({
       inventoryItemId: reservationItemId, quantity: Number(reservationQuantity),
       reference: reservationReference.trim() || undefined,
+      expiresAt: reservationExpiresAt ? new Date(reservationExpiresAt).toISOString() : undefined,
     }, { accessToken }, activeBranchId),
     onSuccess: (result) => {
       setReservationIdToRelease(result.data.id);
@@ -378,6 +379,7 @@ export function InventoryPage() {
   const [reservationItemId, setReservationItemId] = useState("");
   const [reservationQuantity, setReservationQuantity] = useState("1");
   const [reservationReference, setReservationReference] = useState("");
+  const [reservationExpiresAt, setReservationExpiresAt] = useState("");
   const [reservationIdToRelease, setReservationIdToRelease] = useState("");
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [supplierName, setSupplierName] = useState("");
@@ -1400,10 +1402,12 @@ export function InventoryPage() {
       <section className="inventory-panel" aria-label="Stock reservations and reorder recommendations">
         <h2>Available Stock, Reservations &amp; Reorder</h2>
         <p>Reserved quantities are protected from issues and transfers. Reorder suggestions use each item's minimum threshold and configured replenishment quantity.</p>
-        <form onSubmit={(event) => { event.preventDefault(); setReservationError(null); if (!reservationItemId || !Number.isInteger(Number(reservationQuantity)) || Number(reservationQuantity) <= 0) { setReservationError("Select an item and enter a positive reservation quantity."); return; } reservationCreateMutation.mutate(); }}>
+        <form onSubmit={(event) => { event.preventDefault(); setReservationError(null); if (!reservationItemId || !Number.isInteger(Number(reservationQuantity)) || Number(reservationQuantity) <= 0) { setReservationError("Select an item and enter a positive reservation quantity."); return; } if (reservationExpiresAt && new Date(reservationExpiresAt).getTime() <= Date.now()) { setReservationError("Reservation expiry must be in the future."); return; } reservationCreateMutation.mutate(); }}>
           <label>Item<select value={reservationItemId} onChange={(event) => setReservationItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label>Quantity<input type="number" min="1" step="1" value={reservationQuantity} onChange={(event) => setReservationQuantity(event.target.value)} required /></label>
           <label>Reference<input value={reservationReference} onChange={(event) => setReservationReference(event.target.value)} maxLength={200} /></label>
+          <label>Auto-release at (optional)<input type="datetime-local" value={reservationExpiresAt} onChange={(event) => setReservationExpiresAt(event.target.value)} /></label>
+          <p className="inventory-form-hint">Leave blank for a manual reservation. Expired reservations are released automatically by the background scheduler.</p>
           <button type="submit" disabled={reservationCreateMutation.isPending || !activeBranchId}>{reservationCreateMutation.isPending ? "Reserving..." : "Reserve stock"}</button>
         </form>
         {reservationIdToRelease && <p>Reservation created: {reservationIdToRelease} <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => reservationReleaseMutation.mutate()}>Release reservation</button></p>}
