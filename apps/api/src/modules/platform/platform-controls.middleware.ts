@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { getPlatformConfig } from "./platform-config.service.js";
+import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 export async function requirePlatformOperational(
@@ -7,16 +8,40 @@ export async function requirePlatformOperational(
   _res: Response,
   next: NextFunction,
 ) {
-  const platformConfig = await getPlatformConfig();
-
-  if (!platformConfig.maintenanceMode) {
+  // Platform administrators must retain access to repair tenant state.
+  if (req.user?.securityRole === "PLATFORM_ADMIN") {
     next();
     return;
   }
 
-  // Platform administrators must retain access so maintenance can be
-  // disabled from the Platform Owner control center.
-  if (req.user?.securityRole === "PLATFORM_ADMIN") {
+  // Access tokens can remain valid after an administrator deactivates or
+  // suspends a business. Re-check the tenant record on every protected
+  // operational request rather than trusting the token's businessId.
+  if (req.user?.businessId) {
+    const business = await prisma.business.findFirst({
+      where: {
+        id: req.user.businessId,
+        isActive: true,
+        archivedAt: null,
+        OR: [
+          { suspendedUntil: null },
+          { suspendedUntil: { lte: new Date() } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!business) {
+      throw new AppError(
+        "This business account is inactive, archived, or temporarily suspended. Contact the platform administrator.",
+        403,
+      );
+    }
+  }
+
+  const platformConfig = await getPlatformConfig();
+
+  if (!platformConfig.maintenanceMode) {
     next();
     return;
   }
