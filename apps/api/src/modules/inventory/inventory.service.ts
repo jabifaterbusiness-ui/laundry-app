@@ -1048,31 +1048,39 @@ export async function getInventoryReorderRecommendations(scope: BranchScope) {
 }
 
 export async function getInventoryBranchComparison(scope: BusinessScope) {
-  const branches = await prisma.branch.findMany({
-    where: { businessId: scope.businessId, isActive: true },
-    select: {
-      id: true,
-      name: true,
-      inventoryStocks: {
-        where: { businessId: scope.businessId },
-        include: { inventoryItem: true },
+  const [branches, catalogueItems] = await prisma.$transaction([
+    prisma.branch.findMany({
+      where: { businessId: scope.businessId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        inventoryStocks: {
+          where: { businessId: scope.businessId },
+          include: { inventoryItem: true },
+        },
       },
-    },
-    orderBy: { name: "asc" },
-  });
+      orderBy: { name: "asc" },
+    }),
+    prisma.inventoryItem.findMany({
+      where: { businessId: scope.businessId, isActive: true },
+      select: { id: true, lowStockThreshold: true },
+    }),
+  ]);
 
   return branches.map((branch) => {
     const stocks = branch.inventoryStocks;
+    const stockByItemId = new Map(stocks.map((stock) => [stock.inventoryItemId, stock]));
     // Quantities from different inventory units (kg, bottles, pieces, etc.)
-    // must not be added together; valuation and item counts are comparable.
+    // must not be added together; valuation and catalogue/low-stock counts are comparable.
     const totalValuation = stocks.reduce((sum, stock) => sum + stock.quantity * stock.averageUnitCost, 0);
-    const lowStockItems = stocks.filter((stock) =>
-      stock.quantity - stock.reservedQuantity <= stock.inventoryItem.lowStockThreshold
-    ).length;
+    const lowStockItems = catalogueItems.filter((item) => {
+      const stock = stockByItemId.get(item.id);
+      return (stock ? stock.quantity - stock.reservedQuantity : 0) <= item.lowStockThreshold;
+    }).length;
     return {
       branchId: branch.id,
       branchName: branch.name,
-      itemCount: stocks.length,
+      itemCount: catalogueItems.length,
       totalValuation,
       lowStockItems,
     };
