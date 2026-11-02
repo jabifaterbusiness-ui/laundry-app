@@ -362,3 +362,17 @@ export interface InventoryReport {
 export async function getInventoryReports(auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: InventoryReport }>("/inventory/reports", { accessToken: auth.accessToken, branchId });
 }
+
+export interface InventoryBranchComparisonRow {
+  branchId: string;
+  branchName: string;
+  itemCount: number;
+  totalUnits: number;
+  reservedUnits: number;
+  availableUnits: number;
+  totalValuation: number;
+  lowStockItems: number;
+}
+export async function getInventoryBranchComparison(auth: AuthOptions) {
+  return apiFetch<{ data: InventoryBranchComparisonRow[] }>("/inventory/reports/branch-comparison", { accessToken: auth.accessToken });
+}
