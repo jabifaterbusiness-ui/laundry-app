@@ -24,6 +24,7 @@ import {
   type InventoryPurchaseOrder,
   type InventoryStocktake,
 } from "../../lib/inventory-api.js";
+import { downloadInventoryReportCsv } from "../../lib/inventory-report-export.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 const UNITS: InventoryUnit[] = [
@@ -1426,7 +1427,20 @@ export function InventoryPage() {
       </section>
 
       <section className="inventory-panel" aria-label="Inventory valuation and performance reports">
-        <h2>Inventory Valuation &amp; Performance</h2>
+        <div className="inventory-report-heading">
+          <div><h2>Inventory Valuation &amp; Performance</h2><p>Valuation, stock movement and supplier performance for this branch.</p></div>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!inventoryReportQuery.data?.data}
+            onClick={() => {
+              const report = inventoryReportQuery.data?.data;
+              if (report) downloadInventoryReportCsv(report, `laundryangel-inventory-report-${activeBranchId ?? "branch"}.csv`);
+            }}
+          >
+            Export CSV
+          </button>
+        </div>
         {inventoryReportQuery.isLoading ? <p>Loading inventory reports...</p> : inventoryReportQuery.isError ? <p role="alert">Unable to load inventory reports.</p> : inventoryReportQuery.data?.data && <>
           <div className="inventory-report-summary">
             <article><span>Total stock valuation</span><strong>{(inventoryReportQuery.data.data.totalValuation / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</strong></article>
