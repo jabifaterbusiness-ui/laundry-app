@@ -3,7 +3,7 @@ import type { InventoryReport } from "./inventory-api.js";
 function csvCell(value: string | number | null): string {
   if (value === null) return "";
   const raw = String(value);
-  const safe = typeof value === "string" && /^[=+@-]/.test(raw) ? `'${raw}` : raw;
+  const safe = typeof value === "string" && /^\\s*[=+@-]/.test(raw) ? `'${raw}` : raw;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 

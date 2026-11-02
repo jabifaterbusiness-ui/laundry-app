@@ -58,4 +58,15 @@ describe("inventory report CSV export", () => {
     expect(csv).toContain("'=IMPORT(1)");
     expect(csv).not.toContain("SKU\n=IMPORT(1)");
   });
+
+  it("neutralizes formulas preceded by tabs or whitespace", () => {
+    const unsafeReport: InventoryReport = {
+      ...report,
+      valuation: [{
+        ...report.valuation[0],
+        inventoryItem: { ...report.valuation[0].inventoryItem, name: "\\t=HYPERLINK(\\"https://bad.example\\")" },
+      }],
+    };
+    expect(buildInventoryReportCsv(unsafeReport)).toContain("'\\t=HYPERLINK");
+  });
 });
