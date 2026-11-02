@@ -28,12 +28,17 @@ export function getSubscriptionStatus(
   endsAt: Date,
   status: SubscriptionStatus,
   now = new Date(),
+  cancelAtPeriodEnd = false,
 ): SubscriptionStatus {
   if (status === "CANCELLED") {
     return "CANCELLED";
   }
 
-  if (status === "EXPIRED" || endsAt <= now) {
+  if (endsAt <= now) {
+    return cancelAtPeriodEnd || status === "CANCELLED" ? "CANCELLED" : "EXPIRED";
+  }
+
+  if (status === "EXPIRED") {
     return "EXPIRED";
   }
 
@@ -52,6 +57,8 @@ export async function getBusinessSubscription(businessId: string) {
   const effectiveStatus = getSubscriptionStatus(
     subscription.endsAt,
     subscription.status,
+    new Date(),
+    subscription.cancelAtPeriodEnd,
   );
 
   if (effectiveStatus !== subscription.status) {
