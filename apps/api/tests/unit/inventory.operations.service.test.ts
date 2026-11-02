@@ -5,10 +5,11 @@ const { db } = vi.hoisted(() => ({
     $transaction: vi.fn(), $queryRaw: vi.fn(),
     branch: { findFirst: vi.fn(), findMany: vi.fn() },
     inventoryItem: { findMany: vi.fn(), findFirst: vi.fn() },
-    inventoryStock: { upsert: vi.fn(), findUniqueOrThrow: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    inventoryStock: { upsert: vi.fn(), findUniqueOrThrow: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     inventoryTransfer: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     inventoryTransferLine: { findMany: vi.fn(), update: vi.fn() },
-    inventoryMovement: { create: vi.fn() },
+    inventoryMovement: { create: vi.fn(), findMany: vi.fn() },
+    inventoryPurchaseOrder: { findMany: vi.fn() },
     inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     inventoryStocktakeLine: { update: vi.fn() },
     inventoryReservation: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
@@ -19,7 +20,7 @@ vi.mock("../../src/lib/prisma.js", () => ({ prisma: db }));
 
 import {
   createInventoryMovement, createInventoryTransfer, receiveInventoryTransfer, receiveInventoryPurchaseOrder, createInventoryStocktake, listInventoryStocktakes, getInventoryBranchComparison,
-  submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation,
+  submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation, releaseInventoryReservation, getInventoryReports,
 } from "../../src/modules/inventory/inventory.service.js";
 
 const BUSINESS = "biz-1";
@@ -37,6 +38,53 @@ beforeEach(() => {
 });
 
 describe("inventory operations", () => {
+  it("reports supplier receipt lead time and order fulfilment states", async () => {
+    const orderedAt = new Date("2026-10-01T09:00:00.000Z");
+    const receivedAt = new Date("2026-10-04T09:00:00.000Z");
+    db.inventoryStock.findMany.mockResolvedValue([]);
+    db.inventoryMovement.findMany.mockResolvedValue([]);
+    db.inventoryPurchaseOrder.findMany.mockResolvedValue([
+      {
+        supplierId: "supplier-1",
+        supplier: { name: "Reliable Supplies" },
+        status: "RECEIVED",
+        orderedAt,
+        createdAt: orderedAt,
+        lines: [{ quantityOrdered: 10, unitCost: 250 }],
+        receipts: [{ receivedAt }],
+      },
+      {
+        supplierId: "supplier-1",
+        supplier: { name: "Reliable Supplies" },
+        status: "PARTIALLY_RECEIVED",
+        orderedAt,
+        createdAt: orderedAt,
+        lines: [{ quantityOrdered: 4, unitCost: 300 }],
+        receipts: [],
+      },
+      {
+        supplierId: "supplier-1",
+        supplier: { name: "Reliable Supplies" },
+        status: "ORDERED",
+        orderedAt,
+        createdAt: orderedAt,
+        lines: [{ quantityOrdered: 2, unitCost: 400 }],
+        receipts: [],
+      },
+    ]);
+    const report = await getInventoryReports({ businessId: BUSINESS, branchId: SOURCE });
+    expect(report.supplierPerformance).toEqual([{
+      supplierId: "supplier-1",
+      supplierName: "Reliable Supplies",
+      orderCount: 3,
+      orderedValue: 5000,
+      receivedOrderCount: 1,
+      partiallyReceivedOrderCount: 1,
+      openOrderCount: 1,
+      averageFirstReceiptLeadTimeDays: 3,
+    }]);
+  });
+
   it("compares stock only across active branches in the requested business", async () => {
     db.branch.findMany.mockResolvedValue([
       { id: SOURCE, name: "Central", inventoryStocks: [
