@@ -52,7 +52,7 @@ export const listInventoryStockQuerySchema = z.object({
 
 export const listInventoryMovementsQuerySchema = z.object({
   inventoryItemId: z.string().uuid().optional(),
-  type: z.enum(["RECEIPT", "ISSUE", "ADJUSTMENT"]).optional(),
+  type: z.enum(["RECEIPT", "ISSUE", "ADJUSTMENT", "RETURN", "WASTE", "EXPIRED", "TRANSFER_IN", "TRANSFER_OUT", "STOCKTAKE"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25),
 });
