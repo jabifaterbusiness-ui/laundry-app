@@ -238,11 +238,12 @@ describe("InventoryPage", () => {
   it("dispatches an inter-branch transfer with the selected destination and quantity", async () => {
     renderPage();
     const panel = await screen.findByRole("region", { name: "Advanced inventory operations" });
-    fireEvent.change(within(panel).getByLabelText("Destination branch"), { target: { value: "branch-2" } });
-    fireEvent.change(within(panel).getByLabelText("Transfer reference"), { target: { value: "TR-100" } });
-    fireEvent.change(within(panel).getByLabelText("Item"), { target: { value: item.id } });
-    fireEvent.change(within(panel).getByLabelText("Quantity"), { target: { value: "4" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Dispatch transfer" }));
+    const transferForm = within(panel).getByRole("heading", { name: "Dispatch inter-branch transfer" }).closest("form")!;
+    fireEvent.change(within(transferForm).getByLabelText("Destination branch"), { target: { value: "branch-2" } });
+    fireEvent.change(within(transferForm).getByLabelText("Transfer reference"), { target: { value: "TR-100" } });
+    fireEvent.change(within(transferForm).getByLabelText("Item"), { target: { value: item.id } });
+    fireEvent.change(within(transferForm).getByLabelText("Quantity"), { target: { value: "4" } });
+    fireEvent.click(within(transferForm).getByRole("button", { name: "Dispatch transfer" }));
     await waitFor(() => {
       expect(mockCreateInventoryTransfer).toHaveBeenCalledWith({
         destinationBranchId: "branch-2",
