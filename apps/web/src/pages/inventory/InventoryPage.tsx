@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./InventoryPage.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
@@ -186,6 +186,7 @@ export function InventoryPage() {
     },
   });
   const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);
+  useEffect(() => { setCurrentStocktake(null); }, [activeBranchId]);
   const stocktakesQuery = useQuery({ queryKey: ["inventory", "stocktakes", activeBranchId], queryFn: () => listInventoryStocktakes({ accessToken }, activeBranchId), enabled: Boolean(accessToken && activeBranchId) });
   const stocktakeCreateMutation = useMutation({
     mutationFn: () => createInventoryStocktake({
@@ -194,6 +195,7 @@ export function InventoryPage() {
     }, { accessToken }, activeBranchId),
     onSuccess: (result) => {
       setCurrentStocktake(result.data);
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stocktakes", activeBranchId] });
       setStocktakeReference(""); setStocktakeItemId(""); setStocktakeCount(""); setStocktakeError(null);
     },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to complete stocktake."),
@@ -205,7 +207,7 @@ export function InventoryPage() {
   });
   const stocktakeApproveMutation = useMutation({
     mutationFn: () => approveInventoryStocktake(currentStocktake!.id, { accessToken }, activeBranchId),
-    onSuccess: (result) => { setCurrentStocktake(result.data); setStocktakeError(null); },
+    onSuccess: (result) => { setCurrentStocktake(result.data); queryClient.invalidateQueries({ queryKey: ["inventory", "stocktakes", activeBranchId] }); setStocktakeError(null); },
     onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to approve stocktake."),
   });
   const stocktakeApplyMutation = useMutation({
