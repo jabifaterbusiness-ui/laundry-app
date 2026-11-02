@@ -710,10 +710,12 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
       await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
       const lockedStock = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
       const resultingQuantity = lockedStock.quantity + lineInput.quantity;
-      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity } });
+      const unitCost = lineInput.unitCost ?? orderLine.unitCost;
+      const averageUnitCost = Math.round(((lockedStock.quantity * lockedStock.averageUnitCost) + (lineInput.quantity * unitCost)) / Math.max(1, resultingQuantity));
+      await tx.inventoryStock.update({ where: { id: stock.id }, data: { quantity: resultingQuantity, averageUnitCost } });
       await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: orderLine.inventoryItemId,
-        quantity: lineInput.quantity, type: "RECEIPT", resultingQuantity,
+        quantity: lineInput.quantity, type: "RECEIPT", unitCost, resultingQuantity,
         reason: "Goods received against purchase order", reference: receipt.receiptNumber, createdById: input.receivedById,
       } });
     }
