@@ -20,7 +20,7 @@ import {
   receiveInventoryPurchaseOrder,
   createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
   createInventoryStocktake, listInventoryStocktakes, submitInventoryStocktake, approveInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
-  releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports, getInventoryBranchComparison,
+  releaseInventoryReservation, listInventoryReservations, listInventoryReorderRecommendations, getInventoryReports, getInventoryBranchComparison,
   type InventoryPurchaseOrder,
   type InventoryStocktake,
 } from "../../lib/inventory-api.js";
@@ -194,6 +194,7 @@ export function InventoryPage() {
   const [currentStocktake, setCurrentStocktake] = useState<InventoryStocktake | null>(null);
   useEffect(() => { setCurrentStocktake(null); }, [activeBranchId]);
   const stocktakesQuery = useQuery({ queryKey: ["inventory", "stocktakes", activeBranchId], queryFn: () => listInventoryStocktakes({ accessToken }, activeBranchId), enabled: Boolean(accessToken && activeBranchId) });
+  const reservationsQuery = useQuery({ queryKey: ["inventory", "reservations", activeBranchId], queryFn: () => listInventoryReservations({ accessToken }, activeBranchId), enabled: Boolean(accessToken && activeBranchId) });
   const stocktakeCreateMutation = useMutation({
     mutationFn: () => createInventoryStocktake({
       reference: stocktakeReference.trim(),
@@ -240,6 +241,7 @@ export function InventoryPage() {
       setReservationExpiresAt("");
       setReservationReference("");
       invalidateStockViews();
+      queryClient.invalidateQueries({ queryKey: ["inventory", "reservations", activeBranchId] });
       setReservationError(null);
     },
     onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to reserve stock."),
@@ -248,6 +250,7 @@ export function InventoryPage() {
     mutationFn: () => releaseInventoryReservation(reservationIdToRelease, false, { accessToken }, activeBranchId),
     onSuccess: () => {
       invalidateStockViews();
+      queryClient.invalidateQueries({ queryKey: ["inventory", "reservations", activeBranchId] });
       setReservationIdToRelease("");
     },
     onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to release reservation."),
@@ -1414,6 +1417,8 @@ export function InventoryPage() {
         </form>
         {reservationIdToRelease && <p>Reservation created: {reservationIdToRelease} <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => reservationReleaseMutation.mutate()}>Release reservation</button></p>}
         {reservationError && <p role="alert">{reservationError}</p>}
+        <h3>Reservation register</h3>
+        {reservationsQuery.data?.data?.length ? <div className="inventory-table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th>Reference</th><th>Status</th><th>Expires</th><th>Action</th></tr></thead><tbody>{reservationsQuery.data.data.map((reservation) => <tr key={reservation.id}><td>{reservation.inventoryItem.name}</td><td>{reservation.quantity} {reservation.inventoryItem.unit}</td><td>{reservation.reference || "—"}</td><td>{reservation.status}</td><td>{reservation.expiresAt ? new Date(reservation.expiresAt).toLocaleString() : "Manual"}</td><td>{reservation.status === "ACTIVE" ? <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => { setReservationIdToRelease(reservation.id); reservationReleaseMutation.mutate(); }}>Release</button> : "—"}</td></tr>)}</tbody></table></div> : <p>No reservations recorded for this branch yet.</p>}
         <h3>Reorder recommendations</h3>
         {reorderQuery.data?.data?.length ? <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Suggested order</th><th>Stock value</th></tr></thead><tbody>
           {reorderQuery.data.data.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{row.availableQuantity}</td><td>{row.suggestedOrderQuantity}</td><td>{(row.stockValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
