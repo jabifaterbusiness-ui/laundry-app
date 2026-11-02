@@ -675,6 +675,10 @@ describe("Inventory routes - branch-scoped stock", () => {
   });
 
   it("requires an audit reason for return, waste and expired-stock movements", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    vi.mocked(prisma.branch.findFirst).mockResolvedValue({
+      id: BRANCH_A, businessId: "biz-A", name: "Main Branch",
+    } as never);
     for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
       const res = await request(app)
         .post("/api/v1/inventory/movements")
