@@ -73,6 +73,18 @@ describe("inventory operations", () => {
       },
     ]);
     const report = await getInventoryReports({ businessId: BUSINESS, branchId: SOURCE });
+    expect(db.inventoryPurchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: BUSINESS,
+        branchId: SOURCE,
+        status: { in: ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+        OR: expect.arrayContaining([
+          { createdAt: expect.objectContaining({ gte: expect.any(Date) }) },
+          { orderedAt: expect.objectContaining({ gte: expect.any(Date) }) },
+          { receipts: { some: { receivedAt: expect.objectContaining({ gte: expect.any(Date) }) } } },
+        ]),
+      }),
+    }));
     expect(report.supplierPerformance).toEqual([{
       supplierId: "supplier-1",
       supplierName: "Reliable Supplies",
