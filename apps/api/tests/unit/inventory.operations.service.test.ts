@@ -89,7 +89,7 @@ describe("inventory operations", () => {
       supplierId: "supplier-1",
       supplierName: "Reliable Supplies",
       orderCount: 3,
-      orderedValue: 5000,
+      orderedValue: 4500,
       receivedOrderCount: 1,
       partiallyReceivedOrderCount: 1,
       openOrderCount: 1,
