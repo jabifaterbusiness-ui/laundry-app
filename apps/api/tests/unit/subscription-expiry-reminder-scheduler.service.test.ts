@@ -28,12 +28,23 @@ describe("subscription expiry reminder scheduler", () => {
     const result = await processSubscriptionExpiryReminders(now);
 
     expect(result).toEqual({ subscriptionsScanned: 1, remindersCreated: 1 });
+    expect(prismaMock.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: "ACTIVE", cancelAtPeriodEnd: false }),
+    }));
     expect(prismaMock.businessInboxMessage.createMany).toHaveBeenCalledWith(expect.objectContaining({
       skipDuplicates: true,
       data: [expect.objectContaining({
         businessId: "biz-1", userId: "owner-1", sourceSubscriptionId: "sub-1",
         displayDurationMinutes: 10, createdByPlatformAdminId: "SYSTEM",
       })],
+    }));
+  });
+
+  it("does not create renewal reminders for subscriptions scheduled to cancel", async () => {
+    const now = new Date("2026-11-01T10:00:00.000Z");
+    await processSubscriptionExpiryReminders(now);
+    expect(prismaMock.subscription.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ cancelAtPeriodEnd: false }),
     }));
   });
 
