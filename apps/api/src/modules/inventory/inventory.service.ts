@@ -1017,6 +1017,9 @@ export async function releaseInventoryReservation(scope: BranchScope, input: { r
       where: { id: input.reservationId, businessId: scope.businessId, branchId: scope.branchId, status: "ACTIVE" },
     });
     if (!reservation) throw new AppError("Active reservation not found for this branch", 404);
+    if (input.consumed && reservation.expiresAt && reservation.expiresAt.getTime() <= Date.now()) {
+      throw new AppError("An expired reservation cannot be consumed", 422);
+    }
     const stock = await tx.inventoryStock.findUnique({ where: { inventoryItemId_branchId: { inventoryItemId: reservation.inventoryItemId, branchId: scope.branchId } } });
     if (!stock) throw new AppError("Reserved stock balance not found", 409);
     await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);

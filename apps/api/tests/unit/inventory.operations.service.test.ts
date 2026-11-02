@@ -347,6 +347,20 @@ describe("inventory operations", () => {
     expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
   });
 
+  it("does not consume an expired reservation while the expiry scheduler is pending", async () => {
+    db.inventoryReservation.findFirst.mockResolvedValue({
+      id: "reservation-expired", inventoryItemId: ITEM, quantity: 2,
+      createdById: USER, expiresAt: new Date(Date.now() - 1000),
+    });
+    await expect(releaseInventoryReservation(
+      { businessId: BUSINESS, branchId: SOURCE },
+      { reservationId: "reservation-expired", consumed: true, actedById: "consumer-2" },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
+    expect(db.inventoryStock.update).not.toHaveBeenCalled();
+    expect(db.inventoryReservation.update).not.toHaveBeenCalled();
+  });
+
   it("consumes an active reservation atomically and writes an issue movement", async () => {
     db.inventoryReservation.findFirst.mockResolvedValue({ id: "reservation-1", inventoryItemId: ITEM, quantity: 2, reference: "ORDER-1", createdById: USER });
     db.inventoryStock.findUnique.mockResolvedValue({ id: "stock-1" });
