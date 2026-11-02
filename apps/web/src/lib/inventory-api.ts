@@ -19,8 +19,12 @@ export interface InventoryItem {
   id: string;
   businessId: string;
   name: string;
+  sku: string | null;
+  category: string | null;
+  storageLocation: string | null;
   description: string | null;
   unit: InventoryUnit;
+  reorderQuantity: number;
   lowStockThreshold: number;
   isActive: boolean;
   createdAt: string;
@@ -83,15 +87,23 @@ export interface ListInventoryMovementsParams {
 
 export interface CreateInventoryItemInput {
   name: string;
+  sku?: string;
+  category?: string;
+  storageLocation?: string;
   description?: string;
   unit: InventoryUnit;
+  reorderQuantity?: number;
   lowStockThreshold?: number;
 }
 
 export interface UpdateInventoryItemInput {
   name?: string;
+  sku?: string;
+  category?: string;
+  storageLocation?: string;
   description?: string;
   unit?: InventoryUnit;
+  reorderQuantity?: number;
   lowStockThreshold?: number;
   isActive?: boolean;
 }
