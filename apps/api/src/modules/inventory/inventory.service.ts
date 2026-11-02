@@ -360,8 +360,18 @@ export async function createInventoryMovement(
       update: {},
     });
 
+    // Lock and re-read the balance inside this transaction. Without the
+    // row lock, concurrent issues/receipts can both calculate from the same
+    // stale quantity and overwrite one another.
+    await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`,
+    );
+    const lockedStock = await tx.inventoryStock.findUniqueOrThrow({
+      where: { id: stock.id },
+    });
+
     const change = input.type === "RECEIPT" ? input.quantity : -input.quantity;
-    const resultingQuantity = stock.quantity + change;
+    const resultingQuantity = lockedStock.quantity + change;
 
     if (resultingQuantity < 0) {
       throw new AppError("Insufficient inventory stock", 422);
@@ -443,7 +453,15 @@ export async function adjustInventoryStock(
       update: {},
     });
 
-    const resultingQuantity = stock.quantity + input.quantity;
+    // Serialize stock adjustments and calculate from the latest committed
+    // balance rather than the value returned before a concurrent update.
+    await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`,
+    );
+    const lockedStock = await tx.inventoryStock.findUniqueOrThrow({
+      where: { id: stock.id },
+    });
+    const resultingQuantity = lockedStock.quantity + input.quantity;
 
     if (resultingQuantity < 0) {
       throw new AppError("Inventory adjustment cannot make stock negative", 422);
