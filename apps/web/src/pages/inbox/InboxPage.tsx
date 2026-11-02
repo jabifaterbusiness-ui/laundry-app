@@ -18,7 +18,7 @@ export function InboxPage() {
   });
   const dismissMutation = useMutation({
     mutationFn: (id: string) => dismissBusinessInboxMessage(id, accessToken),
-    onSuccess: async () => { setPopupId(null); await refresh(); },
+    onSuccess: async () => { await refresh(); },
   });
   const messages = inboxQuery.data?.messages ?? [];
   return (
