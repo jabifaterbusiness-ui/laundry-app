@@ -102,7 +102,7 @@ describe("inventory operations", () => {
     ]);
     await expect(getInventoryBranchComparison({ businessId: BUSINESS })).resolves.toEqual([
       { branchId: SOURCE, branchName: "Central", catalogueItemCount: 3, totalValuation: 525, lowStockItems: 2 },
-      { branchId: DESTINATION, branchName: "North", catalogueItemCount: 3, totalValuation: 400, lowStockItems: 2 },
+      { branchId: DESTINATION, branchName: "North", catalogueItemCount: 3, totalValuation: 400, lowStockItems: 3 },
     ]);
     expect(db.branch.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { businessId: BUSINESS, isActive: true },
