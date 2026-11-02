@@ -20,7 +20,7 @@ import {
   receiveInventoryPurchaseOrder,
   createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
   createInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
-  releaseInventoryReservation, listInventoryReorderRecommendations,
+  releaseInventoryReservation, listInventoryReorderRecommendations, getInventoryReports,
   type InventoryPurchaseOrder,
 } from "../../lib/inventory-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -146,6 +146,11 @@ export function InventoryPage() {
     queryKey: ["inventory", "reorder", activeBranchId],
     enabled: Boolean(activeBranchId),
     queryFn: () => listInventoryReorderRecommendations({ accessToken }, activeBranchId),
+  });
+  const inventoryReportQuery = useQuery({
+    queryKey: ["inventory", "reports", activeBranchId],
+    enabled: Boolean(activeBranchId),
+    queryFn: () => getInventoryReports({ accessToken }, activeBranchId),
   });
   const transferCreateMutation = useMutation({
     mutationFn: () => createInventoryTransfer({
@@ -1345,6 +1350,26 @@ export function InventoryPage() {
         {reorderQuery.data?.data?.length ? <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Suggested order</th><th>Stock value</th></tr></thead><tbody>
           {reorderQuery.data.data.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{row.availableQuantity}</td><td>{row.suggestedOrderQuantity}</td><td>{(row.stockValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
         </tbody></table> : <p>No reorder alerts for this branch.</p>}
+      </section>
+
+      <section className="inventory-panel" aria-label="Inventory valuation and performance reports">
+        <h2>Inventory Valuation &amp; Performance</h2>
+        {inventoryReportQuery.isLoading ? <p>Loading inventory reports...</p> : inventoryReportQuery.isError ? <p role="alert">Unable to load inventory reports.</p> : inventoryReportQuery.data?.data && <>
+          <div className="inventory-report-summary">
+            <article><span>Total stock valuation</span><strong>{(inventoryReportQuery.data.data.totalValuation / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</strong></article>
+            <article><span>Units consumed / written off (30 days)</span><strong>{inventoryReportQuery.data.data.consumptionQuantity.toLocaleString()}</strong></article>
+            <article><span>Adjustments (30 days)</span><strong>{inventoryReportQuery.data.data.adjustmentQuantity.toLocaleString()}</strong></article>
+            <article><span>Movements (30 days)</span><strong>{inventoryReportQuery.data.data.movementCount.toLocaleString()}</strong></article>
+          </div>
+          <h3>Stock valuation by item</h3>
+          <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Average unit cost</th><th>Value</th></tr></thead><tbody>
+            {inventoryReportQuery.data.data.valuation.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{(row.averageUnitCost / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td><td>{(row.totalValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
+          </tbody></table>
+          <h3>Supplier performance (last 30 days)</h3>
+          {inventoryReportQuery.data.data.supplierPerformance.length ? <table><thead><tr><th>Supplier</th><th>Orders</th><th>Received</th><th>Ordered value</th></tr></thead><tbody>
+            {inventoryReportQuery.data.data.supplierPerformance.map((row) => <tr key={row.supplierId}><td>{row.supplierName}</td><td>{row.orderCount}</td><td>{row.receivedOrderCount}</td><td>{(row.orderedValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
+          </tbody></table> : <p>No supplier orders in the last 30 days.</p>}
+        </>}
       </section>
     </main>
   );
