@@ -18,6 +18,9 @@ import {
   createInventoryPurchaseOrder,
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
+  createInventoryTransfer, listInventoryTransfers, receiveInventoryTransfer,
+  createInventoryStocktake, applyInventoryStocktake, createInventoryReservation,
+  releaseInventoryReservation, listInventoryReorderRecommendations,
   type InventoryPurchaseOrder,
 } from "../../lib/inventory-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -130,6 +133,72 @@ export function InventoryPage() {
       ),
   });
 
+
+  const advancedTransfersQuery = useQuery({
+    queryKey: ["inventory", "transfers", activeBranchId],
+    enabled: Boolean(activeBranchId),
+    queryFn: () => listInventoryTransfers({ accessToken }, activeBranchId),
+  });
+  const reorderQuery = useQuery({
+    queryKey: ["inventory", "reorder", activeBranchId],
+    enabled: Boolean(activeBranchId),
+    queryFn: () => listInventoryReorderRecommendations({ accessToken }, activeBranchId),
+  });
+  const transferCreateMutation = useMutation({
+    mutationFn: () => createInventoryTransfer({
+      destinationBranchId: transferDestination, transferNumber: transferNumber.trim(),
+      lines: [{ inventoryItemId: transferItemId, quantity: Number(transferQuantity) }],
+    }, { accessToken }, activeBranchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory", "transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      setTransferNumber(""); setTransferItemId(""); setTransferQuantity("1"); setTransferError(null);
+    },
+    onError: (error) => setTransferError(error instanceof ApiError ? error.message : "Unable to dispatch transfer."),
+  });
+  const transferReceiveMutation = useMutation({
+    mutationFn: (input: { id: string; lineId: string; quantity: number }) =>
+      receiveInventoryTransfer(input.id, [{ transferLineId: input.lineId, quantity: input.quantity }], { accessToken }, activeBranchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory", "transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+    },
+  });
+  const stocktakeCreateMutation = useMutation({
+    mutationFn: () => createInventoryStocktake({
+      reference: stocktakeReference.trim(),
+      lines: [{ inventoryItemId: stocktakeItemId, countedQuantity: Number(stocktakeCount) }],
+    }, { accessToken }, activeBranchId),
+    onSuccess: async (result) => {
+      await applyInventoryStocktake(result.data.id, { accessToken }, activeBranchId);
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "movements"] });
+      setStocktakeReference(""); setStocktakeItemId(""); setStocktakeCount(""); setStocktakeError(null);
+    },
+    onError: (error) => setStocktakeError(error instanceof ApiError ? error.message : "Unable to complete stocktake."),
+  });
+  const reservationCreateMutation = useMutation({
+    mutationFn: () => createInventoryReservation({
+      inventoryItemId: reservationItemId, quantity: Number(reservationQuantity),
+      reference: reservationReference.trim() || undefined,
+    }, { accessToken }, activeBranchId),
+    onSuccess: (result) => {
+      setReservationIdToRelease(result.data.id);
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      setReservationError(null);
+    },
+    onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to reserve stock."),
+  });
+  const reservationReleaseMutation = useMutation({
+    mutationFn: () => releaseInventoryReservation(reservationIdToRelease, false, { accessToken }, activeBranchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory", "stock"] });
+      setReservationIdToRelease("");
+    },
+    onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to release reservation."),
+  });
   const saveItemMutation = useMutation({
     mutationFn: async () => {
       const input = {
@@ -256,6 +325,21 @@ export function InventoryPage() {
   });
 
 
+
+  const [transferDestination, setTransferDestination] = useState("");
+  const [transferNumber, setTransferNumber] = useState("");
+  const [transferItemId, setTransferItemId] = useState("");
+  const [transferQuantity, setTransferQuantity] = useState("1");
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [stocktakeReference, setStocktakeReference] = useState("");
+  const [stocktakeItemId, setStocktakeItemId] = useState("");
+  const [stocktakeCount, setStocktakeCount] = useState("");
+  const [stocktakeError, setStocktakeError] = useState<string | null>(null);
+  const [reservationItemId, setReservationItemId] = useState("");
+  const [reservationQuantity, setReservationQuantity] = useState("1");
+  const [reservationReference, setReservationReference] = useState("");
+  const [reservationIdToRelease, setReservationIdToRelease] = useState("");
+  const [reservationError, setReservationError] = useState<string | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
   const [supplierEmail, setSupplierEmail] = useState("");
@@ -1208,6 +1292,53 @@ export function InventoryPage() {
           <label>Goods receipt reference<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} required maxLength={100} /></label>
           <button type="submit" disabled={receiveMutation.isPending || !activeBranchId}>{receiveMutation.isPending ? "Recording..." : "Record delivery"}</button>
         </form>
+      </section>
+
+      <section className="inventory-panel" aria-label="Advanced inventory operations">
+        <h2>Branch Transfers &amp; Stocktaking</h2>
+        <p>Move stock between your branches, confirm incoming deliveries and reconcile physical counts against recorded balances.</p>
+        <div className="inventory-procurement-grid">
+          <form onSubmit={(event) => { event.preventDefault(); setTransferError(null); if (!activeBranchId || !transferDestination || !transferNumber.trim() || !transferItemId || !Number.isInteger(Number(transferQuantity)) || Number(transferQuantity) <= 0) { setTransferError("Select a destination branch and item, and enter a transfer reference and valid quantity."); return; } transferCreateMutation.mutate(); }}>
+            <h3>Dispatch inter-branch transfer</h3>
+            <label>Destination branch<select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)} required><option value="">Select destination</option>{(useAuthStore.getState().user?.branches ?? []).filter((branch) => branch.isActive !== false && branch.id !== activeBranchId).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+            <label>Transfer reference<input value={transferNumber} onChange={(event) => setTransferNumber(event.target.value)} required maxLength={100} /></label>
+            <label>Item<select value={transferItemId} onChange={(event) => setTransferItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Quantity<input type="number" min="1" step="1" value={transferQuantity} onChange={(event) => setTransferQuantity(event.target.value)} required /></label>
+            <button type="submit" disabled={transferCreateMutation.isPending || !activeBranchId || !transferDestination}>{transferCreateMutation.isPending ? "Dispatching..." : "Dispatch transfer"}</button>
+            {transferError && <p role="alert">{transferError}</p>}
+          </form>
+          <form onSubmit={(event) => { event.preventDefault(); setStocktakeError(null); if (!stocktakeReference.trim() || !stocktakeItemId || !Number.isInteger(Number(stocktakeCount)) || Number(stocktakeCount) < 0) { setStocktakeError("Enter a reference, item and non-negative physical count."); return; } stocktakeCreateMutation.mutate(); }}>
+            <h3>Physical stock count</h3>
+            <label>Stocktake reference<input value={stocktakeReference} onChange={(event) => setStocktakeReference(event.target.value)} required maxLength={100} /></label>
+            <label>Item<select value={stocktakeItemId} onChange={(event) => setStocktakeItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Counted quantity<input type="number" min="0" step="1" value={stocktakeCount} onChange={(event) => setStocktakeCount(event.target.value)} required /></label>
+            <button type="submit" disabled={stocktakeCreateMutation.isPending || !activeBranchId}>{stocktakeCreateMutation.isPending ? "Applying count..." : "Reconcile stock"}</button>
+            {stocktakeError && <p role="alert">{stocktakeError}</p>}
+          </form>
+        </div>
+        <h3>Recent transfers</h3>
+        {advancedTransfersQuery.data?.transfers?.length ? <table><thead><tr><th>Reference</th><th>Route</th><th>Status</th><th>Items</th><th>Action</th></tr></thead><tbody>
+          {advancedTransfersQuery.data.transfers.map((transfer) => {
+            const pending = transfer.lines.find((line) => line.quantityReceived < line.quantityDispatched);
+            return <tr key={transfer.id}><td>{transfer.transferNumber}</td><td>{transfer.sourceBranch.name} → {transfer.destinationBranch.name}</td><td>{transfer.status.replaceAll("_", " ")}</td><td>{transfer.lines.map((line) => line.inventoryItem.name + " " + line.quantityReceived + "/" + line.quantityDispatched).join(", ")}</td><td>{transfer.destinationBranchId === activeBranchId && pending && <button type="button" disabled={transferReceiveMutation.isPending} onClick={() => transferReceiveMutation.mutate({ id: transfer.id, lineId: pending.id, quantity: pending.quantityDispatched - pending.quantityReceived })}>Receive outstanding</button>}</td></tr>;
+          })}
+        </tbody></table> : <p>No branch transfers recorded.</p>}
+      </section>
+      <section className="inventory-panel" aria-label="Stock reservations and reorder recommendations">
+        <h2>Available Stock, Reservations &amp; Reorder</h2>
+        <p>Reserved quantities are protected from issues and transfers. Reorder suggestions use each item's minimum threshold and configured replenishment quantity.</p>
+        <form onSubmit={(event) => { event.preventDefault(); setReservationError(null); if (!reservationItemId || !Number.isInteger(Number(reservationQuantity)) || Number(reservationQuantity) <= 0) { setReservationError("Select an item and enter a positive reservation quantity."); return; } reservationCreateMutation.mutate(); }}>
+          <label>Item<select value={reservationItemId} onChange={(event) => setReservationItemId(event.target.value)} required><option value="">Select item</option>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label>Quantity<input type="number" min="1" step="1" value={reservationQuantity} onChange={(event) => setReservationQuantity(event.target.value)} required /></label>
+          <label>Reference<input value={reservationReference} onChange={(event) => setReservationReference(event.target.value)} maxLength={200} /></label>
+          <button type="submit" disabled={reservationCreateMutation.isPending || !activeBranchId}>{reservationCreateMutation.isPending ? "Reserving..." : "Reserve stock"}</button>
+        </form>
+        {reservationIdToRelease && <p>Reservation created: {reservationIdToRelease} <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => reservationReleaseMutation.mutate()}>Release reservation</button></p>}
+        {reservationError && <p role="alert">{reservationError}</p>}
+        <h3>Reorder recommendations</h3>
+        {reorderQuery.data?.data?.length ? <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Suggested order</th><th>Stock value</th></tr></thead><tbody>
+          {reorderQuery.data.data.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{row.availableQuantity}</td><td>{row.suggestedOrderQuantity}</td><td>{(row.stockValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
+        </tbody></table> : <p>No reorder alerts for this branch.</p>}
       </section>
     </main>
   );
