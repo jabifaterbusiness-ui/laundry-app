@@ -49,6 +49,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
     },
+    inventoryReservation: {
+      findMany: vi.fn(),
+    },
     branch: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -501,6 +504,37 @@ describe("Inventory routes - business-scoped items", () => {
       }),
     }));
     expect(userBranchFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("Inventory routes - reservation register", () => {
+  it("lists reservations only for the selected business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    vi.mocked(prisma.inventoryReservation.findMany).mockResolvedValue([{
+      id: "reservation-1",
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      inventoryItemId: "item-1",
+      quantity: 2,
+      status: "ACTIVE",
+      reference: "ORDER-100",
+      expiresAt: null,
+      releasedAt: null,
+      createdAt: new Date("2026-11-02T10:00:00.000Z"),
+      inventoryItem: { id: "item-1", name: "Detergent", unit: "LITRE" },
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/inventory/reservations")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(prisma.inventoryReservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", branchId: BRANCH_A },
+      take: 100,
+    }));
   });
 });
 
