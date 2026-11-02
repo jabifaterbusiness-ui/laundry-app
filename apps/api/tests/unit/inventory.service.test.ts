@@ -821,10 +821,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
-        name: {
-          contains: "detergent",
-          mode: "insensitive",
-        },
+        OR: [
+          { name: { contains: "detergent", mode: "insensitive" } },
+          { sku: { contains: "detergent", mode: "insensitive" } },
+          { category: { contains: "detergent", mode: "insensitive" } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -836,10 +837,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
-        name: {
-          contains: "detergent",
-          mode: "insensitive",
-        },
+        OR: [
+          { name: { contains: "detergent", mode: "insensitive" } },
+          { sku: { contains: "detergent", mode: "insensitive" } },
+          { category: { contains: "detergent", mode: "insensitive" } },
+        ],
       },
     });
   });
