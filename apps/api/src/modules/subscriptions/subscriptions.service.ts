@@ -35,7 +35,7 @@ export function getSubscriptionStatus(
   }
 
   if (endsAt <= now) {
-    return cancelAtPeriodEnd || status === "CANCELLED" ? "CANCELLED" : "EXPIRED";
+    return cancelAtPeriodEnd ? "CANCELLED" : "EXPIRED";
   }
 
   if (status === "EXPIRED") {
