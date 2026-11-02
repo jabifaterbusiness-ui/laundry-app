@@ -247,7 +247,7 @@ export function InventoryPage() {
     onError: (error) => setReservationError(error instanceof ApiError ? error.message : "Unable to reserve stock."),
   });
   const reservationReleaseMutation = useMutation({
-    mutationFn: () => releaseInventoryReservation(reservationIdToRelease, false, { accessToken }, activeBranchId),
+    mutationFn: (reservationId: string) => releaseInventoryReservation(reservationId, false, { accessToken }, activeBranchId),
     onSuccess: () => {
       invalidateStockViews();
       queryClient.invalidateQueries({ queryKey: ["inventory", "reservations", activeBranchId] });
@@ -1415,10 +1415,10 @@ export function InventoryPage() {
           <p className="inventory-form-hint">Leave blank for a manual reservation. Expired reservations are released automatically by the background scheduler.</p>
           <button type="submit" disabled={reservationCreateMutation.isPending || !activeBranchId}>{reservationCreateMutation.isPending ? "Reserving..." : "Reserve stock"}</button>
         </form>
-        {reservationIdToRelease && <p>Reservation created: {reservationIdToRelease} <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => reservationReleaseMutation.mutate()}>Release reservation</button></p>}
+        {reservationIdToRelease && <p>Reservation created: {reservationIdToRelease} <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => reservationReleaseMutation.mutate(reservationIdToRelease)}>Release reservation</button></p>}
         {reservationError && <p role="alert">{reservationError}</p>}
         <h3>Reservation register</h3>
-        {reservationsQuery.data?.data?.length ? <div className="inventory-table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th>Reference</th><th>Status</th><th>Expires</th><th>Action</th></tr></thead><tbody>{reservationsQuery.data.data.map((reservation) => <tr key={reservation.id}><td>{reservation.inventoryItem.name}</td><td>{reservation.quantity} {reservation.inventoryItem.unit}</td><td>{reservation.reference || "—"}</td><td>{reservation.status}</td><td>{reservation.expiresAt ? new Date(reservation.expiresAt).toLocaleString() : "Manual"}</td><td>{reservation.status === "ACTIVE" ? <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => { setReservationIdToRelease(reservation.id); reservationReleaseMutation.mutate(); }}>Release</button> : "—"}</td></tr>)}</tbody></table></div> : <p>No reservations recorded for this branch yet.</p>}
+        {reservationsQuery.data?.data?.length ? <div className="inventory-table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th>Reference</th><th>Status</th><th>Expires</th><th>Action</th></tr></thead><tbody>{reservationsQuery.data.data.map((reservation) => <tr key={reservation.id}><td>{reservation.inventoryItem.name}</td><td>{reservation.quantity} {reservation.inventoryItem.unit}</td><td>{reservation.reference || "—"}</td><td>{reservation.status}</td><td>{reservation.expiresAt ? new Date(reservation.expiresAt).toLocaleString() : "Manual"}</td><td>{reservation.status === "ACTIVE" ? <button type="button" disabled={reservationReleaseMutation.isPending} onClick={() => { setReservationIdToRelease(reservation.id); reservationReleaseMutation.mutate(reservation.id); }}>Release</button> : "—"}</td></tr>)}</tbody></table></div> : <p>No reservations recorded for this branch yet.</p>}
         <h3>Reorder recommendations</h3>
         {reorderQuery.data?.data?.length ? <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Suggested order</th><th>Stock value</th></tr></thead><tbody>
           {reorderQuery.data.data.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{row.availableQuantity}</td><td>{row.suggestedOrderQuantity}</td><td>{(row.stockValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
