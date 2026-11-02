@@ -377,7 +377,7 @@ export async function getInventoryReports(auth: AuthOptions, branchId: string | 
 export interface InventoryBranchComparisonRow {
   branchId: string;
   branchName: string;
-  itemCount: number;
+  catalogueItemCount: number;
   totalValuation: number;
   lowStockItems: number;
 }
