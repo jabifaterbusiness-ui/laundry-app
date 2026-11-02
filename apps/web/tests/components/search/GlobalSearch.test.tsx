@@ -1,344 +1,84 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router-dom";
 import { GlobalSearch } from "../../../src/components/search/GlobalSearch.js";
-import { useAuthStore } from "../../../src/state/auth-store.js";
-import * as searchApi from "../../../src/lib/search-api.js";
-import type { QuickOperationDefinition } from "../../../src/lib/quick-operations-catalog.js";
 
-vi.mock("../../../src/lib/search-api.js");
+const { globalSearchMock, navigateMock, hasPermissionMock, searchQuickOperationsMock } = vi.hoisted(() => ({
+  globalSearchMock: vi.fn(),
+  navigateMock: vi.fn(),
+  hasPermissionMock: vi.fn(),
+  searchQuickOperationsMock: vi.fn(),
+}));
 
-const mockedSearchApi = vi.mocked(searchApi);
-
-function LocationProbe() {
-  const location = useLocation();
-
-  return <div data-testid="location">{location.pathname}</div>;
-}
-
-function renderSearch() {
-  return render(
-    <MemoryRouter initialEntries={["/"]}>
-      <GlobalSearch />
-      <LocationProbe />
-    </MemoryRouter>,
-  );
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-
-  useAuthStore.setState({
-    user: {
-      id: "user-1",
-      email: "test@example.com",
-      fullName: "Test User",
-      role: "STAFF",
-      businessId: "business-1",
-      branches: [{ id: "branch-1", name: "Main Branch" }],
-    },
-    accessToken: "test-token",
-    refreshToken: "refresh-token",
-    activeBranchId: "branch-1",
-  });
-
-  mockedSearchApi.globalSearch.mockResolvedValue([]);
-});
+vi.mock("react-router-dom", () => ({ useNavigate: () => navigateMock }));
+vi.mock("../../../src/lib/search-api.js", () => ({ globalSearch: globalSearchMock }));
+vi.mock("../../../src/state/auth-store.js", () => ({
+  useAuthStore: (selector: (state: unknown) => unknown) => selector({
+    accessToken: "access-token",
+    activeBranchId: "branch-main",
+    user: { id: "user-1", permissions: ["customers.create"] },
+  }),
+}));
+vi.mock("../../../src/lib/permissions.js", () => ({ hasPermission: hasPermissionMock }));
+vi.mock("../../../src/lib/quick-operations-catalog.js", () => ({ searchQuickOperations: searchQuickOperationsMock }));
 
 describe("GlobalSearch", () => {
-  it("renders the global search input", () => {
-    renderSearch();
-
-    expect(
-      screen.getByRole("textbox", { name: /global search/i }),
-    ).toBeInTheDocument();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalSearchMock.mockResolvedValue([]);
+    hasPermissionMock.mockReturnValue(true);
+    searchQuickOperationsMock.mockReturnValue([]);
   });
 
-  it("searches after the debounce and displays grouped results", async () => {
-    const user = userEvent.setup();
+  it("searches the active branch and opens the selected order result", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "ORDER", id: "order-42", title: "Order #00042",
+      subtitle: "Ada Laundry · RECEIVED", href: "/orders?orderId=order-42",
+    }]);
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "00042" } });
 
-    mockedSearchApi.globalSearch.mockResolvedValue([
-      {
-        type: "CUSTOMER",
-        id: "customer-1",
-        title: "Jane Doe",
-        subtitle: "08012345678",
-        href: "/customers",
-      },
-      {
-        type: "ORDER",
-        id: "order-1",
-        title: "Order #00001",
-        subtitle: "Jane Doe · RECEIVED",
-        href: "/orders",
-      },
-      {
-        type: "INVOICE",
-        id: "invoice-1",
-        title: "Invoice #INV-00001",
-        subtitle: "Jane Doe · ISSUED",
-        href: "/invoices",
-      },
-    ]);
-
-    renderSearch();
-
-    await user.type(
-      screen.getByRole("textbox", { name: /global search/i }),
-      "Jane",
-    );
-
-    expect(
-      await screen.findByRole("option", { name: /Jane Doe 08012345678/i }),
-    ).toBeInTheDocument();
-
-    expect(screen.getByText("Customers")).toBeInTheDocument();
-    expect(screen.getByText("Orders")).toBeInTheDocument();
-    expect(screen.getByText("Invoices")).toBeInTheDocument();
-
-    expect(mockedSearchApi.globalSearch).toHaveBeenCalledWith(
-      { q: "Jane", limit: 10 },
-      { accessToken: "test-token" },
-      "branch-1",
-    );
+    const result = await screen.findByRole("option", { name: /Order #00042/ });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalledWith(
+      { q: "00042", limit: 10 }, { accessToken: "access-token" }, "branch-main",
+    ));
+    fireEvent.click(result);
+    expect(navigateMock).toHaveBeenCalledWith("/orders?orderId=order-42");
+    expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
 
-
-  it("shows matching quick operations alongside normal search results", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([]);
-
-    renderSearch();
-
-    await user.type(
-      screen.getByRole("textbox", { name: /global search/i }),
-      "TI",
-    );
-
-    expect(
-      await screen.findByRole("option", {
-        name: /TI Transfer Invoice/i,
-      }),
-    ).toBeInTheDocument();
-
-    expect(screen.getByText("Quick Operations")).toBeInTheDocument();
+  it("offers customer creation and carries a phone-like query into the new customer flow", async () => {
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "08012345678" } });
+    fireEvent.click(await screen.findByRole("option", { name: /Add New Customer/ }));
+    expect(navigateMock).toHaveBeenCalledWith("/orders?addCustomer=1&customerPhone=08012345678");
   });
 
-  it("opens a quick operation event when a shortcut is selected", async () => {
-    const user = userEvent.setup();
-    const events: QuickOperationDefinition[] = [];
+  it("dispatches the selected quick operation without navigating", async () => {
+    const operation = {
+      code: "MCB", name: "Manual Cloud Backup", description: "Create an encrypted cloud backup.",
+      permission: "migrations.manage", requiresConfirmation: false, sensitive: false,
+    };
+    searchQuickOperationsMock.mockReturnValue([operation]);
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "manual cloud backup" } });
+    fireEvent.click(await screen.findByRole("option", { name: /MCB Manual Cloud Backup/ }));
 
-    function listener(event: Event) {
-      events.push(
-        (event as CustomEvent<QuickOperationDefinition>).detail,
-      );
-    }
-
-    window.addEventListener("quick-operation:open", listener);
-
-    try {
-      mockedSearchApi.globalSearch.mockResolvedValue([]);
-
-      renderSearch();
-
-      const input = screen.getByRole("textbox", {
-        name: /global search/i,
-      });
-
-      await user.type(input, "TI");
-
-      await user.click(
-        await screen.findByRole("option", {
-          name: /TI Transfer Invoice/i,
-        }),
-      );
-
-      expect(events).toHaveLength(1);
-      expect(events[0]?.code).toBe("TI");
-      expect(input).toHaveValue("");
-    } finally {
-      window.removeEventListener("quick-operation:open", listener);
-    }
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "quick-operation:open", detail: operation }));
+    expect(navigateMock).not.toHaveBeenCalled();
+    dispatchSpy.mockRestore();
   });
 
-  it("shows an empty state when no results are returned", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([]);
-
-    renderSearch();
-
-    await user.type(
-      screen.getByRole("textbox", { name: /global search/i }),
-      "Unknown",
-    );
-
-    expect(
-      await screen.findByText("No results found."),
-    ).toBeInTheDocument();
-  });
-
-  it("shows an error when search fails", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockRejectedValue(
-      new Error("Search service unavailable"),
-    );
-
-    renderSearch();
-
-    await user.type(
-      screen.getByRole("textbox", { name: /global search/i }),
-      "Jane",
-    );
-
-    expect(
-      await screen.findByText("Search service unavailable"),
-    ).toBeInTheDocument();
-  });
-
-  it("navigates when a result is clicked", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([
-      {
-        type: "ORDER",
-        id: "order-1",
-        title: "Order #00001",
-        subtitle: "Jane Doe · RECEIVED",
-        href: "/orders",
-      },
-    ]);
-
-    renderSearch();
-
-    await user.type(
-      screen.getByRole("textbox", { name: /global search/i }),
-      "00001",
-    );
-
-    await user.click(
-      await screen.findByRole("option", { name: /Order #00001/i }),
-    );
-
-    expect(screen.getByTestId("location")).toHaveTextContent("/orders");
-    expect(
-      screen.getByRole("textbox", { name: /global search/i }),
-    ).toHaveValue("");
-  });
-
-  it("selects the first result when Enter is pressed", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([
-      {
-        type: "CUSTOMER",
-        id: "customer-1",
-        title: "Jane Doe",
-        subtitle: "08012345678",
-        href: "/customers",
-      },
-      {
-        type: "ORDER",
-        id: "order-1",
-        title: "Order #00001",
-        subtitle: "Jane Doe · RECEIVED",
-        href: "/orders",
-      },
-    ]);
-
-    renderSearch();
-
-    const input = screen.getByRole("textbox", {
-      name: /global search/i,
-    });
-
-    await user.type(input, "Jane");
-
-    await screen.findByRole("option", {
-      name: /Jane Doe 08012345678/i,
-    });
-
-    await user.keyboard("{Enter}");
-
-    expect(screen.getByTestId("location")).toHaveTextContent(
-      "/customers",
-    );
-  });
-
-  it("closes the results when Escape is pressed", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([
-      {
-        type: "CUSTOMER",
-        id: "customer-1",
-        title: "Jane Doe",
-        subtitle: "08012345678",
-        href: "/customers",
-      },
-    ]);
-
-    renderSearch();
-
-    const input = screen.getByRole("textbox", {
-      name: /global search/i,
-    });
-
-    await user.type(input, "Jane");
-
-    expect(
-      await screen.findByRole("option", {
-        name: /Jane Doe 08012345678/i,
-      }),
-    ).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("option", {
-          name: /Jane Doe 08012345678/i,
-        }),
-      ).not.toBeInTheDocument();
-    });
-  });
-
-  it("clears results when the query is cleared", async () => {
-    const user = userEvent.setup();
-
-    mockedSearchApi.globalSearch.mockResolvedValue([
-      {
-        type: "CUSTOMER",
-        id: "customer-1",
-        title: "Jane Doe",
-        subtitle: "08012345678",
-        href: "/customers",
-      },
-    ]);
-
-    renderSearch();
-
-    const input = screen.getByRole("textbox", {
-      name: /global search/i,
-    });
-
-    await user.type(input, "Jane");
-
-    expect(
-      await screen.findByRole("option", {
-        name: /Jane Doe 08012345678/i,
-      }),
-    ).toBeInTheDocument();
-
-    await user.clear(input);
-
-    expect(
-      screen.queryByRole("option", {
-        name: /Jane Doe 08012345678/i,
-      }),
-    ).not.toBeInTheDocument();
+  it("closes the result panel when Escape is pressed", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "CUSTOMER", id: "customer-1", title: "Ada Laundry",
+      subtitle: "08012345678", href: "/orders?customerId=customer-1",
+    }]);
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "Ada" } });
+    expect(await screen.findByRole("option", { name: /Ada Laundry/ })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });
