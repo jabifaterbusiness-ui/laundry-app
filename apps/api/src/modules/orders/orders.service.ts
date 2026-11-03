@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
 import { createInvoiceFromOrderWithTx } from "../invoices/invoices.service.js";
+import { notifyOrderStatus } from "../communications/communications.service.js";
 
 export interface CreateOrderItemData {
   serviceId: string;
@@ -518,7 +519,7 @@ async function updateOrderStatusWithDb(
     data.cancelledAt = now;
   }
 
-  return db.order.update({
+  const updated = await db.order.update({
     where: { id },
     data,
     include: {
@@ -527,4 +528,13 @@ async function updateOrderStatusWithDb(
       items: true,
     },
   });
+
+  // Send customer notification only after the status update has committed.
+  // Provider failures are recorded by the delivery service and must not roll
+  // back or hide the operational status change.
+  if (db === prisma && existing.status !== status) {
+    await notifyOrderStatus({ orderId: id, businessId, branchId, status }).catch(() => []);
+  }
+
+  return updated;
 }
