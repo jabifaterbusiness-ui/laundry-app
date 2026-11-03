@@ -3,7 +3,7 @@ import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js"
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import {
-  deleteStatusRule, getReminderConfig, getUnpickedOrders, listStatusRules,
+  deleteStatusRule, getDeliveries, getReminderConfig, getUnpickedOrders, listStatusRules,
   saveReminderConfig, saveStatusRule, sendAnnouncement, sendReminders,
 } from "./communications.controller.js";
 
@@ -11,6 +11,7 @@ export const communicationsRouter = Router();
 communicationsRouter.use(requireAuth, requireBusinessContext);
 
 communicationsRouter.post("/announcements", requirePermission("customers.update"), asyncHandler(sendAnnouncement));
+communicationsRouter.get("/deliveries", requirePermission("customers.view"), asyncHandler(getDeliveries));
 communicationsRouter.get("/status-rules", requirePermission("orders.view"), asyncHandler(listStatusRules));
 communicationsRouter.put("/status-rules", requirePermission("orders.change_status"), asyncHandler(saveStatusRule));
 communicationsRouter.delete("/status-rules/:id", requirePermission("orders.change_status"), asyncHandler(deleteStatusRule));
