@@ -1288,7 +1288,7 @@ export function InvoicesPage() {
                         <td>{entry.version}</td>
                         <td>{entry.action}</td>
                         <td>{entry.reason}</td>
-                        <td>{entry.actorUserId}</td>
+                        <td>{entry.actorName ?? "Unavailable user"}</td>
                         <td>{formatDate(entry.createdAt)}</td>
                         <td>{formatDate(entry.expiresAt)}</td>
                       </tr>
