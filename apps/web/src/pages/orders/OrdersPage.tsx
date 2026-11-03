@@ -1551,7 +1551,10 @@ export function OrdersPage() {
               <p role="status">Loading this customer's agreed service prices before calculating the order…</p>
             )}
             {formCustomerId && activeWorkspace?.mode !== "edit" && customerPricesQuery.isError && !customerPricesQuery.data && (
-              <p role="alert">Unable to load this customer's agreed prices. The order is blocked to prevent standard prices being used by mistake. Please retry the customer pricing request.</p>
+              <div role="alert">
+                <p>Unable to load this customer's agreed prices. The order is blocked to prevent standard prices being used by mistake.</p>
+                <button type="button" onClick={() => void customerPricesQuery.refetch()} disabled={customerPricesQuery.isFetching}>Retry customer pricing</button>
+              </div>
             )}
             {formError && <p role="alert">{formError}</p>}
 
