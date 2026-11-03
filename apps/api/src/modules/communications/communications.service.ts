@@ -308,19 +308,19 @@ export async function saveUnpickedOrderReminderConfig(businessId: string, input:
     where: { businessId }, create: { businessId, ...input }, update: input,
   });
 }
-export async function listUnpickedOrders(businessId: string) {
+export async function listUnpickedOrders(businessId: string, branchId: string) {
   const config = await getUnpickedOrderReminderConfig(businessId);
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - config.thresholdMonths);
   if (!config.enabled) return [];
   return prisma.order.findMany({
-    where: { businessId, status: "READY_FOR_PICKUP", OR: [{ readyAt: { lte: cutoff } }, { readyAt: null, createdAt: { lte: cutoff } }] },
+    where: { businessId, branchId, status: "READY_FOR_PICKUP", OR: [{ readyAt: { lte: cutoff } }, { readyAt: null, createdAt: { lte: cutoff } }] },
     include: { customer: true, branch: true, items: true, invoice: true },
     orderBy: { createdAt: "asc" },
   });
 }
 export async function sendUnpickedReminders(input: {
-  businessId: string; orderIds: string[]; channels: Channel[]; message: string;
+  businessId: string; branchId: string; orderIds: string[]; channels: Channel[]; message: string;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
   const config = await getUnpickedOrderReminderConfig(input.businessId);
@@ -328,7 +328,7 @@ export async function sendUnpickedReminders(input: {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - config.thresholdMonths);
   const orders = await prisma.order.findMany({
-    where: { businessId: input.businessId, id: { in: [...new Set(input.orderIds)] }, status: "READY_FOR_PICKUP", OR: [{ readyAt: { lte: cutoff } }, { readyAt: null, createdAt: { lte: cutoff } }] },
+    where: { businessId: input.businessId, branchId: input.branchId, id: { in: [...new Set(input.orderIds)] }, status: "READY_FOR_PICKUP", OR: [{ readyAt: { lte: cutoff } }, { readyAt: null, createdAt: { lte: cutoff } }] },
     include: { customer: true, business: { select: { name: true } } },
   });
   if (orders.length !== new Set(input.orderIds).size) throw new AppError("One or more selected unpicked orders are unavailable", 422);
