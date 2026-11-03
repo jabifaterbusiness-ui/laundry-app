@@ -120,24 +120,26 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
   for (const channel of channels) {
     const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
     if (!destination) {
-      results.push(await recordMissingDestination({
+      const missingResult = await recordMissingDestination({
         businessId: input.businessId, customerId: order.customerId, orderId: order.id,
         channel, messageType: "ORDER_STATUS",
         dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
         reason: channel === "EMAIL" ? "Customer email is missing" : "Customer phone is missing",
-      }));
+      });
+      results.push({ ...missingResult, channel });
       continue;
     }
     const fallback = channel === "WHATSAPP"
       ? "Hello {{customerName}}, your order {{orderNumber}} is now {{status}}. Thank you for choosing {{companyName}}."
       : "Hello {{customerName}},\n\nYour order {{orderNumber}} is now {{status}}.\n\nThank you for choosing {{companyName}}.";
-    results.push(await deliverMessage({
+    const deliveryResult = await deliverMessage({
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "ORDER_STATUS", destination,
       subject: renderTemplate(rule.emailSubject || "Order update from {{companyName}}", values),
       body: renderTemplate((channel === "EMAIL" ? rule.emailMessage : rule.whatsappMessage) || fallback, values),
       dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
-    }));
+    });
+    results.push({ ...deliveryResult, channel });
   }
   return results;
 }
