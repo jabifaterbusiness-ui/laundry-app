@@ -4,10 +4,9 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import type { Customer, Order } from "@laundry-app/shared";
 import { SensitiveAuthorizationProvider } from "../../../src/components/auth/SensitiveAuthorizationProvider.js";
 import { OrdersPage } from "../../../src/pages/orders/OrdersPage.js";
@@ -168,6 +167,11 @@ import {
   listColors,
 } from "../../../src/lib/colors-api.js";
 
+function CurrentLocation() {
+  const location = useLocation();
+  return <output data-testid="current-location">{location.pathname}{location.search}</output>;
+}
+
 function renderPage(initialEntries: string[] = ["/orders"]) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -181,6 +185,7 @@ function renderPage(initialEntries: string[] = ["/orders"]) {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={initialEntries}>
         <SensitiveAuthorizationProvider>
+          <CurrentLocation />
           <OrdersPage />
         </SensitiveAuthorizationProvider>
       </MemoryRouter>
@@ -693,35 +698,16 @@ describe("OrdersPage quick customer switching", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("opens the exact order from a global-search orderId deep link in Order Management", async () => {
-    vi.mocked(getOrder).mockResolvedValue(orderA);
-    vi.mocked(getCustomer).mockResolvedValue(customerA);
-
+  it("redirects legacy order deep links to the independent Order Management route", async () => {
     renderPage([`/orders?orderId=${orderA.id}`]);
 
     await waitFor(() => {
-      expect(vi.mocked(getOrder)).toHaveBeenCalledWith(
-        orderA.id,
-        { accessToken: "test-token" },
-        "branch-a",
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        `/order-management?orderId=${orderA.id}`,
       );
     });
 
-    const orderHeading = await screen.findByRole("heading", {
-      name: /00001/i,
-    });
-    expect(orderHeading).toBeInTheDocument();
-
-    const orderManagement = screen.getByRole("region", {
-      name: "Order Management",
-    });
-    expect(within(orderManagement).getByText("Jane Doe")).toBeInTheDocument();
-
-    const workspace = useOrderWorkspaceStore.getState().workspaces.find(
-      (item) => item.customer.id === customerA.id,
-    );
-    expect(workspace?.activeOrder?.id).toBe(orderA.id);
-    expect(workspace?.mode).toBe("view");
+    expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
   });
 
   it("opens an existing order in Order Management from its folder", async () => {
@@ -751,25 +737,11 @@ describe("OrdersPage quick customer switching", () => {
 
     fireEvent.click(orderButton);
 
-    expect(
-      await screen.findByRole("heading", {
-        name: /00001/i,
-      }),
-    ).toBeInTheDocument();
-
-    const orderManagement = screen.getByRole("region", {
-      name: "Order Management",
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        `/order-management?orderId=${orderA.id}`,
+      );
     });
-
-    expect(
-      within(orderManagement).getByText("Jane Doe"),
-    ).toBeInTheDocument();
-
-    expect(
-      within(orderManagement).getByRole("button", {
-        name: /^New order$/i,
-      }),
-    ).toBeInTheDocument();
   });
 
   it("opens the customer finder before creating a new order", async () => {
