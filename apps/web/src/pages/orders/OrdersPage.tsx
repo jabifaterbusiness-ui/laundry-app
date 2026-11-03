@@ -552,6 +552,7 @@ export function OrdersPage() {
     void startEditInvoice(order);
   }, [
     location.key,
+    location.pathname,
     orderIdFromUrl,
     editOrderFromUrl,
     orderFromUrlQuery.data,
