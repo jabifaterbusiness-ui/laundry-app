@@ -241,7 +241,7 @@ async function createOrderWithTx(
       );
     }
 
-    await createInvoiceFromOrderWithTx(
+    const invoice = await createInvoiceFromOrderWithTx(
       tx,
       order,
       business,
@@ -249,7 +249,14 @@ async function createOrderWithTx(
       { adjustments: data.adjustments ?? [], taxRuleIds: data.taxRuleIds ?? [] },
     );
 
-    return order;
+    // Keep the order's displayed total aligned with the issued invoice total
+    // (including adjustments and tax), while OrderItem remains the immutable
+    // service-price snapshot used for the subtotal.
+    return tx.order.update({
+      where: { id: order.id },
+      data: { orderTotal: invoice.totalAmount },
+      include: { customer: true, branch: true, items: true },
+    });
 }
 
 async function createUniqueOrderNumber(
