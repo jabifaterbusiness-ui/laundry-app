@@ -9,7 +9,7 @@ function makeTransaction(
     findMany: vi.fn().mockResolvedValue([{ groupId: "group-1" }]),
   };
   const priceAdjustment = {
-    findMany: vi.fn().mockImplementation(async (args: { where?: { id?: unknown } }) =>
+    findMany: vi.fn().mockImplementation(async (args: { where?: { id?: unknown; targetScope?: unknown } }) =>
       args.where?.id ? manualDiscounts.filter((rule) => !args.where?.targetScope || rule.targetScope === args.where.targetScope) : rules,
     ),
   };
