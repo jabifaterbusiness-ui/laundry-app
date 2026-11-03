@@ -10,6 +10,10 @@ import {
   listUnpickedOrders, removeOrderStatusRule, saveOrderStatusRule,
   saveUnpickedOrderReminderConfig, saveCustomerGroup, updateCustomerGroup, sendUnpickedReminders,
 } from "./communications.service.js";
+function requireBranchId(req: Request): string {
+  if (!req.branchId) throw new AppError("This action requires an active branch", 403);
+  return req.branchId;
+}
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) throw new AppError("This action requires an account scoped to a business", 403);
   return req.user.businessId;
@@ -83,12 +87,12 @@ export async function saveReminderConfig(req: Request, res: Response) {
   res.status(200).json(config);
 }
 export async function getUnpickedOrders(req: Request, res: Response) {
-  res.status(200).json({ data: await listUnpickedOrders(requireBusinessId(req)) });
+  res.status(200).json({ data: await listUnpickedOrders(requireBusinessId(req), requireBranchId(req)) });
 }
 export async function sendReminders(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = reminderSendSchema.parse(req.body);
-  const result = await sendUnpickedReminders({ businessId: id, ...input });
+  const result = await sendUnpickedReminders({ businessId: id, branchId: requireBranchId(req), ...input });
   await recordAuditEvent({ action: "communications.unpicked_reminders_sent", entityType: "Order", entityId: "bulk", businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { orderCount: result.orderCount, channels: input.channels } });
   res.status(200).json(result);
 }
