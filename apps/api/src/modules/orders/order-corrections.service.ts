@@ -601,7 +601,7 @@ export async function editOrderWithCorrection(params: {
           if (!value || typeof value !== "object" || Array.isArray(value)) return [];
           const rule = value as Record<string, unknown>;
           if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
-          const scope = rule.scope === "ITEMS" ? "ITEMS" : "INVOICE";
+          const scope = rule.scope === "ITEMS" ? "ITEMS" as const : "INVOICE" as const;
           const itemIndexes = Array.isArray(rule.itemIndexes)
             ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < calculationLines.length)
             : [];
@@ -691,8 +691,8 @@ export async function editOrderWithCorrection(params: {
         adjustmentTotal: calculation.adjustmentTotal,
         additiveTaxTotal: calculation.additiveTaxTotal,
         withholdingTaxTotal: calculation.withholdingTaxTotal,
-        appliedAdjustments: calculation.adjustments,
-        appliedTaxes: calculation.taxes,
+        appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+        appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
         totalAmount: orderTotal,
         ...(params.input.garmentNote !== undefined && {
           garmentNote:
