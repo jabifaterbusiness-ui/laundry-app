@@ -1,0 +1,205 @@
+import { prisma } from "../../lib/prisma.js";
+import { AppError } from "../../middleware/error-handler.js";
+import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
+
+type Channel = "WHATSAPP" | "EMAIL";
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+function renderTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_match, key: string) => values[key] ?? "");
+}
+async function deliverMessage(input: {
+  businessId: string; customerId: string; orderId?: string; campaignId?: string;
+  channel: Channel; messageType: string; destination: string; subject: string;
+  body: string; dedupeKey: string;
+}) {
+  let delivery;
+  try {
+    delivery = await prisma.communicationDelivery.create({
+      data: {
+        businessId: input.businessId, customerId: input.customerId,
+        orderId: input.orderId ?? null, campaignId: input.campaignId ?? null,
+        channel: input.channel, messageType: input.messageType,
+        destination: input.destination, dedupeKey: input.dedupeKey,
+        status: "PENDING",
+      },
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return { status: "DUPLICATE" as const };
+    }
+    throw error;
+  }
+  try {
+    let providerMessageId: string;
+    if (input.channel === "EMAIL") {
+      providerMessageId = (await sendHtmlEmail({
+        to: input.destination,
+        subject: input.subject,
+        html: `<div style="font-family:Arial,sans-serif;line-height:1.6;white-space:pre-wrap">${escapeHtml(input.body).replace(/\n/g, "<br>")}</div>`,
+      })).id;
+    } else {
+      await assertWhatsAppMessagingEnabled();
+      providerMessageId = (await sendWhatsAppText({ to: input.destination, body: input.body })).id;
+    }
+    await prisma.communicationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: "SENT", providerMessageId, sentAt: new Date() },
+    });
+    return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Message delivery failed";
+    await prisma.communicationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: "FAILED", errorMessage: message.slice(0, 1000) },
+    });
+    return { status: "FAILED" as const, deliveryId: delivery.id, error: message };
+  }
+}
+
+export async function notifyOrderStatus(input: { orderId: string; businessId: string; branchId: string; status: string }) {
+  const order = await prisma.order.findFirst({
+    where: { id: input.orderId, businessId: input.businessId, branchId: input.branchId },
+    include: { customer: true, business: { select: { name: true } } },
+  });
+  if (!order) return [];
+  const rule = await prisma.orderStatusNotificationRule.findFirst({
+    where: { businessId: input.businessId, status: input.status, enabled: true },
+  });
+  if (!rule) return [];
+  const values = {
+    customerName: order.customer.name,
+    orderNumber: order.orderNumber,
+    companyName: order.business.name,
+    status: input.status.replaceAll("_", " ").toLowerCase(),
+  };
+  const channels: Channel[] = rule.channel === "BOTH" ? ["WHATSAPP", "EMAIL"] : [rule.channel as Channel];
+  const results = [];
+  for (const channel of channels) {
+    const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
+    if (!destination) {
+      results.push({ channel, status: "FAILED", error: channel === "EMAIL" ? "Customer email is missing" : "Customer phone is missing" });
+      continue;
+    }
+    const fallback = channel === "WHATSAPP"
+      ? "Hello {{customerName}}, your order {{orderNumber}} is now {{status}}. Thank you for choosing {{companyName}}."
+      : "Hello {{customerName}},\n\nYour order {{orderNumber}} is now {{status}}.\n\nThank you for choosing {{companyName}}.";
+    results.push(await deliverMessage({
+      businessId: input.businessId, customerId: order.customerId, orderId: order.id,
+      channel, messageType: "ORDER_STATUS", destination,
+      subject: renderTemplate(rule.emailSubject || "Order update from {{companyName}}", values),
+      body: renderTemplate((channel === "EMAIL" ? rule.emailMessage : rule.whatsappMessage) || fallback, values),
+      dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
+    }));
+  }
+  return results;
+}
+
+export async function listOrderStatusRules(businessId: string) {
+  return prisma.orderStatusNotificationRule.findMany({ where: { businessId }, orderBy: { status: "asc" } });
+}
+export async function saveOrderStatusRule(input: {
+  businessId: string; status: string; enabled: boolean; channel: "WHATSAPP" | "EMAIL" | "BOTH";
+  whatsappMessage?: string | null; emailSubject?: string | null; emailMessage?: string | null;
+}) {
+  return prisma.orderStatusNotificationRule.upsert({
+    where: { businessId_status: { businessId: input.businessId, status: input.status } },
+    create: input,
+    update: {
+      enabled: input.enabled, channel: input.channel,
+      whatsappMessage: input.whatsappMessage ?? null,
+      emailSubject: input.emailSubject ?? null,
+      emailMessage: input.emailMessage ?? null,
+    },
+  });
+}
+export async function removeOrderStatusRule(id: string, businessId: string) {
+  const result = await prisma.orderStatusNotificationRule.deleteMany({ where: { id, businessId } });
+  if (!result.count) throw new AppError("Notification rule not found", 404);
+}
+
+export async function createAnnouncement(input: {
+  businessId: string; createdByUserId: string; title: string; message: string;
+  channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS"; customerIds?: string[];
+}) {
+  if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
+  const customers = input.audience === "ALL_CUSTOMERS"
+    ? await prisma.customer.findMany({ where: { businessId: input.businessId, lifecycleStatus: "ACTIVE" }, select: { id: true, name: true, email: true, phone: true } })
+    : await prisma.customer.findMany({ where: { businessId: input.businessId, id: { in: [...new Set(input.customerIds ?? [])] }, lifecycleStatus: "ACTIVE" }, select: { id: true, name: true, email: true, phone: true } });
+  if (input.audience === "SELECTED_CUSTOMERS" && customers.length !== new Set(input.customerIds ?? []).size) {
+    throw new AppError("One or more selected customers are unavailable", 422);
+  }
+  if (!customers.length) throw new AppError("No active customers match this announcement", 422);
+  if (customers.length > 2000) throw new AppError("An announcement is limited to 2,000 customers per campaign", 422);
+  const campaign = await prisma.announcementCampaign.create({
+    data: {
+      businessId: input.businessId, createdByUserId: input.createdByUserId,
+      title: input.title, message: input.message, channels: input.channels,
+      audience: input.audience, status: "SENDING",
+      recipients: { create: customers.map((customer) => ({ customerId: customer.id })) },
+    },
+  });
+  const results = await Promise.all(customers.flatMap((customer) => input.channels.map((channel) => {
+    const destination = channel === "EMAIL" ? customer.email : customer.phone;
+    if (!destination) return Promise.resolve({ status: "FAILED" as const, customerId: customer.id, channel, error: channel === "EMAIL" ? "Missing email address" : "Missing phone number" });
+    return deliverMessage({
+      businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
+      channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
+      body: renderTemplate(input.message, { customerName: customer.name, companyName: "" }),
+      dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
+    }).then((result) => ({ ...result, customerId: customer.id, channel }));
+  })));
+  const failed = results.filter((result) => result.status === "FAILED").length;
+  await prisma.announcementCampaign.update({
+    where: { id: campaign.id },
+    data: { status: failed === results.length ? "FAILED" : failed ? "PARTIAL" : "SENT" },
+  });
+  return { campaignId: campaign.id, recipientCount: customers.length, results };
+}
+
+export async function getUnpickedOrderReminderConfig(businessId: string) {
+  return prisma.unpickedOrderReminderConfig.upsert({
+    where: { businessId },
+    create: { businessId },
+    update: {},
+  });
+}
+export async function saveUnpickedOrderReminderConfig(businessId: string, input: { enabled: boolean; thresholdMonths: number }) {
+  return prisma.unpickedOrderReminderConfig.upsert({
+    where: { businessId }, create: { businessId, ...input }, update: input,
+  });
+}
+export async function listUnpickedOrders(businessId: string) {
+  const config = await getUnpickedOrderReminderConfig(businessId);
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - config.thresholdMonths);
+  return prisma.order.findMany({
+    where: { businessId, status: "READY_FOR_PICKUP", createdAt: { lte: cutoff } },
+    include: { customer: true, branch: true, items: true, invoice: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+export async function sendUnpickedReminders(input: {
+  businessId: string; orderIds: string[]; channels: Channel[]; message: string;
+}) {
+  if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
+  const orders = await prisma.order.findMany({
+    where: { businessId: input.businessId, id: { in: [...new Set(input.orderIds)] }, status: "READY_FOR_PICKUP" },
+    include: { customer: true, business: { select: { name: true } } },
+  });
+  if (orders.length !== new Set(input.orderIds).size) throw new AppError("One or more selected unpicked orders are unavailable", 422);
+  const results = await Promise.all(orders.flatMap((order) => input.channels.map((channel) => {
+    const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
+    if (!destination) return Promise.resolve({ status: "FAILED" as const, orderId: order.id, channel, error: "Customer contact is missing" });
+    const body = renderTemplate(input.message, { customerName: order.customer.name, orderNumber: order.orderNumber, companyName: order.business.name, status: "ready for pickup" });
+    return deliverMessage({
+      businessId: input.businessId, customerId: order.customerId, orderId: order.id,
+      channel, messageType: "UNPICKED_REMINDER", destination, subject: `Unpicked order ${order.orderNumber}`,
+      body, dedupeKey: `unpicked-reminder:${order.id}:${channel}:${input.message.length}`,
+    }).then((result) => ({ ...result, orderId: order.id, channel }));
+  })));
+  return { orderCount: orders.length, results };
+}
