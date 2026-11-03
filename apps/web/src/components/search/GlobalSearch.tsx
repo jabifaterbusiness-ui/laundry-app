@@ -61,6 +61,14 @@ export function GlobalSearch() {
   const [completedQuery, setCompletedQuery] = useState("");
   const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
+  const orderMatchAvailable = results.some((result) => result.type === "ORDER");
+  const groups = groupResults(
+    results.filter((result) => result.type !== "ORDER"),
+  );
+  const quickOperations = searchQuickOperations(query).filter((operation) =>
+    hasPermission(user, operation.permission),
+  );
+  const canCreateCustomer = hasPermission(user, "customers.create");
 
   // Search belongs to the current page, user, and branch. Clear it whenever
   // navigation or the authenticated tenant context changes so an old email,
@@ -111,14 +119,32 @@ export function GlobalSearch() {
               nextResults[0];
 
             if (submittedResult) {
-              selectResult(submittedResult);
+              setQuery("");
+              setResults([]);
+              setError(null);
+              setCompletedQuery("");
+              setIsOpen(false);
+              navigate(
+                submittedResult.type === "ORDER"
+                  ? `/order-management?orderId=${encodeURIComponent(submittedResult.id)}`
+                  : submittedResult.href,
+              );
             } else if (
               canCreateCustomer &&
               searchQuickOperations(trimmedQuery).filter((operation) =>
                 hasPermission(user, operation.permission),
               ).length === 0
             ) {
-              addCustomerFromSearch();
+              const digits = trimmedQuery.replace(/[^0-9]/g, "");
+              const phoneLike = digits.length >= 5 && /^[+0-9().\\s-]+$/.test(trimmedQuery);
+              const params = new URLSearchParams({ addCustomer: "1" });
+              if (phoneLike) params.set("customerPhone", trimmedQuery);
+              setQuery("");
+              setResults([]);
+              setError(null);
+              setCompletedQuery("");
+              setIsOpen(false);
+              navigate(`/orders?${params.toString()}`);
             }
           }
         })
@@ -148,7 +174,7 @@ export function GlobalSearch() {
       // cleaned up, not only when the next request eventually starts.
       if (requestId === requestIdRef.current) requestIdRef.current += 1;
     };
-  }, [query, accessToken, activeBranchId]);
+  }, [query, accessToken, activeBranchId, navigate, user, canCreateCustomer]);
 
   function selectResult(result: GlobalSearchResult) {
     setQuery("");
@@ -189,14 +215,6 @@ export function GlobalSearch() {
     }
   }
 
-  const orderMatchAvailable = results.some((result) => result.type === "ORDER");
-  const groups = groupResults(
-    results.filter((result) => result.type !== "ORDER"),
-  );
-  const quickOperations = searchQuickOperations(query).filter((operation) =>
-    hasPermission(user, operation.permission),
-  );
-  const canCreateCustomer = hasPermission(user, "customers.create");
 
   function addCustomerFromSearch() {
     const trimmed = query.trim();
