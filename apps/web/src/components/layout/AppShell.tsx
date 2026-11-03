@@ -577,7 +577,7 @@ export function AppShell({ children }: PropsWithChildren) {
                     <span className="nav-icon" aria-hidden="true">
                       {item.icon}
                     </span>
-                    <span>{item.label}</span>
+                    <span>{isWorkstationMode && item.href === "/orders" ? "Order Management" : item.label}</span>
                   </Link>
                 );
               })}
