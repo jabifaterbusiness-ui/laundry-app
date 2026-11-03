@@ -188,13 +188,20 @@ export async function saveCustomerGroup(input: {
     select: { id: true },
   });
   if (existing) throw new AppError("A customer group with this name already exists", 409);
-  return prisma.customerGroup.create({
-    data: {
-      businessId: input.businessId, name: input.name, description: input.description ?? null,
-      members: { create: ids.map((customerId) => ({ businessId: input.businessId, customerId })) },
-    },
-    include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
-  });
+  try {
+    return await prisma.customerGroup.create({
+      data: {
+        businessId: input.businessId, name: input.name, description: input.description ?? null,
+        members: { create: ids.map((customerId) => ({ businessId: input.businessId, customerId })) },
+      },
+      include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      throw new AppError("A customer group with this name already exists", 409);
+    }
+    throw error;
+  }
 }
 
 export async function updateCustomerGroup(input: {
