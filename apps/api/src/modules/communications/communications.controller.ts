@@ -17,7 +17,11 @@ function requireBusinessId(req: Request): string {
 export async function sendAnnouncement(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = createAnnouncementSchema.parse(req.body);
-  const result = await createAnnouncement({ businessId: id, createdByUserId: req.user!.id, ...input });
+  const result = await createAnnouncement({
+    businessId: id, createdByUserId: req.user!.id,
+    title: input.title, message: input.message, channels: input.channels, audience: input.audience,
+    ...(input.customerIds !== undefined ? { customerIds: input.customerIds } : {}),
+  });
   await recordAuditEvent({ action: "communications.announcement_sent", entityType: "AnnouncementCampaign", entityId: result.campaignId, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { recipientCount: result.recipientCount, channels: input.channels, audience: input.audience } });
   res.status(201).json(result);
 }
@@ -27,7 +31,12 @@ export async function listStatusRules(req: Request, res: Response) {
 export async function saveStatusRule(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = statusRuleSchema.parse(req.body);
-  const rule = await saveOrderStatusRule({ businessId: id, ...input });
+  const rule = await saveOrderStatusRule({
+    businessId: id, status: input.status, enabled: input.enabled, channel: input.channel,
+    ...(input.whatsappMessage !== undefined ? { whatsappMessage: input.whatsappMessage } : {}),
+    ...(input.emailSubject !== undefined ? { emailSubject: input.emailSubject } : {}),
+    ...(input.emailMessage !== undefined ? { emailMessage: input.emailMessage } : {}),
+  });
   await recordAuditEvent({ action: "communications.status_rule_saved", entityType: "OrderStatusNotificationRule", entityId: rule.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { status: rule.status, enabled: rule.enabled, channel: rule.channel } });
   res.status(200).json(rule);
 }
