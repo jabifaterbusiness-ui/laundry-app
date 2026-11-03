@@ -169,21 +169,29 @@ export async function createAnnouncement(input: {
       recipients: { create: customers.map((customer) => ({ customerId: customer.id })) },
     },
   });
-  const results = await Promise.all(customers.flatMap((customer) => input.channels.map((channel) => {
+  const jobs = customers.flatMap((customer) => input.channels.map((channel) => async () => {
     const destination = channel === "EMAIL" ? customer.email : customer.phone;
-    if (!destination) return recordMissingDestination({
-      businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
-      channel, messageType: "ANNOUNCEMENT",
-      dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
-      reason: channel === "EMAIL" ? "Missing email address" : "Missing phone number",
-    }).then((result) => ({ ...result, customerId: customer.id, channel }));
-    return deliverMessage({
+    if (!destination) {
+      const result = await recordMissingDestination({
+        businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
+        channel, messageType: "ANNOUNCEMENT",
+        dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
+        reason: channel === "EMAIL" ? "Missing email address" : "Missing phone number",
+      });
+      return { ...result, customerId: customer.id, channel };
+    }
+    const result = await deliverMessage({
       businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
       body: renderTemplate(input.message, { customerName: customer.name, companyName: "" }),
       dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
-    }).then((result) => ({ ...result, customerId: customer.id, channel }));
-  })));
+    });
+    return { ...result, customerId: customer.id, channel };
+  }));
+  const results: Array<{ status: string; customerId: string; channel: Channel; error?: string }> = [];
+  for (let offset = 0; offset < jobs.length; offset += 10) {
+    results.push(...await Promise.all(jobs.slice(offset, offset + 10).map((job) => job())));
+  }
   const failed = results.filter((result) => result.status === "FAILED").length;
   await prisma.announcementCampaign.update({
     where: { id: campaign.id },
@@ -228,21 +236,29 @@ export async function sendUnpickedReminders(input: {
     include: { customer: true, business: { select: { name: true } } },
   });
   if (orders.length !== new Set(input.orderIds).size) throw new AppError("One or more selected unpicked orders are unavailable", 422);
-  const results = await Promise.all(orders.flatMap((order) => input.channels.map((channel) => {
+  const jobs = orders.flatMap((order) => input.channels.map((channel) => async () => {
     const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
-    if (!destination) return recordMissingDestination({
-      businessId: input.businessId, customerId: order.customerId, orderId: order.id,
-      channel, messageType: "UNPICKED_REMINDER",
-      dedupeKey: `unpicked-reminder:${order.id}:${channel}:${new Date().toISOString().slice(0, 10)}:missing-contact`,
-      reason: "Customer contact is missing",
-    }).then((result) => ({ ...result, orderId: order.id, channel }));
+    const dedupeKey = `unpicked-reminder:${order.id}:${channel}:${new Date().toISOString().slice(0, 10)}:${createHash("sha256").update(input.message).digest("hex")}`;
+    if (!destination) {
+      const result = await recordMissingDestination({
+        businessId: input.businessId, customerId: order.customerId, orderId: order.id,
+        channel, messageType: "UNPICKED_REMINDER", dedupeKey,
+        reason: "Customer contact is missing",
+      });
+      return { ...result, orderId: order.id, channel };
+    }
     const body = renderTemplate(input.message, { customerName: order.customer.name, orderNumber: order.orderNumber, companyName: order.business.name, status: "ready for pickup" });
-    return deliverMessage({
+    const result = await deliverMessage({
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "UNPICKED_REMINDER", destination, subject: `Unpicked order ${order.orderNumber}`,
-      body, dedupeKey: `unpicked-reminder:${order.id}:${channel}:${new Date().toISOString().slice(0, 10)}:${createHash("sha256").update(input.message).digest("hex")}`,
-    }).then((result) => ({ ...result, orderId: order.id, channel }));
-  })));
+      body, dedupeKey,
+    });
+    return { ...result, orderId: order.id, channel };
+  }));
+  const results = [];
+  for (let offset = 0; offset < jobs.length; offset += 10) {
+    results.push(...await Promise.all(jobs.slice(offset, offset + 10).map((job) => job())));
+  }
   return { orderCount: orders.length, results };
 }
 
