@@ -613,7 +613,7 @@ export async function listInvoiceHistory(params: {
     throw new AppError("Invoice not found", 404);
   }
 
-  return prisma.invoiceHistory.findMany({
+  const history = await prisma.invoiceHistory.findMany({
     where: {
       invoiceId: invoice.id,
       businessId: params.businessId,
@@ -623,4 +623,16 @@ export async function listInvoiceHistory(params: {
       version: "desc",
     },
   });
+  const actorIds = [...new Set(history.map((entry) => entry.actorUserId).filter(Boolean))];
+  const actors = actorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: actorIds }, businessId: params.businessId },
+        select: { id: true, fullName: true },
+      })
+    : [];
+  const actorNames = new Map(actors.map((actor) => [actor.id, actor.fullName]));
+  return history.map((entry) => ({
+    ...entry,
+    actorName: actorNames.get(entry.actorUserId) ?? null,
+  }));
 }
