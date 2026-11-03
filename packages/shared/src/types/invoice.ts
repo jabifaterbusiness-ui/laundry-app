@@ -53,7 +53,7 @@ export interface Invoice {
   adjustmentTotal: number;
   additiveTaxTotal: number;
   withholdingTaxTotal: number;
-  appliedAdjustments: Array<{ id: string; name: string; percentage: number; amount: number; scope: "INVOICE" | "ITEMS"; itemIds?: string[]; itemIndexes?: number[] }>>;
+  appliedAdjustments: Array<{ id: string; name: string; percentage: number; amount: number; scope: "INVOICE" | "ITEMS"; itemIds?: string[]; itemIndexes?: number[] }>;
   appliedTaxes: Array<{ id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; amount: number }>;
   totalAmount: number;
 
