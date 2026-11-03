@@ -334,12 +334,25 @@ describe("invoices.service", () => {
         totalAmount: 9000,
       };
       const orderUpdate = vi.fn().mockResolvedValue({});
+      const automaticDiscount = {
+        id: "all-customer-discount",
+        name: "Launch promotion",
+        percentage: -10,
+        targetScope: "ALL_CUSTOMERS",
+        customer: null,
+        group: null,
+        excludedServiceIds: [],
+        allowStacking: false,
+        isActive: true,
+        startsAt: null,
+        endsAt: null,
+      };
       const tx = {
         customerGroupMember: {
           findMany: vi.fn().mockResolvedValue([]),
         },
         priceAdjustment: {
-          findMany: vi.fn().mockResolvedValue([]),
+          findMany: vi.fn().mockResolvedValue([automaticDiscount]),
         },
         taxRule: {
           findMany: vi.fn().mockResolvedValue([]),
@@ -392,6 +405,15 @@ describe("invoices.service", () => {
       );
 
       expect(result).toBe(invoice);
+      expect(tx.invoice.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            subtotal: 10000,
+            adjustmentTotal: -1000,
+            totalAmount: 9000,
+          }),
+        }),
+      );
       expect(orderUpdate).toHaveBeenCalledWith({
         where: { id: "order-2" },
         data: { orderTotal: 9000 },
