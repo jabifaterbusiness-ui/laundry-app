@@ -70,6 +70,11 @@ export function GlobalSearch() {
   );
   const canCreateCustomer = hasPermission(user, "customers.create");
   const userPermissionKey = `${user?.role ?? ""}:${(user?.permissions ?? []).slice().sort().join("|")}`;
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Search belongs to the current page, user, and branch. Clear it whenever
   // navigation or the authenticated tenant context changes so an old email,
@@ -133,7 +138,7 @@ export function GlobalSearch() {
             } else if (
               canCreateCustomer &&
               searchQuickOperations(trimmedQuery).filter((operation) =>
-                hasPermission(user, operation.permission),
+                hasPermission(userRef.current, operation.permission),
               ).length === 0
             ) {
               const digits = trimmedQuery.replace(/[^0-9]/g, "");
