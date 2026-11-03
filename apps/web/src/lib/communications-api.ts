@@ -18,7 +18,7 @@ export interface CommunicationDelivery {
   campaign: { id: string; title: string } | null;
 }
 export interface UnpickedOrder {
-  id: string; orderNumber: string; createdAt: string; orderTotal: number;
+  id: string; orderNumber: string; createdAt: string; readyAt: string | null; orderTotal: number;
   customer: { id: string; name: string; phone: string; email: string | null };
   branch: { name: string };
 }
