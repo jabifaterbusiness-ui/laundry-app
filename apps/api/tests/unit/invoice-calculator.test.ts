@@ -15,6 +15,7 @@ describe("calculateInvoice", () => {
   it("limits an item adjustment to selected items", () => {
     const result = calculateInvoice(lines, [{ id: "a", name: "Shirt discount", percentage: -20, scope: "ITEMS", itemIds: ["shirt"] }]);
     expect(result.adjustments[0].amount).toBe(-2000);
+    expect(result.adjustments[0].itemIndexes).toEqual([0]);
     expect(result.totalAmount).toBe(13000);
   });
   it("supports a full discount and prevents a negative balance", () => {
