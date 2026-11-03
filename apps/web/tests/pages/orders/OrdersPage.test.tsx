@@ -941,7 +941,7 @@ describe("OrdersPage customer-specific pricing", () => {
   async function openNewOrderForCustomer(customer: Customer) {
     fireEvent.click(screen.getByRole("button", { name: /^New order$/i }));
     await screen.findByRole("heading", { name: /find customer/i });
-    const picker = screen.getByRole("region", { name: /customer picker/i });
+    const picker = screen.getByRole("region", { name: /find customer/i });
     fireEvent.click(within(picker).getByRole("button", {
       name: new RegExp(`^${customer.name}(?:\\s|$)`, "i"),
     }));
