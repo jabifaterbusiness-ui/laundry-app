@@ -27,6 +27,25 @@ function groupResults(results: GlobalSearchResult[]) {
   })).filter((group) => group.results.length > 0);
 }
 
+function findExactOrderMatch(
+  results: GlobalSearchResult[],
+  query: string,
+) {
+  const normalizedQuery = query
+    .trim()
+    .replace(/^order\\s*/i, "")
+    .replace(/^#\\s*/, "")
+    .toUpperCase();
+
+  if (!normalizedQuery) return undefined;
+
+  return results.find((result) => {
+    if (result.type !== "ORDER") return false;
+    const orderNumber = result.title.match(/^Order\\s*#\\s*(.+)$/i)?.[1];
+    return orderNumber?.trim().toUpperCase() === normalizedQuery;
+  });
+}
+
 export function GlobalSearch() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,7 +144,9 @@ export function GlobalSearch() {
     if (event.key === "Enter") {
       // Keep matching orders available to Enter without listing them in the dropdown.
       const firstResult =
-        results.find((result) => result.type === "ORDER") ?? results[0];
+        findExactOrderMatch(results, query) ??
+        results.find((result) => result.type === "ORDER") ??
+        results[0];
 
       if (firstResult) {
         selectResult(firstResult);
