@@ -126,6 +126,13 @@ export type CompanyReceipt = {
   branchName: string;
   createdAt: string;
   items: ReceiptItem[];
+  subtotal: number;
+  adjustedSubtotal: number;
+  adjustmentTotal: number;
+  additiveTaxTotal: number;
+  withholdingTaxTotal: number;
+  appliedAdjustments: Array<{ id: string; name: string; percentage: number; amount: number; scope: "INVOICE" | "ITEMS"; itemIds?: string[]; itemIndexes?: number[] }>;
+  appliedTaxes: Array<{ id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; amount: number }>;
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
