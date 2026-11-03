@@ -144,6 +144,8 @@ vi.mock("../../../src/lib/customers-api.js", () => ({
 
 vi.mock("../../../src/lib/services-api.js", () => ({
   listServices: vi.fn(),
+  listPricingRules: vi.fn(),
+  listCustomerServicePrices: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/colors-api.js", () => ({
@@ -162,7 +164,7 @@ import {
   getCustomer,
   listCustomers,
 } from "../../../src/lib/customers-api.js";
-import { listServices } from "../../../src/lib/services-api.js";
+import { listServices, listPricingRules, listCustomerServicePrices } from "../../../src/lib/services-api.js";
 import {
   createColor,
   listColors,
@@ -249,6 +251,9 @@ beforeEach(() => {
     customer: customerA,
   });
 
+
+  vi.mocked(listPricingRules).mockResolvedValue({ adjustments: [], taxes: [] });
+  vi.mocked(listCustomerServicePrices).mockResolvedValue([]);
 
   vi.mocked(listServices).mockResolvedValue({
     data: [serviceA, serviceB],
