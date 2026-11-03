@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
+import { updateInvoiceFinancialRulesSchema } from "./invoice-financial-rules.validation.js";
+import { updateInvoiceFinancialRules } from "./invoice-financial-rules.service.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import {
   createInvoiceSchema,
@@ -300,4 +302,33 @@ export async function history(req: Request, res: Response) {
   });
 
   res.status(200).json(result);
+}
+
+
+export async function updateFinancialRules(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = invoiceIdParamSchema.parse(req.params);
+  const input = updateInvoiceFinancialRulesSchema.parse(req.body);
+  const result = await updateInvoiceFinancialRules({
+    invoiceId: id, businessId, branchId, actorUserId: req.user!.id,
+    reason: input.reason, adjustments: input.adjustments, taxRuleIds: input.taxRuleIds,
+  });
+  await recordAuditEvent({
+    action: "invoice.financial_rules_updated",
+    entityType: "Invoice",
+    entityId: result.invoice.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      invoiceNumber: result.invoice.invoiceNumber,
+      reason: result.reason,
+      historyId: result.history.id,
+      before: result.before,
+      after: result.after,
+    },
+  });
+  res.status(200).json(result.invoice);
 }
