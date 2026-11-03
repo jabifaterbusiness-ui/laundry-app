@@ -869,27 +869,6 @@ export function OrdersPage() {
     setCustomerPickerOpen(false);
   }
 
-  function startNewOrderForCustomer(customer: Customer) {
-    const workspaceId = openWorkspace(customer);
-
-    switchWorkspace(workspaceId);
-
-    updateWorkspace(workspaceId, {
-      mode: "new",
-      draft: {
-        customerId: customer.id,
-        lines: [{ serviceId: "", quantity: 1, colors: [] }],
-        garmentNote: "",
-        internalNote: "",
-        expectedReadyAt: "",
-      },
-    });
-
-    setFormError(null);
-    setCustomerPickerOpen(false);
-    setFormOpen(true);
-  }
-
   function renderOrderTable(sectionOrders: Order[]) {
     if (sectionOrders.length === 0) {
       return <p>No orders in this section.</p>;
@@ -1567,6 +1546,8 @@ export function OrdersPage() {
           })}
         </section>
       )}
+
+      {newOrderContent}
 
       {workspaces.length > 0 && (
         <OrderWorkspaceSwitcher
