@@ -10,7 +10,7 @@ function makeTransaction(
   };
   const priceAdjustment = {
     findMany: vi.fn().mockImplementation(async (args: { where?: { id?: unknown } }) =>
-      args.where?.id ? manualDiscounts : rules,
+      args.where?.id ? manualDiscounts.filter((rule) => !args.where?.targetScope || rule.targetScope === args.where.targetScope) : rules,
     ),
   };
   return {
@@ -96,7 +96,7 @@ describe("resolveAutomaticDiscountSelections", () => {
         allowStacking: false,
         excludedServiceIds: [],
       },
-    ], [{ id: "manual-adjustment", percentage: -5 }]);
+    ], [{ id: "manual-adjustment", percentage: -5, targetScope: "MANUAL" }]);
 
     const result = await resolveAutomaticDiscountSelections(
       tx,
@@ -107,6 +107,32 @@ describe("resolveAutomaticDiscountSelections", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("does not treat a targeted discount ID as a manually selected discount", async () => {
+    const { tx } = makeTransaction([
+      {
+        id: "customer-discount",
+        percentage: -10,
+        targetScope: "CUSTOMER",
+        allowStacking: false,
+        excludedServiceIds: [],
+      },
+    ], [{
+      id: "customer-discount",
+      percentage: -10,
+      targetScope: "CUSTOMER",
+    }]);
+
+    const result = await resolveAutomaticDiscountSelections(
+      tx,
+      "business-1",
+      "customer-1",
+      [{ serviceId: "service-1" }],
+      [{ adjustmentId: "customer-discount", scope: "INVOICE" }],
+    );
+
+    expect(result).toEqual([{ adjustmentId: "customer-discount", scope: "INVOICE" }]);
   });
 
   it("still applies a customer discount when a manual surcharge is selected", async () => {
