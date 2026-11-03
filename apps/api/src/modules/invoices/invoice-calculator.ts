@@ -67,7 +67,7 @@ export function calculateInvoice(lines: PriceLine[], adjustments: PriceAdjustmen
       for (const line of allocations) {
         remainingByLine.set(line.id, line.capacity - line.allocated);
       }
-      applied = -discount;
+      applied = discount === 0 ? 0 : -discount;
     }
     return { id: rule.id, name: rule.name, percentage: rule.percentage, amount: applied, scope: rule.scope, ...(rule.scope === "ITEMS" ? { itemIds: [...(rule.itemIds ?? [])], itemIndexes: lines.flatMap((line, index) => (rule.itemIds ?? []).includes(line.id) ? [index] : []) } : {}) };
   });
