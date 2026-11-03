@@ -103,6 +103,24 @@ describe("GlobalSearch", () => {
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
   });
 
+  it("does not open a different order when the order number is only a partial match", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "ORDER", id: "order-100005", title: "Order #100005",
+      subtitle: "Other Customer · RECEIVED", href: "/orders?orderId=order-100005",
+    }]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+
+    expect(await screen.findByText("No exact order-number match. Check the order number and try again.")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("00005");
+    expect(screen.queryByRole("option", { name: /Add New Customer/ })).not.toBeInTheDocument();
+  });
+
   it("offers customer creation and carries a phone-like query into the new customer flow", async () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "08012345678" } });
