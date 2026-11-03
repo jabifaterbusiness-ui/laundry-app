@@ -1149,7 +1149,6 @@ export function OrdersPage() {
                             type="button"
                             aria-label={`Select colors for item ${index + 1}`}
                             onClick={() => toggleColorSelector(index)}
-                            aria-label={`Select colors for item ${index + 1}`}
                             aria-expanded={openColorSelector === index}
                             style={{
                               width: "100%",
