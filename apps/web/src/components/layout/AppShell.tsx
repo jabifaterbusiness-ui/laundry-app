@@ -140,6 +140,8 @@ export function AppShell({ children }: PropsWithChildren) {
   const inboxUnreadCount = inboxQuery.data?.unreadCount ?? 0;
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
+  const isWorkstationMode = appMode === "CUSTOMER_WORKSTATION";
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [quickOperation, setQuickOperation] =
     useState<QuickOperationDefinition | null>(null);
@@ -358,6 +360,17 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="topbar-search">
             <GlobalSearch />
           </div>
+          {isWorkstationMode ? (
+            <button
+              type="button"
+              className="workstation-sidebar-toggle"
+              aria-expanded={!sidebarCollapsed}
+              aria-label={sidebarCollapsed ? "Show workstation sidebar" : "Hide workstation sidebar"}
+              onClick={() => setSidebarCollapsed((current) => !current)}
+            >
+              {sidebarCollapsed ? "Show menu" : "Hide menu"}
+            </button>
+          ) : null}
 
           <div className="topbar-user">
             {activeBranches.length > 0 ? (
@@ -383,6 +396,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 aria-pressed={appMode === "NORMAL"}
                 onClick={() => {
                   setAppMode("NORMAL");
+                  setSidebarCollapsed(false);
                   if (location.pathname === "/customer-workstation") {
                     navigate("/");
                   }
@@ -399,7 +413,8 @@ export function AppShell({ children }: PropsWithChildren) {
                 aria-pressed={appMode === "CUSTOMER_WORKSTATION"}
                 onClick={() => {
                   setAppMode("CUSTOMER_WORKSTATION");
-                  navigate("/customer-workstation");
+                  setSidebarCollapsed(true);
+                  navigate("/orders");
                 }}
               >
                 Customer Workstation Mode
@@ -514,8 +529,8 @@ export function AppShell({ children }: PropsWithChildren) {
         />
       ) : null}
 
-      <div className="app-layout">
-        <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
+      <div className={`app-layout ${isWorkstationMode && sidebarCollapsed ? "app-layout--sidebar-collapsed" : ""}`}>
+        <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""} ${isWorkstationMode ? "sidebar--workstation" : ""}`}>
           <div className="sidebar-mobile-header">
             <span>Menu</span>
             <button
@@ -531,7 +546,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <section className="nav-section">
               <h2>Operations</h2>
 
-              {OPERATIONS.map((item) => {
+              {(isWorkstationMode ? OPERATIONS.filter((item) => item.href === "/orders") : OPERATIONS).map((item) => {
                 const active = isActive(item.href);
 
                 if (
@@ -560,12 +575,13 @@ export function AppShell({ children }: PropsWithChildren) {
                 );
               })}
             </section>
-            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
+            {!isWorkstationMode ? (            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
               <span className="nav-icon" aria-hidden="true">✉</span>
               <span>Inbox</span>
               {inboxUnreadCount > 0 ? <span className="inbox-unread-badge">{inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}</span> : null}
-            </Link>
+            </Link>) : null}
 
+            {!isWorkstationMode ? (
             <section className="nav-section management-section">
               <h2>Management</h2>
 
@@ -672,20 +688,21 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
             </section>
+            ) : null}
           </nav>
 
-          <Link to="/help" className={`nav-item help-nav-item ${isActive("/help") ? "active" : ""}`} onClick={closeMobileNav}>
+          {!isWorkstationMode ? <Link to="/help" className={`nav-item help-nav-item ${isActive("/help") ? "active" : ""}`} onClick={closeMobileNav}>
             <span className="nav-icon" aria-hidden="true">?</span>
             <span>Help Centre</span>
-          </Link>
+          </Link> : null}
 
-          <div className="sidebar-footer">
+          {!isWorkstationMode ? <div className="sidebar-footer">
             <div className="sidebar-footer-mark">LA</div>
             <div>
               <strong>Laundry Angel</strong>
               <span>Management System</span>
             </div>
-          </div>
+          </div> : null}
         </aside>
 
         <main className="main-content">
@@ -708,7 +725,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </button>
             </section>
           )}
-          {activeInboxPopup ? (
+          {!isWorkstationMode && activeInboxPopup ? (
             <div className="global-inbox-popup-backdrop" role="presentation">
               <section className="global-inbox-popup" role="dialog" aria-modal="true" aria-labelledby="global-inbox-popup-title">
                 <span className="global-inbox-popup-eyebrow">LAUNDRYANGEL ANNOUNCEMENT</span>
@@ -726,14 +743,14 @@ export function AppShell({ children }: PropsWithChildren) {
         </main>
       </div>
 
-      <QuickOperationLauncher
+      {!isWorkstationMode ? <QuickOperationLauncher
         operation={quickOperation}
         initialRecordId={quickOperationRecordId}
         onClose={() => {
           setQuickOperation(null);
           setQuickOperationRecordId("");
         }}
-      />
+      /> : null}
     </div>
   );
 }
