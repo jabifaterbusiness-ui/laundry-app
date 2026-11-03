@@ -496,13 +496,24 @@ function OrderManagementContent({
           queryKey: ["orders", "customer-history", customer.id],
         });
         onSelectOrder(result.order);
+
+        const deliveries = result.order.notificationResults ?? [];
+        const sent = deliveries.filter((item) => item.status === "SENT").length;
+        const failed = deliveries.filter((item) => item.status === "FAILED").length;
+        const duplicate = deliveries.filter((item) => item.status === "DUPLICATE").length;
+        const deliverySummary = deliveries.length
+          ? `Customer notification: ${sent} sent, ${failed} failed, ${duplicate} already processed.`
+          : "No enabled customer notification rule applies to this status.";
+
+        setError(
+          result.order.notificationError
+            ? `Order status updated, but notification processing failed: ${result.order.notificationError}`
+            : `Order status updated. ${deliverySummary}`,
+        );
+      } else {
+        setError("Status saved offline and will synchronize when the connection is restored.");
       }
       setLayer("none");
-      setError(
-        result.queued
-          ? "Status saved offline and will synchronize when the connection is restored."
-          : null,
-      );
     },
     onError: (err) => {
       setError(
