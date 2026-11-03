@@ -1,8 +1,8 @@
 export type AdjustmentScope = "INVOICE" | "ITEMS";
 export interface PriceLine { id: string; amount: number }
-export interface PriceAdjustment { id: string; name: string; percentage: number; scope: AdjustmentScope; itemIds?: string[]; itemIndexes?: number[] }
+export interface PriceAdjustment { id: string; name: string; percentage: number; scope: AdjustmentScope; itemIds?: string[] }
 export interface TaxRule { id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; enabled: boolean; allowWithOtherTaxes: boolean }
-export interface AppliedAdjustment { id: string; name: string; percentage: number; amount: number; scope: AdjustmentScope; itemIds?: string[] }
+export interface AppliedAdjustment { id: string; name: string; percentage: number; amount: number; scope: AdjustmentScope; itemIds?: string[]; itemIndexes?: number[] }
 export interface AppliedTax { id: string; name: string; kind: TaxRule["kind"]; value: number; treatment: TaxRule["treatment"]; amount: number }
 export interface InvoiceCalculation {
   subtotal: number; adjustedSubtotal: number; adjustmentTotal: number; taxableBase: number;
