@@ -909,7 +909,7 @@ describe("OrdersPage quick customer switching", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses ESC to return from New Order to Order Management", async () => {
+  it("keeps Order Management outside the Orders route after selecting an order", async () => {
     vi.mocked(listOrders).mockResolvedValue({
       data: [orderA],
       pagination: {
@@ -919,59 +919,20 @@ describe("OrdersPage quick customer switching", () => {
         totalPages: 1,
       },
     });
-
     vi.mocked(listAllOrders).mockResolvedValue([orderA]);
 
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /all orders/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "00001" }));
 
-    const allOrdersFolder = await screen.findByRole("button", {
-      name: /all orders/i,
-    });
-
-    fireEvent.click(allOrdersFolder);
-
-    const orderButton = await screen.findByRole("button", {
-      name: "00001",
-    });
-
-    fireEvent.click(orderButton);
-
-    await screen.findByRole("heading", {
-      name: /00001/i,
-    });
-
-    const orderManagement = screen.getByRole("region", {
-      name: "Order Management",
-    });
-
-    fireEvent.click(
-      within(orderManagement).getByRole("button", {
-        name: /^New order$/i,
-      }),
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: /^New order$/i,
-      }),
-    ).toBeInTheDocument();
-
-    fireEvent.keyDown(window, {
-      key: "Escape",
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        `/order-management?orderId=${orderA.id}`,
+      );
     });
 
     expect(
-      await screen.findByRole("heading", {
-        name: /00001/i,
-      }),
-    ).toBeInTheDocument();
-
-    const orderManagementAfterEsc = screen.getByRole("region", {
-      name: "Order Management",
-    });
-
-    expect(
-      within(orderManagementAfterEsc).getByText("Jane Doe"),
-    ).toBeInTheDocument();
+      screen.queryByRole("region", { name: "Order Management" }),
+    ).not.toBeInTheDocument();
   });
 });
