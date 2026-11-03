@@ -69,7 +69,7 @@ export function GlobalSearch() {
     hasPermission(user, operation.permission),
   );
   const canCreateCustomer = hasPermission(user, "customers.create");
-  const userPermissionKey = (user?.permissions ?? []).slice().sort().join("|");
+  const userPermissionKey = `${user?.role ?? ""}:${(user?.permissions ?? []).slice().sort().join("|")}`;
 
   // Search belongs to the current page, user, and branch. Clear it whenever
   // navigation or the authenticated tenant context changes so an old email,
