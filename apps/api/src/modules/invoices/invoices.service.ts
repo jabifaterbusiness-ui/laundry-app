@@ -1,6 +1,31 @@
 import type { InvoiceStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { calculateInvoice } from "./invoice-calculator.js";
+
+async function calculateNewInvoiceDefaults(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  items: Array<{ id: string; lineTotal: number }>,
+) {
+  const rules = await tx.taxRule.findMany({
+    where: { businessId, isActive: true, enabledByDefault: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return calculateInvoice(
+    items.map((item) => ({ id: item.id, amount: item.lineTotal })),
+    [],
+    rules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      kind: rule.kind as "PERCENTAGE" | "FIXED",
+      value: rule.value,
+      treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING",
+      enabled: true,
+      allowWithOtherTaxes: rule.allowWithOtherTaxes,
+    })),
+  );
+}
 
 export interface CreateInvoiceData {
   businessId: string;
@@ -100,8 +125,17 @@ export async function createInvoiceWithTx(
       totalPrice: item.lineTotal,
     }));
 
+  const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items);
+
   return tx.invoice.create({
     data: {
+      subtotal: calculation.subtotal,
+      adjustedSubtotal: calculation.adjustedSubtotal,
+      adjustmentTotal: calculation.adjustmentTotal,
+      additiveTaxTotal: calculation.additiveTaxTotal,
+      withholdingTaxTotal: calculation.withholdingTaxTotal,
+      appliedAdjustments: calculation.adjustments,
+      appliedTaxes: calculation.taxes,
       business: {
         connect: { id: businessId },
       },
@@ -125,7 +159,7 @@ export async function createInvoiceWithTx(
       receiptBackgroundColor: order.business.receiptBackgroundColor,
       receiptTextColor: order.business.receiptTextColor,
       receiptHeaderStyle: order.business.receiptHeaderStyle,
-      totalAmount: order.orderTotal,
+      totalAmount: calculation.totalAmount,
       garmentNote: order.garmentNote,
       internalNote: order.internalNote,
       customerAgreement: agreement,
@@ -190,8 +224,17 @@ export async function createInvoiceFromOrderWithTx(
       totalPrice: item.lineTotal,
     }));
 
+  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items);
+
   return tx.invoice.create({
     data: {
+      subtotal: calculation.subtotal,
+      adjustedSubtotal: calculation.adjustedSubtotal,
+      adjustmentTotal: calculation.adjustmentTotal,
+      additiveTaxTotal: calculation.additiveTaxTotal,
+      withholdingTaxTotal: calculation.withholdingTaxTotal,
+      appliedAdjustments: calculation.adjustments,
+      appliedTaxes: calculation.taxes,
       business: {
         connect: { id: business.id },
       },
@@ -215,7 +258,7 @@ export async function createInvoiceFromOrderWithTx(
       receiptBackgroundColor: business.receiptBackgroundColor,
       receiptTextColor: business.receiptTextColor,
       receiptHeaderStyle: business.receiptHeaderStyle,
-      totalAmount: order.orderTotal,
+      totalAmount: calculation.totalAmount,
       garmentNote: order.garmentNote,
       internalNote: order.internalNote,
       customerAgreement: agreement,
