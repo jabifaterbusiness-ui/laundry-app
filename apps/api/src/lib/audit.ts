@@ -78,6 +78,9 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
       }
     }
 
+    const existingReference = input.metadata?.reference;
+    const hasExternalReference =
+      typeof existingReference === "string" && existingReference.trim().length > 0;
     const metadata: Record<string, unknown> = {
       ...(input.metadata ?? {}),
       ...(actorName
@@ -85,12 +88,7 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
             authorizedBy: actorName,
             // Preserve a genuine external reference (e.g. bank/POS reference).
             // When none was supplied, use the authenticated authorizer's name.
-            ...(
-              typeof input.metadata?.reference === "string" &&
-              input.metadata.reference.trim()
-                ? {}
-                : { reference: actorName }
-            ),
+            ...(!hasExternalReference ? { reference: actorName } : {}),
           }
         : {}),
     };
