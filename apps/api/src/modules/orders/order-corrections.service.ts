@@ -32,6 +32,10 @@ type OrderForCorrection = Prisma.OrderGetPayload<{
     invoice: {
       include: {
         items: true;
+        payments: {
+          where: { status: "POSTED" };
+          select: { amount: true; type: true };
+        };
       };
     };
   };
