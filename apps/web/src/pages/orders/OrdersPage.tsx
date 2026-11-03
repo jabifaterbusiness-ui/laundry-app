@@ -31,7 +31,6 @@ import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
-import { OrderManagement } from "./OrderManagement.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
 
@@ -99,6 +98,7 @@ export function OrdersPage() {
   const customerIdFromUrl = searchParams.get("customerId");
   const returnToFromUrl = searchParams.get("returnTo");
   const orderIdFromUrl = searchParams.get("orderId");
+  const editOrderFromUrl = searchParams.get("edit") === "1";
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
@@ -494,26 +494,31 @@ export function OrdersPage() {
   });
 
   useEffect(() => {
-    const navigationKey = orderIdFromUrl
-      ? `${location.key}:${orderIdFromUrl}`
-      : null;
-    if (
-      !orderIdFromUrl ||
-      openedOrderFromUrlRef.current === navigationKey
-    ) {
+    if (!orderIdFromUrl) return;
+
+    if (!editOrderFromUrl) {
+      navigate(
+        `/order-management?orderId=${encodeURIComponent(orderIdFromUrl)}`,
+        { replace: true },
+      );
       return;
     }
+
+    const navigationKey = `${location.key}:${orderIdFromUrl}:edit`;
+    if (openedOrderFromUrlRef.current === navigationKey) return;
 
     const order = orderFromUrlQuery.data;
-    if (!order) {
-      return;
-    }
+    if (!order) return;
 
     openedOrderFromUrlRef.current = navigationKey;
-    // A search deep-link must open the complete Order Management workspace,
-    // not merely set the page's selectedOrder state.
-    void openOrderManagement(order);
-  }, [location.key, orderIdFromUrl, orderFromUrlQuery.data]);
+    void startEditInvoice(order);
+  }, [
+    location.key,
+    orderIdFromUrl,
+    editOrderFromUrl,
+    orderFromUrlQuery.data,
+    navigate,
+  ]);
 
   useEffect(() => {
     const navigationKey = customerIdFromUrl
@@ -805,27 +810,10 @@ export function OrdersPage() {
     createMutation.mutate();
   }
 
-  async function openOrderManagement(order: Order) {
-    setSelectedOrder(order);
-
-    const customer =
-      customers.find((item) => item.id === order.customerId) ??
-      (await getCustomer(order.customerId, { accessToken }).catch(() => null));
-
-    if (!customer) {
-      setFormError("Unable to load the customer for this order.");
-      return;
-    }
-
-    const workspaceId = openWorkspace(customer, { order });
-    switchWorkspace(workspaceId);
-    updateWorkspace(workspaceId, {
-      activeOrder: order,
-      mode: "view",
-    });
-    setFormOpen(false);
-    setCustomerPickerOpen(false);
-    setFormError(null);
+  function openOrderManagement(order: Order) {
+    navigate(
+      `/order-management?orderId=${encodeURIComponent(order.id)}`,
+    );
   }
 
   async function startEditInvoice(order: Order) {
@@ -900,18 +888,6 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
-  }
-
-  function closeOrderManagement() {
-    setFormOpen(false);
-    setCustomerPickerOpen(false);
-    setFormError(null);
-
-    if (activeWorkspaceId) {
-      updateWorkspace(activeWorkspaceId, {
-        mode: "view",
-      });
-    }
   }
 
   function renderOrderTable(sectionOrders: Order[]) {
@@ -1686,23 +1662,6 @@ export function OrdersPage() {
         </section>
       )}
 
-      {activeWorkspace?.customer &&
-        (selectedOrder || formOpen) && (
-          <OrderManagement
-            order={selectedOrder}
-            customer={activeWorkspace.customer}
-            mode={activeWorkspace.mode}
-            newOrderContent={newOrderContent}
-            onBack={closeOrderManagement}
-            onSwitchCustomer={() => {
-              setCustomerSearch("");
-              setCustomerPickerOpen(true);
-            }}
-            onNewOrder={startNewOrderForCustomer}
-            onSelectOrder={openOrderManagement}
-            onEditOrder={startEditInvoice}
-          />
-        )}
       {customerCreateMessage ? <p role="status">{customerCreateMessage}</p> : null}
       {newCustomerOpen ? (
         <CustomerFormDialog
