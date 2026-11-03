@@ -1503,7 +1503,7 @@ export function OrdersPage() {
               <section aria-label="Invoice discounts and taxes" style={{ margin: "1rem 0", padding: "1rem", border: "1px solid var(--border, #ddd)", borderRadius: 12 }}>
                 <h3>Invoice discounts & taxes</h3>
                 {pricingRulesQuery.isLoading && <p>Loading pricing options...</p>}
-                {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive).map((rule) => {
+                {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive && (rule.targetScope ?? "MANUAL") === "MANUAL").map((rule) => {
                   const selection = adjustmentSelections[rule.id];
                   return (
                     <div key={rule.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
