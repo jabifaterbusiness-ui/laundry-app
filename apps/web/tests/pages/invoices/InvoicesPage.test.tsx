@@ -84,6 +84,13 @@ const invoice = {
   companyEmail: "test@laundry.com",
   companyWebsite: "https://laundry.test",
   companyAddress: "Test Address",
+  subtotal: 10000,
+  adjustedSubtotal: 10000,
+  adjustmentTotal: 0,
+  additiveTaxTotal: 0,
+  withholdingTaxTotal: 0,
+  appliedAdjustments: [],
+  appliedTaxes: [],
   totalAmount: 10000,
   garmentNote: null,
   internalNote: null,
@@ -204,6 +211,13 @@ beforeEach(() => {
     branchName: "Main Branch",
     createdAt: "2026-09-01T10:00:00.000Z",
     items: [],
+    subtotal: 10000,
+    adjustedSubtotal: 10000,
+    adjustmentTotal: 0,
+    additiveTaxTotal: 0,
+    withholdingTaxTotal: 0,
+    appliedAdjustments: [],
+    appliedTaxes: [],
     totalAmount: 10000,
     totalPaid: 0,
     balanceDue: 10000,
@@ -254,6 +268,69 @@ describe("InvoicesPage invoice correction workflow", () => {
       ).toBeInTheDocument();
     });
   }
+
+  it("shows the financial breakdown and payment history in the on-screen invoice", async () => {
+    mockedInvoicesApi.getCustomerReceipt.mockResolvedValue({
+      receiptType: "CUSTOMER",
+      invoiceNumber: "INV-00001",
+      orderNumber: "00001",
+      companyName: "Test Laundry",
+      companyPhone: "08000000000",
+      companyEmail: "test@laundry.com",
+      companyWebsite: "https://laundry.test",
+      companyAddress: "Test Address",
+      customerName: "John Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-09-01T10:00:00.000Z",
+      items: [],
+      subtotal: 10000,
+      adjustedSubtotal: 9000,
+      adjustmentTotal: -1000,
+      additiveTaxTotal: 675,
+      withholdingTaxTotal: 0,
+      appliedAdjustments: [{
+        id: "special-customer",
+        name: "Special customer",
+        percentage: -10,
+        amount: -1000,
+        scope: "INVOICE",
+      }],
+      appliedTaxes: [{
+        id: "vat",
+        name: "VAT",
+        kind: "PERCENTAGE",
+        value: 7.5,
+        treatment: "ADDITIVE",
+        amount: 675,
+      }],
+      totalAmount: 9675,
+      totalPaid: 2500,
+      balanceDue: 7175,
+      payments: [{
+        id: "payment-1",
+        amount: 2500,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        reference: "BANK-REF-1",
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }],
+      garmentNote: null,
+      customerAgreement: "Customer agreement",
+    });
+
+    renderPage();
+    await selectInvoice();
+
+    expect(await screen.findByText("Service subtotal")).toBeInTheDocument();
+    expect(screen.getByText("Special customer (-10%)")).toBeInTheDocument();
+    expect(screen.getByText("Adjusted taxable amount")).toBeInTheDocument();
+    expect(screen.getByText(/VAT \(7.5%\)/)).toBeInTheDocument();
+    expect(screen.getByText("Total pieces")).toBeInTheDocument();
+    expect(screen.getByText("Payment history")).toBeInTheDocument();
+    expect(screen.getByText("BANK-REF-1")).toBeInTheDocument();
+    expect(screen.getByText("Amount paid")).toBeInTheDocument();
+    expect(screen.getByText("Balance due")).toBeInTheDocument();
+  });
 
   it("shows correction controls with invoices.manage permission", async () => {
     renderPage();
