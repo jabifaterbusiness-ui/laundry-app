@@ -111,6 +111,20 @@ async function createOrderWithTx(
       services.map((service) => [service.id, service]),
     );
 
+    // Customer-specific prices are read only for this business/customer.
+    // The selected price is copied into OrderItem, preserving history.
+    const customerPrices = await tx.customerServicePrice.findMany({
+      where: {
+        businessId: data.businessId,
+        customerId: data.customerId,
+        serviceId: { in: serviceIds },
+      },
+      select: { serviceId: true, unitPrice: true },
+    });
+    const customerPriceMap = new Map(
+      customerPrices.map((price) => [price.serviceId, price.unitPrice]),
+    );
+
     for (const item of data.items) {
       const service = serviceMap.get(item.serviceId);
 
@@ -139,8 +153,9 @@ async function createOrderWithTx(
       (item) => {
         const service = serviceMap.get(item.serviceId)!;
 
+        const unitPrice = customerPriceMap.get(service.id) ?? service.unitPrice;
         const totalPieces = item.quantity * service.pieces;
-        const lineTotal = item.quantity * service.unitPrice;
+        const lineTotal = item.quantity * unitPrice;
 
         return {
           service: {
@@ -151,7 +166,7 @@ async function createOrderWithTx(
           quantity: item.quantity,
           totalPieces,
           colors: item.colors ?? [],
-          unitPrice: service.unitPrice,
+          unitPrice,
           lineTotal,
         };
       },
