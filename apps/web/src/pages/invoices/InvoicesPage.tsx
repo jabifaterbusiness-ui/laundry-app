@@ -220,7 +220,7 @@ export function InvoicesPage() {
       (selectedInvoice.appliedAdjustments ?? []).map((rule) => [rule.id, {
         scope: rule.scope,
         itemIndexes: rule.scope === "ITEMS"
-          ? selectedInvoice.items.flatMap((item, index) => rule.itemIds?.includes(item.id) ? [index] : [])
+          ? (rule.itemIndexes ?? [])
           : [],
       }]),
     ));
