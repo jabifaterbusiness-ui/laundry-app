@@ -179,7 +179,7 @@ export function CommunicationsPage() {
         <div style={{ maxHeight: 260, overflow: "auto", margin: "1rem 0" }}>
           {(unpickedQuery.data?.data ?? []).map((order) => <label key={order.id} style={{ display: "block", padding: 8, borderBottom: "1px solid #e5e7eb" }}>
             <input type="checkbox" checked={selectedOrderIds.includes(order.id)} onChange={(event) => setSelectedOrderIds((current) => event.target.checked ? [...current, order.id] : current.filter((id) => id !== order.id))} />
-            <strong>#{order.orderNumber}</strong> · {order.customer.name} · {order.branch.name} · {money(order.orderTotal)} · {new Date(order.createdAt).toLocaleDateString("en-NG")}
+            <strong>#{order.orderNumber}</strong> · {order.customer.name} · {order.branch.name} · {money(order.orderTotal)} · {new Date(order.readyAt ?? order.createdAt).toLocaleDateString("en-NG")}
           </label>)}
           {(unpickedQuery.data?.data ?? []).length === 0 && <p>No unpicked orders match the current threshold.</p>}
         </div>
