@@ -1035,7 +1035,8 @@ export function OrdersPage() {
 
     const newOrderContent = formOpen ? (
 
-        <section>
+        <section aria-labelledby="new-order-heading">
+          <h2 id="new-order-heading">New Order</h2>
           <form onSubmit={submitOrder}>
             <div>
               <div>
@@ -1146,6 +1147,7 @@ export function OrdersPage() {
                         >
                           <button
                             type="button"
+                            aria-label={`Select colors for item ${index + 1}`}
                             onClick={() => toggleColorSelector(index)}
                             aria-label={`Select colors for item ${index + 1}`}
                             aria-expanded={openColorSelector === index}
