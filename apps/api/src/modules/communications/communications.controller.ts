@@ -6,7 +6,7 @@ import {
   statusRuleIdSchema, statusRuleSchema,
 } from "./communications.validation.js";
 import {
-  createAnnouncement, getUnpickedOrderReminderConfig, listOrderStatusRules,
+  createAnnouncement, getUnpickedOrderReminderConfig, listCommunicationDeliveries, listOrderStatusRules,
   listUnpickedOrders, removeOrderStatusRule, saveOrderStatusRule,
   saveUnpickedOrderReminderConfig, sendUnpickedReminders,
 } from "./communications.service.js";
@@ -56,4 +56,9 @@ export async function sendReminders(req: Request, res: Response) {
   const result = await sendUnpickedReminders({ businessId: id, ...input });
   await recordAuditEvent({ action: "communications.unpicked_reminders_sent", entityType: "Order", entityId: "bulk", businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { orderCount: result.orderCount, channels: input.channels } });
   res.status(200).json(result);
+}
+
+
+export async function getDeliveries(req: Request, res: Response) {
+  res.status(200).json({ data: await listCommunicationDeliveries(requireBusinessId(req)) });
 }
