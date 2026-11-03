@@ -108,6 +108,14 @@ export function OrdersPage() {
     workspaces.find(
       (workspace) => workspace.id === activeWorkspaceId,
     ) ?? null;
+  const orderFormWorkspaces = workspaces.filter(
+    (workspace) => workspace.mode !== "view",
+  );
+  const activeOrderFormWorkspaceId = orderFormWorkspaces.some(
+    (workspace) => workspace.id === activeWorkspaceId,
+  )
+    ? activeWorkspaceId
+    : null;
 
   // Keep page-level UI state synchronized with the selected
   // customer workspace. Workspace mode, rather than activeOrder
@@ -1637,10 +1645,10 @@ export function OrdersPage() {
 
       {newOrderContent}
 
-      {workspaces.length > 0 && (
+      {orderFormWorkspaces.length > 0 && (
         <OrderWorkspaceSwitcher
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
+          workspaces={orderFormWorkspaces}
+          activeWorkspaceId={activeOrderFormWorkspaceId}
           onOpenCustomer={() => {
             setCustomerSearch("");
             setCustomerPickerOpen(true);
