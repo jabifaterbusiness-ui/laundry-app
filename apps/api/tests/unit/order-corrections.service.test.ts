@@ -92,6 +92,9 @@ function createTx() {
     service: {
       findMany: vi.fn(),
     },
+    customerServicePrice: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     garment: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
