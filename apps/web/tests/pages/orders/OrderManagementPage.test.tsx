@@ -109,6 +109,23 @@ describe("OrderManagementPage", () => {
     expect(screen.getByText("Aaron Daniel")).toBeInTheDocument();
   });
 
+  it("does not fetch order or customer details until password authorization succeeds", async () => {
+    let authorize!: (token: string | null) => void;
+    requestAuthorizationMock.mockImplementation(
+      () => new Promise<string | null>((resolve) => { authorize = resolve; }),
+    );
+
+    renderPage();
+    await waitFor(() => expect(requestAuthorizationMock).toHaveBeenCalledOnce());
+
+    expect(getOrderMock).not.toHaveBeenCalled();
+    expect(getCustomerMock).not.toHaveBeenCalled();
+
+    authorize("sensitive-token");
+    await waitFor(() => expect(getOrderMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(getCustomerMock).toHaveBeenCalledOnce());
+  });
+
   it("does not render an order list inside the standalone workspace", async () => {
     renderPage();
     await screen.findByRole("region", { name: "Order Management" });
