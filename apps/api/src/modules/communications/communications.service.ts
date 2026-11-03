@@ -256,6 +256,7 @@ export async function createAnnouncement(input: {
     });
     if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
   } else {
+    if (!input.groupId) throw new AppError("Choose a customer group", 422);
     const group = await prisma.customerGroup.findFirst({
       where: { id: input.groupId, businessId: input.businessId },
       include: { members: { where: { businessId: input.businessId, customer: { lifecycleStatus: "ACTIVE" } }, include: { customer: { select: { id: true, name: true, email: true, phone: true } } } } },
