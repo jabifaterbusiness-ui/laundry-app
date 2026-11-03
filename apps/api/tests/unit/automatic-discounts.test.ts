@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveAutomaticDiscountSelections } from "../../src/modules/invoices/invoices.service.js";
 
-function makeTransaction(rules: Array<Record<string, unknown>>) {
+function makeTransaction(
+  rules: Array<Record<string, unknown>>,
+  manualDiscounts: Array<Record<string, unknown>> = [],
+) {
   const customerGroupMember = {
     findMany: vi.fn().mockResolvedValue([{ groupId: "group-1" }]),
   };
   const priceAdjustment = {
-    findMany: vi.fn().mockResolvedValue(rules),
+    findMany: vi.fn().mockImplementation(async (args: { where?: { id?: unknown } }) =>
+      args.where?.id ? manualDiscounts : rules,
+    ),
   };
   return {
     tx: { customerGroupMember, priceAdjustment } as never,
@@ -91,7 +96,7 @@ describe("resolveAutomaticDiscountSelections", () => {
         allowStacking: false,
         excludedServiceIds: [],
       },
-    ]);
+    ], [{ id: "manual-adjustment", percentage: -5 }]);
 
     const result = await resolveAutomaticDiscountSelections(
       tx,
@@ -102,6 +107,28 @@ describe("resolveAutomaticDiscountSelections", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("still applies a customer discount when a manual surcharge is selected", async () => {
+    const { tx } = makeTransaction([
+      {
+        id: "customer-discount",
+        percentage: -10,
+        targetScope: "CUSTOMER",
+        allowStacking: false,
+        excludedServiceIds: [],
+      },
+    ]);
+
+    const result = await resolveAutomaticDiscountSelections(
+      tx,
+      "business-1",
+      "customer-1",
+      [{ serviceId: "service-1" }],
+      [{ adjustmentId: "manual-surcharge", scope: "INVOICE" }],
+    );
+
+    expect(result).toEqual([{ adjustmentId: "customer-discount", scope: "INVOICE" }]);
   });
 
   it("does not create an automatic selection when every service is excluded", async () => {
