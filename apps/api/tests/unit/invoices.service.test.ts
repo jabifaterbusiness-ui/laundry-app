@@ -17,6 +17,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 
 import {
   createInvoice,
+  createInvoiceFromOrderWithTx,
   getInvoiceForBranch,
   getInvoiceForOrder,
   listInvoices,
@@ -321,6 +322,79 @@ describe("invoices.service", () => {
       ).rejects.toMatchObject({
         message: "An invoice cannot be created for an order with no items",
         statusCode: 422,
+      });
+    });
+  });
+
+  describe("createInvoiceFromOrderWithTx", () => {
+    it("updates the order total to match the invoice total", async () => {
+      const invoice = {
+        id: "invoice-2",
+        invoiceNumber: "00043",
+        totalAmount: 9000,
+      };
+      const orderUpdate = vi.fn().mockResolvedValue({});
+      const tx = {
+        customerGroupMember: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        priceAdjustment: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        taxRule: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        order: {
+          update: orderUpdate,
+        },
+        invoice: {
+          create: vi.fn().mockResolvedValue(invoice),
+        },
+      };
+
+      const result = await createInvoiceFromOrderWithTx(
+        tx as never,
+        {
+          id: "order-2",
+          orderNumber: "00043",
+          orderTotal: 10000,
+          branchId: "branch-1",
+          customerId: "customer-1",
+          garmentNote: null,
+          internalNote: null,
+          customer: { id: "customer-1", name: "Jane Customer" },
+          branch: { id: "branch-1", name: "Main Branch" },
+          items: [{
+            id: "item-1",
+            serviceName: "Shirt",
+            piecesPerUnit: 1,
+            quantity: 2,
+            totalPieces: 2,
+            unitPrice: 5000,
+            lineTotal: 10000,
+          }],
+        } as never,
+        {
+          id: "business-1",
+          name: "Clean Laundry",
+          phone: null,
+          email: null,
+          website: null,
+          address: null,
+          logoUrl: null,
+          receiptPrimaryColor: null,
+          receiptAccentColor: null,
+          receiptBackgroundColor: null,
+          receiptTextColor: null,
+          receiptHeaderStyle: null,
+        },
+        "Customer agreement",
+      );
+
+      expect(result).toBe(invoice);
+      expect(orderUpdate).toHaveBeenCalledWith({
+        where: { id: "order-2" },
+        data: { orderTotal: 9000 },
       });
     });
   });
