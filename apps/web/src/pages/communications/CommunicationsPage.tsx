@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import { listCustomers } from "../../lib/customers-api.js";
@@ -216,7 +217,7 @@ export function CommunicationsPage() {
 
       <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
         <h2>Customer groups</h2>
-        <p>Create reusable customer segments and maintain their membership for targeted announcements.</p>
+        <p>Create reusable customer segments and maintain their membership for targeted announcements. Configure automatic group discounts in <Link to="/services">Services & Price List → Discounts & promotions</Link>.</p>
         <form onSubmit={(event) => { event.preventDefault(); groupMutation.mutate(); }}>
           <label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={100} required /></label>
           <label>Description<input value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} maxLength={500} /></label>
