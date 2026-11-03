@@ -325,7 +325,7 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(within(financialBreakdown).getByText("Service subtotal")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Special customer (-10%)")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Adjusted taxable amount")).toBeInTheDocument();
-    expect(within(financialBreakdown).getByText(/VAT \\(7.5%\\)/)).toBeInTheDocument();
+    expect(within(financialBreakdown).getByText("VAT (7.5%)")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Total pieces")).toBeInTheDocument();
 
     const paymentHistory = screen.getByRole("region", { name: "Invoice payment history" });
