@@ -53,6 +53,12 @@ const OPERATIONS: NavItem[] = [
 
 const MANAGEMENT: NavItem[] = [
   {
+    label: "Customer Communications",
+    href: "/communications",
+    icon: "✉",
+    permissionsAny: ["customers.update", "orders.change_status"],
+  },
+  {
     label: "Services & Price List",
     href: "/services",
     icon: "◈",
