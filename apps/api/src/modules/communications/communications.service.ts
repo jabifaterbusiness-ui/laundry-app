@@ -235,12 +235,14 @@ export async function deleteCustomerGroup(groupId: string, businessId: string) {
   if (!result.count) throw new AppError("Customer group not found", 404);
 }
 
+type AnnouncementCustomer = { id: string; name: string; email: string | null; phone: string };
+
 export async function createAnnouncement(input: {
   businessId: string; createdByUserId: string; title: string; message: string;
   channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
-  let customers;
+  let customers: AnnouncementCustomer[];
   if (input.audience === "ALL_CUSTOMERS") {
     customers = await prisma.customer.findMany({
       where: { businessId: input.businessId, lifecycleStatus: "ACTIVE" },
