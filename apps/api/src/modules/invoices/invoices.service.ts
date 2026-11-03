@@ -12,6 +12,12 @@ async function calculateNewInvoiceDefaults(
     taxRuleIds?: string[];
   } = {},
 ) {
+  // Real Prisma order items always have IDs. Lightweight service/test fixtures may omit
+  // them, so give those lines stable per-invoice IDs before resolving item-scoped rules.
+  const calculationLines = items.map((item, index) => ({
+    ...item,
+    id: typeof item.id === "string" && item.id.trim() ? item.id : `invoice-line-${index + 1}`,
+  }));
   const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
   const adjustmentRecords = selectedAdjustmentIds.length
     ? await tx.priceAdjustment.findMany({ where: { businessId, id: { in: selectedAdjustmentIds }, isActive: true } })
@@ -26,7 +32,7 @@ async function calculateNewInvoiceDefaults(
       if (!Number.isInteger(index) || index < 0 || index >= items.length) {
         throw new AppError("A selected adjustment contains an invalid order item", 422);
       }
-      return items[index].id;
+      return calculationLines[index].id;
     });
     if (selection.scope === "ITEMS" && itemIds.length === 0) {
       throw new AppError("Select at least one item for an item-specific adjustment", 422);
@@ -51,7 +57,7 @@ async function calculateNewInvoiceDefaults(
     throw new AppError("One or more selected tax rules are unavailable", 422);
   }
   return calculateInvoice(
-    items.map((item) => ({ id: item.id, amount: item.lineTotal })),
+    calculationLines.map((item) => ({ id: item.id, amount: item.lineTotal })),
     adjustments,
     rules.map((rule) => ({
       id: rule.id,
