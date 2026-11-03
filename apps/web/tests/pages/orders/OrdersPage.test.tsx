@@ -238,6 +238,7 @@ function seedAuth() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   useOrderWorkspaceStore.getState().clearWorkspaces();
 
   seedAuth();
