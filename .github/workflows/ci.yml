@@ -58,8 +58,8 @@ jobs:
         run: npm run db:migrate:deploy --workspace=apps/api
       - name: Run API tests
         run: npm run test:api
-      - name: Run web tests with per-test progress
-        run: npm run test:web -- --reporter=verbose
+      - name: Run web tests with bounded workers and explicit timeouts
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000
       - name: Lint API and web
         run: npm run lint
       - name: Typecheck API and web
