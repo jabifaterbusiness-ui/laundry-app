@@ -43,7 +43,7 @@ export function CommunicationsPage() {
   const customersQuery = useQuery({
     queryKey: ["customers", "communications"],
     queryFn: () => listCustomers({ page: 1, pageSize: 100, status: "active" }, { accessToken }),
-    enabled: Boolean(accessToken && audience === "SELECTED_CUSTOMERS"),
+    enabled: Boolean(accessToken),
   });
   const groupsQuery = useQuery({
     queryKey: ["communications", "customer-groups"],
