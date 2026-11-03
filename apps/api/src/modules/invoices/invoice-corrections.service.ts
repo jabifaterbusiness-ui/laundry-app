@@ -314,7 +314,7 @@ export async function updateInvoiceWithCorrection(params: {
           })
         : [];
       const calculation = calculateInvoice(lines, savedAdjustments, savedTaxes);
-      const amountPaid = current.payments.reduce((sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount), 0);
+      const amountPaid = (current.payments ?? []).reduce((sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount), 0);
       if (amountPaid > calculation.totalAmount) {
         throw new AppError("The revised invoice total is below the amount already paid. Record an appropriate refund or account credit first.", 422);
       }
