@@ -744,6 +744,14 @@ describe("OrdersPage quick customer switching", () => {
     });
   });
 
+  it("opens the customer picker when returning from Order Management to switch customers", async () => {
+    renderPage(["/orders?customerPicker=1"]);
+
+    expect(
+      await screen.findByRole("heading", { name: /find customer/i }),
+    ).toBeInTheDocument();
+  });
+
   it("opens the customer finder before creating a new order", async () => {
     renderPage();
 
