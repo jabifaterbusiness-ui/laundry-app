@@ -33,15 +33,15 @@ function findExactOrderMatch(
 ) {
   const normalizedQuery = query
     .trim()
-    .replace(/^order\\s*/i, "")
-    .replace(/^#\\s*/, "")
+    .replace(/^order\s*/i, "")
+    .replace(/^#\s*/, "")
     .toUpperCase();
 
   if (!normalizedQuery) return undefined;
 
   return results.find((result) => {
     if (result.type !== "ORDER") return false;
-    const orderNumber = result.title.match(/^Order\\s*#\\s*(.+)$/i)?.[1];
+    const orderNumber = result.title.match(/^Order\s*#\s*(.+)$/i)?.[1];
     return orderNumber?.trim().toUpperCase() === normalizedQuery;
   });
 }
