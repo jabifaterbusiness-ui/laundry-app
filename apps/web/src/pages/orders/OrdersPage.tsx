@@ -490,7 +490,7 @@ export function OrdersPage() {
   const orderFromUrlQuery = useQuery({
     queryKey: ["order", orderIdFromUrl, activeBranchId],
     queryFn: () => getOrder(orderIdFromUrl!, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId && orderIdFromUrl),
+    enabled: Boolean(accessToken && activeBranchId && orderIdFromUrl && editOrderFromUrl),
   });
 
   useEffect(() => {
