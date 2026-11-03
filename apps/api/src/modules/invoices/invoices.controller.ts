@@ -312,7 +312,12 @@ export async function updateFinancialRules(req: Request, res: Response) {
   const input = updateInvoiceFinancialRulesSchema.parse(req.body);
   const result = await updateInvoiceFinancialRules({
     invoiceId: id, businessId, branchId, actorUserId: req.user!.id,
-    reason: input.reason, adjustments: input.adjustments, taxRuleIds: input.taxRuleIds,
+    reason: input.reason,
+    adjustments: input.adjustments.map((rule) => ({
+      adjustmentId: rule.adjustmentId, scope: rule.scope,
+      ...(rule.itemIndexes !== undefined ? { itemIndexes: rule.itemIndexes } : {}),
+    })),
+    taxRuleIds: input.taxRuleIds,
   });
   await recordAuditEvent({
     action: "invoice.financial_rules_updated",
