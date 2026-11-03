@@ -37,7 +37,7 @@ export function OrderManagementPage() {
   const customerQuery = useQuery({
     queryKey: ["order-management-page-customer", orderQuery.data?.customerId],
     queryFn: () => getCustomer(orderQuery.data!.customerId, { accessToken }),
-    enabled: Boolean(accessToken && orderQuery.data?.customerId),
+    enabled: Boolean(accessToken && isAuthorizedForCurrentLocation && orderQuery.data?.customerId),
   });
 
   useEffect(() => {
