@@ -6,6 +6,20 @@ import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
+const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
+
+async function ensureDefaultReadyRule(businessId: string) {
+  return prisma.orderStatusNotificationRule.upsert({
+    where: { businessId_status: { businessId, status: "READY_FOR_PICKUP" } },
+    create: {
+      businessId, status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      whatsappMessage: DEFAULT_READY_WHATSAPP_MESSAGE,
+      emailSubject: "Your laundry is ready for pickup",
+      emailMessage: "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.",
+    },
+    update: {},
+  });
+}
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
@@ -88,9 +102,12 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
     include: { customer: true, business: { select: { name: true } } },
   });
   if (!order) return [];
-  const rule = await prisma.orderStatusNotificationRule.findFirst({
-    where: { businessId: input.businessId, status: input.status, enabled: true },
-  });
+  const configuredRule = input.status === "READY_FOR_PICKUP"
+    ? await ensureDefaultReadyRule(input.businessId)
+    : await prisma.orderStatusNotificationRule.findFirst({
+        where: { businessId: input.businessId, status: input.status },
+      });
+  const rule = configuredRule?.enabled ? configuredRule : null;
   if (!rule) return [];
   const values = {
     customerName: order.customer.name,
@@ -126,6 +143,7 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
 }
 
 export async function listOrderStatusRules(businessId: string) {
+  await ensureDefaultReadyRule(businessId);
   return prisma.orderStatusNotificationRule.findMany({ where: { businessId }, orderBy: { status: "asc" } });
 }
 export async function saveOrderStatusRule(input: {
