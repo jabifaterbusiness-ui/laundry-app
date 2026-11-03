@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createAdjustment, createTax, list as listPricingRules, removeAdjustment, removeTax } from "./pricing-rules.controller.js";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
@@ -24,6 +25,14 @@ import {
 export const servicesRouter = Router();
 
 servicesRouter.use(requireAuth, requireBusinessContext);
+
+// Price adjustments and tax rules are part of the Price List settings.
+servicesRouter.get("/pricing-rules", requirePermission("services.view"), asyncHandler(listPricingRules));
+servicesRouter.post("/price-adjustments", requirePermission("services.update"), asyncHandler(createAdjustment));
+servicesRouter.delete("/price-adjustments/:id", requirePermission("services.update"), asyncHandler(removeAdjustment));
+servicesRouter.post("/tax-rules", requirePermission("services.update"), asyncHandler(createTax));
+servicesRouter.delete("/tax-rules/:id", requirePermission("services.update"), asyncHandler(removeTax));
+
 
 servicesRouter.post(
   "/",
