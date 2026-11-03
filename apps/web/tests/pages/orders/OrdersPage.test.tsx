@@ -253,7 +253,7 @@ beforeEach(() => {
 
 
   vi.mocked(listPricingRules).mockResolvedValue({ adjustments: [], taxes: [] });
-  vi.mocked(listCustomerServicePrices).mockResolvedValue([]);
+  vi.mocked(listCustomerServicePrices).mockResolvedValue({ data: [] });
 
   vi.mocked(listServices).mockResolvedValue({
     data: [serviceA, serviceB],
