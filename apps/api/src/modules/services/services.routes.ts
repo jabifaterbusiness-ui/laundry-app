@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAdjustment, createTax, list as listPricingRules, removeAdjustment, removeTax } from "./pricing-rules.controller.js";
+import { createAdjustment, createTax, list as listPricingRules, removeAdjustment, removeTax, updateAdjustmentStatus } from "./pricing-rules.controller.js";
 import { list as listCustomerPrices, remove as removeCustomerPrice, save as saveCustomerPrice } from "./customer-pricing.controller.js";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
@@ -34,6 +34,7 @@ servicesRouter.put("/customer-prices", requirePermission("services.update"), asy
 servicesRouter.delete("/customer-prices/:id", requirePermission("services.update"), asyncHandler(removeCustomerPrice));
 
 servicesRouter.post("/price-adjustments", requirePermission("services.update"), asyncHandler(createAdjustment));
+servicesRouter.patch("/price-adjustments/:id", requirePermission("services.update"), asyncHandler(updateAdjustmentStatus));
 servicesRouter.delete("/price-adjustments/:id", requirePermission("services.update"), asyncHandler(removeAdjustment));
 servicesRouter.post("/tax-rules", requirePermission("services.update"), asyncHandler(createTax));
 servicesRouter.delete("/tax-rules/:id", requirePermission("services.update"), asyncHandler(removeTax));
