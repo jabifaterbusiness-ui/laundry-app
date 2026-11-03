@@ -133,7 +133,7 @@ export async function resolveAutomaticDiscountSelections(
 
   // A manually selected discount is an explicit choice. Positive surcharges
   // do not count as discount stacking and must not suppress customer benefits.
-  const manualDiscounts = manualSelections.length
+  const manualDiscounts = manualSelections.length && tx.priceAdjustment
     ? await tx.priceAdjustment.findMany({
         where: {
           businessId,
