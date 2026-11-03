@@ -160,6 +160,16 @@ export async function resolveAutomaticDiscountSelections(
         select: { id: true },
       })
     : [];
+  const manuallySelectedAutomaticRule = rules.some((rule) =>
+    manualSelections.some((selection) => selection.adjustmentId === rule.id),
+  );
+  if (manuallySelectedAutomaticRule) {
+    throw new AppError(
+      "Automatic customer discounts are applied automatically and cannot be selected manually",
+      422,
+    );
+  }
+
   let eligibleRules = manualDiscounts.length
     ? rules.filter((rule) => rule.allowStacking)
     : rules;
