@@ -78,6 +78,7 @@ export function CommunicationsPage() {
   const reminderConfigQuery = useQuery({
     queryKey: ["communications", "reminder-config", activeBranchId],
     queryFn: () => getReminderConfig({ accessToken, branchId: activeBranchId }),
+    enabled: Boolean(accessToken && activeBranchId),
   });
 
   useEffect(() => {
@@ -89,6 +90,7 @@ export function CommunicationsPage() {
   const unpickedQuery = useQuery({
     queryKey: ["communications", "unpicked-orders", activeBranchId],
     queryFn: () => listUnpickedOrders({ accessToken, branchId: activeBranchId }),
+    enabled: Boolean(accessToken && activeBranchId),
   });
 
   const groupMutation = useMutation({
@@ -247,11 +249,12 @@ export function CommunicationsPage() {
 
       <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
         <h2>Unpicked orders & customer reminders</h2>
+        {!activeBranchId && <p role="status">Select an active branch from the top bar to view and remind customers about unpicked orders.</p>}
         <p>Find orders that have remained ready for pickup beyond your selected age threshold.</p>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12 }}>
           <label>Age threshold (months)<input type="number" min="1" max="36" value={thresholdMonths} onChange={(event) => setThresholdMonths(Number(event.target.value))} /></label>
           <label><input type="checkbox" checked={remindersEnabled} onChange={(event) => setRemindersEnabled(event.target.checked)} /> Enable reminder section</label>
-          <button type="button" disabled={configMutation.isPending || thresholdMonths < 1 || thresholdMonths > 36} onClick={() => configMutation.mutate()}>Save reminder settings</button>
+          <button type="button" disabled={!activeBranchId || configMutation.isPending || thresholdMonths < 1 || thresholdMonths > 36} onClick={() => configMutation.mutate()}>Save reminder settings</button>
         </div>
         {reminderConfigQuery.data && <p>Current setting: {reminderConfigQuery.data.enabled ? "Enabled" : "Disabled"} · {reminderConfigQuery.data.thresholdMonths} months</p>}
         <div style={{ maxHeight: 260, overflow: "auto", margin: "1rem 0" }}>
@@ -264,7 +267,7 @@ export function CommunicationsPage() {
         <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
         <label><input type="checkbox" checked={reminderChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", reminderChannels, setReminderChannels)} /> WhatsApp</label>
         <label><input type="checkbox" checked={reminderChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", reminderChannels, setReminderChannels)} /> Email</label>
-        <button type="button" disabled={reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
+        <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
       </section>
 
       <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16 }}>
