@@ -150,6 +150,25 @@
   border-style: dashed;
 }
 
+.receipt__charges {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 9px 0;
+  border-top: 1px solid #b8b8b8;
+  font-size: 10px;
+}
+.receipt__charges > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.receipt__charges strong {
+  white-space: nowrap;
+  text-align: right;
+}
+
 .receipt__summary {
   display: flex;
   justify-content: space-between;
