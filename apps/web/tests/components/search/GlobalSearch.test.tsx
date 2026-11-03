@@ -33,7 +33,7 @@ describe("GlobalSearch", () => {
     searchQuickOperationsMock.mockReturnValue([]);
   });
 
-  it("searches the active branch and opens the selected order result", async () => {
+  it("keeps order matches out of suggestions and opens the exact match on Enter", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "ORDER", id: "order-42", title: "Order #00042",
       subtitle: "Ada Laundry · RECEIVED", href: "/orders?orderId=order-42",
@@ -41,12 +41,13 @@ describe("GlobalSearch", () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "00042" } });
 
-    const result = await screen.findByRole("option", { name: /Order #00042/ });
+    expect(await screen.findByText("Matching order found. Press Enter to open Order Management.")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Order #00042/ })).not.toBeInTheDocument();
     await waitFor(() => expect(globalSearchMock).toHaveBeenCalledWith(
       { q: "00042", limit: 10 }, { accessToken: "access-token" }, "branch-main",
     ));
-    fireEvent.click(result);
-    expect(navigateMock).toHaveBeenCalledWith("/orders?orderId=order-42");
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Global search" }), { key: "Enter" });
+    expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-42");
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
 
