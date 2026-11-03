@@ -318,7 +318,7 @@ describe("InvoicesPage invoice correction workflow", () => {
       customerAgreement: "Customer agreement",
     });
 
-    renderPage();
+    renderPage(["invoices.view", "invoices.manage", "payments.view"]);
     await selectInvoice();
 
     expect(await screen.findByText("Service subtotal")).toBeInTheDocument();
