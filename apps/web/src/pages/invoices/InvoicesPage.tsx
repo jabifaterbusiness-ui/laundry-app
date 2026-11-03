@@ -416,12 +416,9 @@ export function InvoicesPage() {
         { accessToken },
         activeBranchId,
       ),
-    enabled: Boolean(
-      accessToken &&
-        activeBranchId &&
-        selectedInvoiceId &&
-        printMode === "customer",
-    ),
+    // Load the customer-safe receipt projection for the on-screen invoice
+    // as well as printing, so payment history and balance stay in sync.
+    enabled: Boolean(accessToken && activeBranchId && selectedInvoiceId),
   });
 
   const companyReceiptQuery = useQuery({
@@ -683,11 +680,96 @@ export function InvoicesPage() {
             </tbody>
           </table>
 
-          <p>
-            <strong>
-              Total: {formatMoney(selectedInvoice.totalAmount)}
-            </strong>
-          </p>
+          <section
+            aria-label="Invoice financial breakdown"
+            style={{
+              marginTop: 16,
+              padding: 14,
+              border: "1px solid #d8dee8",
+              borderRadius: 12,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>Financial breakdown</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <span>Service subtotal</span>
+              <strong>{formatMoney(selectedInvoice.subtotal)}</strong>
+            </div>
+            {(selectedInvoice.appliedAdjustments ?? []).map((adjustment) => (
+              <div key={adjustment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{adjustment.name} ({adjustment.percentage > 0 ? "+" : ""}{adjustment.percentage}%)</span>
+                <strong>{adjustment.amount < 0 ? "−" : adjustment.amount > 0 ? "+" : ""}{formatMoney(Math.abs(adjustment.amount))}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <span>Adjusted taxable amount</span>
+              <strong>{formatMoney(selectedInvoice.adjustedSubtotal)}</strong>
+            </div>
+            {(selectedInvoice.appliedTaxes ?? []).map((tax) => (
+              <div key={tax.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{tax.name} ({tax.kind === "PERCENTAGE" ? `${tax.value}%` : "Fixed"}) · {tax.treatment === "WITHHOLDING" ? "Withheld" : "Added"}</span>
+                <strong>{tax.treatment === "WITHHOLDING" ? "−" : "+"}{formatMoney(tax.amount)}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px solid #d8dee8", paddingTop: 8 }}>
+              <span>Total pieces</span>
+              <strong>{selectedInvoice.items.reduce((total, item) => total + item.totalPieces, 0)}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 18, borderTop: "2px solid #111827", paddingTop: 8 }}>
+              <strong>TOTAL AMOUNT</strong>
+              <strong>{formatMoney(selectedInvoice.totalAmount)}</strong>
+            </div>
+          </section>
+
+          <section
+            aria-label="Invoice payment history"
+            style={{
+              marginTop: 14,
+              padding: 14,
+              border: "1px solid #d8dee8",
+              borderRadius: 12,
+            }}
+          >
+            <h3 style={{ margin: "0 0 10px" }}>Payment history</h3>
+            {customerReceiptQuery.isLoading ? <p>Loading payment history...</p> : null}
+            {customerReceiptQuery.isError ? (
+              <p role="alert">Unable to load payment history. The invoice total above remains available.</p>
+            ) : null}
+            {customerReceiptQuery.data?.payments.length ? (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr>
+                  </thead>
+                  <tbody>
+                    {customerReceiptQuery.data.payments.map((payment) => (
+                      <tr key={payment.id}>
+                        <td>{formatDate(payment.createdAt)}</td>
+                        <td>{payment.type === "REFUND" ? "Refund" : ({
+                          CASH: "Cash",
+                          TRANSFER: "Bank transfer",
+                          POS: "POS",
+                          PAY_FROM_ACCOUNT: "Customer account",
+                        } as const)[payment.method]}</td>
+                        <td>{payment.reference || "—"}</td>
+                        <td>{payment.type === "REFUND" ? "−" : ""}{formatMoney(payment.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : customerReceiptQuery.data ? (
+              <p>No payments recorded.</p>
+            ) : null}
+            {customerReceiptQuery.data && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 12, borderTop: "1px solid #d8dee8", paddingTop: 10 }}>
+                <div><span>Total amount</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalAmount)}</strong></div>
+                <div><span>Amount paid</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalPaid)}</strong></div>
+                <div><span>Balance due</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.balanceDue)}</strong></div>
+              </div>
+            )}
+          </section>
 
           {selectedInvoice.garmentNote && (
             <p>
