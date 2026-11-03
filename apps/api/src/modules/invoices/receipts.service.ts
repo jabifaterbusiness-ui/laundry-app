@@ -28,6 +28,13 @@ export type CustomerReceipt = {
     unitPrice: number;
     totalPrice: number;
   }>;
+  subtotal: number;
+  adjustedSubtotal: number;
+  adjustmentTotal: number;
+  additiveTaxTotal: number;
+  withholdingTaxTotal: number;
+  appliedAdjustments: unknown[];
+  appliedTaxes: unknown[];
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
@@ -208,6 +215,13 @@ export async function getCustomerReceipt(
     branchName: invoice.branch.name,
     createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
+    subtotal: invoice.subtotal,
+    adjustedSubtotal: invoice.adjustedSubtotal,
+    adjustmentTotal: invoice.adjustmentTotal,
+    additiveTaxTotal: invoice.additiveTaxTotal,
+    withholdingTaxTotal: invoice.withholdingTaxTotal,
+    appliedAdjustments: Array.isArray(invoice.appliedAdjustments) ? invoice.appliedAdjustments : [],
+    appliedTaxes: Array.isArray(invoice.appliedTaxes) ? invoice.appliedTaxes : [],
     totalAmount: invoice.totalAmount,
     ...projectPayments(invoice),
     garmentNote: invoice.garmentNote,
