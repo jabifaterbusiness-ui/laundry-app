@@ -58,6 +58,8 @@ export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [completedQuery, setCompletedQuery] = useState("");
+  const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
 
   // Search belongs to the current page, user, and branch. Clear it whenever
@@ -70,6 +72,8 @@ export function GlobalSearch() {
     setIsOpen(false);
     setIsLoading(false);
     setError(null);
+    setCompletedQuery("");
+    pendingEnterRef.current = false;
   }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
@@ -79,6 +83,7 @@ export function GlobalSearch() {
       setResults([]);
       setIsLoading(false);
       setError(null);
+      setCompletedQuery("");
       return;
     }
 
@@ -95,12 +100,34 @@ export function GlobalSearch() {
         .then((nextResults) => {
           if (requestId !== requestIdRef.current) return;
           setResults(nextResults);
+          setCompletedQuery(trimmedQuery);
           setIsOpen(true);
+
+          if (pendingEnterRef.current) {
+            pendingEnterRef.current = false;
+            const submittedResult =
+              findExactOrderMatch(nextResults, trimmedQuery) ??
+              nextResults.find((result) => result.type === "ORDER") ??
+              nextResults[0];
+
+            if (submittedResult) {
+              selectResult(submittedResult);
+            } else if (
+              canCreateCustomer &&
+              searchQuickOperations(trimmedQuery).filter((operation) =>
+                hasPermission(user, operation.permission),
+              ).length === 0
+            ) {
+              addCustomerFromSearch();
+            }
+          }
         })
         .catch((err: unknown) => {
           if (requestId !== requestIdRef.current) return;
 
           setResults([]);
+          setCompletedQuery(trimmedQuery);
+          pendingEnterRef.current = false;
           setError(
             err instanceof Error
               ? err.message
@@ -127,6 +154,7 @@ export function GlobalSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
     navigate(
       result.type === "ORDER"
@@ -142,6 +170,11 @@ export function GlobalSearch() {
     }
 
     if (event.key === "Enter") {
+      if (isLoading || completedQuery !== query.trim()) {
+        pendingEnterRef.current = true;
+        return;
+      }
+
       // Keep matching orders available to Enter without listing them in the dropdown.
       const firstResult =
         findExactOrderMatch(results, query) ??
@@ -175,6 +208,7 @@ export function GlobalSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
     navigate(`/orders?${params.toString()}`);
   }
@@ -183,6 +217,7 @@ export function GlobalSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
 
     window.dispatchEvent(
@@ -208,6 +243,8 @@ export function GlobalSearch() {
           setQuery(event.target.value);
           setResults([]);
           setError(null);
+          setCompletedQuery("");
+          pendingEnterRef.current = false;
           setIsOpen(true);
         }}
         onFocus={() => {
