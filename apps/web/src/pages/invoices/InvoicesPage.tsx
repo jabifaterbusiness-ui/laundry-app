@@ -419,7 +419,7 @@ export function InvoicesPage() {
       ),
     // Load the customer-safe receipt projection for the on-screen invoice
     // as well as printing, so payment history and balance stay in sync.
-    enabled: Boolean(accessToken && activeBranchId && selectedInvoiceId),
+    enabled: Boolean(accessToken && activeBranchId && selectedInvoiceId && (canViewPayments || printMode === "customer")),
   });
 
   const companyReceiptQuery = useQuery({
