@@ -257,7 +257,7 @@ export async function createInvoiceWithTx(
     adjustments: automaticAdjustments,
   });
 
-  return tx.invoice.create({
+  const invoice = await tx.invoice.create({
     data: {
       subtotal: calculation.subtotal,
       adjustedSubtotal: calculation.adjustedSubtotal,
@@ -307,6 +307,14 @@ export async function createInvoiceWithTx(
       },
     },
   });
+
+  // Keep the order list total aligned when an invoice is issued separately
+  // for an existing order and an automatic discount is applied.
+  await tx.order.update({
+    where: { id: order.id },
+    data: { orderTotal: invoice.totalAmount },
+  });
+  return invoice;
 }
 
 export async function createInvoiceFromOrderWithTx(
