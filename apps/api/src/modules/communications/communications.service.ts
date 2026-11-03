@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
@@ -198,8 +199,22 @@ export async function sendUnpickedReminders(input: {
     return deliverMessage({
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "UNPICKED_REMINDER", destination, subject: `Unpicked order ${order.orderNumber}`,
-      body, dedupeKey: `unpicked-reminder:${order.id}:${channel}:${input.message.length}`,
+      body, dedupeKey: `unpicked-reminder:${order.id}:${channel}:${new Date().toISOString().slice(0, 10)}:${createHash("sha256").update(input.message).digest("hex")}`,
     }).then((result) => ({ ...result, orderId: order.id, channel }));
   })));
   return { orderCount: orders.length, results };
+}
+
+
+export async function listCommunicationDeliveries(businessId: string) {
+  return prisma.communicationDelivery.findMany({
+    where: { businessId },
+    include: {
+      customer: { select: { id: true, name: true } },
+      order: { select: { id: true, orderNumber: true } },
+      campaign: { select: { id: true, title: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
 }
