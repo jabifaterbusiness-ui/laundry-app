@@ -16,7 +16,6 @@ const RESULT_GROUPS: {
   type: GlobalSearchResultType;
   label: string;
 }[] = [
-  { type: "ORDER", label: "Orders" },
   { type: "INVOICE", label: "Invoices" },
   { type: "CUSTOMER", label: "Customers" },
 ];
@@ -110,7 +109,11 @@ export function GlobalSearch() {
     setResults([]);
     setError(null);
     setIsOpen(false);
-    navigate(result.href);
+    navigate(
+      result.type === "ORDER"
+        ? `/order-management?orderId=${encodeURIComponent(result.id)}`
+        : result.href,
+    );
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -120,7 +123,10 @@ export function GlobalSearch() {
     }
 
     if (event.key === "Enter") {
-      const firstResult = results[0];
+      // Order matches remain available for keyboard submission, but are never
+      // rendered as a growing list in the global-search dropdown.
+      const firstResult =
+        results.find((result) => result.type === "ORDER") ?? results[0];
 
       if (firstResult) {
         selectResult(firstResult);
@@ -130,7 +136,10 @@ export function GlobalSearch() {
     }
   }
 
-  const groups = groupResults(results);
+  const orderMatchAvailable = results.some((result) => result.type === "ORDER");
+  const groups = groupResults(
+    results.filter((result) => result.type !== "ORDER"),
+  );
   const quickOperations = searchQuickOperations(query).filter((operation) =>
     hasPermission(user, operation.permission),
   );
@@ -213,7 +222,7 @@ export function GlobalSearch() {
             <div style={{ padding: 16 }}>Searching...</div>
           ) : error ? (
             <div style={{ padding: 16 }}>{error}</div>
-          ) : groups.length === 0 && quickOperations.length === 0 && !canCreateCustomer ? (
+          ) : groups.length === 0 && quickOperations.length === 0 && !orderMatchAvailable && !canCreateCustomer ? (
             <div style={{ padding: 16 }}>No results found.</div>
           ) : (
             <>
@@ -267,7 +276,13 @@ export function GlobalSearch() {
                 </section>
               ) : null}
 
-              {groups.length === 0 && quickOperations.length === 0 && canCreateCustomer ? (
+              {groups.length === 0 && quickOperations.length === 0 && orderMatchAvailable ? (
+                <div style={{ padding: 16 }}>
+                  Matching order found. Press Enter to open Order Management.
+                </div>
+              ) : null}
+
+              {groups.length === 0 && quickOperations.length === 0 && !orderMatchAvailable && canCreateCustomer ? (
                 <section style={{ padding: 14, borderTop: "1px solid #eee" }}>
                   <div style={{ fontWeight: 600 }}>No matching customer, order, or invoice.</div>
                   <button
