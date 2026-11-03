@@ -202,6 +202,26 @@ export type InvoiceHistoryEntry = {
   createdAt: string;
 };
 
+export async function updateInvoiceFinancialRules(
+  id: string,
+  input: {
+    reason: string;
+    confirmed: true;
+    adjustments: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds: string[];
+  },
+  auth: { accessToken: string | null; sensitiveAuthorization?: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/financial-rules`, {
+    method: "PATCH",
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
+
 export async function updateInvoice(
   id: string,
   input: UpdateInvoiceCorrectionInput,
