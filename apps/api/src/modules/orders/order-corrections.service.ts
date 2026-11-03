@@ -338,6 +338,18 @@ export async function editOrderWithCorrection(params: {
       services.map((service) => [service.id, service]),
     );
 
+    const customerPrices = await tx.customerServicePrice.findMany({
+      where: {
+        businessId: params.businessId,
+        customerId: current.customerId,
+        serviceId: { in: serviceIds },
+      },
+      select: { serviceId: true, unitPrice: true },
+    });
+    const customerPriceMap = new Map(
+      customerPrices.map((price) => [price.serviceId, price.unitPrice]),
+    );
+
     for (const service of services) {
       if (!service.isActive) {
         throw new AppError(
@@ -389,15 +401,17 @@ export async function editOrderWithCorrection(params: {
 
     const preparedItems = params.input.items.map((input) => {
       const service = serviceMap.get(input.serviceId)!;
+      const existingItem = input.id ? currentItemsById.get(input.id) : undefined;
+      // Retain the exact historical unit price when the existing service line
+      // remains unchanged. New or explicitly changed service lines use the
+      // customer's active override, falling back to the standard price list.
+      const unitPrice = existingItem?.serviceId === service.id
+        ? existingItem.unitPrice
+        : customerPriceMap.get(service.id) ?? service.unitPrice;
       const totalPieces = service.pieces * input.quantity;
-      const lineTotal = service.unitPrice * input.quantity;
+      const lineTotal = unitPrice * input.quantity;
 
-      return {
-        input,
-        service,
-        totalPieces,
-        lineTotal,
-      };
+      return { input, service, unitPrice, totalPieces, lineTotal };
     });
 
     /*
@@ -459,7 +473,7 @@ export async function editOrderWithCorrection(params: {
     const resultingItemIds = new Set<string>();
 
     for (const prepared of preparedItems) {
-      const { input, service, totalPieces, lineTotal } =
+      const { input, service, unitPrice, totalPieces, lineTotal } =
         prepared;
 
       if (input.id) {
@@ -476,7 +490,7 @@ export async function editOrderWithCorrection(params: {
             piecesPerUnit: service.pieces,
             quantity: input.quantity,
             totalPieces,
-            unitPrice: service.unitPrice,
+            unitPrice,
             lineTotal,
           },
         });
@@ -544,7 +558,7 @@ export async function editOrderWithCorrection(params: {
             piecesPerUnit: service.pieces,
             quantity: input.quantity,
             totalPieces,
-            unitPrice: service.unitPrice,
+            unitPrice,
             lineTotal,
           },
         });
