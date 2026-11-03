@@ -136,7 +136,7 @@ export function GlobalSearch() {
               ).length === 0
             ) {
               const digits = trimmedQuery.replace(/[^0-9]/g, "");
-              const phoneLike = digits.length >= 5 && /^[+0-9().\\s-]+$/.test(trimmedQuery);
+              const phoneLike = digits.length >= 5 && /^[+0-9().\s-]+$/.test(trimmedQuery);
               const params = new URLSearchParams({ addCustomer: "1" });
               if (phoneLike) params.set("customerPhone", trimmedQuery);
               setQuery("");
