@@ -137,6 +137,10 @@ model Business {
   services                    Service[]
   priceAdjustments            PriceAdjustment[]
   taxRules                     TaxRule[]
+  announcementCampaigns       AnnouncementCampaign[]
+  communicationDeliveries     CommunicationDelivery[]
+  orderStatusNotificationRules OrderStatusNotificationRule[]
+  unpickedOrderReminderConfig  UnpickedOrderReminderConfig?
   orders                      Order[]
   invoices                    Invoice[]
   payments                    Payment[]
@@ -482,6 +486,9 @@ model Customer {
   statusHistory CustomerStatusHistory[]
   account       CustomerAccount?
   servicePrices CustomerServicePrice[]
+  announcementRecipients AnnouncementRecipient[]
+  communicationDeliveries CommunicationDelivery[]
+  statusNotificationDeliveries OrderStatusNotificationDelivery[]
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -633,6 +640,8 @@ model Order {
   items    OrderItem[]
   garments Garment[]
   invoice  Invoice?
+  statusNotificationDeliveries OrderStatusNotificationDelivery[]
+  communicationDeliveries CommunicationDelivery[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2725,4 +2734,127 @@ model CustomerServicePrice {
   @@index([businessId, customerId])
   @@index([businessId, serviceId])
   @@map("customer_service_prices")
+}
+
+
+// ---------------------------------------------------------------------
+// CUSTOMER ANNOUNCEMENTS, ORDER STATUS NOTIFICATIONS AND REMINDERS
+// ---------------------------------------------------------------------
+
+model AnnouncementCampaign {
+  id              String   @id @default(uuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title           String
+  message         String
+  channels        String[] @default([])
+  audience        String   // ALL_CUSTOMERS or SELECTED_CUSTOMERS
+  status          String   @default("DRAFT")
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  recipients AnnouncementRecipient[]
+  deliveries CommunicationDelivery[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@map("announcement_campaigns")
+}
+
+model AnnouncementRecipient {
+  id         String   @id @default(uuid())
+  campaignId String
+  customerId String
+  createdAt  DateTime @default(now())
+  campaign   AnnouncementCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, customerId])
+  @@index([customerId])
+  @@map("announcement_recipients")
+}
+
+model CommunicationDelivery {
+  id                String   @id @default(uuid())
+  businessId        String
+  customerId        String
+  orderId           String?
+  campaignId        String?
+  channel           String
+  messageType       String
+  destination       String
+  status            String   @default("PENDING")
+  providerMessageId String?
+  errorMessage      String?
+  dedupeKey         String   @unique
+  sentAt            DateTime?
+  createdAt         DateTime @default(now())
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  campaign          AnnouncementCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([orderId, messageType])
+  @@index([campaignId, channel, status])
+  @@map("communication_deliveries")
+}
+
+model OrderStatusNotificationRule {
+  id                 String   @id @default(uuid())
+  businessId         String
+  business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  status             String
+  enabled            Boolean  @default(true)
+  channel            String   @default("WHATSAPP")
+  whatsappMessage    String?
+  emailSubject       String?
+  emailMessage       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  deliveries OrderStatusNotificationDelivery[]
+
+  @@unique([businessId, status])
+  @@index([businessId, enabled])
+  @@map("order_status_notification_rules")
+}
+
+model OrderStatusNotificationDelivery {
+  id                String   @id @default(uuid())
+  businessId        String
+  orderId           String
+  ruleId            String
+  customerId        String
+  status            String
+  channel           String
+  destination       String
+  deliveryStatus    String   @default("PENDING")
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime @default(now())
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rule              OrderStatusNotificationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, ruleId, status])
+  @@index([businessId, deliveryStatus, createdAt])
+  @@index([customerId, createdAt])
+  @@map("order_status_notification_deliveries")
+}
+
+model UnpickedOrderReminderConfig {
+  id             String   @id @default(uuid())
+  businessId     String   @unique
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  enabled        Boolean  @default(true)
+  thresholdMonths Int     @default(2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("unpicked_order_reminder_configs")
 }
