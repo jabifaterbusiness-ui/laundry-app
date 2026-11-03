@@ -17,6 +17,7 @@ import {
   voidInvoice,
   transfer,
   history,
+  updateFinancialRules,
 } from "./invoices.controller.js";
 import {
   customerReceipt,
@@ -65,6 +66,13 @@ invoicesRouter.patch(
   "/:id",
   requirePermission("invoices.manage"),
   asyncHandler(update),
+);
+
+invoicesRouter.patch(
+  "/:id/financial-rules",
+  requirePermission("invoices.manage"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(updateFinancialRules),
 );
 
 invoicesRouter.post(
