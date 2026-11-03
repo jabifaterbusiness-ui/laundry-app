@@ -186,6 +186,8 @@ export function GlobalSearch() {
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
+          setResults([]);
+          setError(null);
           setIsOpen(true);
         }}
         onFocus={() => {
