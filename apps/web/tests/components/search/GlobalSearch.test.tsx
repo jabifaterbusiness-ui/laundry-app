@@ -33,7 +33,7 @@ describe("GlobalSearch", () => {
     searchQuickOperationsMock.mockReturnValue([]);
   });
 
-  it("searches the active branch and opens the selected order result", async () => {
+  it("keeps order matches out of suggestions and opens the exact match on Enter", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "ORDER", id: "order-42", title: "Order #00042",
       subtitle: "Ada Laundry · RECEIVED", href: "/orders?orderId=order-42",
@@ -41,13 +41,84 @@ describe("GlobalSearch", () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "00042" } });
 
-    const result = await screen.findByRole("option", { name: /Order #00042/ });
+    expect(await screen.findByText("Matching order found. Press Enter to open Order Management.")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Order #00042/ })).not.toBeInTheDocument();
     await waitFor(() => expect(globalSearchMock).toHaveBeenCalledWith(
       { q: "00042", limit: 10 }, { accessToken: "access-token" }, "branch-main",
     ));
-    fireEvent.click(result);
-    expect(navigateMock).toHaveBeenCalledWith("/orders?orderId=order-42");
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Global search" }), { key: "Enter" });
+    expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-42");
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
+  });
+
+  it("opens the order when Enter is pressed before the debounced search finishes", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "ORDER";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(
+      new Promise((resolve) => { resolveSearch = resolve; }),
+    );
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([{
+      type: "ORDER",
+      id: "order-5",
+      title: "Order #00005",
+      subtitle: "Aaron Daniel · RECEIVED",
+      href: "/orders?orderId=order-5",
+    }]);
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
+    });
+  });
+
+  it("chooses the exact order number when broader matches are also returned", async () => {
+    globalSearchMock.mockResolvedValue([
+      {
+        type: "ORDER", id: "order-100005", title: "Order #100005",
+        subtitle: "Other Customer · RECEIVED", href: "/orders?orderId=order-100005",
+      },
+      {
+        type: "ORDER", id: "order-5", title: "Order #00005",
+        subtitle: "Aaron Daniel · RECEIVED", href: "/orders?orderId=order-5",
+      },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+    await screen.findByText("Matching order found. Press Enter to open Order Management.");
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
+  });
+
+  it("does not open a different order when the order number is only a partial match", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "ORDER", id: "order-100005", title: "Order #100005",
+      subtitle: "Other Customer · RECEIVED", href: "/orders?orderId=order-100005",
+    }]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+
+    expect(await screen.findByText("No exact order-number match. Check the order number and try again.")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("00005");
+    expect(screen.queryByRole("option", { name: /Add New Customer/ })).not.toBeInTheDocument();
   });
 
   it("offers customer creation and carries a phone-like query into the new customer flow", async () => {

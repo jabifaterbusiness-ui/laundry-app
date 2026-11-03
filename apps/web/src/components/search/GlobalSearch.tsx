@@ -16,7 +16,6 @@ const RESULT_GROUPS: {
   type: GlobalSearchResultType;
   label: string;
 }[] = [
-  { type: "ORDER", label: "Orders" },
   { type: "INVOICE", label: "Invoices" },
   { type: "CUSTOMER", label: "Customers" },
 ];
@@ -26,6 +25,25 @@ function groupResults(results: GlobalSearchResult[]) {
     ...group,
     results: results.filter((result) => result.type === group.type),
   })).filter((group) => group.results.length > 0);
+}
+
+function findExactOrderMatch(
+  results: GlobalSearchResult[],
+  query: string,
+) {
+  const normalizedQuery = query
+    .trim()
+    .replace(/^order\s*/i, "")
+    .replace(/^#\s*/, "")
+    .toUpperCase();
+
+  if (!normalizedQuery) return undefined;
+
+  return results.find((result) => {
+    if (result.type !== "ORDER") return false;
+    const orderNumber = result.title.match(/^Order\s*#\s*(.+)$/i)?.[1];
+    return orderNumber?.trim().toUpperCase() === normalizedQuery;
+  });
 }
 
 export function GlobalSearch() {
@@ -40,7 +58,25 @@ export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [completedQuery, setCompletedQuery] = useState("");
+  const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
+  const exactOrderMatch = findExactOrderMatch(results, query);
+  const hasOrderCandidate = results.some((result) => result.type === "ORDER");
+  const orderMatchAvailable = Boolean(exactOrderMatch);
+  const groups = groupResults(
+    results.filter((result) => result.type !== "ORDER"),
+  );
+  const quickOperations = searchQuickOperations(query).filter((operation) =>
+    hasPermission(user, operation.permission),
+  );
+  const canCreateCustomer = hasPermission(user, "customers.create");
+  const userPermissionKey = `${user?.role ?? ""}:${(user?.permissions ?? []).slice().sort().join("|")}`;
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Search belongs to the current page, user, and branch. Clear it whenever
   // navigation or the authenticated tenant context changes so an old email,
@@ -52,6 +88,8 @@ export function GlobalSearch() {
     setIsOpen(false);
     setIsLoading(false);
     setError(null);
+    setCompletedQuery("");
+    pendingEnterRef.current = false;
   }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
@@ -61,6 +99,7 @@ export function GlobalSearch() {
       setResults([]);
       setIsLoading(false);
       setError(null);
+      setCompletedQuery("");
       return;
     }
 
@@ -77,12 +116,52 @@ export function GlobalSearch() {
         .then((nextResults) => {
           if (requestId !== requestIdRef.current) return;
           setResults(nextResults);
+          setCompletedQuery(trimmedQuery);
           setIsOpen(true);
+
+          if (pendingEnterRef.current) {
+            pendingEnterRef.current = false;
+            const submittedResult =
+              findExactOrderMatch(nextResults, trimmedQuery) ??
+              nextResults.find((result) => result.type !== "ORDER");
+
+            if (submittedResult) {
+              setQuery("");
+              setResults([]);
+              setError(null);
+              setCompletedQuery("");
+              setIsOpen(false);
+              navigate(
+                submittedResult.type === "ORDER"
+                  ? `/order-management?orderId=${encodeURIComponent(submittedResult.id)}`
+                  : submittedResult.href,
+              );
+            } else if (
+              !nextResults.some((result) => result.type === "ORDER") &&
+              canCreateCustomer &&
+              searchQuickOperations(trimmedQuery).filter((operation) =>
+                hasPermission(userRef.current, operation.permission),
+              ).length === 0
+            ) {
+              const digits = trimmedQuery.replace(/[^0-9]/g, "");
+              const phoneLike = digits.length >= 5 && /^[+0-9().\s-]+$/.test(trimmedQuery);
+              const params = new URLSearchParams({ addCustomer: "1" });
+              if (phoneLike) params.set("customerPhone", trimmedQuery);
+              setQuery("");
+              setResults([]);
+              setError(null);
+              setCompletedQuery("");
+              setIsOpen(false);
+              navigate(`/orders?${params.toString()}`);
+            }
+          }
         })
         .catch((err: unknown) => {
           if (requestId !== requestIdRef.current) return;
 
           setResults([]);
+          setCompletedQuery(trimmedQuery);
+          pendingEnterRef.current = false;
           setError(
             err instanceof Error
               ? err.message
@@ -103,14 +182,28 @@ export function GlobalSearch() {
       // cleaned up, not only when the next request eventually starts.
       if (requestId === requestIdRef.current) requestIdRef.current += 1;
     };
-  }, [query, accessToken, activeBranchId]);
+  }, [
+    query,
+    accessToken,
+    activeBranchId,
+    navigate,
+    user?.id,
+    user?.businessId,
+    userPermissionKey,
+    canCreateCustomer,
+  ]);
 
   function selectResult(result: GlobalSearchResult) {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
-    navigate(result.href);
+    navigate(
+      result.type === "ORDER"
+        ? `/order-management?orderId=${encodeURIComponent(result.id)}`
+        : result.href,
+    );
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -120,21 +213,24 @@ export function GlobalSearch() {
     }
 
     if (event.key === "Enter") {
-      const firstResult = results[0];
+      if (isLoading || completedQuery !== query.trim()) {
+        pendingEnterRef.current = true;
+        return;
+      }
+
+      // Keep matching orders available to Enter without listing them in the dropdown.
+      const firstResult =
+        exactOrderMatch ??
+        results.find((result) => result.type !== "ORDER");
 
       if (firstResult) {
         selectResult(firstResult);
-      } else if (!isLoading && !error && canCreateCustomer && groups.length === 0 && quickOperations.length === 0) {
+      } else if (!isLoading && !error && !hasOrderCandidate && canCreateCustomer && groups.length === 0 && quickOperations.length === 0) {
         addCustomerFromSearch();
       }
     }
   }
 
-  const groups = groupResults(results);
-  const quickOperations = searchQuickOperations(query).filter((operation) =>
-    hasPermission(user, operation.permission),
-  );
-  const canCreateCustomer = hasPermission(user, "customers.create");
 
   function addCustomerFromSearch() {
     const trimmed = query.trim();
@@ -146,6 +242,7 @@ export function GlobalSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
     navigate(`/orders?${params.toString()}`);
   }
@@ -154,6 +251,7 @@ export function GlobalSearch() {
     setQuery("");
     setResults([]);
     setError(null);
+    setCompletedQuery("");
     setIsOpen(false);
 
     window.dispatchEvent(
@@ -177,6 +275,10 @@ export function GlobalSearch() {
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
+          setResults([]);
+          setError(null);
+          setCompletedQuery("");
+          pendingEnterRef.current = false;
           setIsOpen(true);
         }}
         onFocus={() => {
@@ -213,7 +315,7 @@ export function GlobalSearch() {
             <div style={{ padding: 16 }}>Searching...</div>
           ) : error ? (
             <div style={{ padding: 16 }}>{error}</div>
-          ) : groups.length === 0 && quickOperations.length === 0 && !canCreateCustomer ? (
+          ) : groups.length === 0 && quickOperations.length === 0 && !hasOrderCandidate && !canCreateCustomer ? (
             <div style={{ padding: 16 }}>No results found.</div>
           ) : (
             <>
@@ -267,7 +369,19 @@ export function GlobalSearch() {
                 </section>
               ) : null}
 
-              {groups.length === 0 && quickOperations.length === 0 && canCreateCustomer ? (
+              {groups.length === 0 && quickOperations.length === 0 && orderMatchAvailable ? (
+                <div style={{ padding: 16 }}>
+                  Matching order found. Press Enter to open Order Management.
+                </div>
+              ) : null}
+
+              {groups.length === 0 && quickOperations.length === 0 && hasOrderCandidate && !orderMatchAvailable ? (
+                <div style={{ padding: 16 }}>
+                  No exact order-number match. Check the order number and try again.
+                </div>
+              ) : null}
+
+              {groups.length === 0 && quickOperations.length === 0 && !hasOrderCandidate && canCreateCustomer ? (
                 <section style={{ padding: 14, borderTop: "1px solid #eee" }}>
                   <div style={{ fontWeight: 600 }}>No matching customer, order, or invoice.</div>
                   <button
