@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import { listCustomers } from "../../lib/customers-api.js";
@@ -34,6 +34,12 @@ export function CommunicationsPage() {
   const [reminderMessage, setReminderMessage] = useState(DEFAULT_REMINDER);
   const [reminderChannels, setReminderChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!reminderConfigQuery.data) return;
+    setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
+    setRemindersEnabled(reminderConfigQuery.data.enabled);
+  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
 
   const customersQuery = useQuery({
     queryKey: ["customers", "communications"],
