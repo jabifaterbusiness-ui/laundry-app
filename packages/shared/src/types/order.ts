@@ -31,6 +31,7 @@ export interface Order {
   // Optional to keep queued/offline order snapshots backward compatible.
   customer?: { id: string; name: string; phone: string; email?: string | null };
   notificationResults?: Array<{ status: "SENT" | "FAILED" | "DUPLICATE"; channel: "WHATSAPP" | "EMAIL"; error?: string }>;
+  notificationError?: string;
   orderNumber: string;
   status: OrderStatus;
   orderTotal: number;
