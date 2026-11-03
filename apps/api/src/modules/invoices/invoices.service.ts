@@ -124,9 +124,20 @@ export async function resolveAutomaticDiscountSelections(
     orderBy: { createdAt: "asc" },
   });
 
-  // A manually selected adjustment is an explicit choice. Automatic discounts
-  // join it only when the automatic rule expressly permits stacking.
-  let eligibleRules = manualSelections.length
+  // A manually selected discount is an explicit choice. Positive surcharges
+  // do not count as discount stacking and must not suppress customer benefits.
+  const manualDiscounts = manualSelections.length
+    ? await tx.priceAdjustment.findMany({
+        where: {
+          businessId,
+          id: { in: manualSelections.map((selection) => selection.adjustmentId) },
+          isActive: true,
+          percentage: { lt: 0 },
+        },
+        select: { id: true },
+      })
+    : [];
+  let eligibleRules = manualDiscounts.length
     ? rules.filter((rule) => rule.allowStacking)
     : rules;
 
