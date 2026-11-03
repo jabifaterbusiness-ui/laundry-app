@@ -38,6 +38,12 @@ const OPERATIONS: NavItem[] = [
     permission: "orders.view",
   },
   {
+    label: "Order Management",
+    href: "/order-management",
+    icon: "▤",
+    permission: "orders.view",
+  },
+  {
     label: "Invoices & Receipts",
     href: "/invoices",
     icon: "▤",
