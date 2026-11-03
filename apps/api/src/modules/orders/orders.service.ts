@@ -532,20 +532,22 @@ async function updateOrderStatusWithDb(
   // Send customer notification only after the status update has committed.
   // Return the recorded delivery outcome so the operator can see whether
   // WhatsApp/email succeeded; provider failures never roll back the status.
+  if (db !== prisma || existing.status === status) {
+    return updated;
+  }
+
   let notificationResults: Awaited<ReturnType<typeof notifyOrderStatus>> = [];
   let notificationError: string | undefined;
-  if (db === prisma && existing.status !== status) {
-    try {
-      notificationResults = await notifyOrderStatus({
-        orderId: id,
-        businessId,
-        branchId,
-        status,
-      });
-    } catch {
-      // Do not surface provider exception text or configuration details to staff.
-      notificationError = "Notification processing failed. Check Delivery History for details.";
-    }
+  try {
+    notificationResults = await notifyOrderStatus({
+      orderId: id,
+      businessId,
+      branchId,
+      status,
+    });
+  } catch {
+    // Do not surface provider exception text or configuration details to staff.
+    notificationError = "Notification processing failed. Check Delivery History for details.";
   }
 
   return {
