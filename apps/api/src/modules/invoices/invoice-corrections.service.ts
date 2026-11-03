@@ -24,7 +24,6 @@ export type UpdateInvoiceCorrectionInput = {
 type InvoiceWithItems = Prisma.InvoiceGetPayload<{
   include: {
     items: true;
-    payments: { select: { amount: true; type: true } };
     order: {
       include: {
         customer: true;
@@ -33,6 +32,9 @@ type InvoiceWithItems = Prisma.InvoiceGetPayload<{
     };
   };
 }>;
+type InvoiceWithPayments = InvoiceWithItems & {
+  payments: Array<{ amount: number; type: "PAYMENT" | "REFUND" }>;
+};
 
 function buildSnapshot(invoice: InvoiceWithItems) {
   return {
@@ -107,7 +109,7 @@ async function getInvoiceForCorrection(
   invoiceId: string,
   businessId: string,
   branchId: string,
-): Promise<InvoiceWithItems> {
+): Promise<InvoiceWithPayments> {
   const invoice = await tx.invoice.findFirst({
     where: {
       id: invoiceId,
@@ -310,7 +312,7 @@ export async function updateInvoiceWithCorrection(params: {
               (rule.kind !== "PERCENTAGE" && rule.kind !== "FIXED") ||
               typeof rule.value !== "number" ||
               (rule.treatment !== "ADDITIVE" && rule.treatment !== "WITHHOLDING")) return [];
-            return [{ id: rule.id, name: rule.name, kind: rule.kind, value: rule.value, treatment: rule.treatment, enabled: true, allowWithOtherTaxes: true }];
+            return [{ id: rule.id, name: rule.name, kind: rule.kind as "PERCENTAGE" | "FIXED", value: rule.value, treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING", enabled: true, allowWithOtherTaxes: true }];
           })
         : [];
       const calculation = calculateInvoice(lines, savedAdjustments, savedTaxes);
