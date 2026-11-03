@@ -18,6 +18,8 @@ export interface CreateOrderData {
   garmentNote?: string;
   internalNote?: string;
   expectedReadyAt?: Date;
+  adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+  taxRuleIds?: string[];
 }
 
 export interface ListOrdersParams {
@@ -244,6 +246,7 @@ async function createOrderWithTx(
       order,
       business,
       business.defaultCustomerAgreement,
+      { adjustments: data.adjustments ?? [], taxRuleIds: data.taxRuleIds ?? [] },
     );
 
     return order;
