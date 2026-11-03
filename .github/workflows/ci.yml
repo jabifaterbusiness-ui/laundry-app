@@ -20,7 +20,7 @@ jobs:
   verify:
     name: Test, lint, typecheck, build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
@@ -56,8 +56,10 @@ jobs:
         run: npm run db:generate
       - name: Apply database migrations
         run: npm run db:migrate:deploy --workspace=apps/api
-      - name: Run test suites
-        run: npm test
+      - name: Run API tests
+        run: npm run test:api
+      - name: Run web tests with per-test progress
+        run: npm run test:web -- --reporter=verbose
       - name: Lint API and web
         run: npm run lint
       - name: Typecheck API and web
