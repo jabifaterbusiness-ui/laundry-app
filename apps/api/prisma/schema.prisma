@@ -140,6 +140,7 @@ model Business {
   announcementCampaigns       AnnouncementCampaign[]
   communicationDeliveries     CommunicationDelivery[]
   orderStatusNotificationRules OrderStatusNotificationRule[]
+  orderStatusNotificationDeliveries OrderStatusNotificationDelivery[]
   unpickedOrderReminderConfig  UnpickedOrderReminderConfig?
   orders                      Order[]
   invoices                    Invoice[]
