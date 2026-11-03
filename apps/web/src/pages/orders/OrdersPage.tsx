@@ -966,10 +966,6 @@ export function OrdersPage() {
         </thead>
         <tbody>
           {sectionOrders.map((order) => {
-            const customer = customers.find(
-              (item) => item.id === order.customerId,
-            );
-
             return (
               <tr key={order.id}>
                 <td>
@@ -980,7 +976,7 @@ export function OrdersPage() {
                     {order.orderNumber}
                   </button>
                 </td>
-                <td>{customer?.name ?? order.customerId}</td>
+                <td>{order.customer?.name ?? "Customer unavailable"}</td>
                 <td>{statusLabel(order.status)}</td>
                 <td>{formatMoney(order.orderTotal)}</td>
                 <td>{formatDate(order.expectedReadyAt)}</td>
