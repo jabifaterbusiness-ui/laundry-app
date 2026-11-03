@@ -270,6 +270,30 @@ describe("InvoicesPage invoice correction workflow", () => {
   }
 
   it("shows the financial breakdown and payment history in the on-screen invoice", async () => {
+    mockedInvoicesApi.getInvoice.mockResolvedValue({
+      ...invoice,
+      subtotal: 10000,
+      adjustedSubtotal: 9000,
+      adjustmentTotal: -1000,
+      additiveTaxTotal: 675,
+      withholdingTaxTotal: 0,
+      appliedAdjustments: [{
+        id: "special-customer",
+        name: "Special customer",
+        percentage: -10,
+        amount: -1000,
+        scope: "INVOICE",
+      }],
+      appliedTaxes: [{
+        id: "vat",
+        name: "VAT",
+        kind: "PERCENTAGE",
+        value: 7.5,
+        treatment: "ADDITIVE",
+        amount: 675,
+      }],
+      totalAmount: 9675,
+    });
     mockedInvoicesApi.getCustomerReceipt.mockResolvedValue({
       receiptType: "CUSTOMER",
       invoiceNumber: "INV-00001",
