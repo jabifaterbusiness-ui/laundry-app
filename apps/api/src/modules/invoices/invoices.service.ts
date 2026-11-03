@@ -34,17 +34,19 @@ async function calculateNewInvoiceDefaults(
     return { id: rule.id, name: rule.name, percentage: rule.percentage, scope: selection.scope, itemIds };
   });
   const explicitTaxIds = [...new Set(options.taxRuleIds ?? [])];
-  const rules = await tx.taxRule.findMany({
-    where: {
-      businessId,
-      isActive: true,
-      OR: [
-        { enabledByDefault: true },
-        ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
-      ],
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const rules = tx.taxRule
+    ? await tx.taxRule.findMany({
+        where: {
+          businessId,
+          isActive: true,
+          OR: [
+            { enabledByDefault: true },
+            ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
   if (explicitTaxIds.some((id) => !rules.some((rule) => rule.id === id))) {
     throw new AppError("One or more selected tax rules are unavailable", 422);
   }
