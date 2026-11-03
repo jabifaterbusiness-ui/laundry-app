@@ -29,13 +29,19 @@ type OrderForCorrection = Prisma.OrderGetPayload<{
     branch: true;
     items: true;
     garments: true;
+    invoice: { include: { items: true } };
+  };
+}>;
+type OrderForCorrectionWithPayments = Prisma.OrderGetPayload<{
+  include: {
+    customer: true;
+    branch: true;
+    items: true;
+    garments: true;
     invoice: {
       include: {
         items: true;
-        payments: {
-          where: { status: "POSTED" };
-          select: { amount: true; type: true };
-        };
+        payments: { where: { status: "POSTED" }; select: { amount: true; type: true } };
       };
     };
   };
@@ -155,7 +161,7 @@ async function getOrderForCorrection(
   orderId: string,
   businessId: string,
   branchId: string,
-): Promise<OrderForCorrection> {
+): Promise<OrderForCorrectionWithPayments> {
   const order = await tx.order.findFirst({
     where: {
       id: orderId,
