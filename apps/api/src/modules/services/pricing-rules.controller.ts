@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { createAdjustmentSchema, createTaxRuleSchema, pricingRuleIdSchema } from "./pricing-rules.validation.js";
-import { createPriceAdjustment, createTaxRule, deletePriceAdjustment, deleteTaxRule, listPricingRules } from "./pricing-rules.service.js";
+import { createAdjustmentSchema, createTaxRuleSchema, pricingRuleIdSchema, updateAdjustmentStatusSchema } from "./pricing-rules.validation.js";
+import { createPriceAdjustment, createTaxRule, deletePriceAdjustment, deleteTaxRule, listPricingRules, setPriceAdjustmentActive } from "./pricing-rules.service.js";
 
 function businessId(req: Request): string {
   if (!req.user?.businessId) throw new AppError("This action requires an account scoped to a business", 403);
@@ -19,6 +19,22 @@ export async function createAdjustment(req: Request, res: Response) {
   const result = await createPriceAdjustment({ businessId: id, ...input });
   await recordAuditEvent({ action: "pricing.adjustment_created", entityType: "PriceAdjustment", entityId: result.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(201).json(result);
+}
+
+export async function updateAdjustmentStatus(req: Request, res: Response) {
+  const id = businessId(req);
+  const { id: ruleId } = pricingRuleIdSchema.parse(req.params);
+  const input = updateAdjustmentStatusSchema.parse(req.body);
+  const result = await setPriceAdjustmentActive(ruleId, id, input.isActive);
+  await recordAuditEvent({
+    action: input.isActive ? "pricing.adjustment_activated" : "pricing.adjustment_paused",
+    entityType: "PriceAdjustment",
+    entityId: ruleId,
+    businessId: id,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+  });
+  res.status(200).json(result);
 }
 
 export async function removeAdjustment(req: Request, res: Response) {
