@@ -1533,7 +1533,7 @@ export function OrdersPage() {
                 <h4>Taxes</h4>
                 {(pricingRulesQuery.data?.taxes ?? []).filter((rule) => rule.isActive).map((rule) => (
                   <label key={rule.id} style={{ display: "block", margin: "0.35rem 0" }}>
-                    <input type="checkbox" checked={selectedTaxRuleIds.includes(rule.id)} onChange={(event) => setSelectedTaxRuleIds((current) => event.target.checked ? [...current, rule.id] : current.filter((id) => id !== rule.id))} />
+                    <input type="checkbox" checked={rule.enabledByDefault || selectedTaxRuleIds.includes(rule.id)} disabled={rule.enabledByDefault} onChange={(event) => setSelectedTaxRuleIds((current) => event.target.checked ? [...current, rule.id] : current.filter((id) => id !== rule.id))} />
                     {rule.name} — {rule.kind === "PERCENTAGE" ? `${rule.value}%` : formatMoney(rule.value)} · {rule.treatment === "ADDITIVE" ? "Added" : "Withheld"}{rule.enabledByDefault ? " · Automatic on new invoices" : ""}
                   </label>
                 ))}
