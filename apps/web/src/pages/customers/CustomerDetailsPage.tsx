@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../lib/api-client.js";
 import { getCustomer } from "../../lib/customers-api.js";
+import { listServices, listCustomerServicePrices, saveCustomerServicePrice, deleteCustomerServicePrice } from "../../lib/services-api.js";
 import {
   fundCustomerAccount,
   getCustomerAccount,
@@ -30,16 +31,38 @@ export function CustomerDetailsPage() {
 
   const canViewAccount = hasPermission(user, "customer_accounts.view");
   const canManageAccount = hasPermission(user, "customer_accounts.manage");
+  const canManageServicePrices = hasPermission(user, "services.update");
 
   const [fundingOpen, setFundingOpen] = useState(false);
   const [fundingAmount, setFundingAmount] = useState("");
   const [fundingNote, setFundingNote] = useState("");
   const [fundingError, setFundingError] = useState<string | null>(null);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
   const customerQuery = useQuery({
     queryKey: ["customer", id],
     queryFn: () => getCustomer(id!, { accessToken }),
     enabled: Boolean(id),
+  });
+
+  const servicesQuery = useQuery({
+    queryKey: ["services", "active"],
+    queryFn: () => listServices({ status: "active" }, { accessToken }),
+    enabled: canManageServicePrices,
+  });
+  const customerPricesQuery = useQuery({
+    queryKey: ["customer-service-prices", id],
+    queryFn: () => listCustomerServicePrices(id!, { accessToken }),
+    enabled: Boolean(id) && canManageServicePrices,
+  });
+  const savePriceMutation = useMutation({
+    mutationFn: async (input: { serviceId: string; unitPrice: number }) =>
+      saveCustomerServicePrice({ customerId: id!, ...input }, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
+  });
+  const removePriceMutation = useMutation({
+    mutationFn: (priceId: string) => deleteCustomerServicePrice(priceId, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
   });
 
   const accountQuery = useQuery({
@@ -278,6 +301,38 @@ export function CustomerDetailsPage() {
           </>
         )}
       </section>
+
+      {canManageServicePrices && (
+        <section aria-label="Customer-specific service prices">
+          <h2>Special Customer Pricing</h2>
+          <p>Set individual service prices for this customer. New orders use these prices automatically. Remove an override to return that service to the standard Price List price. Existing orders are not changed.</p>
+          {servicesQuery.isLoading || customerPricesQuery.isLoading ? <p>Loading service prices...</p> : (
+            <div>
+              {(servicesQuery.data?.data ?? []).map((service) => {
+                const override = customerPricesQuery.data?.data.find((entry) => entry.serviceId === service.id);
+                const value = priceDrafts[service.id] ?? String(override?.unitPrice ?? service.unitPrice);
+                return (
+                  <div key={service.id} style={{ display: "flex", alignItems: "end", gap: "0.75rem", flexWrap: "wrap", margin: "0.75rem 0", padding: "0.75rem", border: "1px solid var(--border, #ddd)", borderRadius: "10px" }}>
+                    <div style={{ flex: "1 1 180px" }}>
+                      <strong>{service.name}</strong>
+                      <div><small>Standard: {formatMoney(service.unitPrice)}{override ? " · Special price active" : ""}</small></div>
+                    </div>
+                    <label>Customer price (₦)
+                      <input type="number" min="0" step="1" value={value} onChange={(event) => setPriceDrafts((current) => ({ ...current, [service.id]: event.target.value }))} />
+                    </label>
+                    <button type="button" disabled={savePriceMutation.isPending} onClick={() => {
+                      const amount = Number(value);
+                      if (Number.isSafeInteger(amount) && amount >= 0) savePriceMutation.mutate({ serviceId: service.id, unitPrice: amount });
+                    }}>Save price</button>
+                    {override && <button type="button" disabled={removePriceMutation.isPending} onClick={() => removePriceMutation.mutate(override.id)}>Use standard price</button>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {(savePriceMutation.isError || removePriceMutation.isError) && <p role="alert">Unable to update this customer price. Please check the amount and try again.</p>}
+        </section>
+      )}
 
       <div>
         <button

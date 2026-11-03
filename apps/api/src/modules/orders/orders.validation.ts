@@ -22,6 +22,12 @@ export const createOrderSchema = z
     items: z
       .array(orderItemSchema)
       .min(1, "An order must contain at least one item"),
+    adjustments: z.array(z.object({
+      adjustmentId: uuidSchema,
+      scope: z.enum(["INVOICE", "ITEMS"]),
+      itemIndexes: z.array(z.number().int().nonnegative()).optional(),
+    }).strict()).default([]),
+    taxRuleIds: z.array(uuidSchema).default([]),
     garmentNote: z
       .string()
       .trim()

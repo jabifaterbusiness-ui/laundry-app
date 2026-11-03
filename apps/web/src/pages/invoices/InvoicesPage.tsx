@@ -13,9 +13,12 @@ import {
   listInvoices,
   transferInvoice,
   updateInvoice,
+  updateInvoiceFinancialRules,
   voidInvoice,
 } from "../../lib/invoices-api.js";
 import { listCustomers } from "../../lib/customers-api.js";
+import { listPricingRules } from "../../lib/services-api.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
@@ -56,7 +59,7 @@ export function InvoicesPage() {
     null,
   );
   const [correctionMode, setCorrectionMode] = useState<
-    "edit" | "transfer" | "void" | "delete" | "history" | null
+    "edit" | "financial" | "transfer" | "void" | "delete" | "history" | null
   >(null);
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -65,6 +68,9 @@ export function InvoicesPage() {
   const [garmentNote, setGarmentNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [customerAgreement, setCustomerAgreement] = useState("");
+  const [financialAdjustments, setFinancialAdjustments] = useState<Record<string, { scope: "INVOICE" | "ITEMS"; itemIndexes: number[] }>>({});
+  const [financialTaxRuleIds, setFinancialTaxRuleIds] = useState<string[]>([]);
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const [editItems, setEditItems] = useState<
     Array<{
       itemName: string;
@@ -122,6 +128,12 @@ export function InvoicesPage() {
     ),
   });
 
+  const pricingRulesQuery = useQuery({
+    queryKey: ["pricing-rules"],
+    queryFn: () => listPricingRules({ accessToken }),
+    enabled: Boolean(accessToken && canManageInvoices),
+  });
+
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
@@ -174,6 +186,8 @@ export function InvoicesPage() {
     setCustomerSearch("");
     setTargetCustomerId("");
     setCorrectionError(null);
+    setFinancialAdjustments({});
+    setFinancialTaxRuleIds([]);
   }
 
   function startEdit() {
@@ -195,6 +209,23 @@ export function InvoicesPage() {
       })),
     );
     setCorrectionMode("edit");
+  }
+
+  function startFinancialCorrection() {
+    if (!selectedInvoice || selectedInvoice.status !== "ISSUED") return;
+    setCorrectionError(null);
+    setReason("");
+    setConfirmed(false);
+    setFinancialAdjustments(Object.fromEntries(
+      (selectedInvoice.appliedAdjustments ?? []).map((rule) => [rule.id, {
+        scope: rule.scope,
+        itemIndexes: rule.scope === "ITEMS"
+          ? (rule.itemIndexes ?? [])
+          : [],
+      }]),
+    ));
+    setFinancialTaxRuleIds((selectedInvoice.appliedTaxes ?? []).map((tax) => tax.id));
+    setCorrectionMode("financial");
   }
 
   function startTransfer() {
@@ -287,6 +318,25 @@ export function InvoicesPage() {
             items: editItems,
           },
           { accessToken },
+          activeBranchId,
+        );
+      }
+
+      if (correctionMode === "financial") {
+        const authorization = await requestSensitiveAuthorization();
+        if (!authorization) throw new Error("Sensitive authorization is required for financial corrections.");
+        return updateInvoiceFinancialRules(
+          selectedInvoiceId,
+          {
+            reason: trimmedReason,
+            confirmed: true,
+            adjustments: Object.entries(financialAdjustments).map(([adjustmentId, selection]) => ({
+              adjustmentId, scope: selection.scope,
+              ...(selection.scope === "ITEMS" ? { itemIndexes: selection.itemIndexes } : {}),
+            })),
+            taxRuleIds: financialTaxRuleIds,
+          },
+          { accessToken, sensitiveAuthorization: authorization },
           activeBranchId,
         );
       }
@@ -708,6 +758,9 @@ export function InvoicesPage() {
                 <button type="button" onClick={startEdit}>
                   Edit Invoice
                 </button>
+                {selectedInvoice.status === "ISSUED" ? (
+                  <button type="button" onClick={startFinancialCorrection}>Adjust Discounts & Taxes</button>
+                ) : null}
 
                 <button type="button" onClick={startTransfer}>
                   Transfer Invoice
@@ -773,11 +826,13 @@ export function InvoicesPage() {
           <h3>
             {correctionMode === "edit"
               ? "Edit Invoice"
-              : correctionMode === "transfer"
-                ? "Transfer Invoice"
-                : correctionMode === "void"
-                  ? "Void Invoice"
-                  : "Delete Invoice"}
+              : correctionMode === "financial"
+                ? "Adjust Discounts & Taxes"
+                : correctionMode === "transfer"
+                  ? "Transfer Invoice"
+                  : correctionMode === "void"
+                    ? "Void Invoice"
+                    : "Delete Invoice"}
           </h3>
 
           {correctionMode === "edit" ? (
@@ -929,6 +984,41 @@ export function InvoicesPage() {
                 </div>
               ))}
             </>
+          ) : null}
+
+          {correctionMode === "financial" ? (
+            <section aria-label="Adjust invoice discounts and taxes">
+              <p>Apply or remove financial rules on this existing invoice. The original invoice state is saved in Edited History. A change that would make the amount paid exceed the new invoice total is blocked.</p>
+              <h4>Discounts and surcharges</h4>
+              {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive).map((rule) => {
+                const selection = financialAdjustments[rule.id];
+                return <div key={rule.id} style={{ padding: "8px 0", borderBottom: "1px solid #e5e7eb" }}>
+                  <label><input type="checkbox" checked={Boolean(selection)} onChange={(event) => setFinancialAdjustments((current) => {
+                    const next = { ...current };
+                    if (event.target.checked) next[rule.id] = { scope: "INVOICE", itemIndexes: [] };
+                    else delete next[rule.id];
+                    return next;
+                  })} /> {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%)</label>
+                  {selection ? <div style={{ marginLeft: 24 }}>
+                    <label>Apply to<select value={selection.scope} onChange={(event) => setFinancialAdjustments((current) => ({ ...current, [rule.id]: { scope: event.target.value as "INVOICE" | "ITEMS", itemIndexes: [] } }))}>
+                      <option value="INVOICE">Entire invoice</option><option value="ITEMS">Selected items only</option>
+                    </select></label>
+                    {selection.scope === "ITEMS" && selectedInvoice.items.map((item, index) => <label key={item.id} style={{ display: "block" }}>
+                      <input type="checkbox" checked={selection.itemIndexes.includes(index)} onChange={(event) => setFinancialAdjustments((current) => {
+                        const existing = current[rule.id] ?? { scope: "ITEMS" as const, itemIndexes: [] };
+                        return { ...current, [rule.id]: { scope: "ITEMS", itemIndexes: event.target.checked ? [...existing.itemIndexes, index] : existing.itemIndexes.filter((value) => value !== index) } };
+                      })} /> {item.itemName} × {item.quantity}
+                    </label>)}
+                  </div> : null}
+                </div>;
+              })}
+              <h4>Taxes</h4>
+              {(pricingRulesQuery.data?.taxes ?? []).filter((rule) => rule.isActive).map((rule) => <label key={rule.id} style={{ display: "block", padding: "4px 0" }}>
+                <input type="checkbox" checked={financialTaxRuleIds.includes(rule.id)} onChange={(event) => setFinancialTaxRuleIds((current) => event.target.checked ? [...current, rule.id] : current.filter((id) => id !== rule.id))} />
+                {rule.name} — {rule.kind === "PERCENTAGE" ? `${rule.value}%` : formatMoney(rule.value)} · {rule.treatment === "ADDITIVE" ? "Added" : "Withheld"}
+              </label>)}
+              {pricingRulesQuery.isError && <p role="alert">Unable to load the current Price List rules.</p>}
+            </section>
           ) : null}
 
           {correctionMode === "transfer" ? (

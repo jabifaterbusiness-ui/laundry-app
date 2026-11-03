@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { calculateInvoice } from "./invoice-calculator.js";
 
 const HISTORY_RETENTION_DAYS = 60;
 
@@ -31,6 +32,9 @@ type InvoiceWithItems = Prisma.InvoiceGetPayload<{
     };
   };
 }>;
+type InvoiceWithPayments = InvoiceWithItems & {
+  payments: Array<{ amount: number; type: "PAYMENT" | "REFUND" }>;
+};
 
 function buildSnapshot(invoice: InvoiceWithItems) {
   return {
@@ -52,6 +56,13 @@ function buildSnapshot(invoice: InvoiceWithItems) {
     receiptBackgroundColor: invoice.receiptBackgroundColor,
     receiptTextColor: invoice.receiptTextColor,
     receiptHeaderStyle: invoice.receiptHeaderStyle,
+    subtotal: invoice.subtotal,
+    adjustedSubtotal: invoice.adjustedSubtotal,
+    adjustmentTotal: invoice.adjustmentTotal,
+    additiveTaxTotal: invoice.additiveTaxTotal,
+    withholdingTaxTotal: invoice.withholdingTaxTotal,
+    appliedAdjustments: invoice.appliedAdjustments,
+    appliedTaxes: invoice.appliedTaxes,
     totalAmount: invoice.totalAmount,
     garmentNote: invoice.garmentNote,
     internalNote: invoice.internalNote,
@@ -98,7 +109,7 @@ async function getInvoiceForCorrection(
   invoiceId: string,
   businessId: string,
   branchId: string,
-): Promise<InvoiceWithItems> {
+): Promise<InvoiceWithPayments> {
   const invoice = await tx.invoice.findFirst({
     where: {
       id: invoiceId,
@@ -110,6 +121,10 @@ async function getInvoiceForCorrection(
         orderBy: {
           createdAt: "asc",
         },
+      },
+      payments: {
+        where: { status: "POSTED" },
+        select: { amount: true, type: true },
       },
       order: {
         include: {
@@ -275,20 +290,47 @@ export async function updateInvoiceWithCorrection(params: {
 
     if (params.input.items !== undefined) {
       const items = normalizeItems(params.input.items);
-      totalAmount = items.reduce(
-        (sum, item) => sum + item.totalPrice,
-        0,
-      );
+      const lines = items.map((item, index) => ({ id: String(index), amount: item.totalPrice }));
+      const savedAdjustments = Array.isArray(current.appliedAdjustments)
+        ? current.appliedAdjustments.flatMap((value) => {
+            if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+            const rule = value as Record<string, unknown>;
+            if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
+            const scope = rule.scope === "ITEMS" ? "ITEMS" as const : "INVOICE" as const;
+            const indexes = Array.isArray(rule.itemIndexes)
+              ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < items.length)
+              : [];
+            if (scope === "ITEMS" && indexes.length === 0) return [];
+            return [{ id: rule.id, name: rule.name, percentage: rule.percentage, scope, itemIds: indexes.map(String) }];
+          })
+        : [];
+      const savedTaxes = Array.isArray(current.appliedTaxes)
+        ? current.appliedTaxes.flatMap((value) => {
+            if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+            const rule = value as Record<string, unknown>;
+            if (typeof rule.id !== "string" || typeof rule.name !== "string" ||
+              (rule.kind !== "PERCENTAGE" && rule.kind !== "FIXED") ||
+              typeof rule.value !== "number" ||
+              (rule.treatment !== "ADDITIVE" && rule.treatment !== "WITHHOLDING")) return [];
+            return [{ id: rule.id, name: rule.name, kind: rule.kind as "PERCENTAGE" | "FIXED", value: rule.value, treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING", enabled: true, allowWithOtherTaxes: true }];
+          })
+        : [];
+      const calculation = calculateInvoice(lines, savedAdjustments, savedTaxes);
+      const amountPaid = (current.payments ?? []).reduce((sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount), 0);
+      if (amountPaid > calculation.totalAmount) {
+        throw new AppError("The revised invoice total is below the amount already paid. Record an appropriate refund or account credit first.", 422);
+      }
+      totalAmount = calculation.totalAmount;
+      data.subtotal = calculation.subtotal;
+      data.adjustedSubtotal = calculation.adjustedSubtotal;
+      data.adjustmentTotal = calculation.adjustmentTotal;
+      data.additiveTaxTotal = calculation.additiveTaxTotal;
+      data.withholdingTaxTotal = calculation.withholdingTaxTotal;
+      data.appliedAdjustments = calculation.adjustments as unknown as Prisma.InputJsonValue;
+      data.appliedTaxes = calculation.taxes as unknown as Prisma.InputJsonValue;
 
-      await tx.invoiceItem.deleteMany({
-        where: {
-          invoiceId: current.id,
-        },
-      });
-
-      data.items = {
-        create: items,
-      };
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: current.id } });
+      data.items = { create: items };
       data.totalAmount = totalAmount;
     }
 
@@ -311,6 +353,10 @@ export async function updateInvoiceWithCorrection(params: {
         },
       },
     });
+
+    if (params.input.items !== undefined) {
+      await tx.order.update({ where: { id: current.orderId }, data: { orderTotal: totalAmount } });
+    }
 
     return {
       invoice: updated,

@@ -54,6 +54,12 @@ function createTransactionClient() {
     service: {
       findMany: vi.fn(),
     },
+    customerServicePrice: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    taxRule: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     orderNumberSequence: {
       upsert: vi.fn(),
     },
@@ -68,7 +74,7 @@ function createTransactionClient() {
       createMany: vi.fn(),
     },
     invoice: {
-      create: vi.fn(),
+      create: vi.fn().mockResolvedValue({ totalAmount: 0 }),
     },
     business: {
       findUnique: vi.fn().mockResolvedValue({

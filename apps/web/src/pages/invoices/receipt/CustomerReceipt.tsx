@@ -131,6 +131,25 @@ export function CustomerReceipt({
         </section>
       )}
 
+      {((receipt.adjustmentTotal ?? 0) !== 0 || (receipt.additiveTaxTotal ?? 0) !== 0 || (receipt.withholdingTaxTotal ?? 0) !== 0 || (receipt.appliedAdjustments?.length ?? 0) > 0 || (receipt.appliedTaxes?.length ?? 0) > 0) && (
+        <section className="receipt__charges" aria-label="Invoice adjustments and taxes">
+          <div><span>Service subtotal</span><strong>{formatReceiptMoney(receipt.subtotal ?? receipt.totalAmount)}</strong></div>
+          {(receipt.appliedAdjustments ?? []).map((adjustment) => (
+            <div key={adjustment.id}>
+              <span>{adjustment.name} ({adjustment.percentage > 0 ? "+" : ""}{adjustment.percentage}%)</span>
+              <strong>{adjustment.amount > 0 ? "+" : adjustment.amount < 0 ? "−" : ""}{formatReceiptMoney(Math.abs(adjustment.amount))}</strong>
+            </div>
+          ))}
+          <div><span>Adjusted taxable amount</span><strong>{formatReceiptMoney(receipt.adjustedSubtotal ?? receipt.subtotal ?? receipt.totalAmount)}</strong></div>
+          {(receipt.appliedTaxes ?? []).map((tax) => (
+            <div key={tax.id}>
+              <span>{tax.name} ({tax.kind === "PERCENTAGE" ? `${tax.value}%` : "Fixed"})</span>
+              <strong>{tax.treatment === "WITHHOLDING" ? "−" : "+"}{formatReceiptMoney(tax.amount)}</strong>
+            </div>
+          ))}
+        </section>
+      )}
+
       <div className="receipt__summary">
         <div>
           <span>TOTAL PCS</span>

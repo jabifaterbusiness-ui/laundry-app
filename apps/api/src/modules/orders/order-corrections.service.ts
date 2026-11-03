@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { calculateInvoice } from "../invoices/invoice-calculator.js";
 
 const HISTORY_RETENTION_DAYS = 60;
 
@@ -28,9 +29,19 @@ type OrderForCorrection = Prisma.OrderGetPayload<{
     branch: true;
     items: true;
     garments: true;
+    invoice: { include: { items: true } };
+  };
+}>;
+type OrderForCorrectionWithPayments = Prisma.OrderGetPayload<{
+  include: {
+    customer: true;
+    branch: true;
+    items: true;
+    garments: true;
     invoice: {
       include: {
         items: true;
+        payments: { where: { status: "POSTED" }; select: { amount: true; type: true } };
       };
     };
   };
@@ -80,6 +91,13 @@ function buildInvoiceSnapshot(invoice: OrderForCorrection["invoice"]) {
     receiptBackgroundColor: invoice.receiptBackgroundColor,
     receiptTextColor: invoice.receiptTextColor,
     receiptHeaderStyle: invoice.receiptHeaderStyle,
+    subtotal: invoice.subtotal,
+    adjustedSubtotal: invoice.adjustedSubtotal,
+    adjustmentTotal: invoice.adjustmentTotal,
+    additiveTaxTotal: invoice.additiveTaxTotal,
+    withholdingTaxTotal: invoice.withholdingTaxTotal,
+    appliedAdjustments: invoice.appliedAdjustments,
+    appliedTaxes: invoice.appliedTaxes,
     totalAmount: invoice.totalAmount,
     garmentNote: invoice.garmentNote,
     internalNote: invoice.internalNote,
@@ -143,7 +161,7 @@ async function getOrderForCorrection(
   orderId: string,
   businessId: string,
   branchId: string,
-): Promise<OrderForCorrection> {
+): Promise<OrderForCorrectionWithPayments> {
   const order = await tx.order.findFirst({
     where: {
       id: orderId,
@@ -170,6 +188,10 @@ async function getOrderForCorrection(
             orderBy: {
               createdAt: "asc",
             },
+          },
+          payments: {
+            where: { status: "POSTED" },
+            select: { amount: true, type: true },
           },
         },
       },
@@ -330,6 +352,18 @@ export async function editOrderWithCorrection(params: {
       services.map((service) => [service.id, service]),
     );
 
+    const customerPrices = await tx.customerServicePrice.findMany({
+      where: {
+        businessId: params.businessId,
+        customerId: current.customerId,
+        serviceId: { in: serviceIds },
+      },
+      select: { serviceId: true, unitPrice: true },
+    });
+    const customerPriceMap = new Map(
+      customerPrices.map((price) => [price.serviceId, price.unitPrice]),
+    );
+
     for (const service of services) {
       if (!service.isActive) {
         throw new AppError(
@@ -381,15 +415,17 @@ export async function editOrderWithCorrection(params: {
 
     const preparedItems = params.input.items.map((input) => {
       const service = serviceMap.get(input.serviceId)!;
+      const existingItem = input.id ? currentItemsById.get(input.id) : undefined;
+      // Retain the exact historical unit price when the existing service line
+      // remains unchanged. New or explicitly changed service lines use the
+      // customer's active override, falling back to the standard price list.
+      const unitPrice = existingItem?.serviceId === service.id
+        ? existingItem.unitPrice
+        : customerPriceMap.get(service.id) ?? service.unitPrice;
       const totalPieces = service.pieces * input.quantity;
-      const lineTotal = service.unitPrice * input.quantity;
+      const lineTotal = unitPrice * input.quantity;
 
-      return {
-        input,
-        service,
-        totalPieces,
-        lineTotal,
-      };
+      return { input, service, unitPrice, totalPieces, lineTotal };
     });
 
     /*
@@ -451,7 +487,7 @@ export async function editOrderWithCorrection(params: {
     const resultingItemIds = new Set<string>();
 
     for (const prepared of preparedItems) {
-      const { input, service, totalPieces, lineTotal } =
+      const { input, service, unitPrice, totalPieces, lineTotal } =
         prepared;
 
       if (input.id) {
@@ -468,7 +504,7 @@ export async function editOrderWithCorrection(params: {
             piecesPerUnit: service.pieces,
             quantity: input.quantity,
             totalPieces,
-            unitPrice: service.unitPrice,
+            unitPrice,
             lineTotal,
           },
         });
@@ -536,7 +572,7 @@ export async function editOrderWithCorrection(params: {
             piecesPerUnit: service.pieces,
             quantity: input.quantity,
             totalPieces,
-            unitPrice: service.unitPrice,
+            unitPrice,
             lineTotal,
           },
         });
@@ -568,10 +604,57 @@ export async function editOrderWithCorrection(params: {
       }
     }
 
-    const orderTotal = preparedItems.reduce(
-      (sum, item) => sum + item.lineTotal,
+    const invoice = current.invoice!;
+    const calculationLines = preparedItems.map((item, index) => ({
+      id: item.input.id ?? `new-${index}`,
+      amount: item.lineTotal,
+    }));
+    const lineIds = new Set(calculationLines.map((line) => line.id));
+    const savedAdjustments = Array.isArray(invoice.appliedAdjustments)
+      ? invoice.appliedAdjustments.flatMap((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+          const rule = value as Record<string, unknown>;
+          if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
+          const scope = rule.scope === "ITEMS" ? "ITEMS" as const : "INVOICE" as const;
+          const itemIndexes = Array.isArray(rule.itemIndexes)
+            ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < calculationLines.length)
+            : [];
+          // Persisted order-item IDs are the authoritative scope. Indexes are
+          // only a compatibility fallback for older snapshots that predate IDs;
+          // using indexes first would silently retarget a discount if staff reorder
+          // or insert lines while correcting an order.
+          const itemIds = Array.isArray(rule.itemIds)
+            ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
+            : itemIndexes.map((index) => calculationLines[index]!.id);
+          if (scope === "ITEMS" && itemIds.length === 0) return [];
+          return [{ id: rule.id, name: rule.name, percentage: rule.percentage, scope, itemIds }];
+        })
+      : [];
+    const savedTaxes = Array.isArray(invoice.appliedTaxes)
+      ? invoice.appliedTaxes.flatMap((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+          const rule = value as Record<string, unknown>;
+          if (
+            typeof rule.id !== "string" || typeof rule.name !== "string" ||
+            (rule.kind !== "PERCENTAGE" && rule.kind !== "FIXED") ||
+            typeof rule.value !== "number" ||
+            (rule.treatment !== "ADDITIVE" && rule.treatment !== "WITHHOLDING")
+          ) return [];
+          return [{
+            id: rule.id, name: rule.name, kind: rule.kind as "PERCENTAGE" | "FIXED", value: rule.value,
+            treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING", enabled: true, allowWithOtherTaxes: true,
+          }];
+        })
+      : [];
+    const calculation = calculateInvoice(calculationLines, savedAdjustments, savedTaxes);
+    const amountPaid = (invoice.payments ?? []).reduce(
+      (sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount),
       0,
     );
+    if (amountPaid > calculation.totalAmount) {
+      throw new AppError("The revised order total is below the amount already paid. Record an appropriate refund or account credit first.", 422);
+    }
+    const orderTotal = calculation.totalAmount;
 
     const orderData: Prisma.OrderUpdateInput = {
       orderTotal,
@@ -599,8 +682,6 @@ export async function editOrderWithCorrection(params: {
       data: orderData,
     });
 
-    const invoice = current.invoice!;
-
     let customerAgreement = invoice.customerAgreement;
 
     if (params.input.customerAgreement !== undefined) {
@@ -626,6 +707,13 @@ export async function editOrderWithCorrection(params: {
         id: invoice.id,
       },
       data: {
+        subtotal: calculation.subtotal,
+        adjustedSubtotal: calculation.adjustedSubtotal,
+        adjustmentTotal: calculation.adjustmentTotal,
+        additiveTaxTotal: calculation.additiveTaxTotal,
+        withholdingTaxTotal: calculation.withholdingTaxTotal,
+        appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+        appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
         totalAmount: orderTotal,
         ...(params.input.garmentNote !== undefined && {
           garmentNote:

@@ -43,6 +43,7 @@ import { platformRouter } from "./modules/platform/platform.routes.js";
 import { inboxRouter } from "./modules/inbox/inbox.routes.js";
 import { requirePlatformOperational } from "./modules/platform/platform-controls.middleware.js";
 import { subscriptionPaymentWebhookRouter } from "./modules/subscriptions/subscription-payment-webhook.routes.js";
+import { communicationsRouter } from "./modules/communications/communications.routes.js";
 
 export function createApp() {
   const app = express();
@@ -112,6 +113,7 @@ export function createApp() {
   mountProtectedTenantRoute("/customers", customersRouter);
   mountProtectedTenantRoute("/audit", auditRouter);
   mountProtectedTenantRoute("/services", servicesRouter);
+  mountProtectedTenantRoute("/communications", communicationsRouter);
   mountProtectedTenantRoute("/colors", colorsRouter);
   mountProtectedTenantRoute("/orders", ordersRouter);
   mountProtectedTenantRoute("/garments", garmentsRouter);

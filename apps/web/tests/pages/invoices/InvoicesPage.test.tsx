@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { SensitiveAuthorizationProvider } from "../../../src/components/auth/SensitiveAuthorizationProvider.js";
 import { InvoicesPage } from "../../../src/pages/invoices/InvoicesPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as invoicesApi from "../../../src/lib/invoices-api.js";
@@ -49,7 +50,9 @@ function renderPage(
   return render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <InvoicesPage />
+        <SensitiveAuthorizationProvider>
+          <InvoicesPage />
+        </SensitiveAuthorizationProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );

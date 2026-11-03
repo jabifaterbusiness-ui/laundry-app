@@ -1,6 +1,75 @@
 import type { InvoiceStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { calculateInvoice } from "./invoice-calculator.js";
+
+async function calculateNewInvoiceDefaults(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  items: Array<{ id: string; lineTotal: number }>,
+  options: {
+    adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds?: string[];
+  } = {},
+) {
+  // Real Prisma order items always have IDs. Lightweight service/test fixtures may omit
+  // them, so give those lines stable per-invoice IDs before resolving item-scoped rules.
+  const calculationLines = items.map((item, index) => ({
+    ...item,
+    id: typeof item.id === "string" && item.id.trim() ? item.id : `invoice-line-${index + 1}`,
+  }));
+  const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
+  const adjustmentRecords = selectedAdjustmentIds.length
+    ? await tx.priceAdjustment.findMany({ where: { businessId, id: { in: selectedAdjustmentIds }, isActive: true } })
+    : [];
+  if (adjustmentRecords.length !== selectedAdjustmentIds.length) {
+    throw new AppError("One or more selected price adjustments are unavailable", 422);
+  }
+  const adjustmentMap = new Map(adjustmentRecords.map((rule) => [rule.id, rule]));
+  const adjustments = (options.adjustments ?? []).map((selection) => {
+    const rule = adjustmentMap.get(selection.adjustmentId)!;
+    const itemIds = (selection.itemIndexes ?? []).map((index) => {
+      if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+        throw new AppError("A selected adjustment contains an invalid order item", 422);
+      }
+      return calculationLines[index]!.id;
+    });
+    if (selection.scope === "ITEMS" && itemIds.length === 0) {
+      throw new AppError("Select at least one item for an item-specific adjustment", 422);
+    }
+    return { id: rule.id, name: rule.name, percentage: rule.percentage, scope: selection.scope, itemIds };
+  });
+  const explicitTaxIds = [...new Set(options.taxRuleIds ?? [])];
+  const rules = tx.taxRule
+    ? await tx.taxRule.findMany({
+        where: {
+          businessId,
+          isActive: true,
+          OR: [
+            { enabledByDefault: true },
+            ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  if (explicitTaxIds.some((id) => !rules.some((rule) => rule.id === id))) {
+    throw new AppError("One or more selected tax rules are unavailable", 422);
+  }
+  return calculateInvoice(
+    calculationLines.map((item) => ({ id: item.id, amount: item.lineTotal })),
+    adjustments,
+    rules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      kind: rule.kind as "PERCENTAGE" | "FIXED",
+      value: rule.value,
+      treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING",
+      enabled: true,
+      allowWithOtherTaxes: rule.allowWithOtherTaxes,
+    })),
+  );
+}
 
 export interface CreateInvoiceData {
   businessId: string;
@@ -100,8 +169,17 @@ export async function createInvoiceWithTx(
       totalPrice: item.lineTotal,
     }));
 
+  const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items);
+
   return tx.invoice.create({
     data: {
+      subtotal: calculation.subtotal,
+      adjustedSubtotal: calculation.adjustedSubtotal,
+      adjustmentTotal: calculation.adjustmentTotal,
+      additiveTaxTotal: calculation.additiveTaxTotal,
+      withholdingTaxTotal: calculation.withholdingTaxTotal,
+      appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+      appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
       business: {
         connect: { id: businessId },
       },
@@ -125,7 +203,7 @@ export async function createInvoiceWithTx(
       receiptBackgroundColor: order.business.receiptBackgroundColor,
       receiptTextColor: order.business.receiptTextColor,
       receiptHeaderStyle: order.business.receiptHeaderStyle,
-      totalAmount: order.orderTotal,
+      totalAmount: calculation.totalAmount,
       garmentNote: order.garmentNote,
       internalNote: order.internalNote,
       customerAgreement: agreement,
@@ -169,6 +247,10 @@ export async function createInvoiceFromOrderWithTx(
     receiptHeaderStyle: string | null;
   },
   customerAgreement: string,
+  pricingOptions: {
+    adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds?: string[];
+  } = {},
 ) {
   const agreement = customerAgreement.trim();
 
@@ -190,8 +272,17 @@ export async function createInvoiceFromOrderWithTx(
       totalPrice: item.lineTotal,
     }));
 
+  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, pricingOptions);
+
   return tx.invoice.create({
     data: {
+      subtotal: calculation.subtotal,
+      adjustedSubtotal: calculation.adjustedSubtotal,
+      adjustmentTotal: calculation.adjustmentTotal,
+      additiveTaxTotal: calculation.additiveTaxTotal,
+      withholdingTaxTotal: calculation.withholdingTaxTotal,
+      appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+      appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
       business: {
         connect: { id: business.id },
       },
@@ -215,7 +306,7 @@ export async function createInvoiceFromOrderWithTx(
       receiptBackgroundColor: business.receiptBackgroundColor,
       receiptTextColor: business.receiptTextColor,
       receiptHeaderStyle: business.receiptHeaderStyle,
-      totalAmount: order.orderTotal,
+      totalAmount: calculation.totalAmount,
       garmentNote: order.garmentNote,
       internalNote: order.internalNote,
       customerAgreement: agreement,

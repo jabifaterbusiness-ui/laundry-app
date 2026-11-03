@@ -89,3 +89,45 @@ export async function setServiceActive(
     },
   );
 }
+
+
+export interface PriceAdjustmentRule {
+  id: string; name: string; percentage: number; isActive: boolean;
+}
+export interface TaxRuleSetting {
+  id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
+  treatment: "ADDITIVE" | "WITHHOLDING"; enabledByDefault: boolean;
+  allowWithOtherTaxes: boolean; isActive: boolean;
+}
+export interface PricingRulesResponse {
+  adjustments: PriceAdjustmentRule[];
+  taxes: TaxRuleSetting[];
+}
+export interface CustomerServicePrice {
+  id: string; customerId: string; serviceId: string; unitPrice: number;
+  service: Pick<Service, "id" | "name" | "pieces" | "unitPrice" | "isActive">;
+}
+export async function listPricingRules(auth: { accessToken: string | null }): Promise<PricingRulesResponse> {
+  return apiFetch<PricingRulesResponse>("/services/pricing-rules", { accessToken: auth.accessToken });
+}
+export async function createPriceAdjustment(input: { name: string; percentage: number }, auth: { accessToken: string | null }): Promise<PriceAdjustmentRule> {
+  return apiFetch<PriceAdjustmentRule>("/services/price-adjustments", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function deletePriceAdjustment(id: string, auth: { accessToken: string | null }): Promise<void> {
+  return apiFetch<void>(`/services/price-adjustments/${id}`, { method: "DELETE", accessToken: auth.accessToken });
+}
+export async function createTaxRule(input: Omit<TaxRuleSetting, "id" | "isActive">, auth: { accessToken: string | null }): Promise<TaxRuleSetting> {
+  return apiFetch<TaxRuleSetting>("/services/tax-rules", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function deleteTaxRule(id: string, auth: { accessToken: string | null }): Promise<void> {
+  return apiFetch<void>(`/services/tax-rules/${id}`, { method: "DELETE", accessToken: auth.accessToken });
+}
+export async function listCustomerServicePrices(customerId: string, auth: { accessToken: string | null }): Promise<{ data: CustomerServicePrice[] }> {
+  return apiFetch<{ data: CustomerServicePrice[] }>(`/services/customer-prices?customerId=${encodeURIComponent(customerId)}`, { accessToken: auth.accessToken });
+}
+export async function saveCustomerServicePrice(input: { customerId: string; serviceId: string; unitPrice: number }, auth: { accessToken: string | null }): Promise<CustomerServicePrice> {
+  return apiFetch<CustomerServicePrice>("/services/customer-prices", { method: "PUT", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function deleteCustomerServicePrice(id: string, auth: { accessToken: string | null }): Promise<void> {
+  return apiFetch<void>(`/services/customer-prices/${id}`, { method: "DELETE", accessToken: auth.accessToken });
+}

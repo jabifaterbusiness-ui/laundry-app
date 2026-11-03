@@ -50,6 +50,14 @@ export async function create(req: Request, res: Response) {
     branchId,
     customerId: input.customerId,
     items: input.items,
+    ...(input.adjustments !== undefined ? {
+      adjustments: input.adjustments.map((selection) => ({
+        adjustmentId: selection.adjustmentId,
+        scope: selection.scope,
+        ...(selection.itemIndexes !== undefined ? { itemIndexes: selection.itemIndexes } : {}),
+      })),
+    } : {}),
+    ...(input.taxRuleIds !== undefined ? { taxRuleIds: input.taxRuleIds } : {}),
     ...(input.garmentNote !== undefined && {
       garmentNote: input.garmentNote,
     }),

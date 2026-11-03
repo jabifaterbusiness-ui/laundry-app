@@ -28,6 +28,13 @@ export type CustomerReceipt = {
     unitPrice: number;
     totalPrice: number;
   }>;
+  subtotal?: number;
+  adjustedSubtotal?: number;
+  adjustmentTotal?: number;
+  additiveTaxTotal?: number;
+  withholdingTaxTotal?: number;
+  appliedAdjustments?: unknown[];
+  appliedTaxes?: unknown[];
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
@@ -70,6 +77,13 @@ export type CompanyReceipt = {
     unitPrice: number;
     totalPrice: number;
   }>;
+  subtotal?: number;
+  adjustedSubtotal?: number;
+  adjustmentTotal?: number;
+  additiveTaxTotal?: number;
+  withholdingTaxTotal?: number;
+  appliedAdjustments?: unknown[];
+  appliedTaxes?: unknown[];
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
@@ -208,6 +222,13 @@ export async function getCustomerReceipt(
     branchName: invoice.branch.name,
     createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
+    subtotal: invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.totalPrice, 0),
+    adjustedSubtotal: invoice.adjustedSubtotal ?? invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.totalPrice, 0),
+    adjustmentTotal: invoice.adjustmentTotal ?? 0,
+    additiveTaxTotal: invoice.additiveTaxTotal ?? 0,
+    withholdingTaxTotal: invoice.withholdingTaxTotal ?? 0,
+    appliedAdjustments: Array.isArray(invoice.appliedAdjustments) ? invoice.appliedAdjustments : [],
+    appliedTaxes: Array.isArray(invoice.appliedTaxes) ? invoice.appliedTaxes : [],
     totalAmount: invoice.totalAmount,
     ...projectPayments(invoice),
     garmentNote: invoice.garmentNote,
@@ -256,6 +277,13 @@ export async function getCompanyReceipt(
     branchName: invoice.branch.name,
     createdAt: invoice.createdAt.toISOString(),
     items: projectItems(invoice),
+    subtotal: invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.totalPrice, 0),
+    adjustedSubtotal: invoice.adjustedSubtotal ?? invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.totalPrice, 0),
+    adjustmentTotal: invoice.adjustmentTotal ?? 0,
+    additiveTaxTotal: invoice.additiveTaxTotal ?? 0,
+    withholdingTaxTotal: invoice.withholdingTaxTotal ?? 0,
+    appliedAdjustments: Array.isArray(invoice.appliedAdjustments) ? invoice.appliedAdjustments : [],
+    appliedTaxes: Array.isArray(invoice.appliedTaxes) ? invoice.appliedTaxes : [],
     totalAmount: invoice.totalAmount,
     ...projectPayments(invoice),
     garmentNote: invoice.garmentNote,

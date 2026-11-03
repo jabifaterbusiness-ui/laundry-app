@@ -53,6 +53,12 @@ export interface CreateOrderInput {
   expectedReadyAt?: string;
   garmentNote?: string;
   internalNote?: string;
+  adjustments?: Array<{
+    adjustmentId: string;
+    scope: "INVOICE" | "ITEMS";
+    itemIndexes?: number[];
+  }>;
+  taxRuleIds?: string[];
 }
 
 export interface ListOrdersParams {

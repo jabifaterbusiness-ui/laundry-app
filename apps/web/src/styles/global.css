@@ -347,6 +347,37 @@ a {
 
 /* ---------- LAYOUT ---------- */
 
+.app-layout--sidebar-collapsed .sidebar {
+  display: none;
+}
+.app-layout--sidebar-collapsed .main-content {
+  flex: 1 1 100%;
+  width: 100%;
+}
+.sidebar--workstation {
+  padding-top: 18px;
+}
+.sidebar--workstation .nav-section h2 {
+  color: var(--la-primary-dark);
+}
+.workstation-sidebar-toggle {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--la-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--la-text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.workstation-sidebar-toggle:hover {
+  border-color: var(--la-primary);
+  color: var(--la-primary-dark);
+  background: var(--la-primary-soft);
+}
+
 .app-layout {
   display: flex;
   max-width: 1600px;

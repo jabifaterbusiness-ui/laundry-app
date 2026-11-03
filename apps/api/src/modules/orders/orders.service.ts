@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
 import { createInvoiceFromOrderWithTx } from "../invoices/invoices.service.js";
+import { notifyOrderStatus } from "../communications/communications.service.js";
 
 export interface CreateOrderItemData {
   serviceId: string;
@@ -18,6 +19,8 @@ export interface CreateOrderData {
   garmentNote?: string;
   internalNote?: string;
   expectedReadyAt?: Date;
+  adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+  taxRuleIds?: string[];
 }
 
 export interface ListOrdersParams {
@@ -111,6 +114,20 @@ async function createOrderWithTx(
       services.map((service) => [service.id, service]),
     );
 
+    // Customer-specific prices are read only for this business/customer.
+    // The selected price is copied into OrderItem, preserving history.
+    const customerPrices = await tx.customerServicePrice.findMany({
+      where: {
+        businessId: data.businessId,
+        customerId: data.customerId,
+        serviceId: { in: serviceIds },
+      },
+      select: { serviceId: true, unitPrice: true },
+    });
+    const customerPriceMap = new Map(
+      customerPrices.map((price) => [price.serviceId, price.unitPrice]),
+    );
+
     for (const item of data.items) {
       const service = serviceMap.get(item.serviceId);
 
@@ -139,8 +156,9 @@ async function createOrderWithTx(
       (item) => {
         const service = serviceMap.get(item.serviceId)!;
 
+        const unitPrice = customerPriceMap.get(service.id) ?? service.unitPrice;
         const totalPieces = item.quantity * service.pieces;
-        const lineTotal = item.quantity * service.unitPrice;
+        const lineTotal = item.quantity * unitPrice;
 
         return {
           service: {
@@ -151,7 +169,7 @@ async function createOrderWithTx(
           quantity: item.quantity,
           totalPieces,
           colors: item.colors ?? [],
-          unitPrice: service.unitPrice,
+          unitPrice,
           lineTotal,
         };
       },
@@ -224,14 +242,22 @@ async function createOrderWithTx(
       );
     }
 
-    await createInvoiceFromOrderWithTx(
+    const invoice = await createInvoiceFromOrderWithTx(
       tx,
       order,
       business,
       business.defaultCustomerAgreement,
+      { adjustments: data.adjustments ?? [], taxRuleIds: data.taxRuleIds ?? [] },
     );
 
-    return order;
+    // Keep the order's displayed total aligned with the issued invoice total
+    // (including adjustments and tax), while OrderItem remains the immutable
+    // service-price snapshot used for the subtotal.
+    return tx.order.update({
+      where: { id: order.id },
+      data: { orderTotal: invoice.totalAmount },
+      include: { customer: true, branch: true, items: true },
+    });
 }
 
 async function createUniqueOrderNumber(
@@ -493,7 +519,7 @@ async function updateOrderStatusWithDb(
     data.cancelledAt = now;
   }
 
-  return db.order.update({
+  const updated = await db.order.update({
     where: { id },
     data,
     include: {
@@ -502,4 +528,13 @@ async function updateOrderStatusWithDb(
       items: true,
     },
   });
+
+  // Send customer notification only after the status update has committed.
+  // Provider failures are recorded by the delivery service and must not roll
+  // back or hide the operational status change.
+  if (db === prisma && existing.status !== status) {
+    await notifyOrderStatus({ orderId: id, businessId, branchId, status }).catch(() => []);
+  }
+
+  return updated;
 }

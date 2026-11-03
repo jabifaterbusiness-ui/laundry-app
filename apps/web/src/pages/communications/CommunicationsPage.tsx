@@ -1,0 +1,303 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "../../lib/api-client.js";
+import { listCustomers } from "../../lib/customers-api.js";
+import { useAuthStore } from "../../state/auth-store.js";
+import {
+  createAnnouncement, deleteCustomerGroup, deleteStatusRule, getReminderConfig, listCustomerGroups, saveCustomerGroup,
+  listCommunicationDeliveries, listStatusRules, listUnpickedOrders,
+  saveReminderConfig, saveStatusRule, sendUnpickedReminders,
+  type CommunicationChannel,
+} from "../../lib/communications-api.js";
+
+const STATUSES = ["RECEIVED", "IN_PROGRESS", "READY_FOR_PICKUP", "COMPLETED", "CANCELLED"];
+const DEFAULT_REMINDER = "Hello {{customerName}}, your order {{orderNumber}} has been ready for pickup. Please contact us to arrange collection. Thank you.";
+function money(value: number) { return `₦${value.toLocaleString("en-NG")}`; }
+
+export function CommunicationsPage() {
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const activeBranchId = useAuthStore((state) => state.activeBranchId);
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [audience, setAudience] = useState<"ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP">("ALL_CUSTOMERS");
+  const [groupId, setGroupId] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupCustomerIds, setGroupCustomerIds] = useState<string[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | undefined>();
+  const [customerIds, setCustomerIds] = useState<string[]>([]);
+  const [customerPage, setCustomerPage] = useState(1);
+  const [announcementChannels, setAnnouncementChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
+  const [status, setStatus] = useState("READY_FOR_PICKUP");
+  const [ruleEnabled, setRuleEnabled] = useState(true);
+  const [ruleChannel, setRuleChannel] = useState<"WHATSAPP" | "EMAIL" | "BOTH">("WHATSAPP");
+  const [whatsappTemplate, setWhatsappTemplate] = useState("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
+  const [emailSubject, setEmailSubject] = useState("Order update from {{companyName}}");
+  const [emailTemplate, setEmailTemplate] = useState("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
+  const [thresholdMonths, setThresholdMonths] = useState(2);
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [reminderMessage, setReminderMessage] = useState(DEFAULT_REMINDER);
+  const [reminderChannels, setReminderChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const customersQuery = useQuery({
+    queryKey: ["customers", "communications", customerPage],
+    queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
+    enabled: Boolean(accessToken),
+  });
+  const groupsQuery = useQuery({
+    queryKey: ["communications", "customer-groups"],
+    queryFn: () => listCustomerGroups({ accessToken }),
+  });
+  const rulesQuery = useQuery({
+    queryKey: ["communications", "status-rules"],
+    queryFn: () => listStatusRules({ accessToken }),
+  });
+  const deliveriesQuery = useQuery({
+    queryKey: ["communications", "deliveries"],
+    queryFn: () => listCommunicationDeliveries({ accessToken }),
+  });
+  useEffect(() => {
+    const rule = rulesQuery.data?.data.find((item) => item.status === status);
+    if (rule) {
+      setRuleEnabled(rule.enabled);
+      setRuleChannel(rule.channel);
+      setWhatsappTemplate(rule.whatsappMessage ?? "");
+      setEmailSubject(rule.emailSubject ?? "");
+      setEmailTemplate(rule.emailMessage ?? "");
+    } else {
+      setRuleEnabled(false);
+      setRuleChannel("WHATSAPP");
+      setWhatsappTemplate("");
+      setEmailSubject("");
+      setEmailTemplate("");
+    }
+  }, [status, rulesQuery.data]);
+
+  const reminderConfigQuery = useQuery({
+    queryKey: ["communications", "reminder-config", activeBranchId],
+    queryFn: () => getReminderConfig({ accessToken, branchId: activeBranchId }),
+    enabled: Boolean(accessToken && activeBranchId),
+  });
+
+  useEffect(() => {
+    if (!reminderConfigQuery.data) return;
+    setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
+    setRemindersEnabled(reminderConfigQuery.data.enabled);
+  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
+
+  const unpickedQuery = useQuery({
+    queryKey: ["communications", "unpicked-orders", activeBranchId],
+    queryFn: () => listUnpickedOrders({ accessToken, branchId: activeBranchId }),
+    enabled: Boolean(accessToken && activeBranchId),
+  });
+
+  const groupMutation = useMutation({
+    mutationFn: () => saveCustomerGroup({
+      name: groupName.trim(), description: groupDescription.trim() || null, customerIds: groupCustomerIds,
+    }, { accessToken }, editingGroupId),
+    onSuccess: async () => {
+      setFeedback(editingGroupId ? "Customer group updated." : "Customer group created.");
+      setGroupName(""); setGroupDescription(""); setGroupCustomerIds([]); setEditingGroupId(undefined);
+      await queryClient.invalidateQueries({ queryKey: ["communications", "customer-groups"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save customer group."),
+  });
+  const removeGroupMutation = useMutation({
+    mutationFn: (id: string) => deleteCustomerGroup(id, { accessToken }),
+    onSuccess: async () => {
+      setGroupId("");
+      await queryClient.invalidateQueries({ queryKey: ["communications", "customer-groups"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to delete customer group."),
+  });
+  const announcementMutation = useMutation({
+    mutationFn: () => createAnnouncement({
+      title: title.trim(), message: announcementMessage.trim(), audience,
+      channels: announcementChannels, ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
+      ...(audience === "CUSTOMER_GROUP" ? { groupId } : {}),
+    }, { accessToken }),
+    onSuccess: async (result) => {
+      setFeedback(`Announcement processed for ${result.recipientCount} customers. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
+      setTitle(""); setAnnouncementMessage(""); setCustomerIds([]);
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+    },
+    onError: (error) => setFeedback(error instanceof ApiError ? error.message : "Unable to send announcement."),
+  });
+  const ruleMutation = useMutation({
+    mutationFn: () => saveStatusRule({
+      status, enabled: ruleEnabled, channel: ruleChannel,
+      whatsappMessage: whatsappTemplate, emailSubject, emailMessage: emailTemplate,
+    }, { accessToken }),
+    onSuccess: async () => {
+      setFeedback(`Notification rule saved for ${status.replaceAll("_", " ")}.`);
+      await queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save notification rule."),
+  });
+  const removeRuleMutation = useMutation({
+    mutationFn: (id: string) => deleteStatusRule(id, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] }),
+  });
+  const configMutation = useMutation({
+    mutationFn: () => saveReminderConfig({ enabled: remindersEnabled, thresholdMonths }, { accessToken, branchId: activeBranchId }),
+    onSuccess: async () => {
+      setFeedback("Unpicked-order reminder settings saved.");
+      await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "unpicked-orders"] });
+    },
+  });
+  const reminderMutation = useMutation({
+    mutationFn: () => sendUnpickedReminders({ orderIds: selectedOrderIds, channels: reminderChannels, message: reminderMessage.trim() }, { accessToken, branchId: activeBranchId }),
+    onSuccess: async (result) => {
+      setFeedback(`Reminder processed for ${result.orderCount} orders. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
+      setSelectedOrderIds([]);
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send reminders."),
+  });
+
+  function toggleChannel(value: CommunicationChannel, current: CommunicationChannel[], set: (next: CommunicationChannel[]) => void) {
+    set(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+  }
+  function loadRule(rule: NonNullable<typeof rulesQuery.data>["data"][number]) {
+    setStatus(rule.status); setRuleEnabled(rule.enabled); setRuleChannel(rule.channel);
+    setWhatsappTemplate(rule.whatsappMessage ?? ""); setEmailSubject(rule.emailSubject ?? ""); setEmailTemplate(rule.emailMessage ?? "");
+  }
+
+  return (
+    <main style={{ maxWidth: 1180, margin: "0 auto", padding: "1.25rem" }}>
+      <header style={{ marginBottom: "1.5rem" }}>
+        <p style={{ color: "#0f766e", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>Customer engagement</p>
+        <h1>Announcements & Notifications</h1>
+        <p>Reach customers through WhatsApp and email, automate order updates, and follow up on uncollected laundry.</p>
+      </header>
+      {feedback && <p role="status" style={{ padding: "0.8rem 1rem", borderRadius: 10, background: "#ecfdf5", color: "#065f46" }}>{feedback}</p>}
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
+        <h2>Compose an announcement</h2>
+        <p>Send a company-wide message or select individual customers. Delivery results are recorded for follow-up.</p>
+        <form onSubmit={(event) => { event.preventDefault(); announcementMutation.mutate(); }}>
+          <label>Announcement title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required /></label>
+          <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
+          <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option><option value="CUSTOMER_GROUP">Customer group</option></select></label>
+          {audience === "SELECTED_CUSTOMERS" && (
+            <>
+            <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid #d8dee8", borderRadius: 10, padding: 10 }}>
+              {(customersQuery.data?.data ?? []).map((customer) => <label key={customer.id} style={{ display: "block", padding: "4px 0" }}>
+                <input type="checkbox" checked={customerIds.includes(customer.id)} onChange={(event) => setCustomerIds((current) => event.target.checked ? [...current, customer.id] : current.filter((id) => id !== customer.id))} />
+                {customer.name} · {customer.phone}
+              </label>)}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingTop: 8 }}>
+              <small>Page {customersQuery.data?.pagination.page ?? customerPage} of {customersQuery.data?.pagination.totalPages ?? 1} · {customersQuery.data?.pagination.total ?? 0} active customers</small>
+              <span>
+                <button type="button" disabled={customerPage <= 1} onClick={() => setCustomerPage((page) => Math.max(1, page - 1))}>Previous</button>
+                <button type="button" disabled={customerPage >= (customersQuery.data?.pagination.totalPages ?? 1)} onClick={() => setCustomerPage((page) => page + 1)}>Next</button>
+              </span>
+            </div>
+            </>
+          )}
+          {audience === "CUSTOMER_GROUP" && (
+            <label>Customer group<select value={groupId} onChange={(event) => setGroupId(event.target.value)} required>
+              <option value="">Choose a group</option>
+              {(groupsQuery.data?.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name} ({group._count.members})</option>)}
+            </select></label>
+          )}
+          <div><strong>Sending channels</strong>
+            <label><input type="checkbox" checked={announcementChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", announcementChannels, setAnnouncementChannels)} /> WhatsApp</label>
+            <label><input type="checkbox" checked={announcementChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", announcementChannels, setAnnouncementChannels)} /> Email</label>
+          </div>
+          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId)}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
+        </form>
+      </section>
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
+        <h2>Customer groups</h2>
+        <p>Create reusable customer segments and maintain their membership for targeted announcements.</p>
+        <form onSubmit={(event) => { event.preventDefault(); groupMutation.mutate(); }}>
+          <label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={100} required /></label>
+          <label>Description<input value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} maxLength={500} /></label>
+          <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid #d8dee8", borderRadius: 10, padding: 10 }}>
+            {(customersQuery.data?.data ?? []).map((customer) => <label key={customer.id} style={{ display: "block", padding: 4 }}>
+              <input type="checkbox" checked={groupCustomerIds.includes(customer.id)} onChange={(event) => setGroupCustomerIds((current) => event.target.checked ? [...current, customer.id] : current.filter((id) => id !== customer.id))} />
+              {customer.name} · {customer.phone}
+            </label>)}
+          </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingTop: 8 }}>
+              <small>Page {customersQuery.data?.pagination.page ?? customerPage} of {customersQuery.data?.pagination.totalPages ?? 1} · {customersQuery.data?.pagination.total ?? 0} active customers</small>
+              <span>
+                <button type="button" disabled={customerPage <= 1} onClick={() => setCustomerPage((page) => Math.max(1, page - 1))}>Previous</button>
+                <button type="button" disabled={customerPage >= (customersQuery.data?.pagination.totalPages ?? 1)} onClick={() => setCustomerPage((page) => page + 1)}>Next</button>
+              </span>
+            </div>
+          <button type="submit" disabled={groupMutation.isPending || !groupName.trim() || !groupCustomerIds.length}>{groupMutation.isPending ? "Saving..." : editingGroupId ? "Update group" : "Create group"}</button>
+          {editingGroupId && <button type="button" onClick={() => { setEditingGroupId(undefined); setGroupName(""); setGroupDescription(""); setGroupCustomerIds([]); }}>Cancel edit</button>}
+        </form>
+        {(groupsQuery.data?.data ?? []).map((group) => <div key={group.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+          <span><strong>{group.name}</strong> · {group._count.members} customers</span>
+          <span>
+            <button type="button" onClick={() => { setEditingGroupId(group.id); setGroupName(group.name); setGroupDescription(group.description ?? ""); setGroupCustomerIds(group.members.map((member) => member.customerId)); }}>Edit</button>
+            <button type="button" disabled={removeGroupMutation.isPending} onClick={() => removeGroupMutation.mutate(group.id)}>Delete</button>
+          </span>
+        </div>)}
+      </section>
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
+        <h2>Automatic order-status messages</h2>
+        <p>Choose which order statuses trigger a customer message. Use template fields: {"{{customerName}}"}, {"{{orderNumber}}"}, {"{{companyName}}"}, {"{{status}}"}.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+          <label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{STATUSES.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select></label>
+          <label>Channel<select value={ruleChannel} onChange={(event) => setRuleChannel(event.target.value as typeof ruleChannel)}><option value="WHATSAPP">WhatsApp</option><option value="EMAIL">Email</option><option value="BOTH">WhatsApp and email</option></select></label>
+          <label><input type="checkbox" checked={ruleEnabled} onChange={(event) => setRuleEnabled(event.target.checked)} /> Enable this notification</label>
+        </div>
+        <label>WhatsApp message<textarea rows={3} value={whatsappTemplate} onChange={(event) => setWhatsappTemplate(event.target.value)} /></label>
+        <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
+        <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
+        <button type="button" disabled={ruleMutation.isPending} onClick={() => ruleMutation.mutate()}>Save status notification</button>
+        <h3>Configured rules</h3>
+        {(rulesQuery.data?.data ?? []).map((rule) => <div key={rule.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+          <span><strong>{rule.status.replaceAll("_", " ")}</strong> · {rule.channel} · {rule.enabled ? "Enabled" : "Disabled"}</span>
+          <span><button type="button" onClick={() => loadRule(rule)}>Edit</button> <button type="button" disabled={removeRuleMutation.isPending} onClick={() => removeRuleMutation.mutate(rule.id)}>Remove</button></span>
+        </div>)}
+      </section>
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
+        <h2>Unpicked orders & customer reminders</h2>
+        {!activeBranchId && <p role="status">Select an active branch from the top bar to view and remind customers about unpicked orders.</p>}
+        <p>Find orders that have remained ready for pickup beyond your selected age threshold.</p>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12 }}>
+          <label>Age threshold (months)<input type="number" min="1" max="36" value={thresholdMonths} onChange={(event) => setThresholdMonths(Number(event.target.value))} /></label>
+          <label><input type="checkbox" checked={remindersEnabled} onChange={(event) => setRemindersEnabled(event.target.checked)} /> Enable reminder section</label>
+          <button type="button" disabled={!activeBranchId || configMutation.isPending || thresholdMonths < 1 || thresholdMonths > 36} onClick={() => configMutation.mutate()}>Save reminder settings</button>
+        </div>
+        {reminderConfigQuery.data && <p>Current setting: {reminderConfigQuery.data.enabled ? "Enabled" : "Disabled"} · {reminderConfigQuery.data.thresholdMonths} months</p>}
+        <div style={{ maxHeight: 260, overflow: "auto", margin: "1rem 0" }}>
+          {(unpickedQuery.data?.data ?? []).map((order) => <label key={order.id} style={{ display: "block", padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+            <input type="checkbox" checked={selectedOrderIds.includes(order.id)} onChange={(event) => setSelectedOrderIds((current) => event.target.checked ? [...current, order.id] : current.filter((id) => id !== order.id))} />
+            <strong>#{order.orderNumber}</strong> · {order.customer.name} · {order.branch.name} · {money(order.orderTotal)} · {new Date(order.readyAt ?? order.createdAt).toLocaleDateString("en-NG")}
+          </label>)}
+          {(unpickedQuery.data?.data ?? []).length === 0 && <p>No unpicked orders match the current threshold.</p>}
+        </div>
+        <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
+        <label><input type="checkbox" checked={reminderChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", reminderChannels, setReminderChannels)} /> WhatsApp</label>
+        <label><input type="checkbox" checked={reminderChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", reminderChannels, setReminderChannels)} /> Email</label>
+        <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
+      </section>
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16 }}>
+        <h2>Delivery history</h2>
+        <p>Most recent 200 communication attempts across announcements, order updates and pickup reminders.</p>
+        {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
+        {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
+          <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
+          <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
+          <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
+          {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
+        </div>)}
+      </section>
+    </main>
+  );
+}

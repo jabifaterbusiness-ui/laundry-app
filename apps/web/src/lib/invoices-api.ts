@@ -91,6 +91,13 @@ export type CustomerReceipt = {
   branchName: string;
   createdAt: string;
   items: ReceiptItem[];
+  subtotal: number;
+  adjustedSubtotal: number;
+  adjustmentTotal: number;
+  additiveTaxTotal: number;
+  withholdingTaxTotal: number;
+  appliedAdjustments: Array<{ id: string; name: string; percentage: number; amount: number; scope: "INVOICE" | "ITEMS"; itemIds?: string[]; itemIndexes?: number[] }>;
+  appliedTaxes: Array<{ id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; amount: number }>;
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
@@ -119,6 +126,13 @@ export type CompanyReceipt = {
   branchName: string;
   createdAt: string;
   items: ReceiptItem[];
+  subtotal: number;
+  adjustedSubtotal: number;
+  adjustmentTotal: number;
+  additiveTaxTotal: number;
+  withholdingTaxTotal: number;
+  appliedAdjustments: Array<{ id: string; name: string; percentage: number; amount: number; scope: "INVOICE" | "ITEMS"; itemIds?: string[]; itemIndexes?: number[] }>;
+  appliedTaxes: Array<{ id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; amount: number }>;
   totalAmount: number;
   totalPaid: number;
   balanceDue: number;
@@ -194,6 +208,26 @@ export type InvoiceHistoryEntry = {
   expiresAt: string;
   createdAt: string;
 };
+
+export async function updateInvoiceFinancialRules(
+  id: string,
+  input: {
+    reason: string;
+    confirmed: true;
+    adjustments: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds: string[];
+  },
+  auth: { accessToken: string | null; sensitiveAuthorization?: string | null },
+  branchId?: string | null,
+): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/financial-rules`, {
+    method: "PATCH",
+    accessToken: auth.accessToken,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+    branchId,
+    body: JSON.stringify(input),
+  });
+}
 
 export async function updateInvoice(
   id: string,
