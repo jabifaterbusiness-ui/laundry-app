@@ -602,9 +602,14 @@ export async function editOrderWithCorrection(params: {
           const rule = value as Record<string, unknown>;
           if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
           const scope = rule.scope === "ITEMS" ? "ITEMS" : "INVOICE";
-          const itemIds = Array.isArray(rule.itemIds)
-            ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
+          const itemIndexes = Array.isArray(rule.itemIndexes)
+            ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < calculationLines.length)
             : [];
+          const itemIds = itemIndexes.length
+            ? itemIndexes.map((index) => calculationLines[index]!.id)
+            : Array.isArray(rule.itemIds)
+              ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
+              : [];
           if (scope === "ITEMS" && itemIds.length === 0) return [];
           return [{ id: rule.id, name: rule.name, percentage: rule.percentage, scope, itemIds }];
         })
