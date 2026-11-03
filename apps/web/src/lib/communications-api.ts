@@ -3,7 +3,11 @@ import { apiFetch } from "./api-client.js";
 export type CommunicationChannel = "WHATSAPP" | "EMAIL";
 export interface AnnouncementInput {
   title: string; message: string; channels: CommunicationChannel[];
-  audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS"; customerIds?: string[];
+  audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
+}
+export interface CustomerGroup {
+  id: string; name: string; description: string | null;
+  _count: { members: number }; members: Array<{ customerId: string }>;
 }
 export interface StatusNotificationRule {
   id: string; status: string; enabled: boolean; channel: CommunicationChannel | "BOTH";
@@ -23,6 +27,15 @@ export interface UnpickedOrder {
   branch: { name: string };
 }
 export interface ReminderConfig { id: string; enabled: boolean; thresholdMonths: number }
+export async function listCustomerGroups(auth: { accessToken: string | null }) {
+  return apiFetch<{ data: CustomerGroup[] }>("/communications/customer-groups", { accessToken: auth.accessToken });
+}
+export async function saveCustomerGroup(input: { name: string; description?: string | null; customerIds: string[] }, auth: { accessToken: string | null }, id?: string) {
+  return apiFetch<CustomerGroup>(id ? `/communications/customer-groups/${id}` : "/communications/customer-groups", { method: id ? "PUT" : "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function deleteCustomerGroup(id: string, auth: { accessToken: string | null }) {
+  return apiFetch<void>(`/communications/customer-groups/${id}`, { method: "DELETE", accessToken: auth.accessToken });
+}
 export async function createAnnouncement(input: AnnouncementInput, auth: { accessToken: string | null }) {
   return apiFetch<{ campaignId: string; recipientCount: number; results: Array<{ status: string; channel: string; customerId?: string; error?: string }> }>("/communications/announcements", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
 }
