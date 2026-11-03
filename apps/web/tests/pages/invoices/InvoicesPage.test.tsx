@@ -321,15 +321,18 @@ describe("InvoicesPage invoice correction workflow", () => {
     renderPage(["invoices.view", "invoices.manage", "payments.view"]);
     await selectInvoice();
 
-    expect(await screen.findByText("Service subtotal")).toBeInTheDocument();
-    expect(screen.getByText("Special customer (-10%)")).toBeInTheDocument();
-    expect(screen.getByText("Adjusted taxable amount")).toBeInTheDocument();
-    expect(screen.getByText(/VAT \(7.5%\)/)).toBeInTheDocument();
-    expect(screen.getByText("Total pieces")).toBeInTheDocument();
-    expect(screen.getByText("Payment history")).toBeInTheDocument();
-    expect(screen.getByText("BANK-REF-1")).toBeInTheDocument();
-    expect(screen.getByText("Amount paid")).toBeInTheDocument();
-    expect(screen.getByText("Balance due")).toBeInTheDocument();
+    const financialBreakdown = screen.getByRole("region", { name: "Invoice financial breakdown" });
+    expect(within(financialBreakdown).getByText("Service subtotal")).toBeInTheDocument();
+    expect(within(financialBreakdown).getByText("Special customer (-10%)")).toBeInTheDocument();
+    expect(within(financialBreakdown).getByText("Adjusted taxable amount")).toBeInTheDocument();
+    expect(within(financialBreakdown).getByText(/VAT \\(7.5%\\)/)).toBeInTheDocument();
+    expect(within(financialBreakdown).getByText("Total pieces")).toBeInTheDocument();
+
+    const paymentHistory = screen.getByRole("region", { name: "Invoice payment history" });
+    expect(within(paymentHistory).getByText("Payment history")).toBeInTheDocument();
+    expect(within(paymentHistory).getByText("BANK-REF-1")).toBeInTheDocument();
+    expect(within(paymentHistory).getByText("Amount paid")).toBeInTheDocument();
+    expect(within(paymentHistory).getByText("Balance due")).toBeInTheDocument();
   });
 
   it("shows correction controls with invoices.manage permission", async () => {
