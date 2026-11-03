@@ -27,6 +27,7 @@ export function CommunicationsPage() {
   const [groupCustomerIds, setGroupCustomerIds] = useState<string[]>([]);
   const [editingGroupId, setEditingGroupId] = useState<string | undefined>();
   const [customerIds, setCustomerIds] = useState<string[]>([]);
+  const [customerPage, setCustomerPage] = useState(1);
   const [announcementChannels, setAnnouncementChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [status, setStatus] = useState("READY_FOR_PICKUP");
   const [ruleEnabled, setRuleEnabled] = useState(true);
@@ -42,8 +43,8 @@ export function CommunicationsPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const customersQuery = useQuery({
-    queryKey: ["customers", "communications"],
-    queryFn: () => listCustomers({ page: 1, pageSize: 100, status: "active" }, { accessToken }),
+    queryKey: ["customers", "communications", customerPage],
+    queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
     enabled: Boolean(accessToken),
   });
   const groupsQuery = useQuery({
@@ -189,6 +190,13 @@ export function CommunicationsPage() {
                 {customer.name} · {customer.phone}
               </label>)}
             </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingTop: 8 }}>
+              <small>Page {customersQuery.data?.pagination.page ?? customerPage} of {customersQuery.data?.pagination.totalPages ?? 1} · {customersQuery.data?.pagination.total ?? 0} active customers</small>
+              <span>
+                <button type="button" disabled={customerPage <= 1} onClick={() => setCustomerPage((page) => Math.max(1, page - 1))}>Previous</button>
+                <button type="button" disabled={customerPage >= (customersQuery.data?.pagination.totalPages ?? 1)} onClick={() => setCustomerPage((page) => page + 1)}>Next</button>
+              </span>
+            </div>
           )}
           {audience === "CUSTOMER_GROUP" && (
             <label>Customer group<select value={groupId} onChange={(event) => setGroupId(event.target.value)} required>
@@ -216,6 +224,13 @@ export function CommunicationsPage() {
               {customer.name} · {customer.phone}
             </label>)}
           </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingTop: 8 }}>
+              <small>Page {customersQuery.data?.pagination.page ?? customerPage} of {customersQuery.data?.pagination.totalPages ?? 1} · {customersQuery.data?.pagination.total ?? 0} active customers</small>
+              <span>
+                <button type="button" disabled={customerPage <= 1} onClick={() => setCustomerPage((page) => Math.max(1, page - 1))}>Previous</button>
+                <button type="button" disabled={customerPage >= (customersQuery.data?.pagination.totalPages ?? 1)} onClick={() => setCustomerPage((page) => page + 1)}>Next</button>
+              </span>
+            </div>
           <button type="submit" disabled={groupMutation.isPending || !groupName.trim() || !groupCustomerIds.length}>{groupMutation.isPending ? "Saving..." : editingGroupId ? "Update group" : "Create group"}</button>
           {editingGroupId && <button type="button" onClick={() => { setEditingGroupId(undefined); setGroupName(""); setGroupDescription(""); setGroupCustomerIds([]); }}>Cancel edit</button>}
         </form>
