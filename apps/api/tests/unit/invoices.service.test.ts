@@ -98,8 +98,9 @@ describe("invoices.service", () => {
             ],
             invoice: null,
           }),
+          update: vi.fn().mockResolvedValue({}),
         },
-        invoice: {
+                invoice: {
           create: invoiceCreate,
         },
       };
