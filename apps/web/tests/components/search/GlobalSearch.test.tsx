@@ -51,6 +51,27 @@ describe("GlobalSearch", () => {
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
 
+  it("chooses the exact order number when broader matches are also returned", async () => {
+    globalSearchMock.mockResolvedValue([
+      {
+        type: "ORDER", id: "order-100005", title: "Order #100005",
+        subtitle: "Other Customer · RECEIVED", href: "/orders?orderId=order-100005",
+      },
+      {
+        type: "ORDER", id: "order-5", title: "Order #00005",
+        subtitle: "Aaron Daniel · RECEIVED", href: "/orders?orderId=order-5",
+      },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+    await screen.findByText("Matching order found. Press Enter to open Order Management.");
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
+  });
+
   it("offers customer creation and carries a phone-like query into the new customer flow", async () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "08012345678" } });
