@@ -16,6 +16,7 @@ function money(value: number) { return `₦${value.toLocaleString("en-NG")}`; }
 
 export function CommunicationsPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
@@ -75,8 +76,8 @@ export function CommunicationsPage() {
   }, [status, rulesQuery.data]);
 
   const reminderConfigQuery = useQuery({
-    queryKey: ["communications", "reminder-config"],
-    queryFn: () => getReminderConfig({ accessToken }),
+    queryKey: ["communications", "reminder-config", activeBranchId],
+    queryFn: () => getReminderConfig({ accessToken, branchId: activeBranchId }),
   });
 
   useEffect(() => {
@@ -86,8 +87,8 @@ export function CommunicationsPage() {
   }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
 
   const unpickedQuery = useQuery({
-    queryKey: ["communications", "unpicked-orders"],
-    queryFn: () => listUnpickedOrders({ accessToken }),
+    queryKey: ["communications", "unpicked-orders", activeBranchId],
+    queryFn: () => listUnpickedOrders({ accessToken, branchId: activeBranchId }),
   });
 
   const groupMutation = useMutation({
@@ -138,7 +139,7 @@ export function CommunicationsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] }),
   });
   const configMutation = useMutation({
-    mutationFn: () => saveReminderConfig({ enabled: remindersEnabled, thresholdMonths }, { accessToken }),
+    mutationFn: () => saveReminderConfig({ enabled: remindersEnabled, thresholdMonths }, { accessToken, branchId: activeBranchId }),
     onSuccess: async () => {
       setFeedback("Unpicked-order reminder settings saved.");
       await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
@@ -146,7 +147,7 @@ export function CommunicationsPage() {
     },
   });
   const reminderMutation = useMutation({
-    mutationFn: () => sendUnpickedReminders({ orderIds: selectedOrderIds, channels: reminderChannels, message: reminderMessage.trim() }, { accessToken }),
+    mutationFn: () => sendUnpickedReminders({ orderIds: selectedOrderIds, channels: reminderChannels, message: reminderMessage.trim() }, { accessToken, branchId: activeBranchId }),
     onSuccess: async (result) => {
       setFeedback(`Reminder processed for ${result.orderCount} orders. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
       setSelectedOrderIds([]);
