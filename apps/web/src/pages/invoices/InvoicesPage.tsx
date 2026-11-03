@@ -49,6 +49,7 @@ export function InvoicesPage() {
   const queryClient = useQueryClient();
   const canManageInvoices = hasPermission(user, "invoices.manage");
   const canViewInvoices = hasPermission(user, "invoices.view");
+  const canViewPayments = hasPermission(user, "payments.view");
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<InvoiceStatus | "">("");
@@ -722,54 +723,58 @@ export function InvoicesPage() {
             </div>
           </section>
 
-          <section
-            aria-label="Invoice payment history"
-            style={{
-              marginTop: 14,
-              padding: 14,
-              border: "1px solid #d8dee8",
-              borderRadius: 12,
-            }}
-          >
-            <h3 style={{ margin: "0 0 10px" }}>Payment history</h3>
-            {customerReceiptQuery.isLoading ? <p>Loading payment history...</p> : null}
-            {customerReceiptQuery.isError ? (
-              <p role="alert">Unable to load payment history. The invoice total above remains available.</p>
-            ) : null}
-            {customerReceiptQuery.data?.payments.length ? (
-              <div style={{ overflowX: "auto" }}>
-                <table>
-                  <thead>
-                    <tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr>
-                  </thead>
-                  <tbody>
-                    {customerReceiptQuery.data.payments.map((payment) => (
-                      <tr key={payment.id}>
-                        <td>{formatDate(payment.createdAt)}</td>
-                        <td>{payment.type === "REFUND" ? "Refund" : ({
-                          CASH: "Cash",
-                          TRANSFER: "Bank transfer",
-                          POS: "POS",
-                          PAY_FROM_ACCOUNT: "Customer account",
-                        } as const)[payment.method]}</td>
-                        <td>{payment.reference || "—"}</td>
-                        <td>{payment.type === "REFUND" ? "−" : ""}{formatMoney(payment.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : customerReceiptQuery.data ? (
-              <p>No payments recorded.</p>
-            ) : null}
-            {customerReceiptQuery.data && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 12, borderTop: "1px solid #d8dee8", paddingTop: 10 }}>
-                <div><span>Total amount</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalAmount)}</strong></div>
-                <div><span>Amount paid</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalPaid)}</strong></div>
-                <div><span>Balance due</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.balanceDue)}</strong></div>
-              </div>
-            )}
-          </section>
+          {canViewPayments ? (
+            <section
+              aria-label="Invoice payment history"
+              style={{
+                marginTop: 14,
+                padding: 14,
+                border: "1px solid #d8dee8",
+                borderRadius: 12,
+              }}
+            >
+              <h3 style={{ margin: "0 0 10px" }}>Payment history</h3>
+              {customerReceiptQuery.isLoading ? <p>Loading payment history...</p> : null}
+              {customerReceiptQuery.isError ? (
+                <p role="alert">Unable to load payment history. The invoice total above remains available.</p>
+              ) : null}
+              {customerReceiptQuery.data?.payments.length ? (
+                <div style={{ overflowX: "auto" }}>
+                  <table>
+                    <thead>
+                      <tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                      {customerReceiptQuery.data.payments.map((payment) => (
+                        <tr key={payment.id}>
+                          <td>{formatDate(payment.createdAt)}</td>
+                          <td>{payment.type === "REFUND" ? "Refund" : ({
+                            CASH: "Cash",
+                            TRANSFER: "Bank transfer",
+                            POS: "POS",
+                            PAY_FROM_ACCOUNT: "Customer account",
+                          } as const)[payment.method]}</td>
+                          <td>{payment.reference || "—"}</td>
+                          <td>{payment.type === "REFUND" ? "−" : ""}{formatMoney(payment.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : customerReceiptQuery.data ? (
+                <p>No payments recorded.</p>
+              ) : null}
+              {customerReceiptQuery.data && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 12, borderTop: "1px solid #d8dee8", paddingTop: 10 }}>
+                  <div><span>Total amount</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalAmount)}</strong></div>
+                  <div><span>Amount paid</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.totalPaid)}</strong></div>
+                  <div><span>Balance due</span><strong style={{ display: "block" }}>{formatMoney(customerReceiptQuery.data.balanceDue)}</strong></div>
+                </div>
+              )}
+            </section>
+          ) : (
+            <p>Payment details require the payments.view permission.</p>
+          )}
 
           {selectedInvoice.garmentNote && (
             <p>
