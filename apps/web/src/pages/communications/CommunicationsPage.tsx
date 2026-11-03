@@ -35,12 +35,6 @@ export function CommunicationsPage() {
   const [reminderChannels, setReminderChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!reminderConfigQuery.data) return;
-    setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
-    setRemindersEnabled(reminderConfigQuery.data.enabled);
-  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
-
   const customersQuery = useQuery({
     queryKey: ["customers", "communications"],
     queryFn: () => listCustomers({ page: 1, pageSize: 100, status: "active" }, { accessToken }),
@@ -75,6 +69,13 @@ export function CommunicationsPage() {
     queryKey: ["communications", "reminder-config"],
     queryFn: () => getReminderConfig({ accessToken }),
   });
+
+  useEffect(() => {
+    if (!reminderConfigQuery.data) return;
+    setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
+    setRemindersEnabled(reminderConfigQuery.data.enabled);
+  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
+
   const unpickedQuery = useQuery({
     queryKey: ["communications", "unpicked-orders"],
     queryFn: () => listUnpickedOrders({ accessToken }),
