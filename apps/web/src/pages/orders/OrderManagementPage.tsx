@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getCustomer } from "../../lib/customers-api.js";
 import { getOrder } from "../../lib/orders-api.js";
@@ -13,18 +13,25 @@ export function OrderManagementPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("orderId");
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const requestAuthorizationRef = useRef(requestSensitiveAuthorization);
   const authorizationRequestedForRef = useRef<string | null>(null);
-  const [authorizedOrderId, setAuthorizedOrderId] = useState<string | null>(null);
+  const [authorizedContext, setAuthorizedContext] = useState<{
+    orderId: string;
+    locationKey: string;
+  } | null>(null);
+  const isAuthorizedForCurrentLocation =
+    authorizedContext?.orderId === orderId &&
+    authorizedContext.locationKey === location.key;
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
 
   const orderQuery = useQuery({
     queryKey: ["order-management-page", orderId, activeBranchId],
     queryFn: () => getOrder(orderId!, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId && orderId && authorizedOrderId === orderId),
+    enabled: Boolean(accessToken && activeBranchId && orderId && isAuthorizedForCurrentLocation),
   });
 
   const customerQuery = useQuery({
@@ -40,13 +47,13 @@ export function OrderManagementPage() {
   useEffect(() => {
     if (
       !orderId ||
-      authorizedOrderId === orderId ||
-      authorizationRequestedForRef.current === orderId
+      isAuthorizedForCurrentLocation ||
+      authorizationRequestedForRef.current === `${location.key}:${orderId}`
     ) {
       return;
     }
 
-    authorizationRequestedForRef.current = orderId;
+    authorizationRequestedForRef.current = `${location.key}:${orderId}`;
     let active = true;
     setAuthorizationError(null);
 
@@ -57,7 +64,7 @@ export function OrderManagementPage() {
           navigate("/orders", { replace: true });
           return;
         }
-        setAuthorizedOrderId(orderId);
+        setAuthorizedContext({ orderId, locationKey: location.key });
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -69,7 +76,7 @@ export function OrderManagementPage() {
     return () => {
       active = false;
     };
-  }, [orderId, authorizedOrderId, navigate]);
+  }, [orderId, location.key, isAuthorizedForCurrentLocation, navigate]);
 
   if (!orderId) {
     return (
@@ -91,7 +98,7 @@ export function OrderManagementPage() {
     );
   }
 
-  if (authorizedOrderId !== orderId) {
+  if (!isAuthorizedForCurrentLocation) {
     return <main><h1>Order Management</h1><p>Confirm your identity to open this order...</p></main>;
   }
 
