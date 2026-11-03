@@ -124,7 +124,7 @@ export function OrderManagementPage() {
         customer={customerQuery.data}
         mode="view"
         onBack={() => navigate("/orders")}
-        onSwitchCustomer={() => navigate(`/orders?customerId=${encodeURIComponent(customerQuery.data.id)}`)}
+        onSwitchCustomer={() => navigate("/orders?customerPicker=1")}
         onNewOrder={(customer) => navigate(`/orders?customerId=${encodeURIComponent(customer.id)}`)}
         onSelectOrder={(nextOrder) => navigate(`/order-management?orderId=${encodeURIComponent(nextOrder.id)}`)}
         onEditOrder={(selectedOrder) => navigate(`/orders?orderId=${encodeURIComponent(selectedOrder.id)}&edit=1`)}
