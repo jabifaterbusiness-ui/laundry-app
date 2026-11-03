@@ -949,7 +949,7 @@ describe("OrdersPage customer-specific pricing", () => {
   }
 
   it("waits for agreed prices before displaying totals or allowing order creation", async () => {
-    let resolvePrices!: (value: { data: Array<{ serviceId: string; unitPrice: number }> }) => void;
+    let resolvePrices!: (value: { data: Array<{ id: string; customerId: string; serviceId: string; unitPrice: number; service: typeof serviceA }> }) => void;
     vi.mocked(listCustomerServicePrices).mockImplementation(
       () => new Promise((resolve) => { resolvePrices = resolve; }),
     );
@@ -972,7 +972,15 @@ describe("OrdersPage customer-specific pricing", () => {
     fireEvent.change(serviceSelect!, { target: { value: serviceA.id } });
     expect(screen.getByText("Loading customer price…")).toBeInTheDocument();
 
-    resolvePrices({ data: [{ serviceId: serviceA.id, unitPrice: 2500 }] });
+    resolvePrices({
+      data: [{
+        id: "customer-price-a",
+        customerId: customerA.id,
+        serviceId: serviceA.id,
+        unitPrice: 2500,
+        service: serviceA,
+      }],
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /create order/i })).toBeEnabled();
@@ -984,7 +992,13 @@ describe("OrdersPage customer-specific pricing", () => {
     vi.mocked(listCustomerServicePrices)
       .mockRejectedValueOnce(new Error("Temporary pricing service failure"))
       .mockResolvedValueOnce({
-        data: [{ serviceId: serviceA.id, unitPrice: 2500 }],
+        data: [{
+          id: "customer-price-a",
+          customerId: customerA.id,
+          serviceId: serviceA.id,
+          unitPrice: 2500,
+          service: serviceA,
+        }],
       });
 
     renderPage();
