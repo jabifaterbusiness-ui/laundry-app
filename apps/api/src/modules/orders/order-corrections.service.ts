@@ -179,6 +179,10 @@ async function getOrderForCorrection(
               createdAt: "asc",
             },
           },
+          payments: {
+            where: { status: "POSTED" },
+            select: { amount: true, type: true },
+          },
         },
       },
     },
@@ -633,6 +637,13 @@ export async function editOrderWithCorrection(params: {
         })
       : [];
     const calculation = calculateInvoice(calculationLines, savedAdjustments, savedTaxes);
+    const amountPaid = (invoice.payments ?? []).reduce(
+      (sum, payment) => sum + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+      0,
+    );
+    if (amountPaid > calculation.totalAmount) {
+      throw new AppError("The revised order total is below the amount already paid. Record an appropriate refund or account credit first.", 422);
+    }
     const orderTotal = calculation.totalAmount;
 
     const orderData: Prisma.OrderUpdateInput = {
