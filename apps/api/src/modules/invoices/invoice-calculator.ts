@@ -1,6 +1,6 @@
 export type AdjustmentScope = "INVOICE" | "ITEMS";
 export interface PriceLine { id: string; amount: number }
-export interface PriceAdjustment { id: string; name: string; percentage: number; scope: AdjustmentScope; itemIds?: string[] }
+export interface PriceAdjustment { id: string; name: string; percentage: number; scope: AdjustmentScope; itemIds?: string[]; itemIndexes?: number[] }
 export interface TaxRule { id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; enabled: boolean; allowWithOtherTaxes: boolean }
 export interface AppliedAdjustment { id: string; name: string; percentage: number; amount: number; scope: AdjustmentScope; itemIds?: string[] }
 export interface AppliedTax { id: string; name: string; kind: TaxRule["kind"]; value: number; treatment: TaxRule["treatment"]; amount: number }
@@ -40,7 +40,7 @@ export function calculateInvoice(lines: PriceLine[], adjustments: PriceAdjustmen
   const appliedAdjustments: AppliedAdjustment[] = raw.map(({ rule, amount }) => {
     let applied = amount;
     if (amount < 0) { const allocated = Math.min(Math.abs(amount), remainingDiscount); remainingDiscount -= allocated; applied = -allocated; }
-    return { id: rule.id, name: rule.name, percentage: rule.percentage, amount: applied, scope: rule.scope, ...(rule.scope === "ITEMS" ? { itemIds: [...(rule.itemIds ?? [])] } : {}) };
+    return { id: rule.id, name: rule.name, percentage: rule.percentage, amount: applied, scope: rule.scope, ...(rule.scope === "ITEMS" ? { itemIds: [...(rule.itemIds ?? [])], itemIndexes: lines.flatMap((line, index) => (rule.itemIds ?? []).includes(line.id) ? [index] : []) } : {}) };
   });
   const adjustmentTotal = appliedAdjustments.reduce((sum, x) => sum + x.amount, 0);
   const adjustedSubtotal = Math.max(0, subtotal + adjustmentTotal);
