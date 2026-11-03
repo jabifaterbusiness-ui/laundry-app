@@ -36,7 +36,7 @@ export async function getCustomerGroups(req: Request, res: Response) {
 export async function createCustomerGroup(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = customerGroupSchema.parse(req.body);
-  const group = await saveCustomerGroup({ businessId: id, ...input });
+  const group = await saveCustomerGroup({ businessId: id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
   await recordAuditEvent({ action: "communications.customer_group_created", entityType: "CustomerGroup", entityId: group.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { name: group.name, memberCount: group._count.members } });
   res.status(201).json(group);
 }
@@ -44,7 +44,7 @@ export async function updateCustomerGroupMembers(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id } = customerGroupIdSchema.parse(req.params);
   const input = customerGroupSchema.parse(req.body);
-  const group = await updateCustomerGroup({ businessId, groupId: id, ...input });
+  const group = await updateCustomerGroup({ businessId, groupId: id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
   await recordAuditEvent({ action: "communications.customer_group_updated", entityType: "CustomerGroup", entityId: group.id, businessId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { name: group.name, memberCount: group._count.members } });
   res.status(200).json(group);
 }
