@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { calculateInvoice } from "./invoice-calculator.js";
@@ -87,7 +88,7 @@ export async function updateInvoiceFinancialRules(input: {
         subtotal: calculation.subtotal, adjustedSubtotal: calculation.adjustedSubtotal,
         adjustmentTotal: calculation.adjustmentTotal, additiveTaxTotal: calculation.additiveTaxTotal,
         withholdingTaxTotal: calculation.withholdingTaxTotal,
-        appliedAdjustments: calculation.adjustments, appliedTaxes: calculation.taxes,
+        appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue, appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
         totalAmount: calculation.totalAmount,
       },
       include: { items: true, payments: true },
