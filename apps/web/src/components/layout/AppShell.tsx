@@ -165,7 +165,7 @@ export function AppShell({ children }: PropsWithChildren) {
       location.pathname !== "/orders" &&
       location.pathname !== "/order-management"
     ) {
-      navigate("/orders", { replace: true });
+      navigate("/order-management", { replace: true });
       setSidebarCollapsed(true);
     }
   }, [isWorkstationMode, location.pathname, navigate]);
@@ -431,7 +431,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 onClick={() => {
                   setAppMode("CUSTOMER_WORKSTATION");
                   setSidebarCollapsed(true);
-                  navigate("/orders");
+                  navigate("/order-management");
                 }}
               >
                 Customer Workstation Mode
