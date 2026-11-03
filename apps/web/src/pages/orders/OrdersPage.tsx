@@ -533,10 +533,12 @@ export function OrdersPage() {
     if (!orderIdFromUrl) return;
 
     if (!editOrderFromUrl) {
-      navigate(
-        `/order-management?orderId=${encodeURIComponent(orderIdFromUrl)}`,
-        { replace: true },
-      );
+      if (location.pathname !== "/order-management") {
+        navigate(
+          `/order-management?orderId=${encodeURIComponent(orderIdFromUrl)}`,
+          { replace: true },
+        );
+      }
       return;
     }
 
