@@ -24,7 +24,7 @@ export type UpdateInvoiceCorrectionInput = {
 type InvoiceWithItems = Prisma.InvoiceGetPayload<{
   include: {
     items: true;
-    payments: true;
+    payments: { select: { amount: true; type: true } };
     order: {
       include: {
         customer: true;
@@ -294,7 +294,7 @@ export async function updateInvoiceWithCorrection(params: {
             if (!value || typeof value !== "object" || Array.isArray(value)) return [];
             const rule = value as Record<string, unknown>;
             if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
-            const scope = rule.scope === "ITEMS" ? "ITEMS" : "INVOICE";
+            const scope = rule.scope === "ITEMS" ? "ITEMS" as const : "INVOICE" as const;
             const indexes = Array.isArray(rule.itemIndexes)
               ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < items.length)
               : [];
@@ -324,8 +324,8 @@ export async function updateInvoiceWithCorrection(params: {
       data.adjustmentTotal = calculation.adjustmentTotal;
       data.additiveTaxTotal = calculation.additiveTaxTotal;
       data.withholdingTaxTotal = calculation.withholdingTaxTotal;
-      data.appliedAdjustments = calculation.adjustments;
-      data.appliedTaxes = calculation.taxes;
+      data.appliedAdjustments = calculation.adjustments as unknown as Prisma.InputJsonValue;
+      data.appliedTaxes = calculation.taxes as unknown as Prisma.InputJsonValue;
 
       await tx.invoiceItem.deleteMany({ where: { invoiceId: current.id } });
       data.items = { create: items };
