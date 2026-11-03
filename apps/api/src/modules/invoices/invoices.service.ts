@@ -281,8 +281,8 @@ export async function createInvoiceFromOrderWithTx(
       adjustmentTotal: calculation.adjustmentTotal,
       additiveTaxTotal: calculation.additiveTaxTotal,
       withholdingTaxTotal: calculation.withholdingTaxTotal,
-      appliedAdjustments: calculation.adjustments,
-      appliedTaxes: calculation.taxes,
+      appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+      appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
       business: {
         connect: { id: business.id },
       },
