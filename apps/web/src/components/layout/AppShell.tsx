@@ -38,6 +38,12 @@ const OPERATIONS: NavItem[] = [
     permission: "orders.view",
   },
   {
+    label: "Order Management",
+    href: "/order-management",
+    icon: "▤",
+    permission: "orders.view",
+  },
+  {
     label: "Invoices & Receipts",
     href: "/invoices",
     icon: "▤",
@@ -154,7 +160,11 @@ export function AppShell({ children }: PropsWithChildren) {
   const [activeInboxPopupId, setActiveInboxPopupId] = useState<string | null>(null);
   const [shownInboxPopupIds, setShownInboxPopupIds] = useState<string[]>([]);
   useEffect(() => {
-    if (isWorkstationMode && location.pathname !== "/orders") {
+    if (
+      isWorkstationMode &&
+      location.pathname !== "/orders" &&
+      location.pathname !== "/order-management"
+    ) {
       navigate("/orders", { replace: true });
       setSidebarCollapsed(true);
     }
@@ -553,7 +563,10 @@ export function AppShell({ children }: PropsWithChildren) {
             <section className="nav-section">
               <h2>Operations</h2>
 
-              {(isWorkstationMode ? OPERATIONS.filter((item) => item.href === "/orders") : OPERATIONS).map((item) => {
+              {(isWorkstationMode
+                ? OPERATIONS.filter((item) => item.href === "/orders" || item.href === "/order-management")
+                : OPERATIONS
+              ).map((item) => {
                 const active = isActive(item.href);
 
                 if (
