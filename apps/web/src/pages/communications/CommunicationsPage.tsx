@@ -54,6 +54,23 @@ export function CommunicationsPage() {
     queryKey: ["communications", "deliveries"],
     queryFn: () => listCommunicationDeliveries({ accessToken }),
   });
+  useEffect(() => {
+    const rule = rulesQuery.data?.data.find((item) => item.status === status);
+    if (rule) {
+      setRuleEnabled(rule.enabled);
+      setRuleChannel(rule.channel);
+      setWhatsappTemplate(rule.whatsappMessage ?? "");
+      setEmailSubject(rule.emailSubject ?? "");
+      setEmailTemplate(rule.emailMessage ?? "");
+    } else {
+      setRuleEnabled(false);
+      setRuleChannel("WHATSAPP");
+      setWhatsappTemplate("");
+      setEmailSubject("");
+      setEmailTemplate("");
+    }
+  }, [status, rulesQuery.data]);
+
   const reminderConfigQuery = useQuery({
     queryKey: ["communications", "reminder-config"],
     queryFn: () => getReminderConfig({ accessToken }),
