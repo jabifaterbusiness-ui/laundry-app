@@ -4,7 +4,7 @@ import { ApiError } from "../../lib/api-client.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import {
-  createAnnouncement, deleteStatusRule, getReminderConfig,
+  createAnnouncement, deleteCustomerGroup, deleteStatusRule, getReminderConfig, listCustomerGroups, saveCustomerGroup,
   listCommunicationDeliveries, listStatusRules, listUnpickedOrders,
   saveReminderConfig, saveStatusRule, sendUnpickedReminders,
   type CommunicationChannel,
@@ -19,7 +19,12 @@ export function CommunicationsPage() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
-  const [audience, setAudience] = useState<"ALL_CUSTOMERS" | "SELECTED_CUSTOMERS">("ALL_CUSTOMERS");
+  const [audience, setAudience] = useState<"ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP">("ALL_CUSTOMERS");
+  const [groupId, setGroupId] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupCustomerIds, setGroupCustomerIds] = useState<string[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | undefined>();
   const [customerIds, setCustomerIds] = useState<string[]>([]);
   const [announcementChannels, setAnnouncementChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [status, setStatus] = useState("READY_FOR_PICKUP");
@@ -39,6 +44,10 @@ export function CommunicationsPage() {
     queryKey: ["customers", "communications"],
     queryFn: () => listCustomers({ page: 1, pageSize: 100, status: "active" }, { accessToken }),
     enabled: Boolean(accessToken && audience === "SELECTED_CUSTOMERS"),
+  });
+  const groupsQuery = useQuery({
+    queryKey: ["communications", "customer-groups"],
+    queryFn: () => listCustomerGroups({ accessToken }),
   });
   const rulesQuery = useQuery({
     queryKey: ["communications", "status-rules"],
@@ -81,10 +90,30 @@ export function CommunicationsPage() {
     queryFn: () => listUnpickedOrders({ accessToken }),
   });
 
+  const groupMutation = useMutation({
+    mutationFn: () => saveCustomerGroup({
+      name: groupName.trim(), description: groupDescription.trim() || null, customerIds: groupCustomerIds,
+    }, { accessToken }, editingGroupId),
+    onSuccess: async () => {
+      setFeedback(editingGroupId ? "Customer group updated." : "Customer group created.");
+      setGroupName(""); setGroupDescription(""); setGroupCustomerIds([]); setEditingGroupId(undefined);
+      await queryClient.invalidateQueries({ queryKey: ["communications", "customer-groups"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save customer group."),
+  });
+  const removeGroupMutation = useMutation({
+    mutationFn: (id: string) => deleteCustomerGroup(id, { accessToken }),
+    onSuccess: async () => {
+      setGroupId("");
+      await queryClient.invalidateQueries({ queryKey: ["communications", "customer-groups"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to delete customer group."),
+  });
   const announcementMutation = useMutation({
     mutationFn: () => createAnnouncement({
       title: title.trim(), message: announcementMessage.trim(), audience,
       channels: announcementChannels, ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
+      ...(audience === "CUSTOMER_GROUP" ? { groupId } : {}),
     }, { accessToken }),
     onSuccess: async (result) => {
       setFeedback(`Announcement processed for ${result.recipientCount} customers. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
@@ -149,7 +178,7 @@ export function CommunicationsPage() {
         <form onSubmit={(event) => { event.preventDefault(); announcementMutation.mutate(); }}>
           <label>Announcement title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required /></label>
           <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
-          <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option></select></label>
+          <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option><option value="CUSTOMER_GROUP">Customer group</option></select></label>
           {audience === "SELECTED_CUSTOMERS" && (
             <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid #d8dee8", borderRadius: 10, padding: 10 }}>
               {(customersQuery.data?.data ?? []).map((customer) => <label key={customer.id} style={{ display: "block", padding: "4px 0" }}>
@@ -158,12 +187,42 @@ export function CommunicationsPage() {
               </label>)}
             </div>
           )}
+          {audience === "CUSTOMER_GROUP" && (
+            <label>Customer group<select value={groupId} onChange={(event) => setGroupId(event.target.value)} required>
+              <option value="">Choose a group</option>
+              {(groupsQuery.data?.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name} ({group._count.members})</option>)}
+            </select></label>
+          )}
           <div><strong>Sending channels</strong>
             <label><input type="checkbox" checked={announcementChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", announcementChannels, setAnnouncementChannels)} /> WhatsApp</label>
             <label><input type="checkbox" checked={announcementChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", announcementChannels, setAnnouncementChannels)} /> Email</label>
           </div>
-          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length)}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
+          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId)}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
         </form>
+      </section>
+
+      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
+        <h2>Customer groups</h2>
+        <p>Create reusable customer segments and maintain their membership for targeted announcements.</p>
+        <form onSubmit={(event) => { event.preventDefault(); groupMutation.mutate(); }}>
+          <label>Group name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={100} required /></label>
+          <label>Description<input value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} maxLength={500} /></label>
+          <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid #d8dee8", borderRadius: 10, padding: 10 }}>
+            {(customersQuery.data?.data ?? []).map((customer) => <label key={customer.id} style={{ display: "block", padding: 4 }}>
+              <input type="checkbox" checked={groupCustomerIds.includes(customer.id)} onChange={(event) => setGroupCustomerIds((current) => event.target.checked ? [...current, customer.id] : current.filter((id) => id !== customer.id))} />
+              {customer.name} · {customer.phone}
+            </label>)}
+          </div>
+          <button type="submit" disabled={groupMutation.isPending || !groupName.trim() || !groupCustomerIds.length}>{groupMutation.isPending ? "Saving..." : editingGroupId ? "Update group" : "Create group"}</button>
+          {editingGroupId && <button type="button" onClick={() => { setEditingGroupId(undefined); setGroupName(""); setGroupDescription(""); setGroupCustomerIds([]); }}>Cancel edit</button>}
+        </form>
+        {(groupsQuery.data?.data ?? []).map((group) => <div key={group.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+          <span><strong>{group.name}</strong> · {group._count.members} customers</span>
+          <span>
+            <button type="button" onClick={() => { setEditingGroupId(group.id); setGroupName(group.name); setGroupDescription(group.description ?? ""); setGroupCustomerIds(group.members.map((member) => member.customerId)); }}>Edit</button>
+            <button type="button" disabled={removeGroupMutation.isPending} onClick={() => removeGroupMutation.mutate(group.id)}>Delete</button>
+          </span>
+        </div>)}
       </section>
 
       <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16, marginBottom: 18 }}>
