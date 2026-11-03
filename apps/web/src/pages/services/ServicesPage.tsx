@@ -258,15 +258,21 @@ export function ServicesPage() {
                     </select>
                   </label>
                   {discountCustomersQuery.isLoading && <small>Searching customers…</small>}
+                  {discountCustomersQuery.isError && <p role="alert">Unable to search customers. Check your customer-view permission and try again.</p>}
+                  {discountCustomersQuery.isSuccess && discountCustomersQuery.data.data.length === 0 && <small>No active customers match this search.</small>}
                 </>
               )}
               {adjustmentTargetScope === "GROUP" && (
+                <>
                 <label>Customer group
                   <select value={adjustmentGroupId} onChange={(event) => setAdjustmentGroupId(event.target.value)} required>
                     <option value="">Choose a group</option>
                     {(discountGroupsQuery.data?.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name} ({group._count.members} customers)</option>)}
                   </select>
                 </label>
+                {discountGroupsQuery.isError && <p role="alert">Unable to load customer groups. Check your customer-view permission and try again.</p>}
+                {discountGroupsQuery.isSuccess && discountGroupsQuery.data.data.length === 0 && <small>Create a customer group in Customer Engagement before assigning a group discount.</small>}
+                </>
               )}
               <label>Percentage ({adjustmentTargetScope === "MANUAL" ? "+ surcharge / − discount" : "automatic discount; enter a negative value"})
                 <input type="number" min="-100" max={adjustmentTargetScope === "MANUAL" ? "1000" : "-0.01"} step="0.01" value={adjustmentPercentage} onChange={(event) => setAdjustmentPercentage(Number(event.target.value))} required />
