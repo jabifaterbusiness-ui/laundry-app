@@ -51,6 +51,37 @@ describe("GlobalSearch", () => {
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
 
+  it("opens the order when Enter is pressed before the debounced search finishes", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "ORDER";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(
+      new Promise((resolve) => { resolveSearch = resolve; }),
+    );
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00005" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([{
+      type: "ORDER",
+      id: "order-5",
+      title: "Order #00005",
+      subtitle: "Aaron Daniel · RECEIVED",
+      href: "/orders?orderId=order-5",
+    }]);
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
+    });
+  });
+
   it("chooses the exact order number when broader matches are also returned", async () => {
     globalSearchMock.mockResolvedValue([
       {
