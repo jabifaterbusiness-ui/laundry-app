@@ -81,6 +81,16 @@ export function OrderManagementPage() {
     );
   }
 
+  if (authorizationError) {
+    return (
+      <main>
+        <h1>Order Management</h1>
+        <p role="alert">{authorizationError}</p>
+        <button type="button" onClick={() => navigate("/orders")}>Back to Orders</button>
+      </main>
+    );
+  }
+
   if (authorizedOrderId !== orderId) {
     return <main><h1>Order Management</h1><p>Confirm your identity to open this order...</p></main>;
   }
@@ -99,16 +109,6 @@ export function OrderManagementPage() {
             ? error.message
             : "Unable to load this order."}
         </p>
-        <button type="button" onClick={() => navigate("/orders")}>Back to Orders</button>
-      </main>
-    );
-  }
-
-  if (authorizationError) {
-    return (
-      <main>
-        <h1>Order Management</h1>
-        <p role="alert">{authorizationError}</p>
         <button type="button" onClick={() => navigate("/orders")}>Back to Orders</button>
       </main>
     );
