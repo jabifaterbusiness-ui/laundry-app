@@ -542,10 +542,9 @@ async function updateOrderStatusWithDb(
         branchId,
         status,
       });
-    } catch (error) {
-      notificationError = error instanceof Error
-        ? error.message.slice(0, 500)
-        : "Customer notification could not be processed.";
+    } catch {
+      // Do not surface provider exception text or configuration details to staff.
+      notificationError = "Notification processing failed. Check Delivery History for details.";
     }
   }
 
