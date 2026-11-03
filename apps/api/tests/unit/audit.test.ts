@@ -92,6 +92,22 @@ describe("recordAuditEvent", () => {
     });
   });
 
+  it("keeps an external payment reference while recording the authenticated authorizer", async () => {
+    create.mockResolvedValue({} as never);
+
+    await recordAuditEvent({
+      action: "payment.created",
+      entityType: "Payment",
+      actorUserId: "user-1",
+      metadata: { reference: "BANK-TRANSFER-123" },
+    });
+
+    expect(create.mock.calls[0]![0].data.metadata).toEqual({
+      reference: "BANK-TRANSFER-123",
+      authorizedBy: "Test User",
+    });
+  });
+
   it("never persists secrets even if a caller accidentally includes them", async () => {
     create.mockResolvedValue({} as never);
 
