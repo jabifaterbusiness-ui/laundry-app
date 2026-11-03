@@ -114,6 +114,12 @@ const orderA: Order = {
   businessId: "business-a",
   branchId: "branch-a",
   customerId: customerA.id,
+  customer: {
+    id: customerA.id,
+    name: customerA.name,
+    phone: customerA.phone,
+    email: customerA.email,
+  },
   orderNumber: "00001",
   status: "RECEIVED",
   orderTotal: 4500,
