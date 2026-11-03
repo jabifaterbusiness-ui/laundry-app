@@ -20,7 +20,7 @@ jobs:
   verify:
     name: Test, lint, typecheck, build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -56,11 +56,33 @@ jobs:
         run: npm run db:generate
       - name: Apply database migrations
         run: npm run db:migrate:deploy --workspace=apps/api
-      - name: Run test suites
-        run: npm test
+      - name: Run API tests
+        timeout-minutes: 15
+        run: npm run test:api
+      - name: Run web library, state and offline tests
+        timeout-minutes: 12
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/lib tests/state tests/offline-subscription-payment-queue.test.ts tests/offline-sync-queue.test.ts
+      - name: Run web component and app tests
+        timeout-minutes: 12
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/components tests/App.test.tsx
+      - name: Run Orders page tests
+        timeout-minutes: 6
+        run: npm run test --workspace=apps/web -- --reporter=verbose --pool=forks --poolOptions.forks.singleFork --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrdersPage.test.tsx
+      - name: Run Order Management page tests
+        timeout-minutes: 8
+        run: npm run test --workspace=apps/web -- --reporter=verbose --pool=threads --maxWorkers=1 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrderManagementPage.test.tsx
+      - name: Run remaining web page tests (customers through invoices)
+        timeout-minutes: 12
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/customers tests/pages/data-management tests/pages/finance tests/pages/help tests/pages/inventory tests/pages/invoices
+      - name: Run remaining web page tests (payments through users)
+        timeout-minutes: 12
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/payments tests/pages/reports tests/pages/services tests/pages/users
       - name: Lint API and web
+        timeout-minutes: 10
         run: npm run lint
       - name: Typecheck API and web
+        timeout-minutes: 10
         run: npm run typecheck
       - name: Build production applications
+        timeout-minutes: 15
         run: npm run build

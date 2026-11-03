@@ -31,7 +31,6 @@ import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
 import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
-import { OrderManagement } from "./OrderManagement.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
 
@@ -99,6 +98,8 @@ export function OrdersPage() {
   const customerIdFromUrl = searchParams.get("customerId");
   const returnToFromUrl = searchParams.get("returnTo");
   const orderIdFromUrl = searchParams.get("orderId");
+  const editOrderFromUrl = searchParams.get("edit") === "1";
+  const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
@@ -107,6 +108,14 @@ export function OrdersPage() {
     workspaces.find(
       (workspace) => workspace.id === activeWorkspaceId,
     ) ?? null;
+  const orderFormWorkspaces = workspaces.filter(
+    (workspace) => workspace.mode !== "view",
+  );
+  const activeOrderFormWorkspaceId = orderFormWorkspaces.some(
+    (workspace) => workspace.id === activeWorkspaceId,
+  )
+    ? activeWorkspaceId
+    : null;
 
   // Keep page-level UI state synchronized with the selected
   // customer workspace. Workspace mode, rather than activeOrder
@@ -177,6 +186,13 @@ export function OrdersPage() {
   const [initialCustomerPhone, setInitialCustomerPhone] = useState("");
   const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+
+  useEffect(() => {
+    if (!customerPickerFromUrl) return;
+    setCustomerSearch("");
+    setCustomerPickerOpen(true);
+    navigate("/orders", { replace: true });
+  }, [customerPickerFromUrl, navigate]);
 
   useEffect(() => {
     if (searchParams.get("addCustomer") !== "1") return;
@@ -510,30 +526,38 @@ export function OrdersPage() {
   const orderFromUrlQuery = useQuery({
     queryKey: ["order", orderIdFromUrl, activeBranchId],
     queryFn: () => getOrder(orderIdFromUrl!, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId && orderIdFromUrl),
+    enabled: Boolean(accessToken && activeBranchId && orderIdFromUrl && editOrderFromUrl),
   });
 
   useEffect(() => {
-    const navigationKey = orderIdFromUrl
-      ? `${location.key}:${orderIdFromUrl}`
-      : null;
-    if (
-      !orderIdFromUrl ||
-      openedOrderFromUrlRef.current === navigationKey
-    ) {
+    if (!orderIdFromUrl) return;
+
+    if (!editOrderFromUrl) {
+      if (location.pathname !== "/order-management") {
+        navigate(
+          `/order-management?orderId=${encodeURIComponent(orderIdFromUrl)}`,
+          { replace: true },
+        );
+      }
       return;
     }
+
+    const navigationKey = `${location.key}:${orderIdFromUrl}:edit`;
+    if (openedOrderFromUrlRef.current === navigationKey) return;
 
     const order = orderFromUrlQuery.data;
-    if (!order) {
-      return;
-    }
+    if (!order) return;
 
     openedOrderFromUrlRef.current = navigationKey;
-    // A search deep-link must open the complete Order Management workspace,
-    // not merely set the page's selectedOrder state.
-    void openOrderManagement(order);
-  }, [location.key, orderIdFromUrl, orderFromUrlQuery.data]);
+    void startEditInvoice(order);
+  }, [
+    location.key,
+    location.pathname,
+    orderIdFromUrl,
+    editOrderFromUrl,
+    orderFromUrlQuery.data,
+    navigate,
+  ]);
 
   useEffect(() => {
     const navigationKey = customerIdFromUrl
@@ -844,27 +868,10 @@ export function OrdersPage() {
     createMutation.mutate();
   }
 
-  async function openOrderManagement(order: Order) {
-    setSelectedOrder(order);
-
-    const customer =
-      customers.find((item) => item.id === order.customerId) ??
-      (await getCustomer(order.customerId, { accessToken }).catch(() => null));
-
-    if (!customer) {
-      setFormError("Unable to load the customer for this order.");
-      return;
-    }
-
-    const workspaceId = openWorkspace(customer, { order });
-    switchWorkspace(workspaceId);
-    updateWorkspace(workspaceId, {
-      activeOrder: order,
-      mode: "view",
-    });
-    setFormOpen(false);
-    setCustomerPickerOpen(false);
-    setFormError(null);
+  function openOrderManagement(order: Order) {
+    navigate(
+      `/order-management?orderId=${encodeURIComponent(order.id)}`,
+    );
   }
 
   async function startEditInvoice(order: Order) {
@@ -918,39 +925,6 @@ export function OrdersPage() {
     setFormError(null);
     setFormOpen(true);
     setCustomerPickerOpen(false);
-  }
-
-  function startNewOrderForCustomer(customer: Customer) {
-    const workspaceId = openWorkspace(customer);
-
-    switchWorkspace(workspaceId);
-
-    updateWorkspace(workspaceId, {
-      mode: "new",
-      draft: {
-        customerId: customer.id,
-        lines: [{ serviceId: "", quantity: 1, colors: [] }],
-        garmentNote: "",
-        internalNote: "",
-        expectedReadyAt: "",
-      },
-    });
-
-    setFormError(null);
-    setCustomerPickerOpen(false);
-    setFormOpen(true);
-  }
-
-  function closeOrderManagement() {
-    setFormOpen(false);
-    setCustomerPickerOpen(false);
-    setFormError(null);
-
-    if (activeWorkspaceId) {
-      updateWorkspace(activeWorkspaceId, {
-        mode: "view",
-      });
-    }
   }
 
   function renderOrderTable(sectionOrders: Order[]) {
@@ -1067,7 +1041,8 @@ export function OrdersPage() {
 
     const newOrderContent = formOpen ? (
 
-        <section>
+        <section aria-labelledby="new-order-heading">
+          <h2 id="new-order-heading">New Order</h2>
           <form onSubmit={submitOrder}>
             <div>
               <div>
@@ -1179,8 +1154,8 @@ export function OrdersPage() {
                         >
                           <button
                             type="button"
-                            onClick={() => toggleColorSelector(index)}
                             aria-label={`Select colors for item ${index + 1}`}
+                            onClick={() => toggleColorSelector(index)}
                             aria-expanded={openColorSelector === index}
                             style={{
                               width: "100%",
@@ -1503,7 +1478,7 @@ export function OrdersPage() {
               <section aria-label="Invoice discounts and taxes" style={{ margin: "1rem 0", padding: "1rem", border: "1px solid var(--border, #ddd)", borderRadius: 12 }}>
                 <h3>Invoice discounts & taxes</h3>
                 {pricingRulesQuery.isLoading && <p>Loading pricing options...</p>}
-                {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive && (rule.targetScope ?? "MANUAL") === "MANUAL").map((rule) => {
+                {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive).map((rule) => {
                   const selection = adjustmentSelections[rule.id];
                   return (
                     <div key={rule.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
@@ -1687,10 +1662,12 @@ export function OrdersPage() {
         </section>
       )}
 
-      {workspaces.length > 0 && (
+      {newOrderContent}
+
+      {orderFormWorkspaces.length > 0 && (
         <OrderWorkspaceSwitcher
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
+          workspaces={orderFormWorkspaces}
+          activeWorkspaceId={activeOrderFormWorkspaceId}
           onOpenCustomer={() => {
             setCustomerSearch("");
             setCustomerPickerOpen(true);
@@ -1781,23 +1758,6 @@ export function OrdersPage() {
         </section>
       )}
 
-      {activeWorkspace?.customer &&
-        (selectedOrder || formOpen) && (
-          <OrderManagement
-            order={selectedOrder}
-            customer={activeWorkspace.customer}
-            mode={activeWorkspace.mode}
-            newOrderContent={newOrderContent}
-            onBack={closeOrderManagement}
-            onSwitchCustomer={() => {
-              setCustomerSearch("");
-              setCustomerPickerOpen(true);
-            }}
-            onNewOrder={startNewOrderForCustomer}
-            onSelectOrder={openOrderManagement}
-            onEditOrder={startEditInvoice}
-          />
-        )}
       {customerCreateMessage ? <p role="status">{customerCreateMessage}</p> : null}
       {newCustomerOpen ? (
         <CustomerFormDialog
