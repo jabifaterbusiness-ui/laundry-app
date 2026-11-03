@@ -17,6 +17,7 @@ import {
   updateOrderStatus,
 } from "./orders.service.js";
 import { editOrderWithCorrection } from "./order-corrections.service.js";
+import { notifyOrderStatus } from "../communications/communications.service.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -198,7 +199,46 @@ export async function updateStatus(req: Request, res: Response) {
     },
   });
 
-  res.status(200).json(order);
+  let notificationResults: Array<{
+    status: "SENT" | "FAILED" | "DUPLICATE";
+    channel: "WHATSAPP" | "EMAIL";
+    error?: string;
+  }> = [];
+  let notificationError: string | undefined;
+
+  try {
+    notificationResults = await notifyOrderStatus({
+      orderId: order.id,
+      businessId,
+      branchId,
+      status: order.status,
+    });
+  } catch (error) {
+    // Customer messaging must never roll back a successfully saved order status.
+    notificationError = error instanceof Error
+      ? error.message.slice(0, 500)
+      : "Customer notification could not be processed.";
+    await recordAuditEvent({
+      action: "order.status_notification_failed",
+      entityType: "Order",
+      entityId: order.id,
+      businessId,
+      branchId,
+      actorUserId: req.user!.id,
+      correlationId: req.correlationId ?? null,
+      metadata: {
+        orderNumber: order.orderNumber,
+        status: order.status,
+        error: notificationError,
+      },
+    });
+  }
+
+  res.status(200).json({
+    ...order,
+    notificationResults,
+    ...(notificationError ? { notificationError } : {}),
+  });
 }
 
 export async function editInvoice(req: Request, res: Response) {
