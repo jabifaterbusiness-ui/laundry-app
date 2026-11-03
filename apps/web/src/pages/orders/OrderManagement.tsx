@@ -106,6 +106,7 @@ function OrderManagementContent({
   const [address, setAddress] = useState(customer.address ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -490,6 +491,7 @@ function OrderManagementContent({
         },
       ),
     onSuccess: (result) => {
+      setStatusFeedback(null);
       if (!result.queued) {
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         queryClient.invalidateQueries({
@@ -505,17 +507,20 @@ function OrderManagementContent({
           ? `Customer notification: ${sent} sent, ${failed} failed, ${duplicate} already processed.`
           : "No enabled customer notification rule applies to this status.";
 
-        setError(
+        setError(null);
+        setStatusFeedback(
           result.order.notificationError
             ? `Order status updated, but notification processing failed: ${result.order.notificationError}`
             : `Order status updated. ${deliverySummary}`,
         );
       } else {
-        setError("Status saved offline and will synchronize when the connection is restored.");
+        setError(null);
+        setStatusFeedback("Status saved offline and will synchronize when the connection is restored.");
       }
       setLayer("none");
     },
     onError: (err) => {
+      setStatusFeedback(null);
       setError(
         err instanceof ApiError
           ? err.message
@@ -1069,6 +1074,11 @@ function OrderManagementContent({
 
       )}
 
+      {statusFeedback && (
+        <p role="status" style={{ marginTop: 12, color: "#166534" }}>
+          {statusFeedback}
+        </p>
+      )}
       {error && (
         <p role="alert" style={{ marginTop: 12 }}>
           {error}
