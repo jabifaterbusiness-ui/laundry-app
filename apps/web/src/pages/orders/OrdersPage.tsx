@@ -201,6 +201,11 @@ export function OrdersPage() {
   const [adjustmentSelections, setAdjustmentSelections] = useState<Record<string, { scope: "INVOICE" | "ITEMS"; itemIndexes: number[] }>>({});
   const [selectedTaxRuleIds, setSelectedTaxRuleIds] = useState<string[]>([]);
 
+  useEffect(() => {
+    setAdjustmentSelections({});
+    setSelectedTaxRuleIds([]);
+  }, [activeWorkspaceId]);
+
 
   const ordersQuery = useQuery({
     queryKey: [
