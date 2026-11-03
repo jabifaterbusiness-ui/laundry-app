@@ -16,6 +16,7 @@ export function OrderManagementPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("orderId");
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
+  const requestAuthorizationRef = useRef(requestSensitiveAuthorization);
   const authorizationRequestedForRef = useRef<string | null>(null);
   const [authorizedOrderId, setAuthorizedOrderId] = useState<string | null>(null);
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
@@ -33,6 +34,10 @@ export function OrderManagementPage() {
   });
 
   useEffect(() => {
+    requestAuthorizationRef.current = requestSensitiveAuthorization;
+  }, [requestSensitiveAuthorization]);
+
+  useEffect(() => {
     const order = orderQuery.data;
     const customer = customerQuery.data;
     if (!order || !customer || authorizedOrderId === order.id ||
@@ -44,7 +49,7 @@ export function OrderManagementPage() {
     let active = true;
     setAuthorizationError(null);
 
-    void requestSensitiveAuthorization()
+    void requestAuthorizationRef.current()
       .then((authorization) => {
         if (!active) return;
         if (!authorization) {
@@ -67,7 +72,6 @@ export function OrderManagementPage() {
     orderQuery.data,
     customerQuery.data,
     authorizedOrderId,
-    requestSensitiveAuthorization,
     navigate,
   ]);
 
