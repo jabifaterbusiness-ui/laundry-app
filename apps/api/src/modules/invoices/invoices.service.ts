@@ -32,7 +32,7 @@ async function calculateNewInvoiceDefaults(
       if (!Number.isInteger(index) || index < 0 || index >= items.length) {
         throw new AppError("A selected adjustment contains an invalid order item", 422);
       }
-      return calculationLines[index].id;
+      return calculationLines[index]!.id;
     });
     if (selection.scope === "ITEMS" && itemIds.length === 0) {
       throw new AppError("Select at least one item for an item-specific adjustment", 422);
@@ -178,8 +178,8 @@ export async function createInvoiceWithTx(
       adjustmentTotal: calculation.adjustmentTotal,
       additiveTaxTotal: calculation.additiveTaxTotal,
       withholdingTaxTotal: calculation.withholdingTaxTotal,
-      appliedAdjustments: calculation.adjustments,
-      appliedTaxes: calculation.taxes,
+      appliedAdjustments: calculation.adjustments as unknown as Prisma.InputJsonValue,
+      appliedTaxes: calculation.taxes as unknown as Prisma.InputJsonValue,
       business: {
         connect: { id: businessId },
       },
