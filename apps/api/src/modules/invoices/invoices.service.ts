@@ -7,14 +7,50 @@ async function calculateNewInvoiceDefaults(
   tx: Prisma.TransactionClient,
   businessId: string,
   items: Array<{ id: string; lineTotal: number }>,
+  options: {
+    adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds?: string[];
+  } = {},
 ) {
+  const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
+  const adjustmentRecords = selectedAdjustmentIds.length
+    ? await tx.priceAdjustment.findMany({ where: { businessId, id: { in: selectedAdjustmentIds }, isActive: true } })
+    : [];
+  if (adjustmentRecords.length !== selectedAdjustmentIds.length) {
+    throw new AppError("One or more selected price adjustments are unavailable", 422);
+  }
+  const adjustmentMap = new Map(adjustmentRecords.map((rule) => [rule.id, rule]));
+  const adjustments = (options.adjustments ?? []).map((selection) => {
+    const rule = adjustmentMap.get(selection.adjustmentId)!;
+    const itemIds = (selection.itemIndexes ?? []).map((index) => {
+      if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+        throw new AppError("A selected adjustment contains an invalid order item", 422);
+      }
+      return items[index].id;
+    });
+    if (selection.scope === "ITEMS" && itemIds.length === 0) {
+      throw new AppError("Select at least one item for an item-specific adjustment", 422);
+    }
+    return { id: rule.id, name: rule.name, percentage: rule.percentage, scope: selection.scope, itemIds };
+  });
+  const explicitTaxIds = [...new Set(options.taxRuleIds ?? [])];
   const rules = await tx.taxRule.findMany({
-    where: { businessId, isActive: true, enabledByDefault: true },
+    where: {
+      businessId,
+      isActive: true,
+      OR: [
+        { enabledByDefault: true },
+        ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
+      ],
+    },
     orderBy: { createdAt: "asc" },
   });
+  if (explicitTaxIds.some((id) => !rules.some((rule) => rule.id === id))) {
+    throw new AppError("One or more selected tax rules are unavailable", 422);
+  }
   return calculateInvoice(
     items.map((item) => ({ id: item.id, amount: item.lineTotal })),
-    [],
+    adjustments,
     rules.map((rule) => ({
       id: rule.id,
       name: rule.name,
@@ -203,6 +239,10 @@ export async function createInvoiceFromOrderWithTx(
     receiptHeaderStyle: string | null;
   },
   customerAgreement: string,
+  pricingOptions: {
+    adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
+    taxRuleIds?: string[];
+  } = {},
 ) {
   const agreement = customerAgreement.trim();
 
@@ -224,7 +264,7 @@ export async function createInvoiceFromOrderWithTx(
       totalPrice: item.lineTotal,
     }));
 
-  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items);
+  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, pricingOptions);
 
   return tx.invoice.create({
     data: {
