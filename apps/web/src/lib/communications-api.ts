@@ -48,17 +48,17 @@ export async function saveStatusRule(input: Omit<StatusNotificationRule, "id">, 
 export async function deleteStatusRule(id: string, auth: { accessToken: string | null }) {
   return apiFetch<void>(`/communications/status-rules/${id}`, { method: "DELETE", accessToken: auth.accessToken });
 }
-export async function getReminderConfig(auth: { accessToken: string | null }) {
-  return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { accessToken: auth.accessToken });
+export async function getReminderConfig(auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { accessToken: auth.accessToken, branchId: auth.branchId });
 }
-export async function saveReminderConfig(input: { enabled: boolean; thresholdMonths: number }, auth: { accessToken: string | null }) {
-  return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { method: "PUT", accessToken: auth.accessToken, body: JSON.stringify(input) });
+export async function saveReminderConfig(input: { enabled: boolean; thresholdMonths: number }, auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { method: "PUT", accessToken: auth.accessToken, branchId: auth.branchId, body: JSON.stringify(input) });
 }
-export async function listUnpickedOrders(auth: { accessToken: string | null }) {
-  return apiFetch<{ data: UnpickedOrder[] }>("/communications/unpicked-orders", { accessToken: auth.accessToken });
+export async function listUnpickedOrders(auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<{ data: UnpickedOrder[] }>("/communications/unpicked-orders", { accessToken: auth.accessToken, branchId: auth.branchId });
 }
-export async function sendUnpickedReminders(input: { orderIds: string[]; channels: CommunicationChannel[]; message: string }, auth: { accessToken: string | null }) {
-  return apiFetch<{ orderCount: number; results: Array<{ status: string; orderId?: string; channel: string; error?: string }> }>("/communications/unpicked-orders/remind", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+export async function sendUnpickedReminders(input: { orderIds: string[]; channels: CommunicationChannel[]; message: string }, auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<{ orderCount: number; results: Array<{ status: string; orderId?: string; channel: string; error?: string }> }>("/communications/unpicked-orders/remind", { method: "POST", accessToken: auth.accessToken, branchId: auth.branchId, body: JSON.stringify(input) });
 }
 export async function listCommunicationDeliveries(auth: { accessToken: string | null }) {
   return apiFetch<{ data: CommunicationDelivery[] }>("/communications/deliveries", { accessToken: auth.accessToken });
