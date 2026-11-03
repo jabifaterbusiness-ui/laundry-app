@@ -109,7 +109,7 @@ describe("resolveAutomaticDiscountSelections", () => {
     expect(result).toEqual([]);
   });
 
-  it("does not treat a targeted discount ID as a manually selected discount", async () => {
+  it("rejects manual selection of an automatic discount ID", async () => {
     const { tx } = makeTransaction([
       {
         id: "customer-discount",
@@ -124,15 +124,18 @@ describe("resolveAutomaticDiscountSelections", () => {
       targetScope: "CUSTOMER",
     }]);
 
-    const result = await resolveAutomaticDiscountSelections(
-      tx,
-      "business-1",
-      "customer-1",
-      [{ serviceId: "service-1" }],
-      [{ adjustmentId: "customer-discount", scope: "INVOICE" }],
-    );
-
-    expect(result).toEqual([{ adjustmentId: "customer-discount", scope: "INVOICE" }]);
+    await expect(
+      resolveAutomaticDiscountSelections(
+        tx,
+        "business-1",
+        "customer-1",
+        [{ serviceId: "service-1" }],
+        [{ adjustmentId: "customer-discount", scope: "INVOICE" }],
+      ),
+    ).rejects.toMatchObject({
+      message: "Automatic customer discounts are applied automatically and cannot be selected manually",
+      statusCode: 422,
+    });
   });
 
   it("still applies a customer discount when a manual surcharge is selected", async () => {
