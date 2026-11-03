@@ -12,6 +12,27 @@ function escapeHtml(value: string): string {
 function renderTemplate(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_match, key: string) => values[key] ?? "");
 }
+async function recordMissingDestination(input: {
+  businessId: string; customerId: string; orderId?: string; campaignId?: string;
+  channel: Channel; messageType: string; dedupeKey: string; reason: string;
+}) {
+  try {
+    const delivery = await prisma.communicationDelivery.create({
+      data: {
+        businessId: input.businessId, customerId: input.customerId,
+        orderId: input.orderId ?? null, campaignId: input.campaignId ?? null,
+        channel: input.channel, messageType: input.messageType,
+        destination: "", status: "FAILED", errorMessage: input.reason,
+        dedupeKey: input.dedupeKey,
+      },
+    });
+    return { status: "FAILED" as const, deliveryId: delivery.id, error: input.reason };
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") return { status: "DUPLICATE" as const };
+    throw error;
+  }
+}
+
 async function deliverMessage(input: {
   businessId: string; customerId: string; orderId?: string; campaignId?: string;
   channel: Channel; messageType: string; destination: string; subject: string;
@@ -82,7 +103,12 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
   for (const channel of channels) {
     const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
     if (!destination) {
-      results.push({ channel, status: "FAILED", error: channel === "EMAIL" ? "Customer email is missing" : "Customer phone is missing" });
+      results.push(await recordMissingDestination({
+        businessId: input.businessId, customerId: order.customerId, orderId: order.id,
+        channel, messageType: "ORDER_STATUS",
+        dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
+        reason: channel === "EMAIL" ? "Customer email is missing" : "Customer phone is missing",
+      }));
       continue;
     }
     const fallback = channel === "WHATSAPP"
@@ -145,7 +171,12 @@ export async function createAnnouncement(input: {
   });
   const results = await Promise.all(customers.flatMap((customer) => input.channels.map((channel) => {
     const destination = channel === "EMAIL" ? customer.email : customer.phone;
-    if (!destination) return Promise.resolve({ status: "FAILED" as const, customerId: customer.id, channel, error: channel === "EMAIL" ? "Missing email address" : "Missing phone number" });
+    if (!destination) return recordMissingDestination({
+      businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
+      channel, messageType: "ANNOUNCEMENT",
+      dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
+      reason: channel === "EMAIL" ? "Missing email address" : "Missing phone number",
+    }).then((result) => ({ ...result, customerId: customer.id, channel }));
     return deliverMessage({
       businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
@@ -199,7 +230,12 @@ export async function sendUnpickedReminders(input: {
   if (orders.length !== new Set(input.orderIds).size) throw new AppError("One or more selected unpicked orders are unavailable", 422);
   const results = await Promise.all(orders.flatMap((order) => input.channels.map((channel) => {
     const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
-    if (!destination) return Promise.resolve({ status: "FAILED" as const, orderId: order.id, channel, error: "Customer contact is missing" });
+    if (!destination) return recordMissingDestination({
+      businessId: input.businessId, customerId: order.customerId, orderId: order.id,
+      channel, messageType: "UNPICKED_REMINDER",
+      dedupeKey: `unpicked-reminder:${order.id}:${channel}:${new Date().toISOString().slice(0, 10)}:missing-contact`,
+      reason: "Customer contact is missing",
+    }).then((result) => ({ ...result, orderId: order.id, channel }));
     const body = renderTemplate(input.message, { customerName: order.customer.name, orderNumber: order.orderNumber, companyName: order.business.name, status: "ready for pickup" });
     return deliverMessage({
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
