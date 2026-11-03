@@ -66,8 +66,8 @@ jobs:
         timeout-minutes: 12
         run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/components tests/App.test.tsx
       - name: Run Orders page tests
-        timeout-minutes: 8
-        run: npm run test --workspace=apps/web -- --reporter=verbose --pool=threads --maxWorkers=1 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrdersPage.test.tsx
+        timeout-minutes: 6
+        run: npm run test --workspace=apps/web -- --reporter=verbose --pool=forks --poolOptions.forks.singleFork --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrdersPage.test.tsx
       - name: Run Order Management page tests
         timeout-minutes: 8
         run: npm run test --workspace=apps/web -- --reporter=verbose --pool=threads --maxWorkers=1 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrderManagementPage.test.tsx
