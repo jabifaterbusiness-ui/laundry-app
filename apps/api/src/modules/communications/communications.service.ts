@@ -256,6 +256,7 @@ export async function createAnnouncement(input: {
   }
   if (!customers.length) throw new AppError("No active customers match this announcement", 422);
   if (customers.length > 2000) throw new AppError("An announcement is limited to 2,000 customers per campaign", 422);
+  const companyName = (await prisma.business.findUnique({ where: { id: input.businessId }, select: { name: true } }))?.name ?? "";
   const campaign = await prisma.announcementCampaign.create({
     data: {
       businessId: input.businessId, createdByUserId: input.createdByUserId,
@@ -278,7 +279,7 @@ export async function createAnnouncement(input: {
     const result = await deliverMessage({
       businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
-      body: renderTemplate(input.message, { customerName: customer.name, companyName: (await prisma.business.findUnique({ where: { id: input.businessId }, select: { name: true } }))?.name ?? "" }),
+      body: renderTemplate(input.message, { customerName: customer.name, companyName }),
       dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
     });
     return { ...result, customerId: customer.id, channel };
