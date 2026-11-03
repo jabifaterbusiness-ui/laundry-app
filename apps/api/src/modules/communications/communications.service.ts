@@ -166,16 +166,93 @@ export async function removeOrderStatusRule(id: string, businessId: string) {
   if (!result.count) throw new AppError("Notification rule not found", 404);
 }
 
+export async function listCustomerGroups(businessId: string) {
+  return prisma.customerGroup.findMany({
+    where: { businessId },
+    include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function saveCustomerGroup(input: {
+  businessId: string; name: string; description?: string | null; customerIds: string[];
+}) {
+  const ids = [...new Set(input.customerIds)];
+  const customers = ids.length ? await prisma.customer.findMany({
+    where: { businessId: input.businessId, id: { in: ids } },
+    select: { id: true },
+  }) : [];
+  if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
+  const existing = await prisma.customerGroup.findFirst({
+    where: { businessId: input.businessId, name: input.name },
+    select: { id: true },
+  });
+  if (existing) throw new AppError("A customer group with this name already exists", 409);
+  return prisma.customerGroup.create({
+    data: {
+      businessId: input.businessId, name: input.name, description: input.description ?? null,
+      members: { create: ids.map((customerId) => ({ businessId: input.businessId, customerId })) },
+    },
+    include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+  });
+}
+
+export async function updateCustomerGroup(input: {
+  businessId: string; groupId: string; name: string; description?: string | null; customerIds: string[];
+}) {
+  const ids = [...new Set(input.customerIds)];
+  const [group, customers] = await Promise.all([
+    prisma.customerGroup.findFirst({ where: { id: input.groupId, businessId: input.businessId }, select: { id: true } }),
+    ids.length ? prisma.customer.findMany({ where: { businessId: input.businessId, id: { in: ids } }, select: { id: true } }) : [],
+  ]);
+  if (!group) throw new AppError("Customer group not found", 404);
+  if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.customerGroup.update({ where: { id: group.id }, data: { name: input.name, description: input.description ?? null } });
+      await tx.customerGroupMember.deleteMany({ where: { businessId: input.businessId, groupId: group.id } });
+      if (ids.length) await tx.customerGroupMember.createMany({ data: ids.map((customerId) => ({ businessId: input.businessId, groupId: group.id, customerId })) });
+      return tx.customerGroup.findUniqueOrThrow({
+        where: { id: group.id },
+        include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+      });
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") throw new AppError("A customer group with this name already exists", 409);
+    throw error;
+  }
+}
+
+export async function deleteCustomerGroup(groupId: string, businessId: string) {
+  const result = await prisma.customerGroup.deleteMany({ where: { id: groupId, businessId } });
+  if (!result.count) throw new AppError("Customer group not found", 404);
+}
+
 export async function createAnnouncement(input: {
   businessId: string; createdByUserId: string; title: string; message: string;
-  channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS"; customerIds?: string[];
+  channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
-  const customers = input.audience === "ALL_CUSTOMERS"
-    ? await prisma.customer.findMany({ where: { businessId: input.businessId, lifecycleStatus: "ACTIVE" }, select: { id: true, name: true, email: true, phone: true } })
-    : await prisma.customer.findMany({ where: { businessId: input.businessId, id: { in: [...new Set(input.customerIds ?? [])] }, lifecycleStatus: "ACTIVE" }, select: { id: true, name: true, email: true, phone: true } });
-  if (input.audience === "SELECTED_CUSTOMERS" && customers.length !== new Set(input.customerIds ?? []).size) {
-    throw new AppError("One or more selected customers are unavailable", 422);
+  let customers;
+  if (input.audience === "ALL_CUSTOMERS") {
+    customers = await prisma.customer.findMany({
+      where: { businessId: input.businessId, lifecycleStatus: "ACTIVE" },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+  } else if (input.audience === "SELECTED_CUSTOMERS") {
+    const ids = [...new Set(input.customerIds ?? [])];
+    customers = await prisma.customer.findMany({
+      where: { businessId: input.businessId, id: { in: ids }, lifecycleStatus: "ACTIVE" },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+    if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
+  } else {
+    const group = await prisma.customerGroup.findFirst({
+      where: { id: input.groupId, businessId: input.businessId },
+      include: { members: { where: { businessId: input.businessId, customer: { lifecycleStatus: "ACTIVE" } }, include: { customer: { select: { id: true, name: true, email: true, phone: true } } } } },
+    });
+    if (!group) throw new AppError("Customer group not found", 404);
+    customers = group.members.map((member) => member.customer);
   }
   if (!customers.length) throw new AppError("No active customers match this announcement", 422);
   if (customers.length > 2000) throw new AppError("An announcement is limited to 2,000 customers per campaign", 422);
@@ -201,7 +278,7 @@ export async function createAnnouncement(input: {
     const result = await deliverMessage({
       businessId: input.businessId, customerId: customer.id, campaignId: campaign.id,
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
-      body: renderTemplate(input.message, { customerName: customer.name, companyName: "" }),
+      body: renderTemplate(input.message, { customerName: customer.name, companyName: (await prisma.business.findUnique({ where: { id: input.businessId }, select: { name: true } }))?.name ?? "" }),
       dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
     });
     return { ...result, customerId: customer.id, channel };
