@@ -184,6 +184,7 @@ export function CommunicationsPage() {
           <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
           <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option><option value="CUSTOMER_GROUP">Customer group</option></select></label>
           {audience === "SELECTED_CUSTOMERS" && (
+            <>
             <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid #d8dee8", borderRadius: 10, padding: 10 }}>
               {(customersQuery.data?.data ?? []).map((customer) => <label key={customer.id} style={{ display: "block", padding: "4px 0" }}>
                 <input type="checkbox" checked={customerIds.includes(customer.id)} onChange={(event) => setCustomerIds((current) => event.target.checked ? [...current, customer.id] : current.filter((id) => id !== customer.id))} />
@@ -197,6 +198,7 @@ export function CommunicationsPage() {
                 <button type="button" disabled={customerPage >= (customersQuery.data?.pagination.totalPages ?? 1)} onClick={() => setCustomerPage((page) => page + 1)}>Next</button>
               </span>
             </div>
+            </>
           )}
           {audience === "CUSTOMER_GROUP" && (
             <label>Customer group<select value={groupId} onChange={(event) => setGroupId(event.target.value)} required>
