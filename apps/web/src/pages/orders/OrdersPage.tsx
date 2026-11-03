@@ -99,6 +99,7 @@ export function OrdersPage() {
   const returnToFromUrl = searchParams.get("returnTo");
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
+  const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
@@ -177,6 +178,13 @@ export function OrdersPage() {
   const [initialCustomerPhone, setInitialCustomerPhone] = useState("");
   const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+
+  useEffect(() => {
+    if (!customerPickerFromUrl) return;
+    setCustomerSearch("");
+    setCustomerPickerOpen(true);
+    navigate("/orders", { replace: true });
+  }, [customerPickerFromUrl, navigate]);
 
   useEffect(() => {
     if (searchParams.get("addCustomer") !== "1") return;
