@@ -627,8 +627,8 @@ export async function editOrderWithCorrection(params: {
             (rule.treatment !== "ADDITIVE" && rule.treatment !== "WITHHOLDING")
           ) return [];
           return [{
-            id: rule.id, name: rule.name, kind: rule.kind, value: rule.value,
-            treatment: rule.treatment, enabled: true, allowWithOtherTaxes: true,
+            id: rule.id, name: rule.name, kind: rule.kind as "PERCENTAGE" | "FIXED", value: rule.value,
+            treatment: rule.treatment as "ADDITIVE" | "WITHHOLDING", enabled: true, allowWithOtherTaxes: true,
           }];
         })
       : [];
