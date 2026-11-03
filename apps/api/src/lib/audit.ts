@@ -64,6 +64,37 @@ export interface AuditEventInput {
  */
 export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
   try {
+    let actorName: string | undefined;
+    if (input.actorUserId) {
+      try {
+        const actor = await prisma.user.findUnique({
+          where: { id: input.actorUserId },
+          select: { fullName: true },
+        });
+        actorName = actor?.fullName?.trim() || undefined;
+      } catch (err) {
+        // Actor enrichment is best-effort; the immutable actorUserId is still recorded.
+        logger.warn({ err, actorUserId: input.actorUserId }, "Unable to resolve audit actor name");
+      }
+    }
+
+    const metadata: Record<string, unknown> = {
+      ...(input.metadata ?? {}),
+      ...(actorName
+        ? {
+            authorizedBy: actorName,
+            // Preserve a genuine external reference (e.g. bank/POS reference).
+            // When none was supplied, use the authenticated authorizer's name.
+            ...(
+              typeof input.metadata?.reference === "string" &&
+              input.metadata.reference.trim()
+                ? {}
+                : { reference: actorName }
+            ),
+          }
+        : {}),
+    };
+
     await prisma.auditLog.create({
       data: {
         action: input.action,
@@ -73,8 +104,8 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
         branchId: input.branchId ?? null,
         actorUserId: input.actorUserId ?? null,
         correlationId: input.correlationId ?? null,
-        ...(input.metadata
-          ? { metadata: sanitizeAuditMetadata(input.metadata) as object }
+        ...(Object.keys(metadata).length
+          ? { metadata: sanitizeAuditMetadata(metadata) as object }
           : {}),
       },
     });
