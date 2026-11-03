@@ -414,7 +414,7 @@ export async function createInvoiceFromOrderWithTx(
     automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
   });
 
-  return tx.invoice.create({
+  const invoice = await tx.invoice.create({
     data: {
       subtotal: calculation.subtotal,
       adjustedSubtotal: calculation.adjustedSubtotal,
@@ -464,6 +464,15 @@ export async function createInvoiceFromOrderWithTx(
       },
     },
   });
+
+  // Keep the order list total aligned with the discounted invoice created
+  // in this same transaction.
+  await tx.order.update({
+    where: { id: order.id },
+    data: { orderTotal: invoice.totalAmount },
+  });
+
+  return invoice;
 
 }
 /**
