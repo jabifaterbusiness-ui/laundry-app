@@ -135,6 +135,8 @@ model Business {
   customerAccounts            CustomerAccount[]
   customerAccountTransactions CustomerAccountTransaction[]
   services                    Service[]
+  priceAdjustments            PriceAdjustment[]
+  taxRules                     TaxRule[]
   orders                      Order[]
   invoices                    Invoice[]
   payments                    Payment[]
@@ -479,6 +481,7 @@ model Customer {
   orders        Order[]
   statusHistory CustomerStatusHistory[]
   account       CustomerAccount?
+  servicePrices CustomerServicePrice[]
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -544,6 +547,7 @@ model Service {
   updatedAt DateTime @updatedAt
 
   orderItems OrderItem[]
+  customerPrices CustomerServicePrice[]
 
   @@index([businessId])
   @@index([businessId, isActive])
@@ -771,6 +775,14 @@ model Invoice {
 
   // Agreement printed on the customer copy.
   customerAgreement String
+
+  subtotal                    Int      @default(0)
+  adjustedSubtotal             Int      @default(0)
+  adjustmentTotal              Int      @default(0)
+  additiveTaxTotal             Int      @default(0)
+  withholdingTaxTotal          Int      @default(0)
+  appliedAdjustments           Json     @default("[]")
+  appliedTaxes                 Json     @default("[]")
 
   items                       InvoiceItem[]
   payments                    Payment[]
@@ -2657,4 +2669,60 @@ model BusinessInboxMessage {
   @@index([broadcastId])
   @@index([sourceSubscriptionId, readAt])
   @@map("business_inbox_messages")
+}
+
+
+// ---------------------------------------------------------------------
+// PRICE ADJUSTMENTS, TAX CONFIGURATION AND CUSTOMER PRICE OVERRIDES
+// ---------------------------------------------------------------------
+
+model PriceAdjustment {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  percentage Float
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive])
+  @@map("price_adjustments")
+}
+
+model TaxRule {
+  id                 String   @id @default(uuid())
+  businessId         String
+  business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name               String
+  kind               String   // PERCENTAGE or FIXED
+  value              Float
+  treatment          String   // ADDITIVE or WITHHOLDING
+  enabledByDefault   Boolean  @default(false)
+  allowWithOtherTaxes Boolean @default(true)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, isActive, enabledByDefault])
+  @@map("tax_rules")
+}
+
+model CustomerServicePrice {
+  id         String   @id @default(uuid())
+  businessId String
+  customerId String
+  serviceId  String
+  unitPrice  Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, serviceId])
+  @@index([businessId, customerId])
+  @@index([businessId, serviceId])
+  @@map("customer_service_prices")
 }
