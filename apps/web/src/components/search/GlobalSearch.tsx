@@ -61,7 +61,9 @@ export function GlobalSearch() {
   const [completedQuery, setCompletedQuery] = useState("");
   const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
-  const orderMatchAvailable = results.some((result) => result.type === "ORDER");
+  const exactOrderMatch = findExactOrderMatch(results, query);
+  const hasOrderCandidate = results.some((result) => result.type === "ORDER");
+  const orderMatchAvailable = Boolean(exactOrderMatch);
   const groups = groupResults(
     results.filter((result) => result.type !== "ORDER"),
   );
@@ -121,8 +123,7 @@ export function GlobalSearch() {
             pendingEnterRef.current = false;
             const submittedResult =
               findExactOrderMatch(nextResults, trimmedQuery) ??
-              nextResults.find((result) => result.type === "ORDER") ??
-              nextResults[0];
+              nextResults.find((result) => result.type !== "ORDER");
 
             if (submittedResult) {
               setQuery("");
@@ -136,6 +137,7 @@ export function GlobalSearch() {
                   : submittedResult.href,
               );
             } else if (
+              !nextResults.some((result) => result.type === "ORDER") &&
               canCreateCustomer &&
               searchQuickOperations(trimmedQuery).filter((operation) =>
                 hasPermission(userRef.current, operation.permission),
@@ -218,13 +220,12 @@ export function GlobalSearch() {
 
       // Keep matching orders available to Enter without listing them in the dropdown.
       const firstResult =
-        findExactOrderMatch(results, query) ??
-        results.find((result) => result.type === "ORDER") ??
-        results[0];
+        exactOrderMatch ??
+        results.find((result) => result.type !== "ORDER");
 
       if (firstResult) {
         selectResult(firstResult);
-      } else if (!isLoading && !error && canCreateCustomer && groups.length === 0 && quickOperations.length === 0) {
+      } else if (!isLoading && !error && !hasOrderCandidate && canCreateCustomer && groups.length === 0 && quickOperations.length === 0) {
         addCustomerFromSearch();
       }
     }
@@ -314,7 +315,7 @@ export function GlobalSearch() {
             <div style={{ padding: 16 }}>Searching...</div>
           ) : error ? (
             <div style={{ padding: 16 }}>{error}</div>
-          ) : groups.length === 0 && quickOperations.length === 0 && !orderMatchAvailable && !canCreateCustomer ? (
+          ) : groups.length === 0 && quickOperations.length === 0 && !hasOrderCandidate && !canCreateCustomer ? (
             <div style={{ padding: 16 }}>No results found.</div>
           ) : (
             <>
@@ -374,7 +375,13 @@ export function GlobalSearch() {
                 </div>
               ) : null}
 
-              {groups.length === 0 && quickOperations.length === 0 && !orderMatchAvailable && canCreateCustomer ? (
+              {groups.length === 0 && quickOperations.length === 0 && hasOrderCandidate && !orderMatchAvailable ? (
+                <div style={{ padding: 16 }}>
+                  No exact order-number match. Check the order number and try again.
+                </div>
+              ) : null}
+
+              {groups.length === 0 && quickOperations.length === 0 && !hasOrderCandidate && canCreateCustomer ? (
                 <section style={{ padding: 14, borderTop: "1px solid #eee" }}>
                   <div style={{ fontWeight: 600 }}>No matching customer, order, or invoice.</div>
                   <button
