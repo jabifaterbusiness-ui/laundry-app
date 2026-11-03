@@ -142,6 +142,7 @@ model Business {
   orderStatusNotificationRules OrderStatusNotificationRule[]
   orderStatusNotificationDeliveries OrderStatusNotificationDelivery[]
   unpickedOrderReminderConfig  UnpickedOrderReminderConfig?
+  customerGroups               CustomerGroup[]
   orders                      Order[]
   invoices                    Invoice[]
   payments                    Payment[]
@@ -490,6 +491,7 @@ model Customer {
   announcementRecipients AnnouncementRecipient[]
   communicationDeliveries CommunicationDelivery[]
   statusNotificationDeliveries OrderStatusNotificationDelivery[]
+  customerGroups CustomerGroupMember[]
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -2737,6 +2739,40 @@ model CustomerServicePrice {
   @@map("customer_service_prices")
 }
 
+
+// ---------------------------------------------------------------------
+// CUSTOMER GROUPS FOR TARGETED COMMUNICATIONS
+// ---------------------------------------------------------------------
+
+model CustomerGroup {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     CustomerGroupMember[]
+
+  @@unique([businessId, name])
+  @@index([businessId, createdAt])
+  @@map("customer_groups")
+}
+
+model CustomerGroupMember {
+  id         String        @id @default(uuid())
+  businessId String
+  groupId    String
+  customerId String
+  createdAt  DateTime      @default(now())
+  group      CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, customerId])
+  @@index([businessId, groupId])
+  @@index([businessId, customerId])
+  @@map("customer_group_members")
+}
 
 // ---------------------------------------------------------------------
 // CUSTOMER ANNOUNCEMENTS, ORDER STATUS NOTIFICATIONS AND REMINDERS
