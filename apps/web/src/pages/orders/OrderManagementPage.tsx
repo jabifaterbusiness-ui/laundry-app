@@ -24,7 +24,7 @@ export function OrderManagementPage() {
   const orderQuery = useQuery({
     queryKey: ["order-management-page", orderId, activeBranchId],
     queryFn: () => getOrder(orderId!, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId && orderId),
+    enabled: Boolean(accessToken && activeBranchId && orderId && authorizedOrderId === orderId),
   });
 
   const customerQuery = useQuery({
@@ -38,14 +38,15 @@ export function OrderManagementPage() {
   }, [requestSensitiveAuthorization]);
 
   useEffect(() => {
-    const order = orderQuery.data;
-    const customer = customerQuery.data;
-    if (!order || !customer || authorizedOrderId === order.id ||
-        authorizationRequestedForRef.current === order.id) {
+    if (
+      !orderId ||
+      authorizedOrderId === orderId ||
+      authorizationRequestedForRef.current === orderId
+    ) {
       return;
     }
 
-    authorizationRequestedForRef.current = order.id;
+    authorizationRequestedForRef.current = orderId;
     let active = true;
     setAuthorizationError(null);
 
@@ -56,7 +57,7 @@ export function OrderManagementPage() {
           navigate("/orders", { replace: true });
           return;
         }
-        setAuthorizedOrderId(order.id);
+        setAuthorizedOrderId(orderId);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -68,12 +69,7 @@ export function OrderManagementPage() {
     return () => {
       active = false;
     };
-  }, [
-    orderQuery.data,
-    customerQuery.data,
-    authorizedOrderId,
-    navigate,
-  ]);
+  }, [orderId, authorizedOrderId, navigate]);
 
   if (!orderId) {
     return (
@@ -83,6 +79,10 @@ export function OrderManagementPage() {
         <button type="button" onClick={() => navigate("/orders")}>Go to Orders</button>
       </main>
     );
+  }
+
+  if (authorizedOrderId !== orderId) {
+    return <main><h1>Order Management</h1><p>Confirm your identity to open this order...</p></main>;
   }
 
   if (orderQuery.isLoading || customerQuery.isLoading) {
@@ -112,10 +112,6 @@ export function OrderManagementPage() {
         <button type="button" onClick={() => navigate("/orders")}>Back to Orders</button>
       </main>
     );
-  }
-
-  if (authorizedOrderId !== orderQuery.data.id) {
-    return <main><h1>Order Management</h1><p>Confirm your identity to open this order...</p></main>;
   }
 
   const order: Order = orderQuery.data;
