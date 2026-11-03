@@ -10,6 +10,7 @@ async function calculateNewInvoiceDefaults(
   options: {
     adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
     taxRuleIds?: string[];
+    automaticAdjustmentIds?: string[];
   } = {},
 ) {
   // Real Prisma order items always have IDs. Lightweight service/test fixtures may omit
@@ -21,7 +22,17 @@ async function calculateNewInvoiceDefaults(
   const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
   const adjustmentRecords = selectedAdjustmentIds.length
     ? await tx.priceAdjustment.findMany({
-        where: { businessId, id: { in: selectedAdjustmentIds }, isActive: true },
+        where: {
+          businessId,
+          id: { in: selectedAdjustmentIds },
+          isActive: true,
+          OR: [
+            { targetScope: "MANUAL" },
+            ...(options.automaticAdjustmentIds?.length
+              ? [{ id: { in: options.automaticAdjustmentIds }, targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] } }]
+              : []),
+          ],
+        },
         include: {
           customer: { select: { name: true } },
           group: { select: { name: true } },
@@ -273,6 +284,7 @@ export async function createInvoiceWithTx(
   );
   const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items, {
     adjustments: automaticAdjustments,
+    automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
   });
 
   const invoice = await tx.invoice.create({
@@ -394,6 +406,7 @@ export async function createInvoiceFromOrderWithTx(
   const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, {
     ...pricingOptions,
     adjustments: [...(pricingOptions.adjustments ?? []), ...automaticAdjustments],
+    automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
   });
 
   return tx.invoice.create({
