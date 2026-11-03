@@ -27,6 +27,10 @@ export interface Order {
   businessId: string;
   branchId: string;
   customerId: string;
+  // The API includes the related customer on order list/detail responses.
+  // Optional to keep queued/offline order snapshots backward compatible.
+  customer?: { id: string; name: string; phone: string; email?: string | null };
+  notificationResults?: Array<{ status: "SENT" | "FAILED" | "DUPLICATE"; channel: "WHATSAPP" | "EMAIL"; error?: string }>;
   orderNumber: string;
   status: OrderStatus;
   orderTotal: number;
