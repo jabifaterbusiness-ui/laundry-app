@@ -65,7 +65,7 @@ export async function updateInvoiceFinancialRules(input: {
       adjustmentTotal: invoice.adjustmentTotal, additiveTaxTotal: invoice.additiveTaxTotal,
       withholdingTaxTotal: invoice.withholdingTaxTotal, appliedAdjustments: invoice.appliedAdjustments,
       appliedTaxes: invoice.appliedTaxes, totalAmount: invoice.totalAmount,
-      items: invoice.items,
+      items: invoice.items.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
     };
     const latest = await tx.invoiceHistory.findFirst({
       where: { invoiceId: invoice.id },
