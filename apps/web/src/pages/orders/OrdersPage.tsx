@@ -22,7 +22,7 @@ import {
   getCustomer,
   listCustomers,
 } from "../../lib/customers-api.js";
-import { listServices, listPricingRules, type Service } from "../../lib/services-api.js";
+import { listServices, listPricingRules, listCustomerServicePrices, type Service } from "../../lib/services-api.js";
 import {
   createColor,
   listColors,
@@ -578,6 +578,18 @@ export function OrdersPage() {
   const formCustomerId =
     activeWorkspace?.draft.customerId ?? "";
 
+  const customerPricesQuery = useQuery({
+    queryKey: ["customer-service-prices", formCustomerId, "order-form"],
+    queryFn: () => listCustomerServicePrices(formCustomerId, { accessToken }),
+    enabled: Boolean(accessToken && formCustomerId && activeWorkspace?.mode !== "edit"),
+  });
+  const customerPriceMap = useMemo(
+    () => new Map((customerPricesQuery.data?.data ?? []).map((entry) => [entry.serviceId, entry.unitPrice])),
+    [customerPricesQuery.data],
+  );
+  const getEffectiveUnitPrice = (service: Service) =>
+    customerPriceMap.get(service.id) ?? service.unitPrice;
+
   const lines =
     activeWorkspace?.draft.lines ?? [
       { serviceId: "", quantity: 1, colors: [] },
@@ -594,7 +606,7 @@ export function OrdersPage() {
 
   const formTotal = lines.reduce((sum, line) => {
     const service = selectedServices.get(line.serviceId);
-    return sum + (service ? line.quantity * service.unitPrice : 0);
+    return sum + (service ? line.quantity * getEffectiveUnitPrice(service) : 0);
   }, 0);
 
   function closeForm() {
@@ -1107,7 +1119,7 @@ export function OrdersPage() {
                     : 0;
 
                   const lineTotal = service
-                    ? line.quantity * service.unitPrice
+                    ? line.quantity * getEffectiveUnitPrice(service)
                     : 0;
 
                   return (
