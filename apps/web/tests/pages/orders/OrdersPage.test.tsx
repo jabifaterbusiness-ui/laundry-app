@@ -518,7 +518,9 @@ describe("OrdersPage quick customer switching", () => {
       }),
     ).toBeInTheDocument();
 
-    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Jane Doe\s+—\s+New order/i }),
+    ).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", {
