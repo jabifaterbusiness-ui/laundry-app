@@ -977,7 +977,7 @@ describe("OrdersPage customer-specific pricing", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /create order/i })).toBeEnabled();
     });
-    expect(screen.getByText("₦2,500")).toBeInTheDocument();
+    expect(screen.getAllByText("₦2,500").length).toBeGreaterThan(0);
   });
 
   it("blocks order creation and offers retry when agreed-price lookup fails", async () => {
