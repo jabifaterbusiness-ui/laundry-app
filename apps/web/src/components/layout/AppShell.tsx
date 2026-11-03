@@ -153,6 +153,13 @@ export function AppShell({ children }: PropsWithChildren) {
     useState<CloudBackupNotification | null>(null);
   const [activeInboxPopupId, setActiveInboxPopupId] = useState<string | null>(null);
   const [shownInboxPopupIds, setShownInboxPopupIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (isWorkstationMode && location.pathname !== "/orders") {
+      navigate("/orders", { replace: true });
+      setSidebarCollapsed(true);
+    }
+  }, [isWorkstationMode, location.pathname, navigate]);
+
   const activeInboxPopup = inboxQuery.data?.messages.find((message) =>
     message.id === activeInboxPopupId && !message.readAt && !message.dismissedAt
   ) ?? null;
