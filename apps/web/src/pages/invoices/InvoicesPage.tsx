@@ -826,11 +826,13 @@ export function InvoicesPage() {
           <h3>
             {correctionMode === "edit"
               ? "Edit Invoice"
-              : correctionMode === "transfer"
-                ? "Transfer Invoice"
-                : correctionMode === "void"
-                  ? "Void Invoice"
-                  : "Delete Invoice"}
+              : correctionMode === "financial"
+                ? "Adjust Discounts & Taxes"
+                : correctionMode === "transfer"
+                  ? "Transfer Invoice"
+                  : correctionMode === "void"
+                    ? "Void Invoice"
+                    : "Delete Invoice"}
           </h3>
 
           {correctionMode === "edit" ? (
