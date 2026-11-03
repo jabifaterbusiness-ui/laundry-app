@@ -3,6 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
   createService,
+  createPriceAdjustment,
+  createTaxRule,
+  deletePriceAdjustment,
+  deleteTaxRule,
+  listPricingRules,
   listServices,
   setServiceActive,
   updateService,
@@ -28,6 +33,41 @@ export function ServicesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CreateServiceInput>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [adjustmentName, setAdjustmentName] = useState("");
+  const [adjustmentPercentage, setAdjustmentPercentage] = useState(-10);
+  const [taxName, setTaxName] = useState("");
+  const [taxValue, setTaxValue] = useState(7.5);
+  const [taxKind, setTaxKind] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
+  const [taxTreatment, setTaxTreatment] = useState<"ADDITIVE" | "WITHHOLDING">("ADDITIVE");
+  const [taxEnabledByDefault, setTaxEnabledByDefault] = useState(false);
+  const [taxAllowCombination, setTaxAllowCombination] = useState(true);
+
+  const pricingRulesQuery = useQuery({
+    queryKey: ["pricing-rules"],
+    queryFn: () => listPricingRules({ accessToken }),
+  });
+  const pricingRulesMutation = useMutation({
+    mutationFn: async (kind: "adjustment" | "tax") => {
+      if (kind === "adjustment") {
+        return createPriceAdjustment({ name: adjustmentName.trim(), percentage: adjustmentPercentage }, { accessToken });
+      }
+      return createTaxRule({
+        name: taxName.trim(), value: taxValue, kind: taxKind, treatment: taxTreatment,
+        enabledByDefault: taxEnabledByDefault, allowWithOtherTaxes: taxAllowCombination,
+      }, { accessToken });
+    },
+    onSuccess: () => {
+      setAdjustmentName(""); setTaxName("");
+      queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
+    },
+  });
+  const deletePricingRuleMutation = useMutation({
+    mutationFn: async (input: { id: string; kind: "adjustment" | "tax" }) =>
+      input.kind === "adjustment"
+        ? deletePriceAdjustment(input.id, { accessToken })
+        : deleteTaxRule(input.id, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
+  });
 
   const servicesQuery = useQuery({
     queryKey: ["services", { status, search }],
@@ -129,6 +169,47 @@ export function ServicesPage() {
   return (
     <main>
       <h1>Services & Price List</h1>
+
+      <section aria-labelledby="pricing-rules-heading" style={{ margin: "1.5rem 0", padding: "1.25rem", border: "1px solid var(--border, #d9dce3)", borderRadius: "14px" }}>
+        <h2 id="pricing-rules-heading">Discounts, surcharges & taxes</h2>
+        <p>Set reusable price adjustments and tax rules. New invoices use enabled default taxes; older invoices keep their saved totals.</p>
+        {pricingRulesQuery.isError && <p role="alert">Unable to load pricing rules.</p>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
+          <div>
+            <h3>Price adjustments</h3>
+            <form onSubmit={(event) => { event.preventDefault(); pricingRulesMutation.mutate("adjustment"); }}>
+              <label>Adjustment name<input value={adjustmentName} onChange={(event) => setAdjustmentName(event.target.value)} required maxLength={120} /></label>
+              <label>Percentage (+ surcharge / − discount)<input type="number" min="-100" max="1000" step="0.01" value={adjustmentPercentage} onChange={(event) => setAdjustmentPercentage(Number(event.target.value))} required /></label>
+              <button type="submit" disabled={!adjustmentName.trim() || pricingRulesMutation.isPending}>Add adjustment</button>
+            </form>
+            <ul>
+              {(pricingRulesQuery.data?.adjustments ?? []).map((rule) => <li key={rule.id}>
+                {rule.name} — {rule.percentage > 0 ? "+" : ""}{rule.percentage}%
+                <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" })}>Remove</button>
+              </li>)}
+            </ul>
+          </div>
+          <div>
+            <h3>Tax rules</h3>
+            <form onSubmit={(event) => { event.preventDefault(); pricingRulesMutation.mutate("tax"); }}>
+              <label>Tax name<input value={taxName} onChange={(event) => setTaxName(event.target.value)} required maxLength={120} /></label>
+              <label>Calculation type<select value={taxKind} onChange={(event) => setTaxKind(event.target.value as typeof taxKind)}><option value="PERCENTAGE">Percentage</option><option value="FIXED">Fixed amount (₦)</option></select></label>
+              <label>{taxKind === "PERCENTAGE" ? "Rate (%)" : "Amount (₦)"}<input type="number" min="0" step="0.01" value={taxValue} onChange={(event) => setTaxValue(Number(event.target.value))} required /></label>
+              <label>Tax treatment<select value={taxTreatment} onChange={(event) => setTaxTreatment(event.target.value as typeof taxTreatment)}><option value="ADDITIVE">Add to invoice</option><option value="WITHHOLDING">Deduct from invoice</option></select></label>
+              <label><input type="checkbox" checked={taxEnabledByDefault} onChange={(event) => setTaxEnabledByDefault(event.target.checked)} /> Apply automatically to new invoices</label>
+              <label><input type="checkbox" checked={taxAllowCombination} onChange={(event) => setTaxAllowCombination(event.target.checked)} /> May be combined with other taxes</label>
+              <button type="submit" disabled={!taxName.trim() || pricingRulesMutation.isPending}>Add tax rule</button>
+            </form>
+            <ul>
+              {(pricingRulesQuery.data?.taxes ?? []).map((rule) => <li key={rule.id}>
+                {rule.name} — {rule.kind === "PERCENTAGE" ? `${rule.value}%` : `₦${rule.value.toLocaleString()}`} · {rule.treatment === "ADDITIVE" ? "Added" : "Withheld"}{rule.enabledByDefault ? " · Automatic" : ""}
+                <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "tax" })}>Remove</button>
+              </li>)}
+            </ul>
+          </div>
+        </div>
+        {pricingRulesMutation.isError && <p role="alert">Unable to save this pricing rule. Check its name and value, then try again.</p>}
+      </section>
       <TableExportActions title="Complete services and price list" filename="laundryangel-price-list" loadRows={loadAllServicesForExport} columns={[
         { header: "Service / item", value: (row) => row.name }, { header: "Pieces", value: (row) => row.pieces },
         { header: "Unit price (NGN)", value: (row) => row.unitPrice }, { header: "Status", value: (row) => row.isActive ? "Active" : "Inactive" },
