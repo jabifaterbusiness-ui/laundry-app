@@ -19,7 +19,11 @@ async function calculateNewInvoiceDefaults(
     ...item,
     id: typeof item.id === "string" && item.id.trim() ? item.id : `invoice-line-${index + 1}`,
   }));
-  const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
+  const adjustmentSelections = options.adjustments ?? [];
+  const selectedAdjustmentIds = [...new Set(adjustmentSelections.map((item) => item.adjustmentId))];
+  if (selectedAdjustmentIds.length !== adjustmentSelections.length) {
+    throw new AppError("An adjustment cannot be selected more than once", 422);
+  }
   const adjustmentRecords = selectedAdjustmentIds.length
     ? await tx.priceAdjustment.findMany({
         where: {
@@ -151,6 +155,7 @@ export async function resolveAutomaticDiscountSelections(
           id: { in: manualSelections.map((selection) => selection.adjustmentId) },
           isActive: true,
           percentage: { lt: 0 },
+          targetScope: "MANUAL",
         },
         select: { id: true },
       })
