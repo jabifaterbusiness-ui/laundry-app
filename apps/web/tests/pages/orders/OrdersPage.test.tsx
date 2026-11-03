@@ -938,6 +938,16 @@ describe("OrdersPage quick customer switching", () => {
   });
 
 describe("OrdersPage customer-specific pricing", () => {
+  async function openNewOrderForCustomer(customer: Customer) {
+    fireEvent.click(screen.getByRole("button", { name: /^New order$/i }));
+    await screen.findByRole("heading", { name: /find customer/i });
+    const picker = screen.getByRole("region", { name: /customer picker/i });
+    fireEvent.click(within(picker).getByRole("button", {
+      name: new RegExp(`^${customer.name}(?:\\s|$)`, "i"),
+    }));
+    await screen.findByRole("heading", { name: /new order/i });
+  }
+
   it("waits for agreed prices before displaying totals or allowing order creation", async () => {
     let resolvePrices!: (value: { data: Array<{ serviceId: string; unitPrice: number }> }) => void;
     vi.mocked(listCustomerServicePrices).mockImplementation(
