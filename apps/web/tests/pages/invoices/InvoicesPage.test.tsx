@@ -350,7 +350,7 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(within(financialBreakdown).getByText("Special customer (-10%)")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Adjusted taxable amount")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText((_, element) =>
-      element?.tagName === "SPAN" && element.textContent?.replace(/\\s+/g, " ").trim() === "VAT (7.5%) · Added",
+      element?.tagName === "SPAN" && element.textContent?.replace(/\s+/g, " ").trim() === "VAT (7.5%) · Added",
     )).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Total pieces")).toBeInTheDocument();
 
