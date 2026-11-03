@@ -396,7 +396,7 @@ export async function createInvoiceFromOrderWithTx(
     adjustments: [...(pricingOptions.adjustments ?? []), ...automaticAdjustments],
   });
 
-  const invoice = await tx.invoice.create({
+  return tx.invoice.create({
     data: {
       subtotal: calculation.subtotal,
       adjustedSubtotal: calculation.adjustedSubtotal,
@@ -447,15 +447,7 @@ export async function createInvoiceFromOrderWithTx(
     },
   });
 
-  // Keep order management totals consistent with the issued invoice after
-  // automatic or manually selected adjustments have been applied.
-  await tx.order.update({
-    where: { id: order.id },
-    data: { orderTotal: invoice.totalAmount },
-  });
-  return invoice;
 }
-
 /**
  * Tenant- and branch-scoped invoice lookup.
  *
