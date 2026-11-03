@@ -36,10 +36,39 @@ export function calculateInvoice(lines: PriceLine[], adjustments: PriceAdjustmen
     const base = scoped.reduce((sum, line) => sum + line.amount, 0);
     return { rule, amount: roundNaira(base * Math.abs(rule.percentage) / 100) * Math.sign(rule.percentage) };
   });
-  let remainingDiscount = Math.min(raw.filter((x) => x.amount < 0).reduce((sum, x) => sum + Math.abs(x.amount), 0), subtotal);
+  // Track remaining discount capacity per original line. A second discount
+  // on one selected item must never consume the value of an unrelated item.
+  const remainingByLine = new Map(lines.map((line) => [line.id, line.amount]));
   const appliedAdjustments: AppliedAdjustment[] = raw.map(({ rule, amount }) => {
     let applied = amount;
-    if (amount < 0) { const allocated = Math.min(Math.abs(amount), remainingDiscount); remainingDiscount -= allocated; applied = -allocated; }
+    if (amount < 0) {
+      const scopedLines = rule.scope === "INVOICE"
+        ? lines
+        : lines.filter((line) => (rule.itemIds ?? []).includes(line.id));
+      const capacities = scopedLines.map((line) => ({
+        id: line.id,
+        capacity: remainingByLine.get(line.id) ?? 0,
+      }));
+      const available = capacities.reduce((sum, line) => sum + line.capacity, 0);
+      const discount = Math.min(Math.abs(amount), available);
+      const allocations = capacities.map((line) => {
+        const exact = available > 0 ? discount * line.capacity / available : 0;
+        const allocated = Math.min(line.capacity, Math.floor(exact));
+        return { ...line, allocated, fraction: exact - Math.floor(exact) };
+      });
+      let unallocated = discount - allocations.reduce((sum, line) => sum + line.allocated, 0);
+      for (const line of [...allocations].sort((a, b) => b.fraction - a.fraction)) {
+        if (unallocated <= 0) break;
+        if (line.allocated < line.capacity) {
+          line.allocated += 1;
+          unallocated -= 1;
+        }
+      }
+      for (const line of allocations) {
+        remainingByLine.set(line.id, line.capacity - line.allocated);
+      }
+      applied = -discount;
+    }
     return { id: rule.id, name: rule.name, percentage: rule.percentage, amount: applied, scope: rule.scope, ...(rule.scope === "ITEMS" ? { itemIds: [...(rule.itemIds ?? [])], itemIndexes: lines.flatMap((line, index) => (rule.itemIds ?? []).includes(line.id) ? [index] : []) } : {}) };
   });
   const adjustmentTotal = appliedAdjustments.reduce((sum, x) => sum + x.amount, 0);
