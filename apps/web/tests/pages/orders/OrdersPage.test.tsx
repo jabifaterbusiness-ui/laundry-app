@@ -984,4 +984,49 @@ describe("OrdersPage quick customer switching", () => {
       within(orderManagementAfterEsc).getByText("Jane Doe"),
     ).toBeInTheDocument();
   });
+  it("shows the related customer name even when the customer picker page does not contain that customer", async () => {
+    const orderWithCustomer = {
+      ...orderA,
+      customer: {
+        id: customerA.id,
+        name: customerA.name,
+        phone: customerA.phone,
+        email: customerA.email,
+      },
+    };
+
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 100,
+        total: 6494,
+        totalPages: 65,
+      },
+    });
+
+    vi.mocked(listOrders).mockResolvedValue({
+      data: [orderWithCustomer],
+      pagination: {
+        page: 1,
+        pageSize: 25,
+        total: 1,
+        totalPages: 1,
+      },
+    });
+    vi.mocked(listAllOrders).mockResolvedValue([orderWithCustomer]);
+
+    renderPage();
+
+    const allOrdersFolder = await screen.findByRole("button", {
+      name: /all orders/i,
+    });
+    fireEvent.click(allOrdersFolder);
+
+    expect(
+      await screen.findByRole("cell", { name: "Jane Doe" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(customerA.id)).not.toBeInTheDocument();
+  });
+
 });
