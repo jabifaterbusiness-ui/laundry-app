@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { calculateInvoice } from "../invoices/invoice-calculator.js";
 
 const HISTORY_RETENTION_DAYS = 60;
 
@@ -80,6 +81,13 @@ function buildInvoiceSnapshot(invoice: OrderForCorrection["invoice"]) {
     receiptBackgroundColor: invoice.receiptBackgroundColor,
     receiptTextColor: invoice.receiptTextColor,
     receiptHeaderStyle: invoice.receiptHeaderStyle,
+    subtotal: invoice.subtotal,
+    adjustedSubtotal: invoice.adjustedSubtotal,
+    adjustmentTotal: invoice.adjustmentTotal,
+    additiveTaxTotal: invoice.additiveTaxTotal,
+    withholdingTaxTotal: invoice.withholdingTaxTotal,
+    appliedAdjustments: invoice.appliedAdjustments,
+    appliedTaxes: invoice.appliedTaxes,
     totalAmount: invoice.totalAmount,
     garmentNote: invoice.garmentNote,
     internalNote: invoice.internalNote,
@@ -568,10 +576,43 @@ export async function editOrderWithCorrection(params: {
       }
     }
 
-    const orderTotal = preparedItems.reduce(
-      (sum, item) => sum + item.lineTotal,
-      0,
-    );
+    const invoice = current.invoice!;
+    const calculationLines = preparedItems.map((item, index) => ({
+      id: item.input.id ?? `new-${index}`,
+      amount: item.lineTotal,
+    }));
+    const lineIds = new Set(calculationLines.map((line) => line.id));
+    const savedAdjustments = Array.isArray(invoice.appliedAdjustments)
+      ? invoice.appliedAdjustments.flatMap((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+          const rule = value as Record<string, unknown>;
+          if (typeof rule.id !== "string" || typeof rule.name !== "string" || typeof rule.percentage !== "number") return [];
+          const scope = rule.scope === "ITEMS" ? "ITEMS" : "INVOICE";
+          const itemIds = Array.isArray(rule.itemIds)
+            ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
+            : [];
+          if (scope === "ITEMS" && itemIds.length === 0) return [];
+          return [{ id: rule.id, name: rule.name, percentage: rule.percentage, scope, itemIds }];
+        })
+      : [];
+    const savedTaxes = Array.isArray(invoice.appliedTaxes)
+      ? invoice.appliedTaxes.flatMap((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+          const rule = value as Record<string, unknown>;
+          if (
+            typeof rule.id !== "string" || typeof rule.name !== "string" ||
+            (rule.kind !== "PERCENTAGE" && rule.kind !== "FIXED") ||
+            typeof rule.value !== "number" ||
+            (rule.treatment !== "ADDITIVE" && rule.treatment !== "WITHHOLDING")
+          ) return [];
+          return [{
+            id: rule.id, name: rule.name, kind: rule.kind, value: rule.value,
+            treatment: rule.treatment, enabled: true, allowWithOtherTaxes: true,
+          }];
+        })
+      : [];
+    const calculation = calculateInvoice(calculationLines, savedAdjustments, savedTaxes);
+    const orderTotal = calculation.totalAmount;
 
     const orderData: Prisma.OrderUpdateInput = {
       orderTotal,
@@ -599,8 +640,6 @@ export async function editOrderWithCorrection(params: {
       data: orderData,
     });
 
-    const invoice = current.invoice!;
-
     let customerAgreement = invoice.customerAgreement;
 
     if (params.input.customerAgreement !== undefined) {
@@ -626,6 +665,13 @@ export async function editOrderWithCorrection(params: {
         id: invoice.id,
       },
       data: {
+        subtotal: calculation.subtotal,
+        adjustedSubtotal: calculation.adjustedSubtotal,
+        adjustmentTotal: calculation.adjustmentTotal,
+        additiveTaxTotal: calculation.additiveTaxTotal,
+        withholdingTaxTotal: calculation.withholdingTaxTotal,
+        appliedAdjustments: calculation.adjustments,
+        appliedTaxes: calculation.taxes,
         totalAmount: orderTotal,
         ...(params.input.garmentNote !== undefined && {
           garmentNote:
