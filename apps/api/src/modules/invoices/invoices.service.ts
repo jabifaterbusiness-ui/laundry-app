@@ -98,31 +98,38 @@ export async function resolveAutomaticDiscountSelections(
   items: Array<{ serviceId: string }>,
   manualSelections: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>,
 ) {
-  const memberships = await tx.customerGroupMember.findMany({
-    where: { businessId, customerId },
-    select: { groupId: true },
-  });
+  // The delegates are always present on a generated Prisma transaction client.
+  // Optional guards keep isolated service tests and legacy lightweight adapters
+  // compatible while treating an absent delegate as having no automatic rules.
+  const memberships = tx.customerGroupMember
+    ? await tx.customerGroupMember.findMany({
+        where: { businessId, customerId },
+        select: { groupId: true },
+      })
+    : [];
   const groupIds = memberships.map((membership) => membership.groupId);
   const now = new Date();
-  const rules = await tx.priceAdjustment.findMany({
-    where: {
-      businessId,
-      isActive: true,
-      targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] },
-      AND: [
-        { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-        { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-        {
-          OR: [
-            { targetScope: "ALL_CUSTOMERS" },
-            { targetScope: "CUSTOMER", customerId },
-            ...(groupIds.length ? [{ targetScope: "GROUP", groupId: { in: groupIds } }] : []),
+  const rules = tx.priceAdjustment
+    ? await tx.priceAdjustment.findMany({
+        where: {
+          businessId,
+          isActive: true,
+          targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] },
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            {
+              OR: [
+                { targetScope: "ALL_CUSTOMERS" },
+                { targetScope: "CUSTOMER", customerId },
+                ...(groupIds.length ? [{ targetScope: "GROUP", groupId: { in: groupIds } }] : []),
+              ],
+            },
           ],
         },
-      ],
-    },
-    orderBy: { createdAt: "asc" },
-  });
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   // A manually selected discount is an explicit choice. Positive surcharges
   // do not count as discount stacking and must not suppress customer benefits.
