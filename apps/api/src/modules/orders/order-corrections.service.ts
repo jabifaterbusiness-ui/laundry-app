@@ -605,11 +605,13 @@ export async function editOrderWithCorrection(params: {
           const itemIndexes = Array.isArray(rule.itemIndexes)
             ? rule.itemIndexes.filter((index): index is number => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < calculationLines.length)
             : [];
-          const itemIds = itemIndexes.length
-            ? itemIndexes.map((index) => calculationLines[index]!.id)
-            : Array.isArray(rule.itemIds)
-              ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
-              : [];
+          // Persisted order-item IDs are the authoritative scope. Indexes are
+          // only a compatibility fallback for older snapshots that predate IDs;
+          // using indexes first would silently retarget a discount if staff reorder
+          // or insert lines while correcting an order.
+          const itemIds = Array.isArray(rule.itemIds)
+            ? rule.itemIds.filter((id): id is string => typeof id === "string" && lineIds.has(id))
+            : itemIndexes.map((index) => calculationLines[index]!.id);
           if (scope === "ITEMS" && itemIds.length === 0) return [];
           return [{ id: rule.id, name: rule.name, percentage: rule.percentage, scope, itemIds }];
         })
