@@ -91,7 +91,7 @@ async function calculateNewInvoiceDefaults(
   );
 }
 
-async function resolveAutomaticDiscountSelections(
+export async function resolveAutomaticDiscountSelections(
   tx: Prisma.TransactionClient,
   businessId: string,
   customerId: string,
