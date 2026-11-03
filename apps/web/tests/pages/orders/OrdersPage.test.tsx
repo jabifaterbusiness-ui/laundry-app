@@ -655,7 +655,9 @@ describe("OrdersPage quick customer switching", () => {
 
     await openNewOrderForCustomer(customerA);
 
-    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Jane Doe\s+—\s+New order/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
@@ -668,7 +670,9 @@ describe("OrdersPage quick customer switching", () => {
 
     await selectCustomerFromPicker(customerB);
 
-    expect(screen.getByText("John Doe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /John Doe\s+—\s+New order/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
@@ -692,7 +696,9 @@ describe("OrdersPage quick customer switching", () => {
     expect(
       screen.getByRole("heading", { name: /new order/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Jane Doe\s+—\s+New order/i }),
+    ).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", {
