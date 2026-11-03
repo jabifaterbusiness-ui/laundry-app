@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateInvoice } from "./invoice-calculator.js";
+import { calculateInvoice } from "../../src/modules/invoices/invoice-calculator.js";
 
 describe("calculateInvoice", () => {
   const lines = [{ id: "shirt", amount: 10000 }, { id: "trouser", amount: 5000 }];
