@@ -48,6 +48,15 @@ describe("calculateInvoice", () => {
       { id: "b", name: "WHT", kind: "PERCENTAGE", value: 5, treatment: "WITHHOLDING", enabled: true, allowWithOtherTaxes: true },
     ])).toThrow(/cannot be combined/);
   });
+  it("never lets repeated item-scoped discounts consume unrelated lines", () => {
+    const result = calculateInvoice(lines, [
+      { id: "a", name: "First shirt discount", percentage: -100, scope: "ITEMS", itemIds: ["shirt"] },
+      { id: "b", name: "Second shirt discount", percentage: -100, scope: "ITEMS", itemIds: ["shirt"] },
+    ]);
+    expect(result.adjustments.map((adjustment) => adjustment.amount)).toEqual([-10000, 0]);
+    expect(result.adjustedSubtotal).toBe(5000);
+    expect(result.totalAmount).toBe(5000);
+  });
   it("rejects empty item scopes and invalid percentages", () => {
     expect(() => calculateInvoice(lines, [{ id: "a", name: "Discount", percentage: -10, scope: "ITEMS", itemIds: [] }])).toThrow(/select at least one/);
     expect(() => calculateInvoice(lines, [{ id: "a", name: "Discount", percentage: -101, scope: "INVOICE" }])).toThrow(/between -100 and 1000/);
