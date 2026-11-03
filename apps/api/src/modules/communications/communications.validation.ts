@@ -4,13 +4,23 @@ export const createAnnouncementSchema = z.object({
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().min(1).max(4000),
   channels: z.array(channelSchema).min(1).max(2),
-  audience: z.enum(["ALL_CUSTOMERS", "SELECTED_CUSTOMERS"]),
+  audience: z.enum(["ALL_CUSTOMERS", "SELECTED_CUSTOMERS", "CUSTOMER_GROUP"]),
   customerIds: z.array(z.string().uuid()).max(2000).optional(),
+  groupId: z.string().uuid().optional(),
 }).strict().superRefine((value, ctx) => {
   if (value.audience === "SELECTED_CUSTOMERS" && (!value.customerIds || value.customerIds.length === 0)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select at least one customer", path: ["customerIds"] });
   }
+  if (value.audience === "CUSTOMER_GROUP" && !value.groupId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose a customer group", path: ["groupId"] });
+  }
 });
+export const customerGroupSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).nullable().optional(),
+  customerIds: z.array(z.string().uuid()).max(2000),
+}).strict();
+export const customerGroupIdSchema = z.object({ id: z.string().uuid() });
 export const statusRuleSchema = z.object({
   status: z.enum(["RECEIVED", "IN_PROGRESS", "READY_FOR_PICKUP", "COMPLETED", "CANCELLED"]),
   enabled: z.boolean(),
