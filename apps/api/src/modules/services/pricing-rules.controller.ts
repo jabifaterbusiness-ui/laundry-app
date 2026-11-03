@@ -16,7 +16,18 @@ export async function list(req: Request, res: Response) {
 export async function createAdjustment(req: Request, res: Response) {
   const id = businessId(req);
   const input = createAdjustmentSchema.parse(req.body);
-  const result = await createPriceAdjustment({ businessId: id, ...input });
+  const result = await createPriceAdjustment({
+    businessId: id,
+    name: input.name,
+    percentage: input.percentage,
+    targetScope: input.targetScope,
+    allowStacking: input.allowStacking,
+    excludedServiceIds: input.excludedServiceIds,
+    ...(input.customerId !== undefined ? { customerId: input.customerId } : {}),
+    ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
+    ...(input.startsAt !== undefined ? { startsAt: input.startsAt } : {}),
+    ...(input.endsAt !== undefined ? { endsAt: input.endsAt } : {}),
+  });
   await recordAuditEvent({ action: "pricing.adjustment_created", entityType: "PriceAdjustment", entityId: result.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(201).json(result);
 }
