@@ -51,7 +51,7 @@ The first live test should connect a separate test business, send an approved te
 ## Current application scope
 
 - Implemented: per-business connection storage, encrypted tokens, Embedded Signup code exchange, account/phone validation, webhook subscription, disconnect, and durable webhook event capture.
-- Implemented inbox foundation: tenant-scoped conversation grouping, inbound/outbound text history, unread/read state, in-app free-form replies inside the 24-hour customer-service window, and delivery/read status display from webhook events.
+- Implemented inbox foundation: tenant-scoped conversation grouping, inbound/outbound text history, unread/read state, in-app free-form replies to both saved customers and first-time contacts inside the 24-hour customer-service window, and delivery/read status display from webhook events.
 - Implemented templates: list approved templates from the connected business WABA and send templates with BODY text variables. Templates requiring dynamic header/button parameters are intentionally not offered by this first composer.
 - Staff permissions: conversation viewing uses `customers.view`; replying and template sending use `customers.update`. Customer lookups are always scoped to the authenticated business.
 - Limitations to validate: media messages are shown as message-type notices rather than downloaded previews; template component coverage is currently BODY text parameters; inbox polling refreshes every 15 seconds.
