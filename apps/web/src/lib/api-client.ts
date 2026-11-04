@@ -81,12 +81,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   try {
     const url = `${API_BASE_URL}${path}`;
+    const effectiveBranchId = branchId ?? useAuthStore.getState().activeBranchId;
     const requestInit: RequestInit = {
       ...rest,
       headers: {
         "Content-Type": "application/json",
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(branchId ? { "X-Branch-Id": branchId } : {}),
+        ...(effectiveBranchId ? { "X-Branch-Id": effectiveBranchId } : {}),
         ...(sensitiveAuthorization
           ? { "X-Sensitive-Authorization": sensitiveAuthorization }
           : {}),
@@ -142,11 +143,12 @@ export async function apiFetchBlob(
 
   try {
     const url = `${API_BASE_URL}${path}`;
+    const effectiveBranchId = branchId ?? useAuthStore.getState().activeBranchId;
     const requestInit: RequestInit = {
       ...rest,
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(branchId ? { "X-Branch-Id": branchId } : {}),
+        ...(effectiveBranchId ? { "X-Branch-Id": effectiveBranchId } : {}),
         ...(sensitiveAuthorization
           ? { "X-Sensitive-Authorization": sensitiveAuthorization }
           : {}),
