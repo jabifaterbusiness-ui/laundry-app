@@ -101,6 +101,12 @@ const MANAGEMENT: NavItem[] = [
     permission: "branches.view",
   },
   {
+    label: "Branch Sharing",
+    href: "/branches/sharing",
+    icon: "⇄",
+    permission: "branches.view",
+  },
+  {
     label: "Business Settings",
     href: "/business/settings",
     icon: "◆",

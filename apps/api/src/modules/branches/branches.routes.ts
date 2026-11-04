@@ -3,6 +3,11 @@ import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js"
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import {
+  listBranchResourceSharesController,
+  createBranchResourceShareController,
+  deleteBranchResourceShareController,
+} from "./branch-resource-sharing.controller.js";
+import {
   list,
   get,
   create,
@@ -23,6 +28,10 @@ branchesRouter.get(
   requirePermission("branches.view"),
   asyncHandler(list),
 );
+
+branchesRouter.get("/sharing", requirePermission("branches.view"), asyncHandler(listBranchResourceSharesController));
+branchesRouter.post("/sharing", requirePermission("branches.update"), asyncHandler(createBranchResourceShareController));
+branchesRouter.delete("/sharing/:id", requirePermission("branches.update"), asyncHandler(deleteBranchResourceShareController));
 
 branchesRouter.get(
   "/:branchId",
