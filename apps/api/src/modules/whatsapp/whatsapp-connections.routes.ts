@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
@@ -11,7 +11,7 @@ import {
 
 export const whatsappConnectionsRouter = Router();
 
-function businessId(req: Parameters<Parameters<typeof asyncHandler>[0]>[0]): string {
+function businessId(req: Request): string {
   const id = req.user?.businessId;
   if (!id) throw new AppError("This action requires an account scoped to a business", 403);
   return id;
