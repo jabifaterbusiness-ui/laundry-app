@@ -2939,6 +2939,7 @@ model WhatsAppWebhookEvent {
   wabaId             String?
   phoneNumberId      String?
   providerMessageId  String?
+  contactPhone       String?
   eventType          String
   payload            Json
   processedAt        DateTime?
@@ -2948,6 +2949,7 @@ model WhatsAppWebhookEvent {
   @@index([businessId, receivedAt])
   @@index([connectionId, receivedAt])
   @@index([providerMessageId])
+  @@index([businessId, contactPhone, eventType, receivedAt])
   @@index([processedAt, receivedAt])
   @@map("whatsapp_webhook_events")
 }
