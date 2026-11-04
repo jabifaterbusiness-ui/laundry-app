@@ -2949,7 +2949,7 @@ model WhatsAppWebhookEvent {
   @@index([businessId, receivedAt])
   @@index([connectionId, receivedAt])
   @@index([providerMessageId])
-  @@index([businessId, contactPhone, eventType, receivedAt])
+  @@index([businessId, contactPhone, eventType, receivedAt], map: "wa_events_business_contact_type_received_idx")
   @@index([processedAt, receivedAt])
   @@map("whatsapp_webhook_events")
 }
