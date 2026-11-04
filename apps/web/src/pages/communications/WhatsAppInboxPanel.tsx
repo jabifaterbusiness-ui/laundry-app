@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
-import { getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
+import { getApprovedWhatsAppTemplates, getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, sendWhatsAppTemplate, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
@@ -13,6 +13,9 @@ export function WhatsAppInboxPanel() {
   const [selectedPhone, setSelectedPhone] = useState("");
   const [draft, setDraft] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateLanguage, setTemplateLanguage] = useState("");
+  const [templateVariables, setTemplateVariables] = useState<string[]>([]);
   const conversationsQuery = useQuery({
     queryKey: ["whatsapp", "conversations"],
     queryFn: () => getWhatsAppConversations(accessToken),
@@ -20,10 +23,21 @@ export function WhatsAppInboxPanel() {
     refetchInterval: 15000,
   });
   const conversations = conversationsQuery.data?.data ?? [];
+  const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken), staleTime: 60000 });
+  const templates = templatesQuery.data?.data ?? [];
+  const selectedTemplate = templates.find((item) => item.name === templateName && item.language === templateLanguage) ?? templates[0] ?? null;
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
   const readMutation = useMutation({
     mutationFn: (customerId: string) => markWhatsAppConversationRead(customerId, accessToken),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }),
+  });
+  const templateMutation = useMutation({
+    mutationFn: () => {
+      if (!selected?.customerId || !selectedTemplate) throw new Error("Select a customer and an approved template.");
+      return sendWhatsAppTemplate({ customerId: selected.customerId, templateName: selectedTemplate.name, language: selectedTemplate.language, variables: templateVariables }, accessToken);
+    },
+    onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables([]); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }); },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send approved template."),
   });
   const sendMutation = useMutation({
     mutationFn: () => {
@@ -81,6 +95,28 @@ export function WhatsAppInboxPanel() {
                 </div>
                 {feedback ? <p role="status" style={{ color: sendMutation.isError ? "#b91c1c" : "#047857", fontSize: 13, marginBottom: 0 }}>{feedback}</p> : null}
               </form>
+              <details style={{ padding: "0 12px 12px" }}>
+                <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700 }}>Send an approved template (outside the 24-hour reply window)</summary>
+                {!selected.customerId ? <p style={{ color: "#b45309", fontSize: 13 }}>Link this phone number to a customer record before sending a template.</p> : null}
+                {templatesQuery.isLoading ? <p>Loading approved templates…</p> : null}
+                {templatesQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>Could not load templates from Meta. Check the WhatsApp connection.</p> : null}
+                {templates.length === 0 && !templatesQuery.isLoading && !templatesQuery.isError ? <p style={{ color: "#64748b", fontSize: 13 }}>No approved templates are available in this company’s WhatsApp account yet. Create and get a template approved in WhatsApp Manager first.</p> : null}
+                {selectedTemplate ? (
+                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                    <label style={{ display: "grid", gap: 4, fontSize: 13 }}>Approved template
+                      <select value={templateName + "|" + templateLanguage} onChange={(event) => { const [name, language] = event.target.value.split("|"); setTemplateName(name ?? ""); setTemplateLanguage(language ?? ""); const match = templates.find((item) => item.name === name && item.language === language); setTemplateVariables(Array(match?.bodyVariableCount ?? 0).fill("")); }} style={{ padding: 9, border: "1px solid #cbd5e1", borderRadius: 8 }}>
+                        {templates.map((item) => <option key={item.id} value={item.name + "|" + item.language}>{item.name} · {item.language} · {item.category}</option>)}
+                      </select>
+                    </label>
+                    {Array.from({ length: selectedTemplate.bodyVariableCount }, (_, index) => (
+                      <label key={index} style={{ display: "grid", gap: 4, fontSize: 13 }}>Body variable {index + 1}
+                        <input value={templateVariables[index] ?? ""} onChange={(event) => setTemplateVariables((current) => { const values = [...current]; values[index] = event.target.value; return values; })} maxLength={1024} placeholder={"Value for {{" + (index + 1) + "}}"} style={{ padding: 9, border: "1px solid #cbd5e1", borderRadius: 8 }} />
+                      </label>
+                    ))}
+                    <button type="button" disabled={!selected.customerId || templateMutation.isPending || templateVariables.length !== selectedTemplate.bodyVariableCount || templateVariables.some((value) => !value.trim())} onClick={() => templateMutation.mutate()} style={{ justifySelf: "start", background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{templateMutation.isPending ? "Sending template…" : "Send approved template"}</button>
+                  </div>
+                ) : null}
+              </details>
             </div>
           ) : null}
         </div>
