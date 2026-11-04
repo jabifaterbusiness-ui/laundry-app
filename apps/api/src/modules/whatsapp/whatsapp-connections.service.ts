@@ -39,6 +39,8 @@ export async function getWhatsAppConnectionStatus(businessId: string) {
   });
   return {
     configured: Boolean(config.receiptDelivery.whatsappAppId && config.receiptDelivery.whatsappEmbeddedSignupConfigId),
+    appId: config.receiptDelivery.whatsappAppId ?? null,
+    configurationId: config.receiptDelivery.whatsappEmbeddedSignupConfigId ?? null,
     connection,
   };
 }
