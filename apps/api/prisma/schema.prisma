@@ -178,6 +178,8 @@ model Business {
   subscriptionPayments         SubscriptionPayment[]
   paymentWebhookEvents         PaymentWebhookEvent[]
   backupSettings               BackupSettings?
+  whatsappConnection           WhatsAppBusinessConnection?
+  whatsappWebhookEvents        WhatsAppWebhookEvent[]
   backupSchedules              BackupSchedule[]
   backupConnections            BackupCloudConnection[]
   backupRuns                   BackupRun[]
@@ -2900,6 +2902,54 @@ model OrderStatusNotificationDelivery {
   @@index([businessId, deliveryStatus, createdAt])
   @@index([customerId, createdAt])
   @@map("order_status_notification_deliveries")
+}
+
+
+model WhatsAppBusinessConnection {
+  id                    String   @id @default(uuid())
+  businessId            String   @unique
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  wabaId                String
+  phoneNumberId         String   @unique
+  displayPhoneNumber    String?
+  verifiedName          String?
+  encryptedAccessToken  String   @db.Text
+  tokenExpiresAt        DateTime?
+  status                String   @default("CONNECTED")
+  connectedAt           DateTime @default(now())
+  lastVerifiedAt        DateTime?
+  lastError             String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  webhookEvents WhatsAppWebhookEvent[]
+
+  @@index([wabaId])
+  @@index([status, updatedAt])
+  @@map("whatsapp_business_connections")
+}
+
+model WhatsAppWebhookEvent {
+  id                 String   @id @default(uuid())
+  businessId         String?
+  business           Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  connectionId       String?
+  connection         WhatsAppBusinessConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  eventKey           String   @unique
+  wabaId             String?
+  phoneNumberId      String?
+  providerMessageId  String?
+  eventType          String
+  payload            Json
+  processedAt        DateTime?
+  processingError    String?  @db.Text
+  receivedAt         DateTime @default(now())
+
+  @@index([businessId, receivedAt])
+  @@index([connectionId, receivedAt])
+  @@index([providerMessageId])
+  @@index([processedAt, receivedAt])
+  @@map("whatsapp_webhook_events")
 }
 
 model UnpickedOrderReminderConfig {
