@@ -3,6 +3,7 @@ import { config } from "../../../config/index.js";
 import { logger } from "../../../lib/logger.js";
 import { prisma } from "../../../lib/prisma.js";
 import { decryptWhatsAppAccessToken } from "../../whatsapp/whatsapp-token-crypto.js";
+import { replayPendingWhatsAppStatusEvents } from "../../whatsapp/whatsapp-webhook.service.js";
 
 export interface SendWhatsAppReceiptInput {
   businessId?: string;
@@ -61,6 +62,7 @@ async function persistBusinessOutbound(input: { businessId?: string; to: string;
     await prisma.whatsAppWebhookEvent.create({
       data: { eventKey, businessId: input.businessId, contactPhone, eventType: "MESSAGE_SENT", providerMessageId: input.providerMessageId, payload },
     });
+    await replayPendingWhatsAppStatusEvents(input.providerMessageId);
   } catch {
     logger.warn({ businessId: input.businessId, providerMessageId: input.providerMessageId }, "WhatsApp message sent but inbox history could not be persisted");
   }
