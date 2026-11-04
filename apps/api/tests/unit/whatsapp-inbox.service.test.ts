@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  eventFindMany: vi.fn(),\n  eventFindFirst: vi.fn(),
+  eventFindMany: vi.fn(),
+  eventFindFirst: vi.fn(),
   eventCreate: vi.fn(),
   eventUpdateMany: vi.fn(),
   customerFindMany: vi.fn(),
@@ -26,7 +27,8 @@ import { listWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppCo
 describe("WhatsApp tenant inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.eventFindMany.mockResolvedValue([]);\n    mocks.eventFindFirst.mockResolvedValue({ payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) }, receivedAt: new Date(Date.now() - 60_000) });
+    mocks.eventFindMany.mockResolvedValue([]);
+    mocks.eventFindFirst.mockResolvedValue({ payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) }, receivedAt: new Date(Date.now() - 60_000) });
     mocks.eventCreate.mockResolvedValue({});
     mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
     mocks.customerFindMany.mockResolvedValue([]);
@@ -49,20 +51,20 @@ describe("WhatsApp tenant inbox", () => {
   });
 
   it("sends a reply only within the customer's 24-hour service window", async () => {
-    mocks.eventFindMany.mockResolvedValue([{
+    mocks.eventFindFirst.mockResolvedValue({
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) },
       receivedAt: new Date(Date.now() - 60_000),
-    }]);
+    });
     const result = await sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", body: "Thanks for messaging us" });
     expect(mocks.sendText).toHaveBeenCalledWith({ businessId: "business-1", to: "2348012345678", body: "Thanks for messaging us" });
     expect(result.status).toBe("SENT");
   });
 
   it("blocks free-form replies after the 24-hour service window", async () => {
-    mocks.eventFindMany.mockResolvedValue([{
+    mocks.eventFindFirst.mockResolvedValue({
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 25 * 60 * 60) },
       receivedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
-    }]);
+    });
     await expect(sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", body: "Hello again" }))
       .rejects.toThrow("24-hour customer-service window has expired");
     expect(mocks.sendText).not.toHaveBeenCalled();
