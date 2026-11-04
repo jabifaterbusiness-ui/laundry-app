@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { WhatsAppConnectionPanel } from "./WhatsAppConnectionPanel.js";
 import {
   createAnnouncement, deleteCustomerGroup, deleteStatusRule, getReminderConfig, listCustomerGroups, saveCustomerGroup,
   listCommunicationDeliveries, listStatusRules, listUnpickedOrders,
@@ -170,6 +171,7 @@ export function CommunicationsPage() {
 
   return (
     <main style={{ maxWidth: 1180, margin: "0 auto", padding: "1.25rem" }}>
+      <WhatsAppConnectionPanel />
       <header style={{ marginBottom: "1.5rem" }}>
         <p style={{ color: "#0f766e", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>Customer engagement</p>
         <h1>Announcements & Notifications</h1>
