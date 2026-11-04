@@ -144,7 +144,7 @@ export async function sendWhatsAppConversationReply(input: {
   const lastInboundAt = lastInbound?.payload && (lastInbound.payload as MessagePayload).timestamp
     ? Number((lastInbound.payload as MessagePayload).timestamp) * 1000
     : lastInbound?.receivedAt.getTime() ?? 0;
-  if (!lastInboundAt || Date.now() - lastInboundAt > 24 * 60 * 60 * 1000) {
+  if (!Number.isFinite(lastInboundAt) || !lastInboundAt || lastInboundAt > Date.now() + 5 * 60 * 1000 || Date.now() - lastInboundAt > 24 * 60 * 60 * 1000) {
     throw new AppError("The 24-hour customer-service window has expired. Send an approved WhatsApp template to restart the conversation.", 409);
   }
 
