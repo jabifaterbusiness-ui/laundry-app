@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { config } from "../../../config/index.js";
+import { logger } from "../../../lib/logger.js";
 import { prisma } from "../../../lib/prisma.js";
 import { decryptWhatsAppAccessToken } from "../../whatsapp/whatsapp-token-crypto.js";
 
@@ -41,6 +43,23 @@ async function resolveCredentials(businessId?: string) {
   return { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken };
 }
 
+async function persistBusinessOutbound(input: { businessId?: string; to: string; providerMessageId: string; type: "text" | "image"; body?: string }) {
+  if (!input.businessId) return;
+  const contactPhone = input.to.replace(/\D/g, "");
+  const payload = {
+    id: input.providerMessageId, to: input.to, timestamp: String(Math.floor(Date.now() / 1000)),
+    type: input.type,
+    ...(input.type === "text" ? { text: { body: input.body ?? "" } } : { image: { caption: input.body ?? "" }, text: { body: input.body ?? "Image sent" } }),
+  };
+  const eventKey = createHash("sha256").update("MESSAGE_SENT:" + input.businessId + ":" + input.providerMessageId).digest("hex");
+  try {
+    await prisma.whatsAppWebhookEvent.create({
+      data: { eventKey, businessId: input.businessId, contactPhone, eventType: "MESSAGE_SENT", providerMessageId: input.providerMessageId, payload },
+    });
+  } catch {
+    logger.warn({ businessId: input.businessId, providerMessageId: input.providerMessageId }, "WhatsApp message sent but inbox history could not be persisted");
+  }
+}
 export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Promise<{ id: string }> {
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = await resolveCredentials(input.businessId);
   const mediaForm = new FormData();
@@ -76,6 +95,7 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
   }
   const id = messagePayload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
+  await persistBusinessOutbound({ businessId: input.businessId, to: input.to, providerMessageId: id, type: "image", body: input.caption });
   return { id };
 }
 
@@ -104,5 +124,6 @@ export async function sendWhatsAppText(input: SendWhatsAppTextInput): Promise<{ 
   }
   const id = payload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
+  await persistBusinessOutbound({ businessId: input.businessId, to: input.to, providerMessageId: id, type: "text", body: input.body });
   return { id };
 }
