@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { normalizeWhatsAppRecipient, sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 
 type MessagePayload = {
   id?: string;
@@ -65,7 +65,7 @@ export async function listWhatsAppConversations(businessId: string) {
 
   const phones = [...new Set(messages.map((message) => digits(message.phone)).filter(Boolean))];
   const customers = phones.length
-    ? await prisma.customer.findMany({ where: { businessId, phone: { in: [...phones, ...phones.map((phone) => "+" + phone)] } }, select: { id: true, name: true, phone: true } })
+    ? await prisma.customer.findMany({ where: { businessId, phone: { in: [...phones, ...phones.map((phone) => "+" + phone), ...phones.filter((phone) => phone.startsWith("234") && phone.length === 13).map((phone) => "0" + phone.slice(3))] } }, select: { id: true, name: true, phone: true } })
     : [];
   const customerByPhone = new Map(customers.map((customer) => [digits(customer.phone), customer]));
 
