@@ -61,6 +61,21 @@ describe("WhatsApp tenant inbox", () => {
     expect(result.status).toBe("SENT");
   });
 
+  it("allows replies to first-time contacts that are not saved as customers", async () => {
+    mocks.eventFindFirst.mockResolvedValue({
+      payload: { from: "2348098765432", timestamp: String(Math.floor(Date.now() / 1000) - 60) },
+      receivedAt: new Date(Date.now() - 60_000),
+    });
+    const result = await sendWhatsAppConversationReply({
+      businessId: "business-1", phone: "+2348098765432", body: "Hello, how can we help?",
+    });
+    expect(mocks.customerFindFirst).not.toHaveBeenCalled();
+    expect(mocks.sendText).toHaveBeenCalledWith({
+      businessId: "business-1", to: "2348098765432", body: "Hello, how can we help?",
+    });
+    expect(result.customerId).toBeNull();
+  });
+
   it("blocks free-form replies after the 24-hour service window", async () => {
     mocks.eventFindFirst.mockResolvedValue({
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 25 * 60 * 60) },
