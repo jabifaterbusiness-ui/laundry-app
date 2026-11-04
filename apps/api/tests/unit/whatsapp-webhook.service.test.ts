@@ -36,7 +36,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mocks.upsert.mockReset().mockResolvedValue({ id: "event-1", processedAt: null });
     mocks.updateEvent.mockReset().mockResolvedValue({});
-    mocks.findUnique.mockReset().mockResolvedValue(null);
+    mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1" });
     mocks.findMany.mockReset().mockResolvedValue([]);
   });
 
@@ -64,15 +64,15 @@ describe("processWhatsAppWebhook", () => {
     expect(mocks.upsert).toHaveBeenCalledTimes(3);
     expect(mocks.updateMany).toHaveBeenCalledTimes(3);
     expect(mocks.updateMany).toHaveBeenNthCalledWith(1, {
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-delivered", status: { in: ["PENDING", "SENT", "DELIVERED"] } },
+      where: { businessId: "business-1", channel: "WHATSAPP", providerMessageId: "wamid-delivered", status: { in: ["PENDING", "SENT", "DELIVERED"] } },
       data: { status: "DELIVERED", errorMessage: null },
     });
     expect(mocks.updateMany).toHaveBeenNthCalledWith(2, {
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-read", status: { in: ["PENDING", "SENT", "DELIVERED", "READ"] } },
+      where: { businessId: "business-1", channel: "WHATSAPP", providerMessageId: "wamid-read", status: { in: ["PENDING", "SENT", "DELIVERED", "READ"] } },
       data: { status: "READ", errorMessage: null },
     });
     expect(mocks.updateMany).toHaveBeenNthCalledWith(3, {
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-failed", status: { in: ["PENDING", "SENT"] } },
+      where: { businessId: "business-1", channel: "WHATSAPP", providerMessageId: "wamid-failed", status: { in: ["PENDING", "SENT"] } },
       data: { status: "FAILED", errorMessage: "code 131026: Message undeliverable: Recipient unavailable" },
     });
     expect(mocks.updateEvent).toHaveBeenCalledTimes(3);
@@ -96,7 +96,7 @@ describe("processWhatsAppWebhook", () => {
     const body = Buffer.from(JSON.stringify(payload));
     await processWhatsAppWebhook(body, makeSignature(body));
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-already-delivered", status: { in: ["PENDING", "SENT"] } },
+      where: { businessId: "business-1", channel: "WHATSAPP", providerMessageId: "wamid-already-delivered", status: { in: ["PENDING", "SENT"] } },
       data: { status: "FAILED", errorMessage: "code 131026: Message undeliverable" },
     });
   });
@@ -105,7 +105,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateMany.mockResolvedValue({ count: 0 });
     const payload = {
       object: "whatsapp_business_account",
-      entry: [{ changes: [{ value: { statuses: [{ id: "wamid-race", status: "delivered" }] } }] }],
+      entry: [{ changes: [{ value: { metadata: { phone_number_id: "phone-12345" }, statuses: [{ id: "wamid-race", status: "delivered" }] } }] }],
     };
     const body = Buffer.from(JSON.stringify(payload));
     const result = await processWhatsAppWebhook(body, makeSignature(body));
@@ -121,7 +121,7 @@ describe("processWhatsAppWebhook", () => {
     }]);
     await replayPendingWhatsAppStatusEvents("wamid-race");
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-race", status: { in: ["PENDING", "SENT", "DELIVERED"] } },
+      where: { businessId: "business-1", channel: "WHATSAPP", providerMessageId: "wamid-race", status: { in: ["PENDING", "SENT", "DELIVERED"] } },
       data: { status: "DELIVERED", errorMessage: null },
     });
     expect(mocks.updateEvent).toHaveBeenCalledWith({
