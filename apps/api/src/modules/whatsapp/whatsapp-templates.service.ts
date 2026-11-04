@@ -39,10 +39,15 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     // The inbox composer currently supports BODY text variables. Hide templates
     // requiring dynamic header or URL-button parameters rather than offering
     // a send action that Meta would reject.
-    .filter((template) => !(template.components ?? []).some((component) =>
-      (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)))) ||
-      (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => typeof button.url === "string" && /\{\{\s*\d+\s*\}\}/.test(button.url)))
-    ))
+    .filter((template) => {
+      const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
+      const unsupportedNamedBodyVariables = body.includes("{{") && !/\\{\\{\\s*\\d+\\s*\\}\\}/.test(body);
+      const unsupportedComponents = (template.components ?? []).some((component) =>
+        (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(component.text)))) ||
+        (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => button.type === "URL" || button.type === "OTP" || (typeof button.url === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(button.url))))
+      );
+      return !unsupportedNamedBodyVariables && !unsupportedComponents;
+    })
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
       bodyVariableCount: bodyVariableCount(template),
