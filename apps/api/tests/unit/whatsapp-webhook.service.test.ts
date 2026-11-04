@@ -47,8 +47,39 @@ describe("processWhatsAppWebhook", () => {
       data: { status: "READ", errorMessage: null },
     });
     expect(updateMany).toHaveBeenNthCalledWith(3, {
-      where: { channel: "WHATSAPP", providerMessageId: "wamid-failed", status: { in: ["PENDING", "SENT", "DELIVERED"] } },
+      where: { channel: "WHATSAPP", providerMessageId: "wamid-failed", status: { in: ["PENDING", "SENT"] } },
       data: { status: "FAILED", errorMessage: "code 131026: Message undeliverable: Recipient unavailable" },
+    });
+  });
+
+  it("does not let a late failure callback downgrade a delivered message", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{
+        changes: [{
+          value: {
+            statuses: [{
+              id: "wamid-already-delivered",
+              status: "failed",
+              errors: [{ code: 131026, title: "Message undeliverable" }],
+            }],
+          },
+        }],
+      }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    await processWhatsAppWebhook(body, makeSignature(body));
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        channel: "WHATSAPP",
+        providerMessageId: "wamid-already-delivered",
+        status: { in: ["PENDING", "SENT"] },
+      },
+      data: {
+        status: "FAILED",
+        errorMessage: "code 131026: Message undeliverable",
+      },
     });
   });
 
