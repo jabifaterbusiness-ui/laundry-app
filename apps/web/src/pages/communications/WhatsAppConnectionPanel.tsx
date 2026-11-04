@@ -97,7 +97,7 @@ export function WhatsAppConnectionPanel() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (!event.origin.endsWith("facebook.com") || typeof event.data !== "string") return;
+      let originHost = "";\n      try { originHost = new URL(event.origin).hostname; } catch { return; }\n      if (!(originHost === "facebook.com" || originHost.endsWith(".facebook.com")) || typeof event.data !== "string") return;
       let message: { type?: string; event?: string; data?: { waba_id?: string; phone_number_id?: string } };
       try { message = JSON.parse(event.data); } catch { return; }
       if (message.type !== "WA_EMBEDDED_SIGNUP") return;
