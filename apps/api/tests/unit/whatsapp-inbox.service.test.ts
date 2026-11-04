@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   eventFindMany: vi.fn(),
-  eventCreate: vi.fn(),\n  eventUpdateMany: vi.fn(),
+  eventCreate: vi.fn(),
+  eventUpdateMany: vi.fn(),
   customerFindMany: vi.fn(),
   customerFindFirst: vi.fn(),
   connectionFindUnique: vi.fn(),
@@ -26,7 +27,8 @@ describe("WhatsApp tenant inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.eventFindMany.mockResolvedValue([]);
-    mocks.eventCreate.mockResolvedValue({});\n    mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.eventCreate.mockResolvedValue({});
+    mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
     mocks.customerFindMany.mockResolvedValue([]);
     mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", name: "Ada", phone: "2348012345678" });
     mocks.connectionFindUnique.mockResolvedValue({ status: "CONNECTED" });
@@ -72,6 +74,7 @@ describe("WhatsApp tenant inbox", () => {
   it("marks only this tenant customer's inbound messages as read", async () => {
     mocks.eventFindMany.mockResolvedValue([{ id: "in-1", payload: { from: "2348012345678" } }]);
     const result = await markWhatsAppConversationRead({ businessId: "business-1", customerId: "customer-1" });
-    expect(result.markedRead).toBe(1);\n    expect(mocks.eventUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "business-1", id: { in: ["in-1"] } }) }));
+    expect(result.markedRead).toBe(1);
+    expect(mocks.eventUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "business-1", id: { in: ["in-1"] } }) }));
   });
 });
