@@ -24,17 +24,16 @@ export interface WhatsAppConversation {
 export async function getWhatsAppConversations(accessToken: string | null) {
   return apiFetch<{ data: WhatsAppConversation[] }>("/whatsapp/inbox/conversations", { accessToken });
 }
-export async function sendWhatsAppReply(customerId: string, body: string, accessToken: string | null) {
-  return apiFetch<{ id: string; customerId: string; customerName: string; phone: string; body: string; sentAt: string; status: string }>(
-    `/whatsapp/inbox/conversations/${encodeURIComponent(customerId)}/replies`,
-    { method: "POST", accessToken, body: JSON.stringify({ body }) },
+export async function sendWhatsAppReply(input: { customerId?: string | null; phone: string; body: string }, accessToken: string | null) {
+  return apiFetch<{ id: string; customerId: string | null; customerName: string; phone: string; body: string; sentAt: string; status: string }>(
+    "/whatsapp/inbox/conversations/replies",
+    { method: "POST", accessToken, body: JSON.stringify(input) },
   );
 }
-
-export async function markWhatsAppConversationRead(customerId: string, accessToken: string | null) {
+export async function markWhatsAppConversationRead(input: { customerId?: string | null; phone: string }, accessToken: string | null) {
   return apiFetch<{ markedRead: number }>(
-    `/whatsapp/inbox/conversations/${encodeURIComponent(customerId)}/read`,
-    { method: "POST", accessToken },
+    "/whatsapp/inbox/conversations/read",
+    { method: "POST", accessToken, body: JSON.stringify(input) },
   );
 }
 
@@ -48,7 +47,7 @@ export interface ApprovedWhatsAppTemplate {
 export async function getApprovedWhatsAppTemplates(accessToken: string | null) {
   return apiFetch<{ data: ApprovedWhatsAppTemplate[] }>("/whatsapp/inbox/templates", { accessToken });
 }
-export async function sendWhatsAppTemplate(input: { customerId: string; templateName: string; language: string; variables: string[] }, accessToken: string | null) {
+export async function sendWhatsAppTemplate(input: { customerId?: string | null; phone: string; templateName: string; language: string; variables: string[] }, accessToken: string | null) {
   return apiFetch<{ providerMessageId: string; customerId: string; phone: string; template: string; status: string }>(
     "/whatsapp/inbox/templates/send",
     { method: "POST", accessToken, body: JSON.stringify(input) },
