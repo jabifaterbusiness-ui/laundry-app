@@ -1,16 +1,23 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
-export async function listPricingRules(businessId: string) {
+export async function listPricingRules(businessId: string, branchId: string, userId: string) {
+  const [discountScope, taxScope] = await Promise.all([
+    getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }),
+    getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" }),
+  ]);
   const [adjustments, taxes] = await Promise.all([
-    prisma.priceAdjustment.findMany({ where: { businessId }, include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } }, orderBy: { name: "asc" } }),
-    prisma.taxRule.findMany({ where: { businessId }, orderBy: { name: "asc" } }),
+    prisma.priceAdjustment.findMany({ where: { businessId, OR: [{ branchId: null }, { branchId: { in: discountScope.ownerBranchIds } }, { id: { in: discountScope.resourceIds } }] }, include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } }, orderBy: { name: "asc" } }),
+    prisma.taxRule.findMany({ where: { businessId, OR: [{ branchId: null }, { branchId: { in: taxScope.ownerBranchIds } }, { id: { in: taxScope.resourceIds } }] }, orderBy: { name: "asc" } }),
   ]);
   return { adjustments, taxes };
 }
 
 export async function createPriceAdjustment(input: {
   businessId: string;
+  branchId: string;
+  userId: string;
   name: string;
   percentage: number;
   targetScope?: "MANUAL" | "CUSTOMER" | "GROUP" | "ALL_CUSTOMERS";
@@ -22,6 +29,8 @@ export async function createPriceAdjustment(input: {
   excludedServiceIds?: string[];
 }) {
   const targetScope = input.targetScope ?? "MANUAL";
+  const customerScope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "CUSTOMERS" });
+  const serviceScope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "SERVICES" });
   if (!Number.isFinite(input.percentage) || input.percentage < -100 || input.percentage > 1000) {
     throw new AppError("Adjustment percentage must be between -100 and 1000", 422);
   }
@@ -52,13 +61,13 @@ export async function createPriceAdjustment(input: {
   const excludedServiceIds = [...new Set(input.excludedServiceIds ?? [])];
   const [customer, group, services] = await Promise.all([
     input.customerId
-      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId }, select: { id: true } })
+      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve(null),
     input.groupId
       ? prisma.customerGroup.findFirst({ where: { id: input.groupId, businessId: input.businessId }, select: { id: true } })
       : Promise.resolve(null),
     excludedServiceIds.length
-      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds } }, select: { id: true } })
+      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds }, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: serviceScope.ownerBranchIds } }, { id: { in: serviceScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve([]),
   ]);
   if (input.customerId && !customer) throw new AppError("Selected customer is unavailable", 404);
@@ -68,6 +77,7 @@ export async function createPriceAdjustment(input: {
     return await prisma.priceAdjustment.create({
       data: {
         businessId: input.businessId,
+        branchId: input.branchId,
         name: input.name,
         percentage: input.percentage,
         targetScope,
@@ -88,7 +98,11 @@ export async function createPriceAdjustment(input: {
   }
 }
 
-export async function setPriceAdjustmentActive(id: string, businessId: string, isActive: boolean) {
+export async function setPriceAdjustmentActive(id: string, businessId: string, branchId: string, userId: string, isActive: boolean) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" });
+  const existing = await prisma.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+  if (!existing) throw new AppError("Price adjustment not found", 404);
+  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id });
   const result = await prisma.priceAdjustment.updateMany({
     where: { id, businessId },
     data: { isActive },
@@ -100,13 +114,17 @@ export async function setPriceAdjustmentActive(id: string, businessId: string, i
   });
 }
 
-export async function deletePriceAdjustment(id: string, businessId: string) {
+export async function deletePriceAdjustment(id: string, businessId: string, branchId: string, userId: string) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" });
+  const existing = await prisma.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+  if (!existing) throw new AppError("Price adjustment not found", 404);
+  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id });
   const result = await prisma.priceAdjustment.deleteMany({ where: { id, businessId } });
   if (!result.count) throw new AppError("Price adjustment not found", 404);
 }
 
 export async function createTaxRule(input: {
-  businessId: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
+  businessId: string; branchId: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
   treatment: "ADDITIVE" | "WITHHOLDING"; enabledByDefault: boolean; allowWithOtherTaxes: boolean;
 }) {
   if (!Number.isFinite(input.value) || input.value < 0 || (input.kind === "PERCENTAGE" && input.value > 1000)) {
@@ -122,7 +140,11 @@ export async function createTaxRule(input: {
   }
 }
 
-export async function deleteTaxRule(id: string, businessId: string) {
+export async function deleteTaxRule(id: string, businessId: string, branchId: string, userId: string) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" });
+  const existing = await prisma.taxRule.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+  if (!existing) throw new AppError("Tax rule not found", 404);
+  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "TAX_RULES", ownerBranchId: existing.branchId, resourceId: id });
   const result = await prisma.taxRule.deleteMany({ where: { id, businessId } });
   if (!result.count) throw new AppError("Tax rule not found", 404);
 }
