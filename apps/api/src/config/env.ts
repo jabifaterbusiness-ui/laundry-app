@@ -39,6 +39,7 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
   WHATSAPP_APP_SECRET: z.string().min(1).optional(),
+  WHATSAPP_TOKEN_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/, "WHATSAPP_TOKEN_ENCRYPTION_KEY must be exactly 64 hexadecimal characters").optional(),
 
   // --- Subscription payment providers ---
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
