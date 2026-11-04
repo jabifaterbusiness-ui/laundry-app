@@ -52,7 +52,7 @@ async function persistBusinessOutbound(input: { businessId?: string; to: string;
   if (!input.businessId) return;
   const contactPhone = input.to.replace(/\D/g, "");
   const payload = {
-    id: input.providerMessageId, to: input.to, timestamp: String(Math.floor(Date.now() / 1000)),
+    id: input.providerMessageId, to: normalizeWhatsAppRecipient(input.to), timestamp: String(Math.floor(Date.now() / 1000)),
     type: input.type,
     ...(input.type === "text" ? { text: { body: input.body ?? "" } } : { image: { caption: input.body ?? "" }, text: { body: input.body ?? "Image sent" } }),
   };
@@ -100,7 +100,7 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
   }
   const id = messagePayload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
-  await persistBusinessOutbound({ businessId: input.businessId, to: input.to, providerMessageId: id, type: "image", body: input.caption });
+  await persistBusinessOutbound({ businessId: input.businessId, to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "image", body: input.caption });
   return { id };
 }
 
@@ -118,7 +118,7 @@ export async function sendWhatsAppText(input: SendWhatsAppTextInput): Promise<{ 
       method: "POST",
       headers: { Authorization: `Bearer ${whatsappAccessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        messaging_product: "whatsapp", recipient_type: "individual", to: input.to,
+        messaging_product: "whatsapp", recipient_type: "individual", to: normalizeWhatsAppRecipient(input.to),
         type: "text", text: { preview_url: false, body: input.body },
       }),
     },
@@ -129,6 +129,6 @@ export async function sendWhatsAppText(input: SendWhatsAppTextInput): Promise<{ 
   }
   const id = payload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
-  await persistBusinessOutbound({ businessId: input.businessId, to: input.to, providerMessageId: id, type: "text", body: input.body });
+  await persistBusinessOutbound({ businessId: input.businessId, to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "text", body: input.body });
   return { id };
 }
