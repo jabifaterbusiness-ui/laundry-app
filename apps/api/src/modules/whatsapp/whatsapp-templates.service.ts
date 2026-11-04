@@ -34,6 +34,13 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
   if (!response.ok) throw new AppError(payload.error?.message ?? "Unable to load WhatsApp templates from Meta", 502);
   return (payload.data ?? [])
     .filter((template) => template.status === "APPROVED")
+    // The inbox composer currently supports BODY text variables. Hide templates
+    // requiring dynamic header or URL-button parameters rather than offering
+    // a send action that Meta would reject.
+    .filter((template) => !(template.components ?? []).some((component) =>
+      (component.type === "HEADER" && typeof component.text === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(component.text)) ||
+      (component.type === "BUTTONS" && typeof component.text === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(component.text))
+    ))
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
       bodyVariableCount: bodyVariableCount(template),
