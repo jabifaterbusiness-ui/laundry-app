@@ -1053,6 +1053,7 @@ function OrderManagementContent({
             <tr>
               <th>QTY</th>
               <th>Item</th>
+              <th>Colours</th>
               <th>PCS</th>
               <th>Unit Price</th>
               <th>Total</th>
@@ -1063,6 +1064,7 @@ function OrderManagementContent({
               <tr key={item.id}>
                 <td>{item.quantity}</td>
                 <td>{item.serviceName}</td>
+                <td>{(item.colors ?? []).length ? item.colors.join(", ") : "—"}</td>
                 <td>{item.totalPieces}</td>
                 <td>{formatMoney(item.unitPrice)}</td>
                 <td>{formatMoney(item.lineTotal)}</td>
@@ -1070,6 +1072,34 @@ function OrderManagementContent({
             ))}
           </tbody>
         </table>
+
+        {invoiceQuery.isLoading && <p role="status">Loading invoice financial breakdown...</p>}
+        {invoiceQuery.isError && <p role="alert">Unable to load the invoice financial breakdown.</p>}
+        {invoiceQuery.data && (
+          <section aria-label="Order financial breakdown" style={{ marginTop: 18, padding: 16, border: "1px solid #d8dee8", borderRadius: 12, display: "grid", gap: 9, maxWidth: 620 }}>
+            <h3 style={{ margin: 0 }}>Financial breakdown</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span>Service subtotal</span><strong>{formatMoney(invoiceQuery.data.subtotal)}</strong></div>
+            {(invoiceQuery.data.appliedAdjustments ?? []).map((adjustment) => (
+              <div key={adjustment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{adjustment.name} ({adjustment.percentage > 0 ? "+" : ""}{adjustment.percentage}%)</span>
+                <strong>{adjustment.amount < 0 ? "−" : adjustment.amount > 0 ? "+" : ""}{formatMoney(Math.abs(adjustment.amount))}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span>Adjusted taxable amount</span><strong>{formatMoney(invoiceQuery.data.adjustedSubtotal)}</strong></div>
+            {(invoiceQuery.data.appliedTaxes ?? []).map((tax) => (
+              <div key={tax.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{tax.name} ({tax.kind === "PERCENTAGE" ? tax.value + "%" : "Fixed"}) · {tax.treatment === "WITHHOLDING" ? "Withheld" : "Added"}</span>
+                <strong>{tax.treatment === "WITHHOLDING" ? "−" : "+"}{formatMoney(tax.amount)}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px solid #d8dee8", paddingTop: 8 }}>
+              <span>Adjustment total</span><strong>{formatMoney(invoiceQuery.data.adjustmentTotal)}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "2px solid #111827", paddingTop: 10, fontSize: 18 }}>
+              <strong>Total amount</strong><strong>{formatMoney(invoiceQuery.data.totalAmount)}</strong>
+            </div>
+          </section>
+        )}
       </section>
 
       )}

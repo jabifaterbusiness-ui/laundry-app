@@ -662,6 +662,7 @@ export function InvoicesPage() {
               <tr>
                 <th>QTY</th>
                 <th>Item</th>
+                <th>Colours</th>
                 <th>PCS</th>
                 <th>Unit Price</th>
                 <th>Total Price</th>
@@ -673,6 +674,7 @@ export function InvoicesPage() {
                 <tr key={item.id}>
                   <td>{item.quantity}</td>
                   <td>{item.itemName}</td>
+                  <td>{(item.colors ?? []).length ? item.colors.join(", ") : "—"}</td>
                   <td>{item.totalPieces}</td>
                   <td>{formatMoney(item.unitPrice)}</td>
                   <td>{formatMoney(item.totalPrice)}</td>

@@ -15,6 +15,7 @@ interface AuthState {
   sensitiveAuthorization: string | null;
   sensitiveAuthorizationExpiresAt: string | null;
   setSession: (session: { user: AuthenticatedUser; accessToken: string; refreshToken: string }) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   setUser: (user: AuthenticatedUser) => void;
   setActiveBranch: (branchId: string | null) => void;
   setSensitiveAuthorization: (authorization: {
@@ -39,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
       sensitiveAuthorizationExpiresAt: null,
 
       setUser: (user) => set({ user }),
+
+      setTokens: ({ accessToken, refreshToken }) => set({ accessToken, refreshToken }),
 
       setSession: ({ user, accessToken, refreshToken }) =>
         set({
