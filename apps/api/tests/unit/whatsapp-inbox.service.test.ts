@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   eventFindMany: vi.fn(),
-  eventCreate: vi.fn(),
+  eventCreate: vi.fn(),\n  eventUpdateMany: vi.fn(),
   customerFindMany: vi.fn(),
   customerFindFirst: vi.fn(),
   connectionFindUnique: vi.fn(),
@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
-    whatsAppWebhookEvent: { findMany: mocks.eventFindMany, create: mocks.eventCreate },
+    whatsAppWebhookEvent: { findMany: mocks.eventFindMany, create: mocks.eventCreate, updateMany: mocks.eventUpdateMany },
     customer: { findMany: mocks.customerFindMany, findFirst: mocks.customerFindFirst },
     whatsAppBusinessConnection: { findUnique: mocks.connectionFindUnique },
   },
@@ -26,7 +26,7 @@ describe("WhatsApp tenant inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.eventFindMany.mockResolvedValue([]);
-    mocks.eventCreate.mockResolvedValue({});
+    mocks.eventCreate.mockResolvedValue({});\n    mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
     mocks.customerFindMany.mockResolvedValue([]);
     mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", name: "Ada", phone: "2348012345678" });
     mocks.connectionFindUnique.mockResolvedValue({ status: "CONNECTED" });
@@ -72,6 +72,6 @@ describe("WhatsApp tenant inbox", () => {
   it("marks only this tenant customer's inbound messages as read", async () => {
     mocks.eventFindMany.mockResolvedValue([{ id: "in-1", payload: { from: "2348012345678" } }]);
     const result = await markWhatsAppConversationRead({ businessId: "business-1", customerId: "customer-1" });
-    expect(result.markedRead).toBe(1);
+    expect(result.markedRead).toBe(1);\n    expect(mocks.eventUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "business-1", id: { in: ["in-1"] } }) }));
   });
 });
