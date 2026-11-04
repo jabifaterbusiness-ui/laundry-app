@@ -91,7 +91,7 @@ async function processStatus(status: WhatsAppStatus) {
     !Object.prototype.hasOwnProperty.call(allowedPreviousStatuses, status.status)
   ) return false;
 
-  const nextStatus = status.status;
+  const nextStatus = status.status.toUpperCase();
   await prisma.communicationDelivery.updateMany({
     where: {
       channel: "WHATSAPP",
