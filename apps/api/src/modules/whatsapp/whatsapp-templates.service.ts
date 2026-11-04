@@ -68,12 +68,13 @@ export async function sendApprovedWhatsAppTemplate(input: {
     if (!customer) throw new AppError("Customer not found in this business", 404);
     recipient = normalizeWhatsAppRecipient(customer.phone);
     customerId = customer.id;
-  } else {
-    const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
-      where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
-      select: { id: true },
-    });
-    if (!priorInbound) throw new AppError("This number has not contacted this business on WhatsApp. Add it as a customer and confirm consent before sending a template.", 422);
+  }
+  const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
+    where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+    select: { id: true },
+  });
+  if (!priorInbound) {
+    throw new AppError("A customer-initiated WhatsApp conversation is required before sending a template from this inbox.", 422);
   }
 
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
