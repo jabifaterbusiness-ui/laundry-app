@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   updateEvent: vi.fn(),
   findUnique: vi.fn(),
   findMany: vi.fn(),
+  findFirst: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -17,6 +18,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       upsert: mocks.upsert,
       update: mocks.updateEvent,
       findMany: mocks.findMany,
+      findFirst: mocks.findFirst,
     },
   },
 }));
@@ -38,6 +40,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateEvent.mockReset().mockResolvedValue({});
     mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1" });
     mocks.findMany.mockReset().mockResolvedValue([]);
+    mocks.findFirst.mockReset().mockResolvedValue(null);
   });
 
   it("records delivered, read, and failed statuses against provider message IDs", async () => {
