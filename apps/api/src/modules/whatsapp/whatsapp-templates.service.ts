@@ -50,7 +50,7 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
 }
 
 export async function sendApprovedWhatsAppTemplate(input: {
-  businessId: string; customerId?: string; phone: string; templateName: string; language: string; variables: string[];
+  businessId: string; customerId?: string | null; phone: string; templateName: string; language: string; variables: string[];
 }) {
   const connection = await getConnection(input.businessId);
   let recipient = normalizeWhatsAppRecipient(input.phone);
