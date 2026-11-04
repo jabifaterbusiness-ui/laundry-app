@@ -62,7 +62,7 @@ const MANAGEMENT: NavItem[] = [
     label: "Customer Communications",
     href: "/communications",
     icon: "✉",
-    permissionsAny: ["customers.update", "orders.change_status"],
+    permissionsAny: ["customers.view", "customers.update", "orders.change_status"],
   },
   {
     label: "Services & Price List",
