@@ -51,14 +51,27 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
 }
 
 export async function sendApprovedWhatsAppTemplate(input: {
-  businessId: string; customerId: string; templateName: string; language: string; variables: string[];
+  businessId: string; customerId?: string; phone: string; templateName: string; language: string; variables: string[];
 }) {
   const connection = await getConnection(input.businessId);
-  const customer = await prisma.customer.findFirst({
-    where: { id: input.customerId, businessId: input.businessId },
-    select: { id: true, name: true, phone: true },
-  });
-  if (!customer) throw new AppError("Customer not found in this business", 404);
+  let recipient = normalizeWhatsAppRecipient(input.phone);
+  let customerId: string | null = null;
+  if (input.customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { id: true, phone: true },
+    });
+    if (!customer) throw new AppError("Customer not found in this business", 404);
+    recipient = normalizeWhatsAppRecipient(customer.phone);
+    customerId = customer.id;
+  } else {
+    const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
+      where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+      select: { id: true },
+    });
+    if (!priorInbound) throw new AppError("This number has not contacted this business on WhatsApp. Add it as a customer and confirm consent before sending a template.", 422);
+  }
+
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
   const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
   if (!template) throw new AppError("Choose an approved WhatsApp template belonging to this business", 422);
@@ -83,18 +96,18 @@ export async function sendApprovedWhatsAppTemplate(input: {
   if (!response.ok || !providerMessageId) throw new AppError(result.error?.message ?? "WhatsApp template message could not be sent", 502);
 
   const payload = {
-    id: providerMessageId, to: customer.phone, timestamp: String(Math.floor(Date.now() / 1000)),
+    id: providerMessageId, to: recipient, timestamp: String(Math.floor(Date.now() / 1000)),
     type: "template", template: { name: template.name, language: { code: template.language } },
     text: { body: `Template: ${template.name}` },
   };
   const eventKey = createHash("sha256").update(`MESSAGE_SENT:${input.businessId}:${providerMessageId}`).digest("hex");
   try {
     await prisma.whatsAppWebhookEvent.create({
-      data: { eventKey, businessId: input.businessId, contactPhone: normalizeWhatsAppRecipient(customer.phone), eventType: "MESSAGE_SENT", providerMessageId, payload },
+      data: { eventKey, businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_SENT", providerMessageId, payload },
     });
     await replayPendingWhatsAppStatusEvents(providerMessageId);
   } catch {
     logger.warn({ businessId: input.businessId, providerMessageId }, "WhatsApp template sent but inbox history could not be persisted");
   }
-  return { providerMessageId, customerId: customer.id, phone: customer.phone, template: template.name, status: "SENT" };
+  return { providerMessageId, customerId, phone: recipient, template: template.name, status: "SENT" };
 }
