@@ -40,7 +40,7 @@ export function WhatsAppInboxPanel() {
       if (!selected?.customerId || !selectedTemplate) throw new Error("Select a customer and an approved template.");
       return sendWhatsAppTemplate({ customerId: selected.customerId, templateName: selectedTemplate.name, language: selectedTemplate.language, variables: templateVariables }, accessToken);
     },
-    onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables([]); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }); },
+    onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables(Array(selectedTemplate?.bodyVariableCount ?? 0).fill("")); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }); },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send approved template."),
   });
   const sendMutation = useMutation({
@@ -99,7 +99,7 @@ export function WhatsAppInboxPanel() {
                   <small style={{ color: "#64748b" }}>Free-form replies are available within 24 hours of the customer's last message.</small>
                   <button type="submit" disabled={!selected.customerId || !draft.trim() || sendMutation.isPending} style={{ background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{sendMutation.isPending ? "Sending…" : "Send reply"}</button>
                 </div>
-                {feedback ? <p role="status" style={{ color: sendMutation.isError ? "#b91c1c" : "#047857", fontSize: 13, marginBottom: 0 }}>{feedback}</p> : null}
+                {feedback ? <p role="status" style={{ color: sendMutation.isError || templateMutation.isError ? "#b91c1c" : "#047857", fontSize: 13, marginBottom: 0 }}>{feedback}</p> : null}
               </form>
               <details style={{ padding: "0 12px 12px" }}>
                 <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700 }}>Send an approved template (outside the 24-hour reply window)</summary>
