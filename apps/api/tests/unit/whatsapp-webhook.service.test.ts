@@ -149,6 +149,24 @@ describe("processWhatsAppWebhook", () => {
     }));
   });
 
+  it("marks delivery callbacks processed for tenant inbox messages without CommunicationDelivery rows", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    mocks.findFirst.mockResolvedValue({ id: "outbound-inbox-message" });
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{ value: {
+        metadata: { phone_number_id: "phone-12345" },
+        statuses: [{ id: "wamid-inbox", status: "read" }],
+      } }] }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    const result = await processWhatsAppWebhook(body, makeSignature(body));
+    expect(result.processedStatuses).toBe(1);
+    expect(mocks.updateEvent).toHaveBeenCalledWith({
+      where: { id: "event-1" }, data: { processedAt: expect.any(Date), processingError: null },
+    });
+  });
+
   it("rejects invalid signatures before processing callback data", async () => {
     const body = Buffer.from(JSON.stringify({ object: "whatsapp_business_account", entry: [] }));
     await expect(processWhatsAppWebhook(body, "sha256=bad")).rejects.toThrow("Invalid WhatsApp webhook signature");
