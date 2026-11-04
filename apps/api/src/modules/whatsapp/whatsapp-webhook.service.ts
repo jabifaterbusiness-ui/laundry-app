@@ -115,8 +115,15 @@ async function processStatus(status: WhatsAppStatus, context: { wabaId?: string;
   });
   if (event.processedAt) return true;
 
+  const connection = context.phoneNumberId
+    ? await prisma.whatsAppBusinessConnection.findUnique({
+        where: { phoneNumberId: context.phoneNumberId },
+        select: { businessId: true },
+      })
+    : null;
   const result = await prisma.communicationDelivery.updateMany({
     where: {
+      businessId: connection?.businessId ?? "__unmatched_whatsapp_business__",
       channel: "WHATSAPP",
       providerMessageId: status.id,
       status: { in: allowedPreviousStatuses[nextStatus]! },
