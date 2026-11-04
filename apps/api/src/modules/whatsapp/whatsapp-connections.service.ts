@@ -19,7 +19,7 @@ function requireMetaConfig() {
 async function graphRequest<T extends GraphError>(url: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+    headers: { Authorization: `Bearer ${token}` },
   });
   const payload = await response.json() as T;
   if (!response.ok) {
