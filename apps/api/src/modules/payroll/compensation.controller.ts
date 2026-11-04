@@ -11,6 +11,11 @@ import {
 
 import { createCompensationSchema } from "./compensation.validation.js";
 
+function branchId(req: Request) {
+  if (!req.branchId) throw new AppError("A valid branch context is required", 400);
+  return req.branchId;
+}
+
 function businessId(req: Request) {
   if (!req.user?.businessId) {
     throw new AppError(
@@ -34,6 +39,7 @@ export async function createCompensationController(
 
   const result = await createCompensation({
     businessId: businessId(req),
+    branchId: branchId(req),
     employeeId: parsed.data.employeeId,
     basicSalary: parsed.data.basicSalary,
     effectiveFrom: parsed.data.effectiveFrom,
@@ -49,6 +55,7 @@ export async function listCompensationController(req: Request, res: Response) {
 
   const result = await listCompensation({
     businessId: businessId(req),
+    branchId: branchId(req),
     ...(employeeId !== undefined ? { employeeId } : {}),
   });
 
@@ -58,6 +65,7 @@ export async function listCompensationController(req: Request, res: Response) {
 export async function getCompensationController(req: Request, res: Response) {
   const result = await getCompensation({
     businessId: businessId(req),
+    branchId: branchId(req),
     id: req.params.id!,
   });
 
@@ -79,6 +87,7 @@ export async function getCurrentCompensationController(
 
   const result = await getCurrentCompensation({
     businessId: businessId(req),
+    branchId: branchId(req),
     employeeId: req.params.employeeId!,
     effectiveDate,
   });

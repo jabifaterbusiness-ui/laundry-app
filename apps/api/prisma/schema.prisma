@@ -206,6 +206,7 @@ model Branch {
   customerAccountTransactions CustomerAccountTransaction[]
   garments                    Garment[]
 
+  employeeCompensations EmployeeCompensation[]
   payrollPeriods        PayrollPeriod[]
   payrollRecords        PayrollRecord[]
   payrollPayments       PayrollPayment[]
@@ -1690,6 +1691,11 @@ model EmployeeCompensation {
   employeeId String
   employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
+  // New compensation records are branch-owned. Null preserves legacy
+  // business-wide compensation until an owner explicitly scopes it.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
   // Historical basic salary in whole naira.
   basicSalary Int
 
@@ -1704,6 +1710,7 @@ model EmployeeCompensation {
 
   @@index([businessId, employeeId, effectiveFrom])
   @@index([businessId, employeeId, effectiveTo])
+  @@index([businessId, branchId, employeeId, effectiveFrom])
   @@map("employee_compensations")
 }
 

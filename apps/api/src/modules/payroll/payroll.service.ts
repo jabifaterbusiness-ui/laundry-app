@@ -703,27 +703,17 @@ export async function generatePayroll({
       continue;
     }
 
-    const compensation = await prisma.employeeCompensation.findFirst({
-      where: {
-        businessId,
-        employeeId: employee.id,
-        effectiveFrom: {
-          lte: period.periodEnd,
-        },
-        OR: [
-          {
-            effectiveTo: null,
-          },
-          {
-            effectiveTo: {
-              gt: period.periodEnd,
-            },
-          },
-        ],
-      },
-      orderBy: {
-        effectiveFrom: "desc",
-      },
+    const effectiveWindow = {
+      effectiveFrom: { lte: period.periodEnd },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: period.periodEnd } }],
+    };
+    const branchCompensation = await prisma.employeeCompensation.findFirst({
+      where: { businessId, branchId, employeeId: employee.id, ...effectiveWindow },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    const compensation = branchCompensation ?? await prisma.employeeCompensation.findFirst({
+      where: { businessId, branchId: null, employeeId: employee.id, ...effectiveWindow },
+      orderBy: { effectiveFrom: "desc" },
     });
 
     if (!compensation) {

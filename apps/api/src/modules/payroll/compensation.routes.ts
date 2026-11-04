@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { requireAuth } from "../auth/auth.middleware.js";
 import { requireBusinessContext } from "../../middleware/business-context.js";
+import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import {
@@ -15,6 +16,7 @@ const router = Router();
 
 router.use(asyncHandler(requireAuth));
 router.use(asyncHandler(requireBusinessContext));
+router.use(asyncHandler(requireBranchContext));
 
 router.post(
   "/",

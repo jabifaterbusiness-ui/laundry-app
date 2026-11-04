@@ -6,16 +6,19 @@ import type { CreateCompensationInput } from "./compensation.validation.js";
 
 type CreateCompensationArgs = CreateCompensationInput & {
   businessId: string;
+  branchId: string;
   actorUserId: string;
 };
 
 type ListCompensationArgs = {
   businessId: string;
+  branchId: string;
   employeeId?: string;
 };
 
 export async function createCompensation({
   businessId,
+  branchId,
   employeeId,
   basicSalary,
   effectiveFrom,
@@ -26,6 +29,7 @@ export async function createCompensation({
       id: employeeId,
       businessId,
       isActive: true,
+      branches: { some: { branchId } },
     },
     select: {
       id: true,
@@ -42,6 +46,7 @@ export async function createCompensation({
     const current = await tx.employeeCompensation.findFirst({
       where: {
         businessId,
+        branchId,
         employeeId,
         effectiveFrom: {
           lte: effectiveFrom,
@@ -103,6 +108,7 @@ export async function createCompensation({
     return tx.employeeCompensation.create({
       data: {
         businessId,
+        branchId,
         employeeId,
         basicSalary,
         effectiveFrom,
@@ -113,6 +119,7 @@ export async function createCompensation({
 
   await recordAuditEvent({
     businessId,
+    branchId,
     actorUserId,
     action: "employee_compensation.created",
     entityType: "EMPLOYEE_COMPENSATION",
@@ -129,15 +136,18 @@ export async function createCompensation({
 
 export async function getCompensation({
   businessId,
+  branchId,
   id,
 }: {
   businessId: string;
+  branchId: string;
   id: string;
 }) {
   const compensation = await prisma.employeeCompensation.findFirst({
     where: {
       id,
       businessId,
+      OR: [{ branchId }, { branchId: null }],
     },
     include: {
       employee: {
@@ -160,11 +170,13 @@ export async function getCompensation({
 
 export async function listCompensation({
   businessId,
+  branchId,
   employeeId,
 }: ListCompensationArgs) {
   return prisma.employeeCompensation.findMany({
     where: {
       businessId,
+      OR: [{ branchId }, { branchId: null }],
       ...(employeeId ? { employeeId } : {}),
     },
     include: {
@@ -190,34 +202,26 @@ export async function listCompensation({
 
 export async function getCurrentCompensation({
   businessId,
+  branchId,
   employeeId,
   effectiveDate = new Date(),
 }: {
   businessId: string;
+  branchId: string;
   employeeId: string;
   effectiveDate?: Date;
 }) {
-  const compensation = await prisma.employeeCompensation.findFirst({
-    where: {
-      businessId,
-      employeeId,
-      effectiveFrom: {
-        lte: effectiveDate,
-      },
-      OR: [
-        {
-          effectiveTo: null,
-        },
-        {
-          effectiveTo: {
-            gt: effectiveDate,
-          },
-        },
-      ],
-    },
-    orderBy: {
-      effectiveFrom: "desc",
-    },
+  const effectiveWindow = {
+    effectiveFrom: { lte: effectiveDate },
+    OR: [{ effectiveTo: null }, { effectiveTo: { gt: effectiveDate } }],
+  };
+  const branchCompensation = await prisma.employeeCompensation.findFirst({
+    where: { businessId, branchId, employeeId, ...effectiveWindow },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  const compensation = branchCompensation ?? await prisma.employeeCompensation.findFirst({
+    where: { businessId, branchId: null, employeeId, ...effectiveWindow },
+    orderBy: { effectiveFrom: "desc" },
   });
 
   if (!compensation) {
