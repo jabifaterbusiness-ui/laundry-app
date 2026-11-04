@@ -106,16 +106,27 @@ export async function listWhatsAppConversations(businessId: string) {
 }
 
 export async function sendWhatsAppConversationReply(input: {
-  businessId: string; customerId: string; body: string;
+  businessId: string; customerId?: string; phone: string; body: string;
 }) {
   const body = input.body.trim();
   if (!body || body.length > 4096) throw new AppError("Reply must contain between 1 and 4,096 characters", 422);
 
-  const customer = await prisma.customer.findFirst({
-    where: { id: input.customerId, businessId: input.businessId },
-    select: { id: true, name: true, phone: true },
-  });
-  if (!customer) throw new AppError("Customer not found in this business", 404);
+  let recipient = normalizeWhatsAppRecipient(input.phone);
+  let customerName = recipient;
+  let customerId: string | null = null;
+  if (input.customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { id: true, name: true, phone: true },
+    });
+    if (!customer) throw new AppError("Customer not found in this business", 404);
+    recipient = normalizeWhatsAppRecipient(customer.phone);
+    customerName = customer.name;
+    customerId = customer.id;
+  }
+  if (!recipient || recipient.length < 8 || recipient.length > 15) {
+    throw new AppError("The WhatsApp contact number is invalid", 422);
+  }
 
   const connection = await prisma.whatsAppBusinessConnection.findUnique({
     where: { businessId: input.businessId },
@@ -125,9 +136,8 @@ export async function sendWhatsAppConversationReply(input: {
     throw new AppError("Connect this business's WhatsApp number before replying", 409);
   }
 
-  const customerDigits = digits(customer.phone);
   const lastInbound = await prisma.whatsAppWebhookEvent.findFirst({
-    where: { businessId: input.businessId, contactPhone: customerDigits, eventType: "MESSAGE_RECEIVED" },
+    where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
     orderBy: { receivedAt: "desc" },
     select: { payload: true, receivedAt: true },
   });
@@ -138,19 +148,23 @@ export async function sendWhatsAppConversationReply(input: {
     throw new AppError("The 24-hour customer-service window has expired. Send an approved WhatsApp template to restart the conversation.", 409);
   }
 
-  const sent = await sendWhatsAppText({ businessId: input.businessId, to: customer.phone, body });
-  return { id: sent.id, customerId: customer.id, customerName: customer.name, phone: customer.phone, body, sentAt: new Date().toISOString(), status: "SENT" };
+  const sent = await sendWhatsAppText({ businessId: input.businessId, to: recipient, body });
+  return { id: sent.id, customerId, customerName, phone: recipient, body, sentAt: new Date().toISOString(), status: "SENT" };
 }
 
-export async function markWhatsAppConversationRead(input: { businessId: string; customerId: string }) {
-  const customer = await prisma.customer.findFirst({
-    where: { id: input.customerId, businessId: input.businessId },
-    select: { phone: true },
-  });
-  if (!customer) throw new AppError("Customer not found in this business", 404);
+export async function markWhatsAppConversationRead(input: { businessId: string; customerId?: string; phone: string }) {
+  let contactPhone = normalizeWhatsAppRecipient(input.phone);
+  if (input.customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { phone: true },
+    });
+    if (!customer) throw new AppError("Customer not found in this business", 404);
+    contactPhone = normalizeWhatsAppRecipient(customer.phone);
+  }
   const inbound = await prisma.whatsAppWebhookEvent.findMany({
-    where: { businessId: input.businessId, contactPhone: digits(customer.phone), eventType: "MESSAGE_RECEIVED", processedAt: null },
-    select: { id: true, payload: true },
+    where: { businessId: input.businessId, contactPhone, eventType: "MESSAGE_RECEIVED", processedAt: null },
+    select: { id: true },
   });
   const matchingIds = inbound.map((event) => event.id);
   if (matchingIds.length) {
