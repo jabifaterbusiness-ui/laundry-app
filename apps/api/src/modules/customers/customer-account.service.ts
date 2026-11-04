@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type CustomerAccountDb = typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -26,12 +27,16 @@ function calculateBalance(
 export async function getOrCreateCustomerAccount(
   customerId: string,
   businessId: string,
+  branchId: string,
+  userId: string,
   db: CustomerAccountDb = prisma,
 ) {
+  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, db);
   const customer = await db.customer.findFirst({
     where: {
       id: customerId,
       businessId,
+      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }],
     },
     select: {
       id: true,
@@ -42,48 +47,56 @@ export async function getOrCreateCustomerAccount(
     throw new AppError("Customer not found", 404);
   }
 
-  return db.customerAccount.upsert({
+  const accountScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_ACCOUNTS" }, db);
+  const account = await db.customerAccount.findFirst({
     where: {
-      customerId,
-    },
-    create: {
       businessId,
       customerId,
+      OR: [
+        { branchId },
+        { branchId: null },
+        { branchId: { in: accountScope.ownerBranchIds } },
+        { id: { in: accountScope.resourceIds } },
+      ],
     },
-    update: {},
-    include: {
-      transactions: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
+    orderBy: { branchId: "desc" },
+    include: { transactions: { orderBy: { createdAt: "asc" } } },
+  });
+  if (account) return account;
+  return db.customerAccount.create({
+    data: { businessId, customerId, branchId },
+    include: { transactions: { orderBy: { createdAt: "asc" } } },
   });
 }
 
 export async function getCustomerAccount(
   customerId: string,
   businessId: string,
+  branchId: string,
+  userId: string,
 ) {
+  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
   const customer = await prisma.customer.findFirst({
     where: {
       id: customerId,
       businessId,
+      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }],
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
   });
 
   if (!customer) {
     throw new AppError("Customer not found", 404);
   }
 
+  const accountScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_ACCOUNTS" });
   const account = await prisma.customerAccount.findFirst({
     where: {
       customerId,
       businessId,
+      OR: [{ branchId }, { branchId: null }, { branchId: { in: accountScope.ownerBranchIds } }, { id: { in: accountScope.resourceIds } }],
     },
+    orderBy: { branchId: "desc" },
     include: {
       transactions: {
         orderBy: {
@@ -98,6 +111,7 @@ export async function getCustomerAccount(
       id: null,
       customerId,
       businessId,
+      branchId,
       balance: 0,
       transactions: [],
     };
@@ -113,6 +127,7 @@ export async function fundCustomerAccount(data: {
   customerId: string;
   businessId: string;
   branchId: string;
+  userId: string;
   amount: number;
   note?: string;
 }) {
@@ -127,8 +142,12 @@ export async function fundCustomerAccount(data: {
     const account = await getOrCreateCustomerAccount(
       data.customerId,
       data.businessId,
+      data.branchId,
+      data.userId,
       tx,
     );
+
+    await assertBranchResourceWriteAccess({ businessId: data.businessId, branchId: data.branchId, userId: data.userId, resourceType: "CUSTOMER_ACCOUNTS", ownerBranchId: account.branchId, resourceId: account.id }, tx);
 
     const transaction = await tx.customerAccountTransaction.create({
       data: {

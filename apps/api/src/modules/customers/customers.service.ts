@@ -2,11 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { normalizePhone } from "./customers.validation.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export { normalizePhone };
 
 interface ListParams {
   businessId: string;
+  branchId: string;
+  userId: string;
   page: number;
   pageSize: number;
   search?: string;
@@ -14,9 +17,17 @@ interface ListParams {
 }
 
 export async function listCustomers(params: ListParams) {
-  const { businessId, page, pageSize, search, status } = params;
+  const { businessId, branchId, userId, page, pageSize, search, status } = params;
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
 
-  const where: Prisma.CustomerWhereInput = { businessId };
+  const where: Prisma.CustomerWhereInput = {
+    businessId,
+    OR: [
+      { ownerBranchId: null },
+      { ownerBranchId: { in: scope.ownerBranchIds } },
+      { id: { in: scope.resourceIds } },
+    ],
+  };
 
   if (status !== "all") {
     if (status === "inactive") {
@@ -43,13 +54,15 @@ export async function listCustomers(params: ListParams) {
       {
         orders: {
           some: {
-            orderNumber: { contains: search, mode: "insensitive" },
+            branchId,
+          orderNumber: { contains: search, mode: "insensitive" },
           },
         },
       },
       {
         orders: {
           some: {
+            branchId,
             invoice: {
               is: {
                 invoiceNumber: { contains: search, mode: "insensitive" },
@@ -67,7 +80,7 @@ export async function listCustomers(params: ListParams) {
       searchClauses.push({ phone: { contains: normalizedSearch } });
     }
 
-    where.OR = searchClauses;
+    where.AND = [{ OR: searchClauses }];
   }
 
   const [data, total] = await Promise.all([
@@ -103,9 +116,18 @@ type CustomerDb = typeof prisma | Prisma.TransactionClient;
 export async function getCustomerForBusiness(
   id: string,
   businessId: string,
+  branchId: string,
+  userId: string,
   db: CustomerDb = prisma,
 ) {
-  return db.customer.findFirst({ where: { id, businessId } });
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, db);
+  return db.customer.findFirst({
+    where: {
+      id,
+      businessId,
+      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+    },
+  });
 }
 
 /**
@@ -121,13 +143,17 @@ export async function getCustomerForBusiness(
  */
 export async function findPossibleDuplicates(
   businessId: string,
+  branchId: string,
+  userId: string,
   normalizedPhone: string,
   excludeId?: string,
   db: CustomerDb = prisma,
 ) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, db);
   return db.customer.findMany({
     where: {
       businessId,
+      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
       phone: normalizedPhone,
       isActive: true,
       ...(excludeId ? { id: { not: excludeId } } : {}),
@@ -138,6 +164,7 @@ export async function findPossibleDuplicates(
 
 export interface CreateCustomerData {
   businessId: string;
+  branchId: string;
   name: string;
   phone: string;
   email?: string;
@@ -152,6 +179,7 @@ export async function createCustomer(
   return db.customer.create({
     data: {
       businessId: data.businessId,
+      ownerBranchId: data.branchId,
       name: data.name,
       phone: data.phone,
       email: data.email ?? null,
@@ -179,9 +207,14 @@ export interface UpdateCustomerData {
 export async function updateCustomer(
   id: string,
   businessId: string,
+  branchId: string,
+  userId: string,
   data: UpdateCustomerData,
   db: CustomerDb = prisma,
 ) {
+  const existing = await getCustomerForBusiness(id, businessId, branchId, userId, db);
+  if (!existing) throw new AppError("Customer not found", 404);
+  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "CUSTOMERS", ownerBranchId: existing.ownerBranchId, resourceId: id }, db);
   const patch: Prisma.CustomerUpdateManyMutationInput = {};
   if (data.name !== undefined) patch.name = data.name;
   if (data.phone !== undefined) patch.phone = data.phone;
@@ -198,25 +231,30 @@ export async function updateCustomer(
     throw new AppError("Customer not found", 404);
   }
 
-  return getCustomerForBusiness(id, businessId, db);
+  return getCustomerForBusiness(id, businessId, branchId, userId, db);
 }
 
 export async function setCustomerLifecycleStatus(
   id: string,
   businessId: string,
+  branchId: string,
+  userId: string,
   status: "ACTIVE" | "DORMANT" | "BLOCKED" | "BLACKLISTED",
   reason: string,
   actorUserId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, tx);
     const customer = await tx.customer.findFirst({
-      where: { id, businessId },
-      select: { id: true, lifecycleStatus: true },
+      where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+      select: { id: true, lifecycleStatus: true, ownerBranchId: true },
     });
 
     if (!customer) {
       throw new AppError("Customer not found", 404);
     }
+
+    await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "CUSTOMERS", ownerBranchId: customer.ownerBranchId, resourceId: id }, tx);
 
     if (customer.lifecycleStatus === status) {
       throw new AppError("Customer is already in this status", 409);

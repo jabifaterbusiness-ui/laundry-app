@@ -25,7 +25,7 @@ import {
 // it from these tenant-scoped routes.
 export const customersRouter = Router();
 
-customersRouter.use(requireAuth, requireBusinessContext);
+customersRouter.use(requireAuth, requireBusinessContext, asyncHandler(requireBranchContext));
 
 customersRouter.post("/", requirePermission("customers.create"), asyncHandler(create));
 customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list));
@@ -39,7 +39,6 @@ customersRouter.get(
 customersRouter.post(
   "/:id/account/fund",
   requirePermission("customer_accounts.manage"),
-  asyncHandler(requireBranchContext),
   asyncHandler(requireSensitiveAuthorization),
   asyncHandler(fundAccount),
 );
