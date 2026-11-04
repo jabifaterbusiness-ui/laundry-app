@@ -5,6 +5,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     auditLog: {
       create: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -17,9 +20,11 @@ import { logger } from "../../src/lib/logger.js";
 import { recordAuditEvent, sanitizeAuditMetadata } from "../../src/lib/audit.js";
 
 const create = vi.mocked(prisma.auditLog.create);
+const findUser = vi.mocked(prisma.user.findUnique);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findUser.mockResolvedValue({ fullName: "Test User" } as never);
 });
 
 describe("sanitizeAuditMetadata", () => {
@@ -69,6 +74,10 @@ describe("recordAuditEvent", () => {
       metadata: { note: "ok" },
     });
 
+    expect(findUser).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: { fullName: true },
+    });
     expect(create).toHaveBeenCalledOnce();
     const call = create.mock.calls[0]![0];
     expect(call.data).toMatchObject({
@@ -79,7 +88,23 @@ describe("recordAuditEvent", () => {
       branchId: null,
       actorUserId: "user-1",
       correlationId: "corr-1",
-      metadata: { note: "ok" },
+      metadata: { note: "ok", authorizedBy: "Test User", reference: "Test User" },
+    });
+  });
+
+  it("keeps an external payment reference while recording the authenticated authorizer", async () => {
+    create.mockResolvedValue({} as never);
+
+    await recordAuditEvent({
+      action: "payment.created",
+      entityType: "Payment",
+      actorUserId: "user-1",
+      metadata: { reference: "BANK-TRANSFER-123" },
+    });
+
+    expect(create.mock.calls[0]![0].data.metadata).toEqual({
+      reference: "BANK-TRANSFER-123",
+      authorizedBy: "Test User",
     });
   });
 

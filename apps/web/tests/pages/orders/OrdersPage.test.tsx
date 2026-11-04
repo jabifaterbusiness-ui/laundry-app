@@ -293,6 +293,7 @@ beforeEach(() => {
   });
 
   vi.mocked(listAllOrders).mockResolvedValue([]);
+  vi.mocked(listCustomerServicePrices).mockResolvedValue({ data: [] });
 
 });
 
@@ -935,4 +936,117 @@ describe("OrdersPage quick customer switching", () => {
       screen.queryByRole("region", { name: "Order Management" }),
     ).not.toBeInTheDocument();
   });
+
+describe("OrdersPage customer-specific pricing", () => {
+  async function openNewOrderForCustomer(customer: Customer) {
+    fireEvent.click(screen.getByRole("button", { name: /^New order$/i }));
+    await screen.findByRole("heading", { name: /find customer/i });
+    const picker = screen.getByRole("region", { name: /find customer/i });
+    fireEvent.click(within(picker).getByRole("button", {
+      name: new RegExp(`^${customer.name}(?:\\s|$)`, "i"),
+    }));
+    await screen.findByRole("heading", { name: /new order/i });
+  }
+
+  it("waits for agreed prices before displaying totals or allowing order creation", async () => {
+    let resolvePrices!: (value: { data: Array<{ id: string; customerId: string; serviceId: string; unitPrice: number; service: typeof serviceA }> }) => void;
+    vi.mocked(listCustomerServicePrices).mockImplementation(
+      () => new Promise((resolve) => { resolvePrices = resolve; }),
+    );
+
+    renderPage();
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    expect(await screen.findByText(
+      "Loading this customer's agreed service prices before calculating the order…",
+    )).toHaveAttribute("role", "status");
+    expect(screen.getByRole("button", { name: /create order/i })).toBeDisabled();
+
+    const serviceSelect = screen.getAllByRole("combobox").find((element) =>
+      Array.from((element as HTMLSelectElement).options).some(
+        (option) => option.value === serviceA.id,
+      ),
+    );
+    expect(serviceSelect).toBeDefined();
+    fireEvent.change(serviceSelect!, { target: { value: serviceA.id } });
+    expect(screen.getByText("Loading customer price…")).toBeInTheDocument();
+
+    resolvePrices({
+      data: [{
+        id: "customer-price-a",
+        customerId: customerA.id,
+        serviceId: serviceA.id,
+        unitPrice: 2500,
+        service: serviceA,
+      }],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create order/i })).toBeEnabled();
+    });
+    expect(screen.getAllByText("₦2,500").length).toBeGreaterThan(0);
+  });
+
+  it("blocks order creation and offers retry when agreed-price lookup fails", async () => {
+    vi.mocked(listCustomerServicePrices)
+      .mockRejectedValueOnce(new Error("Temporary pricing service failure"))
+      .mockResolvedValueOnce({
+        data: [{
+          id: "customer-price-a",
+          customerId: customerA.id,
+          serviceId: serviceA.id,
+          unitPrice: 2500,
+          service: serviceA,
+        }],
+      });
+
+    renderPage();
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load this customer's agreed prices",
+    );
+    expect(screen.getByRole("button", { name: /create order/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry customer pricing" }));
+
+    await waitFor(() => {
+      expect(listCustomerServicePrices).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("button", { name: /create order/i })).toBeEnabled();
+    });
+  });
+});
+
+describe("OrdersPage customer names", () => {
+  it("shows the related customer name even when the customer picker page does not contain that customer", async () => {
+    const orderWithCustomer = {
+      ...orderA,
+      customer: {
+        id: customerA.id,
+        name: customerA.name,
+        phone: customerA.phone,
+        email: customerA.email,
+      },
+    };
+
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 100, total: 6494, totalPages: 65 },
+    });
+    vi.mocked(listOrders).mockResolvedValue({
+      data: [orderWithCustomer],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    });
+    vi.mocked(listAllOrders).mockResolvedValue([orderWithCustomer]);
+
+    renderPage();
+    const allOrdersFolder = await screen.findByRole("button", { name: /all orders/i });
+    fireEvent.click(allOrdersFolder);
+
+    expect(await screen.findByRole("cell", { name: "Jane Doe" })).toBeInTheDocument();
+    expect(screen.queryByText(customerA.id)).not.toBeInTheDocument();
+  });
+});
 });

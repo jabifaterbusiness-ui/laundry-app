@@ -106,6 +106,7 @@ function OrderManagementContent({
   const [address, setAddress] = useState(customer.address ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -490,21 +491,36 @@ function OrderManagementContent({
         },
       ),
     onSuccess: (result) => {
+      setStatusFeedback(null);
       if (!result.queued) {
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         queryClient.invalidateQueries({
           queryKey: ["orders", "customer-history", customer.id],
         });
         onSelectOrder(result.order);
+
+        const deliveries = result.order.notificationResults ?? [];
+        const sent = deliveries.filter((item) => item.status === "SENT").length;
+        const failed = deliveries.filter((item) => item.status === "FAILED").length;
+        const duplicate = deliveries.filter((item) => item.status === "DUPLICATE").length;
+        const deliverySummary = deliveries.length
+          ? `Customer notification: ${sent} sent, ${failed} failed, ${duplicate} already processed.`
+          : "No enabled customer notification rule applies to this status.";
+
+        setError(null);
+        setStatusFeedback(
+          result.order.notificationError
+            ? `Order status updated, but notification processing failed: ${result.order.notificationError}`
+            : `Order status updated. ${deliverySummary}`,
+        );
+      } else {
+        setError(null);
+        setStatusFeedback("Status saved offline and will synchronize when the connection is restored.");
       }
       setLayer("none");
-      setError(
-        result.queued
-          ? "Status saved offline and will synchronize when the connection is restored."
-          : null,
-      );
     },
     onError: (err) => {
+      setStatusFeedback(null);
       setError(
         err instanceof ApiError
           ? err.message
@@ -1058,6 +1074,11 @@ function OrderManagementContent({
 
       )}
 
+      {statusFeedback && (
+        <p role="status" style={{ marginTop: 12, color: "#166534" }}>
+          {statusFeedback}
+        </p>
+      )}
       {error && (
         <p role="alert" style={{ marginTop: 12 }}>
           {error}

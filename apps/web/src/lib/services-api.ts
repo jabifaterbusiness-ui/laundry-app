@@ -92,7 +92,19 @@ export async function setServiceActive(
 
 
 export interface PriceAdjustmentRule {
-  id: string; name: string; percentage: number; isActive: boolean;
+  id: string;
+  name: string;
+  percentage: number;
+  isActive: boolean;
+  targetScope: "MANUAL" | "CUSTOMER" | "GROUP" | "ALL_CUSTOMERS";
+  customerId: string | null;
+  groupId: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  allowStacking: boolean;
+  excludedServiceIds: string[];
+  customer?: { id: string; name: string } | null;
+  group?: { id: string; name: string } | null;
 }
 export interface TaxRuleSetting {
   id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
@@ -110,8 +122,21 @@ export interface CustomerServicePrice {
 export async function listPricingRules(auth: { accessToken: string | null }): Promise<PricingRulesResponse> {
   return apiFetch<PricingRulesResponse>("/services/pricing-rules", { accessToken: auth.accessToken });
 }
-export async function createPriceAdjustment(input: { name: string; percentage: number }, auth: { accessToken: string | null }): Promise<PriceAdjustmentRule> {
+export async function createPriceAdjustment(input: {
+  name: string;
+  percentage: number;
+  targetScope?: PriceAdjustmentRule["targetScope"];
+  customerId?: string;
+  groupId?: string;
+  startsAt?: string;
+  endsAt?: string;
+  allowStacking?: boolean;
+  excludedServiceIds?: string[];
+}, auth: { accessToken: string | null }): Promise<PriceAdjustmentRule> {
   return apiFetch<PriceAdjustmentRule>("/services/price-adjustments", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function setPriceAdjustmentActive(id: string, isActive: boolean, auth: { accessToken: string | null }): Promise<PriceAdjustmentRule> {
+  return apiFetch<PriceAdjustmentRule>(`/services/price-adjustments/${id}`, { method: "PATCH", accessToken: auth.accessToken, body: JSON.stringify({ isActive }) });
 }
 export async function deletePriceAdjustment(id: string, auth: { accessToken: string | null }): Promise<void> {
   return apiFetch<void>(`/services/price-adjustments/${id}`, { method: "DELETE", accessToken: auth.accessToken });

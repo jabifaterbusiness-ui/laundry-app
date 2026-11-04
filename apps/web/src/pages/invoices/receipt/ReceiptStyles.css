@@ -378,7 +378,16 @@ body.printing-company .invoice-print-customer {
     margin: 0;
     padding: 6mm;
     box-sizing: border-box;
+    /* Long receipts must flow onto additional pages instead of clipping the agreement. */
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  .receipt--customer .receipt__agreement {
+    display: block !important;
+    visibility: visible !important;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .receipt__header,

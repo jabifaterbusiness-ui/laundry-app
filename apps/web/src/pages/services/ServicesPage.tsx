@@ -6,6 +6,7 @@ import {
   createPriceAdjustment,
   createTaxRule,
   deletePriceAdjustment,
+  setPriceAdjustmentActive,
   deleteTaxRule,
   listPricingRules,
   listServices,
@@ -15,6 +16,8 @@ import {
   type Service,
 } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { listCustomers } from "../../lib/customers-api.js";
+import { listCustomerGroups } from "../../lib/communications-api.js";
 import { TableExportActions } from "../../components/exports/TableExportActions.js";
 
 const EMPTY_FORM: CreateServiceInput = {
@@ -35,6 +38,14 @@ export function ServicesPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [adjustmentName, setAdjustmentName] = useState("");
   const [adjustmentPercentage, setAdjustmentPercentage] = useState(-10);
+  const [adjustmentTargetScope, setAdjustmentTargetScope] = useState<"MANUAL" | "CUSTOMER" | "GROUP" | "ALL_CUSTOMERS">("MANUAL");
+  const [adjustmentCustomerSearch, setAdjustmentCustomerSearch] = useState("");
+  const [adjustmentCustomerId, setAdjustmentCustomerId] = useState("");
+  const [adjustmentGroupId, setAdjustmentGroupId] = useState("");
+  const [adjustmentStartsAt, setAdjustmentStartsAt] = useState("");
+  const [adjustmentEndsAt, setAdjustmentEndsAt] = useState("");
+  const [adjustmentAllowStacking, setAdjustmentAllowStacking] = useState(false);
+  const [adjustmentExcludedServices, setAdjustmentExcludedServices] = useState<string[]>([]);
   const [taxName, setTaxName] = useState("");
   const [taxValue, setTaxValue] = useState(7.5);
   const [taxKind, setTaxKind] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
@@ -46,10 +57,47 @@ export function ServicesPage() {
     queryKey: ["pricing-rules"],
     queryFn: () => listPricingRules({ accessToken }),
   });
+  const discountCustomersQuery = useQuery({
+    queryKey: ["discount-target-customers", adjustmentCustomerSearch],
+    queryFn: () => listCustomers({
+      page: 1,
+      pageSize: 25,
+      search: adjustmentCustomerSearch || undefined,
+      status: "active",
+    }, { accessToken }),
+    enabled: Boolean(accessToken && adjustmentTargetScope === "CUSTOMER"),
+  });
+  const discountGroupsQuery = useQuery({
+    queryKey: ["discount-target-groups"],
+    queryFn: () => listCustomerGroups({ accessToken }),
+    enabled: Boolean(accessToken && adjustmentTargetScope === "GROUP"),
+  });
   const pricingRulesMutation = useMutation({
     mutationFn: async (kind: "adjustment" | "tax") => {
       if (kind === "adjustment") {
-        return createPriceAdjustment({ name: adjustmentName.trim(), percentage: adjustmentPercentage }, { accessToken });
+        if (adjustmentTargetScope !== "MANUAL" && adjustmentPercentage >= 0) {
+          throw new Error("Automatic discounts must use a negative percentage.");
+        }
+        if (adjustmentTargetScope === "CUSTOMER" && !adjustmentCustomerId) {
+          throw new Error("Choose the customer who should receive this discount.");
+        }
+        if (adjustmentTargetScope === "GROUP" && !adjustmentGroupId) {
+          throw new Error("Choose the customer group for this discount.");
+        }
+        if (adjustmentTargetScope === "ALL_CUSTOMERS" && (!adjustmentStartsAt || !adjustmentEndsAt)) {
+          throw new Error("Promotions for all customers require a start and end date.");
+        }
+        return createPriceAdjustment({
+          name: adjustmentName.trim(),
+          percentage: adjustmentPercentage,
+          targetScope: adjustmentTargetScope,
+          ...(adjustmentTargetScope === "CUSTOMER" ? { customerId: adjustmentCustomerId } : {}),
+          ...(adjustmentTargetScope === "GROUP" ? { groupId: adjustmentGroupId } : {}),
+          ...(adjustmentStartsAt ? { startsAt: new Date(adjustmentStartsAt).toISOString() } : {}),
+          ...(adjustmentEndsAt ? { endsAt: new Date(adjustmentEndsAt).toISOString() } : {}),
+          allowStacking: adjustmentAllowStacking,
+          excludedServiceIds: adjustmentExcludedServices,
+        }, { accessToken });
       }
       return createTaxRule({
         name: taxName.trim(), value: taxValue, kind: taxKind, treatment: taxTreatment,
@@ -58,8 +106,17 @@ export function ServicesPage() {
     },
     onSuccess: () => {
       setAdjustmentName(""); setTaxName("");
+      setAdjustmentTargetScope("MANUAL");
+      setAdjustmentCustomerSearch(""); setAdjustmentCustomerId(""); setAdjustmentGroupId("");
+      setAdjustmentStartsAt(""); setAdjustmentEndsAt("");
+      setAdjustmentAllowStacking(false); setAdjustmentExcludedServices([]);
       queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
     },
+  });
+  const adjustmentStatusMutation = useMutation({
+    mutationFn: (input: { id: string; isActive: boolean }) =>
+      setPriceAdjustmentActive(input.id, input.isActive, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
   });
   const deletePricingRuleMutation = useMutation({
     mutationFn: async (input: { id: string; kind: "adjustment" | "tax" }) =>
@@ -176,17 +233,92 @@ export function ServicesPage() {
         {pricingRulesQuery.isError && <p role="alert">Unable to load pricing rules.</p>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
           <div>
-            <h3>Price adjustments</h3>
+            <h3>Discounts & promotions</h3>
+            <p>Configure manual price adjustments, automatic individual and group discounts, and scheduled promotions. Automatic rules apply only to new invoices.</p>
             <form onSubmit={(event) => { event.preventDefault(); pricingRulesMutation.mutate("adjustment"); }}>
-              <label>Adjustment name<input value={adjustmentName} onChange={(event) => setAdjustmentName(event.target.value)} required maxLength={120} /></label>
-              <label>Percentage (+ surcharge / − discount)<input type="number" min="-100" max="1000" step="0.01" value={adjustmentPercentage} onChange={(event) => setAdjustmentPercentage(Number(event.target.value))} required /></label>
-              <button type="submit" disabled={!adjustmentName.trim() || pricingRulesMutation.isPending}>Add adjustment</button>
+              <label>Discount / adjustment name<input value={adjustmentName} onChange={(event) => setAdjustmentName(event.target.value)} required maxLength={120} /></label>
+              <label>Rule applies to
+                <select value={adjustmentTargetScope} onChange={(event) => {
+                  setAdjustmentTargetScope(event.target.value as typeof adjustmentTargetScope);
+                  setAdjustmentCustomerId(""); setAdjustmentGroupId("");
+                }}>
+                  <option value="MANUAL">Manual adjustment (selected by staff)</option>
+                  <option value="CUSTOMER">Specific customer (automatic)</option>
+                  <option value="GROUP">Customer group (automatic)</option>
+                  <option value="ALL_CUSTOMERS">All customers promotion (scheduled)</option>
+                </select>
+              </label>
+              {adjustmentTargetScope === "CUSTOMER" && (
+                <>
+                  <label>Find customer<input type="search" value={adjustmentCustomerSearch} onChange={(event) => setAdjustmentCustomerSearch(event.target.value)} placeholder="Search by customer name or phone" /></label>
+                  <label>Customer
+                    <select value={adjustmentCustomerId} onChange={(event) => setAdjustmentCustomerId(event.target.value)} required>
+                      <option value="">Choose a customer</option>
+                      {(discountCustomersQuery.data?.data ?? []).map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}
+                    </select>
+                  </label>
+                  {discountCustomersQuery.isLoading && <small>Searching customers…</small>}
+                  {discountCustomersQuery.isError && <p role="alert">Unable to search customers. Check your customer-view permission and try again.</p>}
+                  {discountCustomersQuery.isSuccess && discountCustomersQuery.data.data.length === 0 && <small>No active customers match this search.</small>}
+                </>
+              )}
+              {adjustmentTargetScope === "GROUP" && (
+                <>
+                <label>Customer group
+                  <select value={adjustmentGroupId} onChange={(event) => setAdjustmentGroupId(event.target.value)} required>
+                    <option value="">Choose a group</option>
+                    {(discountGroupsQuery.data?.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name} ({group._count.members} customers)</option>)}
+                  </select>
+                </label>
+                {discountGroupsQuery.isError && <p role="alert">Unable to load customer groups. Check your customer-view permission and try again.</p>}
+                {discountGroupsQuery.isSuccess && discountGroupsQuery.data.data.length === 0 && <small>Create a customer group in Customer Engagement before assigning a group discount.</small>}
+                </>
+              )}
+              <label>Percentage ({adjustmentTargetScope === "MANUAL" ? "+ surcharge / − discount" : "automatic discount; enter a negative value"})
+                <input type="number" min="-100" max={adjustmentTargetScope === "MANUAL" ? "1000" : "-0.01"} step="0.01" value={adjustmentPercentage} onChange={(event) => setAdjustmentPercentage(Number(event.target.value))} required />
+              </label>
+              {adjustmentTargetScope === "ALL_CUSTOMERS" && (
+                <>
+                  <label>Promotion starts<input type="datetime-local" value={adjustmentStartsAt} onChange={(event) => setAdjustmentStartsAt(event.target.value)} required /></label>
+                  <label>Promotion ends<input type="datetime-local" value={adjustmentEndsAt} onChange={(event) => setAdjustmentEndsAt(event.target.value)} required /></label>
+                </>
+              )}
+              {adjustmentTargetScope !== "MANUAL" && (
+                <>
+                  <label><input type="checkbox" checked={adjustmentAllowStacking} onChange={(event) => setAdjustmentAllowStacking(event.target.checked)} /> Allow this discount to combine with other discounts</label>
+                  <fieldset style={{ border: "1px solid #d8dee8", borderRadius: 8, padding: 10 }}>
+                    <legend>Exclude services (optional)</legend>
+                    {(servicesQuery.data?.data ?? []).map((service) => (
+                      <label key={service.id} style={{ display: "block" }}>
+                        <input type="checkbox" checked={adjustmentExcludedServices.includes(service.id)} onChange={(event) => setAdjustmentExcludedServices((current) => event.target.checked ? [...current, service.id] : current.filter((id) => id !== service.id))} />
+                        {service.name}
+                      </label>
+                    ))}
+                  </fieldset>
+                </>
+              )}
+              <button type="submit" disabled={!adjustmentName.trim() || pricingRulesMutation.isPending || (adjustmentTargetScope === "CUSTOMER" && !adjustmentCustomerId) || (adjustmentTargetScope === "GROUP" && !adjustmentGroupId) || (adjustmentTargetScope === "ALL_CUSTOMERS" && (!adjustmentStartsAt || !adjustmentEndsAt))}>Save discount / adjustment</button>
             </form>
             <ul>
-              {(pricingRulesQuery.data?.adjustments ?? []).map((rule) => <li key={rule.id}>
-                {rule.name} — {rule.percentage > 0 ? "+" : ""}{rule.percentage}%
-                <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" })}>Remove</button>
-              </li>)}
+              {(pricingRulesQuery.data?.adjustments ?? []).map((rule) => {
+                const now = Date.now();
+                const statusLabel = !rule.isActive ? "Paused"
+                  : rule.startsAt && new Date(rule.startsAt).getTime() > now ? "Scheduled"
+                    : rule.endsAt && new Date(rule.endsAt).getTime() < now ? "Expired"
+                      : "Active";
+                const targetLabel = rule.targetScope === "CUSTOMER" ? `Individual · ${rule.customer?.name ?? "Customer"}`
+                  : rule.targetScope === "GROUP" ? `Group · ${rule.group?.name ?? "Customer group"}`
+                    : rule.targetScope === "ALL_CUSTOMERS" ? "Promotion · All customers"
+                      : "Manual adjustment";
+                return <li key={rule.id}>
+                  <strong>{rule.name}</strong> — {rule.percentage}% · {targetLabel} · {statusLabel}
+                  {rule.startsAt && <small> · Starts {new Date(rule.startsAt).toLocaleString()}</small>}
+                  {rule.endsAt && <small> · Ends {new Date(rule.endsAt).toLocaleString()}</small>}
+                  {rule.allowStacking && <small> · Stackable</small>}
+                  <button type="button" disabled={adjustmentStatusMutation.isPending} onClick={() => adjustmentStatusMutation.mutate({ id: rule.id, isActive: !rule.isActive })}>{rule.isActive ? "Pause" : "Resume"}</button>
+                  <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" })}>Remove</button>
+                </li>;
+              })}
             </ul>
           </div>
           <div>

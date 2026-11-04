@@ -492,6 +492,7 @@ model Customer {
   communicationDeliveries CommunicationDelivery[]
   statusNotificationDeliveries OrderStatusNotificationDelivery[]
   customerGroups CustomerGroupMember[]
+  automaticDiscounts PriceAdjustment[] @relation("CustomerAutomaticDiscounts")
 
   // Duplicate handling is soft (detection + explicit override), not a
   // hard DB-level unique constraint - see docs/CUSTOMERS.md section E.
@@ -2695,11 +2696,27 @@ model PriceAdjustment {
   name       String
   percentage Float
   isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+
+  // MANUAL adjustments remain selectable by staff. Automatic discounts can
+  // target one customer, a customer group, or every customer in the business.
+  targetScope String @default("MANUAL")
+  customerId  String?
+  customer    Customer? @relation("CustomerAutomaticDiscounts", fields: [customerId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       CustomerGroup? @relation("CustomerGroupAutomaticDiscounts", fields: [groupId], references: [id], onDelete: Cascade)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  allowStacking Boolean @default(false)
+  excludedServiceIds String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([businessId, name])
   @@index([businessId, isActive])
+  @@index([businessId, targetScope, startsAt, endsAt])
+  @@index([businessId, customerId])
+  @@index([businessId, groupId])
   @@map("price_adjustments")
 }
 
@@ -2753,6 +2770,7 @@ model CustomerGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   members     CustomerGroupMember[]
+  automaticDiscounts PriceAdjustment[] @relation("CustomerGroupAutomaticDiscounts")
 
   @@unique([businessId, name])
   @@index([businessId, createdAt])

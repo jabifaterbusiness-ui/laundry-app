@@ -40,6 +40,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customer: {
       findFirst: vi.fn(),
     },
+    user: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     userBranch: {
       findUnique: vi.fn(),
     },

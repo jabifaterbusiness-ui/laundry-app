@@ -10,6 +10,7 @@ async function calculateNewInvoiceDefaults(
   options: {
     adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
     taxRuleIds?: string[];
+    automaticAdjustmentIds?: string[];
   } = {},
 ) {
   // Real Prisma order items always have IDs. Lightweight service/test fixtures may omit
@@ -18,9 +19,29 @@ async function calculateNewInvoiceDefaults(
     ...item,
     id: typeof item.id === "string" && item.id.trim() ? item.id : `invoice-line-${index + 1}`,
   }));
-  const selectedAdjustmentIds = [...new Set((options.adjustments ?? []).map((item) => item.adjustmentId))];
+  const adjustmentSelections = options.adjustments ?? [];
+  const selectedAdjustmentIds = [...new Set(adjustmentSelections.map((item) => item.adjustmentId))];
+  if (selectedAdjustmentIds.length !== adjustmentSelections.length) {
+    throw new AppError("An adjustment cannot be selected more than once", 422);
+  }
   const adjustmentRecords = selectedAdjustmentIds.length
-    ? await tx.priceAdjustment.findMany({ where: { businessId, id: { in: selectedAdjustmentIds }, isActive: true } })
+    ? await tx.priceAdjustment.findMany({
+        where: {
+          businessId,
+          id: { in: selectedAdjustmentIds },
+          isActive: true,
+          OR: [
+            { targetScope: "MANUAL" },
+            ...(options.automaticAdjustmentIds?.length
+              ? [{ id: { in: options.automaticAdjustmentIds }, targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] } }]
+              : []),
+          ],
+        },
+        include: {
+          customer: { select: { name: true } },
+          group: { select: { name: true } },
+        },
+      })
     : [];
   if (adjustmentRecords.length !== selectedAdjustmentIds.length) {
     throw new AppError("One or more selected price adjustments are unavailable", 422);
@@ -37,7 +58,21 @@ async function calculateNewInvoiceDefaults(
     if (selection.scope === "ITEMS" && itemIds.length === 0) {
       throw new AppError("Select at least one item for an item-specific adjustment", 422);
     }
-    return { id: rule.id, name: rule.name, percentage: rule.percentage, scope: selection.scope, itemIds };
+    const targetLabel =
+      rule.targetScope === "CUSTOMER"
+        ? `Individual customer: ${rule.customer?.name ?? "customer"}`
+        : rule.targetScope === "GROUP"
+          ? `Customer group: ${rule.group?.name ?? "group"}`
+          : rule.targetScope === "ALL_CUSTOMERS"
+            ? "Promotion: all customers"
+            : null;
+    return {
+      id: rule.id,
+      name: targetLabel ? `${rule.name} — ${targetLabel}` : rule.name,
+      percentage: rule.percentage,
+      scope: selection.scope,
+      itemIds,
+    };
   });
   const explicitTaxIds = [...new Set(options.taxRuleIds ?? [])];
   const rules = tx.taxRule
@@ -69,6 +104,92 @@ async function calculateNewInvoiceDefaults(
       allowWithOtherTaxes: rule.allowWithOtherTaxes,
     })),
   );
+}
+
+export async function resolveAutomaticDiscountSelections(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  customerId: string,
+  items: Array<{ serviceId: string }>,
+  manualSelections: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>,
+) {
+  // The delegates are always present on a generated Prisma transaction client.
+  // Optional guards keep isolated service tests and legacy lightweight adapters
+  // compatible while treating an absent delegate as having no automatic rules.
+  const memberships = tx.customerGroupMember
+    ? await tx.customerGroupMember.findMany({
+        where: { businessId, customerId },
+        select: { groupId: true },
+      })
+    : [];
+  const groupIds = memberships.map((membership) => membership.groupId);
+  const now = new Date();
+  const rules = tx.priceAdjustment
+    ? await tx.priceAdjustment.findMany({
+        where: {
+          businessId,
+          isActive: true,
+          targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] },
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            {
+              OR: [
+                { targetScope: "ALL_CUSTOMERS" },
+                { targetScope: "CUSTOMER", customerId },
+                ...(groupIds.length ? [{ targetScope: "GROUP", groupId: { in: groupIds } }] : []),
+              ],
+            },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
+  // A manually selected discount is an explicit choice. Positive surcharges
+  // do not count as discount stacking and must not suppress customer benefits.
+  const manualDiscounts = manualSelections.length && tx.priceAdjustment
+    ? await tx.priceAdjustment.findMany({
+        where: {
+          businessId,
+          id: { in: manualSelections.map((selection) => selection.adjustmentId) },
+          isActive: true,
+          percentage: { lt: 0 },
+          targetScope: "MANUAL",
+        },
+        select: { id: true },
+      })
+    : [];
+  const manuallySelectedAutomaticRule = rules.some((rule) =>
+    manualSelections.some((selection) => selection.adjustmentId === rule.id),
+  );
+  if (manuallySelectedAutomaticRule) {
+    throw new AppError(
+      "Automatic customer discounts are applied automatically and cannot be selected manually",
+      422,
+    );
+  }
+
+  let eligibleRules = manualDiscounts.length
+    ? rules.filter((rule) => rule.allowStacking)
+    : rules;
+
+  if (eligibleRules.length > 1 && eligibleRules.some((rule) => !rule.allowStacking)) {
+    eligibleRules = [eligibleRules.slice().sort((a, b) => a.percentage - b.percentage)[0]!];
+  }
+
+  return eligibleRules.flatMap((rule) => {
+    const itemIndexes = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !rule.excludedServiceIds.includes(item.serviceId))
+      .map(({ index }) => index);
+    if (!itemIndexes.length) return [];
+    return [{
+      adjustmentId: rule.id,
+      scope: itemIndexes.length === items.length ? "INVOICE" as const : "ITEMS" as const,
+      ...(itemIndexes.length === items.length ? {} : { itemIndexes }),
+    }];
+  });
 }
 
 export interface CreateInvoiceData {
@@ -169,9 +290,19 @@ export async function createInvoiceWithTx(
       totalPrice: item.lineTotal,
     }));
 
-  const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items);
+  const automaticAdjustments = await resolveAutomaticDiscountSelections(
+    tx,
+    businessId,
+    order.customerId,
+    order.items,
+    [],
+  );
+  const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items, {
+    adjustments: automaticAdjustments,
+    automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
+  });
 
-  return tx.invoice.create({
+  const invoice = await tx.invoice.create({
     data: {
       subtotal: calculation.subtotal,
       adjustedSubtotal: calculation.adjustedSubtotal,
@@ -221,6 +352,14 @@ export async function createInvoiceWithTx(
       },
     },
   });
+
+  // Keep the order list total aligned when an invoice is issued separately
+  // for an existing order and an automatic discount is applied.
+  await tx.order.update({
+    where: { id: order.id },
+    data: { orderTotal: invoice.totalAmount },
+  });
+  return invoice;
 }
 
 export async function createInvoiceFromOrderWithTx(
@@ -272,9 +411,20 @@ export async function createInvoiceFromOrderWithTx(
       totalPrice: item.lineTotal,
     }));
 
-  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, pricingOptions);
+  const automaticAdjustments = await resolveAutomaticDiscountSelections(
+    tx,
+    business.id,
+    order.customerId,
+    order.items,
+    pricingOptions.adjustments ?? [],
+  );
+  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, {
+    ...pricingOptions,
+    adjustments: [...(pricingOptions.adjustments ?? []), ...automaticAdjustments],
+    automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
+  });
 
-  return tx.invoice.create({
+  const invoice = await tx.invoice.create({
     data: {
       subtotal: calculation.subtotal,
       adjustedSubtotal: calculation.adjustedSubtotal,
@@ -324,8 +474,17 @@ export async function createInvoiceFromOrderWithTx(
       },
     },
   });
-}
 
+  // Keep the order list total aligned with the discounted invoice created
+  // in this same transaction.
+  await tx.order.update({
+    where: { id: order.id },
+    data: { orderTotal: invoice.totalAmount },
+  });
+
+  return invoice;
+
+}
 /**
  * Tenant- and branch-scoped invoice lookup.
  *

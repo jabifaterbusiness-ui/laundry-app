@@ -611,6 +611,11 @@ export function OrdersPage() {
     () => new Map((customerPricesQuery.data?.data ?? []).map((entry) => [entry.serviceId, entry.unitPrice])),
     [customerPricesQuery.data],
   );
+  const customerPricesReady =
+    activeWorkspace?.mode === "edit" ||
+    !formCustomerId ||
+    customerPricesQuery.isSuccess ||
+    Boolean(customerPricesQuery.data);
   const getEffectiveUnitPrice = (service: Service) =>
     customerPriceMap.get(service.id) ?? service.unitPrice;
 
@@ -628,10 +633,12 @@ export function OrdersPage() {
   const expectedReadyAt =
     activeWorkspace?.draft.expectedReadyAt ?? "";
 
-  const formTotal = lines.reduce((sum, line) => {
-    const service = selectedServices.get(line.serviceId);
-    return sum + (service ? line.quantity * getEffectiveUnitPrice(service) : 0);
-  }, 0);
+  const formTotal = customerPricesReady
+    ? lines.reduce((sum, line) => {
+        const service = selectedServices.get(line.serviceId);
+        return sum + (service ? line.quantity * getEffectiveUnitPrice(service) : 0);
+      }, 0)
+    : null;
 
   function closeForm() {
     if (activeWorkspace?.mode === "edit" && activeWorkspaceId) {
@@ -940,10 +947,6 @@ export function OrdersPage() {
         </thead>
         <tbody>
           {sectionOrders.map((order) => {
-            const customer = customers.find(
-              (item) => item.id === order.customerId,
-            );
-
             return (
               <tr key={order.id}>
                 <td>
@@ -954,7 +957,7 @@ export function OrdersPage() {
                     {order.orderNumber}
                   </button>
                 </td>
-                <td>{customer?.name ?? order.customerId}</td>
+                <td>{order.customer?.name ?? "Customer unavailable"}</td>
                 <td>{statusLabel(order.status)}</td>
                 <td>{formatMoney(order.orderTotal)}</td>
                 <td>{formatDate(order.expectedReadyAt)}</td>
@@ -1093,9 +1096,10 @@ export function OrdersPage() {
                     ? line.quantity * service.pieces
                     : 0;
 
-                  const lineTotal = service
-                    ? line.quantity * getEffectiveUnitPrice(service)
-                    : 0;
+                  const lineTotal =
+                    service && customerPricesReady
+                      ? line.quantity * getEffectiveUnitPrice(service)
+                      : null;
 
                   return (
                     <tr key={`${index}-${line.serviceId}`}>
@@ -1359,12 +1363,14 @@ export function OrdersPage() {
                       <td>{totalPieces}</td>
 
                       <td>
-                        {service
-                          ? formatMoney(service.unitPrice)
-                          : "-"}
+                        {!customerPricesReady
+                          ? "Loading customer price…"
+                          : service
+                            ? formatMoney(getEffectiveUnitPrice(service))
+                            : "-"}
                       </td>
 
-                      <td>{formatMoney(lineTotal)}</td>
+                      <td>{lineTotal === null ? "—" : formatMoney(lineTotal)}</td>
 
                       <td>
                         <button
@@ -1386,7 +1392,7 @@ export function OrdersPage() {
             </button>
 
             <p>
-              <strong>Order Total: {formatMoney(formTotal)}</strong>
+              <strong>Order Total: {formTotal === null ? "Loading customer prices…" : formatMoney(formTotal)}</strong>
             </p>
 
             <div>
@@ -1516,11 +1522,20 @@ export function OrdersPage() {
               </section>
             )}
 
+            {formCustomerId && activeWorkspace?.mode !== "edit" && customerPricesQuery.isLoading && (
+              <p role="status">Loading this customer's agreed service prices before calculating the order…</p>
+            )}
+            {formCustomerId && activeWorkspace?.mode !== "edit" && customerPricesQuery.isError && !customerPricesQuery.data && (
+              <div role="alert">
+                <p>Unable to load this customer's agreed prices. The order is blocked to prevent standard prices being used by mistake.</p>
+                <button type="button" onClick={() => void customerPricesQuery.refetch()} disabled={customerPricesQuery.isFetching}>Retry customer pricing</button>
+              </div>
+            )}
             {formError && <p role="alert">{formError}</p>}
 
             <button
               type="submit"
-              disabled={createMutation.isPending || editMutation.isPending}
+              disabled={createMutation.isPending || editMutation.isPending || (activeWorkspace?.mode !== "edit" && !customerPricesReady)}
             >
               {editMutation.isPending
                 ? "Saving changes..."

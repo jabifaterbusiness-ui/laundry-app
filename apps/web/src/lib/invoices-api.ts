@@ -204,6 +204,7 @@ export type InvoiceHistoryEntry = {
   version: number;
   reason: string;
   actorUserId: string;
+  actorName?: string | null;
   snapshot: Record<string, unknown>;
   expiresAt: string;
   createdAt: string;
