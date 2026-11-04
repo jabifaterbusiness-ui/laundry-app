@@ -89,6 +89,7 @@ export function PayrollCompensationSection({
         {
           accessToken,
         },
+        branchId,
       ),
     enabled: Boolean(accessToken && branchId && canView),
   });
@@ -169,6 +170,7 @@ export function PayrollCompensationSection({
         {
           accessToken,
         },
+        branchId,
       ),
     onSuccess: async () => {
       setFormOpen(false);

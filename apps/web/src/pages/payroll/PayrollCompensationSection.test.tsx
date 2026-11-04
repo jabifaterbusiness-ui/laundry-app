@@ -54,6 +54,7 @@ const compensation = [
     id: "comp-1",
     businessId: "biz-1",
     employeeId: "employee-1",
+    branchId: null,
     basicSalary: 150000,
     effectiveFrom: "2026-09-01T00:00:00.000Z",
     effectiveTo: null,
@@ -164,6 +165,7 @@ describe("PayrollCompensationSection", () => {
         {
           accessToken: "token",
         },
+        "branch-1",
       );
     });
   });
