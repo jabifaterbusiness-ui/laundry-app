@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { decryptWhatsAppAccessToken } from "./whatsapp-token-crypto.js";
@@ -86,8 +87,12 @@ export async function sendApprovedWhatsAppTemplate(input: {
     text: { body: `Template: ${template.name}` },
   };
   const eventKey = createHash("sha256").update(`MESSAGE_SENT:${input.businessId}:${providerMessageId}`).digest("hex");
-  await prisma.whatsAppWebhookEvent.create({
-    data: { eventKey, businessId: input.businessId, contactPhone: normalizeWhatsAppRecipient(customer.phone), eventType: "MESSAGE_SENT", providerMessageId, payload },
-  });
+  try {
+    await prisma.whatsAppWebhookEvent.create({
+      data: { eventKey, businessId: input.businessId, contactPhone: normalizeWhatsAppRecipient(customer.phone), eventType: "MESSAGE_SENT", providerMessageId, payload },
+    });
+  } catch {
+    logger.warn({ businessId: input.businessId, providerMessageId }, "WhatsApp template sent but inbox history could not be persisted");
+  }
   return { providerMessageId, customerId: customer.id, phone: customer.phone, template: template.name, status: "SENT" };
 }
