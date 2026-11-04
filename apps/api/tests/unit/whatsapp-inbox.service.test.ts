@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  eventFindMany: vi.fn(),
+  eventFindMany: vi.fn(),\n  eventFindFirst: vi.fn(),
   eventCreate: vi.fn(),
   eventUpdateMany: vi.fn(),
   customerFindMany: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
-    whatsAppWebhookEvent: { findMany: mocks.eventFindMany, create: mocks.eventCreate, updateMany: mocks.eventUpdateMany },
+    whatsAppWebhookEvent: { findMany: mocks.eventFindMany, findFirst: mocks.eventFindFirst, create: mocks.eventCreate, updateMany: mocks.eventUpdateMany },
     customer: { findMany: mocks.customerFindMany, findFirst: mocks.customerFindFirst },
     whatsAppBusinessConnection: { findUnique: mocks.connectionFindUnique },
   },
@@ -26,7 +26,7 @@ import { listWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppCo
 describe("WhatsApp tenant inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.eventFindMany.mockResolvedValue([]);
+    mocks.eventFindMany.mockResolvedValue([]);\n    mocks.eventFindFirst.mockResolvedValue({ payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) }, receivedAt: new Date(Date.now() - 60_000) });
     mocks.eventCreate.mockResolvedValue({});
     mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
     mocks.customerFindMany.mockResolvedValue([]);
