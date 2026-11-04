@@ -56,7 +56,7 @@ describe("WhatsApp tenant inbox", () => {
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) },
       receivedAt: new Date(Date.now() - 60_000),
     });
-    const result = await sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", body: "Thanks for messaging us" });
+    const result = await sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", phone: "2348012345678", body: "Thanks for messaging us" });
     expect(mocks.sendText).toHaveBeenCalledWith({ businessId: "business-1", to: "2348012345678", body: "Thanks for messaging us" });
     expect(result.status).toBe("SENT");
   });
@@ -66,14 +66,14 @@ describe("WhatsApp tenant inbox", () => {
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 25 * 60 * 60) },
       receivedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
     });
-    await expect(sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", body: "Hello again" }))
+    await expect(sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", phone: "2348012345678", body: "Hello again" }))
       .rejects.toThrow("24-hour customer-service window has expired");
     expect(mocks.sendText).not.toHaveBeenCalled();
   });
 
   it("marks only this tenant customer's inbound messages as read", async () => {
     mocks.eventFindMany.mockResolvedValue([{ id: "in-1", payload: { from: "2348012345678" } }]);
-    const result = await markWhatsAppConversationRead({ businessId: "business-1", customerId: "customer-1" });
+    const result = await markWhatsAppConversationRead({ businessId: "business-1", customerId: "customer-1", phone: "2348012345678" });
     expect(result.markedRead).toBe(1);
     expect(mocks.eventUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "business-1", id: { in: ["in-1"] } }) }));
   });
