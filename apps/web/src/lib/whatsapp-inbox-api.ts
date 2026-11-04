@@ -37,3 +37,20 @@ export async function markWhatsAppConversationRead(customerId: string, accessTok
     { method: "POST", accessToken },
   );
 }
+
+export interface ApprovedWhatsAppTemplate {
+  id: string;
+  name: string;
+  language: string;
+  category: string;
+  bodyVariableCount: number;
+}
+export async function getApprovedWhatsAppTemplates(accessToken: string | null) {
+  return apiFetch<{ data: ApprovedWhatsAppTemplate[] }>("/whatsapp/inbox/templates", { accessToken });
+}
+export async function sendWhatsAppTemplate(input: { customerId: string; templateName: string; language: string; variables: string[] }, accessToken: string | null) {
+  return apiFetch<{ providerMessageId: string; customerId: string; phone: string; template: string; status: string }>(
+    "/whatsapp/inbox/templates/send",
+    { method: "POST", accessToken, body: JSON.stringify(input) },
+  );
+}
