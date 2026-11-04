@@ -30,3 +30,10 @@ export async function sendWhatsAppReply(customerId: string, body: string, access
     { method: "POST", accessToken, body: JSON.stringify({ body }) },
   );
 }
+
+export async function markWhatsAppConversationRead(customerId: string, accessToken: string | null) {
+  return apiFetch<{ markedRead: number }>(
+    `/whatsapp/inbox/conversations/${encodeURIComponent(customerId)}/read`,
+    { method: "POST", accessToken },
+  );
+}
