@@ -20,7 +20,7 @@ whatsappInboxRouter.get("/conversations", requirePermission("customers.view"), a
 
 whatsappInboxRouter.post("/conversations/replies", requirePermission("customers.update"), asyncHandler(async (req, res) => {
   const input = z.object({
-    customerId: z.string().uuid().optional(),
+    customerId: z.string().uuid().nullable().optional(),
     phone: z.string().min(8).max(32),
     body: z.string().trim().min(1).max(4096),
   }).strict().parse(req.body);
@@ -29,7 +29,7 @@ whatsappInboxRouter.post("/conversations/replies", requirePermission("customers.
 }));
 
 whatsappInboxRouter.post("/conversations/read", requirePermission("customers.view"), asyncHandler(async (req, res) => {
-  const input = z.object({ customerId: z.string().uuid().optional(), phone: z.string().min(8).max(32) }).strict().parse(req.body);
+  const input = z.object({ customerId: z.string().uuid().nullable().optional(), phone: z.string().min(8).max(32) }).strict().parse(req.body);
   const result = await markWhatsAppConversationRead({ businessId: businessId(req), ...input });
   res.status(200).json(result);
 }));
@@ -40,7 +40,7 @@ whatsappInboxRouter.get("/templates", requirePermission("customers.view"), async
 
 whatsappInboxRouter.post("/templates/send", requirePermission("customers.update"), asyncHandler(async (req, res) => {
   const input = z.object({
-    customerId: z.string().uuid().optional(),
+    customerId: z.string().uuid().nullable().optional(),
     phone: z.string().min(8).max(32),
     templateName: z.string().min(1).max(512),
     language: z.string().min(2).max(32),
