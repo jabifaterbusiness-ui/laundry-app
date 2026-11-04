@@ -32,21 +32,21 @@ export function WhatsAppInboxPanel() {
   useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id, selectedTemplate?.bodyVariableCount]);
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
   const readMutation = useMutation({
-    mutationFn: (customerId: string) => markWhatsAppConversationRead(customerId, accessToken),
+    mutationFn: (conversation: WhatsAppConversation) => markWhatsAppConversationRead({ customerId: conversation.customerId, phone: conversation.phone }, accessToken),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }),
   });
   const templateMutation = useMutation({
     mutationFn: () => {
-      if (!selected?.customerId || !selectedTemplate) throw new Error("Select a customer and an approved template.");
-      return sendWhatsAppTemplate({ customerId: selected.customerId, templateName: selectedTemplate.name, language: selectedTemplate.language, variables: templateVariables }, accessToken);
+      if (!selected || !selectedTemplate) throw new Error("Select a conversation and an approved template.");
+      return sendWhatsAppTemplate({ customerId: selected.customerId, phone: selected.phone, templateName: selectedTemplate.name, language: selectedTemplate.language, variables: templateVariables }, accessToken);
     },
     onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables(Array(selectedTemplate?.bodyVariableCount ?? 0).fill("")); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }); },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send approved template."),
   });
   const sendMutation = useMutation({
     mutationFn: () => {
-      if (!selected?.customerId) throw new Error("This number is not linked to a customer record yet.");
-      return sendWhatsAppReply(selected.customerId, draft, accessToken);
+      if (!selected) throw new Error("Select a customer conversation first.");
+      return sendWhatsAppReply({ customerId: selected.customerId, phone: selected.phone, body: draft }, accessToken);
     },
     onSuccess: async () => {
       setDraft("");
@@ -70,7 +70,7 @@ export function WhatsAppInboxPanel() {
         <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(0, 1.7fr)", gap: 14, marginTop: 18, minHeight: 430 }}>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 13, overflow: "auto", maxHeight: 520 }}>
             {conversations.map((conversation: WhatsAppConversation) => (
-              <button key={conversation.phone} type="button" onClick={() => { setSelectedPhone(conversation.phone); setFeedback(""); if (conversation.customerId && conversation.unreadCount > 0) readMutation.mutate(conversation.customerId); }} style={{ display: "block", width: "100%", textAlign: "left", padding: 13, border: 0, borderBottom: "1px solid #edf2f7", background: selected?.phone === conversation.phone ? "#ecfdf5" : "#fff", cursor: "pointer" }}>
+              <button key={conversation.phone} type="button" onClick={() => { setSelectedPhone(conversation.phone); setFeedback(""); if (conversation.unreadCount > 0) readMutation.mutate(conversation); }} style={{ display: "block", width: "100%", textAlign: "left", padding: 13, border: 0, borderBottom: "1px solid #edf2f7", background: selected?.phone === conversation.phone ? "#ecfdf5" : "#fff", cursor: "pointer" }}>
                 <strong style={{ display: "block", color: "#0f172a" }}>{conversation.customerName}</strong>
                 <small style={{ color: "#64748b" }}>{conversation.phone}</small>
                 <span style={{ display: "block", color: "#475569", fontSize: 12, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", marginTop: 5 }}>{conversation.lastMessage}</span>
@@ -93,17 +93,17 @@ export function WhatsAppInboxPanel() {
                 ))}
               </div>
               <form onSubmit={(event) => { event.preventDefault(); sendMutation.mutate(); }} style={{ padding: 12, borderTop: "1px solid #e2e8f0" }}>
-                {!selected.customerId ? <p style={{ color: "#b45309", fontSize: 13 }}>This number is not linked to a customer record. Add the customer to your records before replying.</p> : null}
+                
                 <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} maxLength={4096} placeholder="Write a WhatsApp reply…" style={{ width: "100%", resize: "vertical", border: "1px solid #cbd5e1", borderRadius: 10, padding: 10, boxSizing: "border-box" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginTop: 8 }}>
                   <small style={{ color: "#64748b" }}>Free-form replies are available within 24 hours of the customer's last message.</small>
-                  <button type="submit" disabled={!selected.customerId || !draft.trim() || sendMutation.isPending} style={{ background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{sendMutation.isPending ? "Sending…" : "Send reply"}</button>
+                  <button type="submit" disabled={!draft.trim() || sendMutation.isPending} style={{ background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{sendMutation.isPending ? "Sending…" : "Send reply"}</button>
                 </div>
                 {feedback ? <p role="status" style={{ color: sendMutation.isError || templateMutation.isError ? "#b91c1c" : "#047857", fontSize: 13, marginBottom: 0 }}>{feedback}</p> : null}
               </form>
               <details style={{ padding: "0 12px 12px" }}>
                 <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700 }}>Send an approved template (outside the 24-hour reply window)</summary>
-                {!selected.customerId ? <p style={{ color: "#b45309", fontSize: 13 }}>Link this phone number to a customer record before sending a template.</p> : null}
+                
                 {templatesQuery.isLoading ? <p>Loading approved templates…</p> : null}
                 {templatesQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>Could not load templates from Meta. Check the WhatsApp connection.</p> : null}
                 {templates.length === 0 && !templatesQuery.isLoading && !templatesQuery.isError ? <p style={{ color: "#64748b", fontSize: 13 }}>No approved templates are available in this company’s WhatsApp account yet. Create and get a template approved in WhatsApp Manager first.</p> : null}
@@ -119,7 +119,7 @@ export function WhatsAppInboxPanel() {
                         <input value={templateVariables[index] ?? ""} onChange={(event) => setTemplateVariables((current) => { const values = [...current]; values[index] = event.target.value; return values; })} maxLength={1024} placeholder={"Value for {{" + (index + 1) + "}}"} style={{ padding: 9, border: "1px solid #cbd5e1", borderRadius: 8 }} />
                       </label>
                     ))}
-                    <button type="button" disabled={!selected.customerId || templateMutation.isPending || templateVariables.length !== selectedTemplate.bodyVariableCount || templateVariables.some((value) => !value.trim())} onClick={() => templateMutation.mutate()} style={{ justifySelf: "start", background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{templateMutation.isPending ? "Sending template…" : "Send approved template"}</button>
+                    <button type="button" disabled={templateMutation.isPending || templateVariables.length !== selectedTemplate.bodyVariableCount || templateVariables.some((value) => !value.trim())} onClick={() => templateMutation.mutate()} style={{ justifySelf: "start", background: "#0f766e", color: "#fff", border: 0, borderRadius: 9, padding: "9px 15px", fontWeight: 700 }}>{templateMutation.isPending ? "Sending template…" : "Send approved template"}</button>
                   </div>
                 ) : null}
               </details>
