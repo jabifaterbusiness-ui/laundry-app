@@ -142,7 +142,7 @@ describe("processWhatsAppWebhook", () => {
     const result = await processWhatsAppWebhook(body, makeSignature(body));
     expect(result).toEqual({ processedStatuses: 0, receivedMessages: 1 });
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      create: expect.objectContaining({ eventType: "MESSAGE_RECEIVED", providerMessageId: "wamid-inbound" }),
+      create: expect.objectContaining({ eventType: "MESSAGE_RECEIVED", providerMessageId: "wamid-inbound", contactPhone: "2348000000000" }),
     }));
   });
 
