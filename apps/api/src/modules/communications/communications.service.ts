@@ -80,7 +80,7 @@ async function deliverMessage(input: {
       })).id;
     } else {
       await assertWhatsAppMessagingEnabled();
-      providerMessageId = (await sendWhatsAppText({ to: input.destination, body: input.body })).id;
+      providerMessageId = (await sendWhatsAppText({ businessId: input.businessId, to: input.destination, body: input.body })).id;
     }
     // A fast provider webhook may arrive before the send request returns.
     // Only promote PENDING rows so an already-recorded DELIVERED/READ/FAILED
