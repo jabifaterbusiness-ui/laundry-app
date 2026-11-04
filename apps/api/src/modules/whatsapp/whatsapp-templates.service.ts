@@ -5,6 +5,7 @@ import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { decryptWhatsAppAccessToken } from "./whatsapp-token-crypto.js";
 import { normalizeWhatsAppRecipient } from "../invoices/providers/whatsapp.provider.js";
+import { replayPendingWhatsAppStatusEvents } from "./whatsapp-webhook.service.js";
 
 type TemplateComponent = { type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; url?: string }> };
 type MetaTemplate = { id: string; name: string; status: string; language: string; category: string; components?: TemplateComponent[] };
@@ -91,6 +92,7 @@ export async function sendApprovedWhatsAppTemplate(input: {
     await prisma.whatsAppWebhookEvent.create({
       data: { eventKey, businessId: input.businessId, contactPhone: normalizeWhatsAppRecipient(customer.phone), eventType: "MESSAGE_SENT", providerMessageId, payload },
     });
+    await replayPendingWhatsAppStatusEvents(providerMessageId);
   } catch {
     logger.warn({ businessId: input.businessId, providerMessageId }, "WhatsApp template sent but inbox history could not be persisted");
   }
