@@ -18,7 +18,12 @@ interface WhatsAppApiResponse {
   error?: { message?: string };
 }
 
-export function normalizeWhatsAppRecipient(value: string): string {\n  const normalized = value.replace(/\\D/g, "");\n  return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized;\n}\n\nasync function resolveCredentials(businessId?: string) {
+export function normalizeWhatsAppRecipient(value: string): string {
+  const normalized = value.replace(/\D/g, "");
+  return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized;
+}
+
+async function resolveCredentials(businessId?: string) {
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = config.receiptDelivery;
   if (!whatsappApiVersion) throw new Error("WhatsApp provider API version is not configured");
   if (businessId) {
