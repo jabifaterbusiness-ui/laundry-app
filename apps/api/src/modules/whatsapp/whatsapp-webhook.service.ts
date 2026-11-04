@@ -80,7 +80,8 @@ const allowedPreviousStatuses: Record<string, string[]> = {
   SENT: ["PENDING", "SENT"],
   DELIVERED: ["PENDING", "SENT", "DELIVERED"],
   READ: ["PENDING", "SENT", "DELIVERED", "READ"],
-  FAILED: ["PENDING", "SENT", "DELIVERED"],
+  // A late failure callback must never downgrade a message already delivered.
+  FAILED: ["PENDING", "SENT"],
 };
 
 async function processStatus(status: WhatsAppStatus) {
