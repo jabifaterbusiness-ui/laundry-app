@@ -86,7 +86,7 @@ export async function sendApprovedWhatsAppTemplate(input: {
   };
   const eventKey = createHash("sha256").update(`MESSAGE_SENT:${input.businessId}:${providerMessageId}`).digest("hex");
   await prisma.whatsAppWebhookEvent.create({
-    data: { eventKey, businessId: input.businessId, eventType: "MESSAGE_SENT", providerMessageId, payload },
+    data: { eventKey, businessId: input.businessId, contactPhone: customer.phone.replace(/\D/g, ""), eventType: "MESSAGE_SENT", providerMessageId, payload },
   });
   return { providerMessageId, customerId: customer.id, phone: customer.phone, template: template.name, status: "SENT" };
 }
