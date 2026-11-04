@@ -6,7 +6,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { decryptWhatsAppAccessToken } from "./whatsapp-token-crypto.js";
 import { normalizeWhatsAppRecipient } from "../invoices/providers/whatsapp.provider.js";
 
-type TemplateComponent = { type?: string; text?: string; format?: string };
+type TemplateComponent = { type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; url?: string }> };
 type MetaTemplate = { id: string; name: string; status: string; language: string; category: string; components?: TemplateComponent[] };
 type TemplateListResponse = { data?: MetaTemplate[]; paging?: { next?: string }; error?: { message?: string } };
 
@@ -40,8 +40,8 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     // requiring dynamic header or URL-button parameters rather than offering
     // a send action that Meta would reject.
     .filter((template) => !(template.components ?? []).some((component) =>
-      (component.type === "HEADER" && typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)) ||
-      (component.type === "BUTTONS" && typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text))
+      (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)))) ||
+      (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => typeof button.url === "string" && /\{\{\s*\d+\s*\}\}/.test(button.url)))
     ))
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
