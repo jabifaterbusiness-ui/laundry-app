@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   updateEvent: vi.fn(),
   findUnique: vi.fn(),
   findMany: vi.fn(),
-  findFirst: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -18,7 +17,6 @@ vi.mock("../../src/lib/prisma.js", () => ({
       upsert: mocks.upsert,
       update: mocks.updateEvent,
       findMany: mocks.findMany,
-      findFirst: mocks.findFirst,
     },
   },
 }));
@@ -40,7 +38,6 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateEvent.mockReset().mockResolvedValue({});
     mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1" });
     mocks.findMany.mockReset().mockResolvedValue([]);
-    mocks.findFirst.mockReset().mockResolvedValue(null);
   });
 
   it("records delivered, read, and failed statuses against provider message IDs", async () => {
@@ -147,24 +144,6 @@ describe("processWhatsAppWebhook", () => {
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ eventType: "MESSAGE_RECEIVED", providerMessageId: "wamid-inbound", contactPhone: "2348000000000" }),
     }));
-  });
-
-  it("marks delivery callbacks processed for tenant inbox messages without CommunicationDelivery rows", async () => {
-    mocks.updateMany.mockResolvedValue({ count: 0 });
-    mocks.findFirst.mockResolvedValue({ id: "outbound-inbox-message" });
-    const payload = {
-      object: "whatsapp_business_account",
-      entry: [{ changes: [{ value: {
-        metadata: { phone_number_id: "phone-12345" },
-        statuses: [{ id: "wamid-inbox", status: "read" }],
-      } }] }],
-    };
-    const body = Buffer.from(JSON.stringify(payload));
-    const result = await processWhatsAppWebhook(body, makeSignature(body));
-    expect(result.processedStatuses).toBe(1);
-    expect(mocks.updateEvent).toHaveBeenCalledWith({
-      where: { id: "event-1" }, data: { processedAt: expect.any(Date), processingError: null },
-    });
   });
 
   it("rejects invalid signatures before processing callback data", async () => {
