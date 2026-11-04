@@ -87,7 +87,7 @@ export async function sendApprovedWhatsAppTemplate(input: {
     method: "POST",
     headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      messaging_product: "whatsapp", recipient_type: "individual", to: normalizeWhatsAppRecipient(customer.phone), type: "template",
+      messaging_product: "whatsapp", recipient_type: "individual", to: recipient, type: "template",
       template: { name: template.name, language: { code: template.language }, ...(components ? { components } : {}) },
     }),
   });
