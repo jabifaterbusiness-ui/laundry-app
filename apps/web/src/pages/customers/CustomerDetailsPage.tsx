@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../lib/api-client.js";
 import { getCustomer } from "../../lib/customers-api.js";
+import { listCustomerGroups } from "../../lib/communications-api.js";
 import { listServices, listCustomerServicePrices, saveCustomerServicePrice, deleteCustomerServicePrice } from "../../lib/services-api.js";
 import {
   fundCustomerAccount,
@@ -43,6 +44,12 @@ export function CustomerDetailsPage() {
     queryKey: ["customer", id],
     queryFn: () => getCustomer(id!, { accessToken }),
     enabled: Boolean(id),
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: ["communications", "customer-groups"],
+    queryFn: () => listCustomerGroups({ accessToken }),
+    enabled: Boolean(accessToken && id),
   });
 
   const servicesQuery = useQuery({
@@ -184,6 +191,7 @@ export function CustomerDetailsPage() {
         <p><strong>Status:</strong> {customer.lifecycleStatus}</p>
         <p><strong>Status reason:</strong> {customer.statusReason ?? "-"}</p>
         <p><strong>Notes:</strong> {customer.notes ?? "-"}</p>
+        <p><strong>Customer groups:</strong> {(groupsQuery.data?.data ?? []).filter((group) => group.members.some((member) => member.customerId === customer.id)).map((group) => group.name).join(", ") || "No group membership"}</p>
       </div>
 
       <section aria-label="Customer account">

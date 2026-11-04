@@ -6,6 +6,7 @@ import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage.js";
 import { SetupPage } from "./pages/auth/SetupPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
+import { CustomerGroupsPage } from "./pages/customers/CustomerGroupsPage.js";
 import { CustomerDetailsPage } from "./pages/customers/CustomerDetailsPage.js";
 import { CustomerWorkstationPage } from "./pages/customers/CustomerWorkstationPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
@@ -50,6 +51,7 @@ function AuthenticatedLayout() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/data-management" element={<DataManagementPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/groups" element={<CustomerGroupsPage />} />
           <Route path="/customers/:id" element={<CustomerDetailsPage />} />
           <Route path="/customer-workstation" element={<CustomerWorkstationPage />} />
           <Route path="/services" element={<ServicesPage />} />

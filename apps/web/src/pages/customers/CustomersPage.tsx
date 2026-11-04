@@ -132,6 +132,7 @@ export function CustomersPage() {
   return (
     <main>
       <h1>Customers</h1>
+      <button type="button" onClick={() => navigate("/customers/groups")} style={{ marginBottom: 16 }}>Customer Groups</button>
       <TableExportActions title="Complete customer list" filename="laundryangel-customers" loadRows={loadAllCustomersForExport} columns={[
         { header: "Customer name", value: (row) => row.name }, { header: "Phone", value: (row) => row.phone },
         { header: "Email", value: (row) => row.email }, { header: "Address", value: (row) => row.address },

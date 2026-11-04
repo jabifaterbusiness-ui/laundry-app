@@ -7,7 +7,7 @@ export interface AnnouncementInput {
 }
 export interface CustomerGroup {
   id: string; name: string; description: string | null;
-  _count: { members: number }; members: Array<{ customerId: string }>;
+  _count: { members: number }; members: Array<{ customerId: string; customer: { id: string; name: string; phone: string } }>;
 }
 export interface StatusNotificationRule {
   id: string; status: string; enabled: boolean; channel: CommunicationChannel | "BOTH";

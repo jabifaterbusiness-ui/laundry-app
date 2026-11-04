@@ -171,7 +171,7 @@ export async function removeOrderStatusRule(id: string, businessId: string) {
 export async function listCustomerGroups(businessId: string) {
   return prisma.customerGroup.findMany({
     where: { businessId },
-    include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+    include: { _count: { select: { members: true } }, members: { select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } } } },
     orderBy: { name: "asc" },
   });
 }
@@ -196,7 +196,7 @@ export async function saveCustomerGroup(input: {
         businessId: input.businessId, name: input.name, description: input.description ?? null,
         members: { create: ids.map((customerId) => ({ businessId: input.businessId, customerId })) },
       },
-      include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+      include: { _count: { select: { members: true } }, members: { select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } } } },
     });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
@@ -223,7 +223,7 @@ export async function updateCustomerGroup(input: {
       if (ids.length) await tx.customerGroupMember.createMany({ data: ids.map((customerId) => ({ businessId: input.businessId, groupId: group.id, customerId })) });
       return tx.customerGroup.findUniqueOrThrow({
         where: { id: group.id },
-        include: { _count: { select: { members: true } }, members: { select: { customerId: true } } },
+        include: { _count: { select: { members: true } }, members: { select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } } } },
       });
     });
   } catch (error) {
