@@ -51,6 +51,15 @@ describe("WhatsApp tenant inbox", () => {
     expect(result[0]?.messages.map((message) => message.direction)).toEqual(["INBOUND", "OUTBOUND"]);
   });
 
+  it("does not show a late failure after a message was delivered", async () => {
+    mocks.eventFindMany.mockResolvedValue([
+      { id: "out-1", eventType: "MESSAGE_SENT", payload: { id: "wamid-1", to: "2348012345678", timestamp: "1793800000", type: "text", text: { body: "Ready" } }, providerMessageId: "wamid-1", receivedAt: new Date("2026-11-04T10:00:00Z"), processedAt: null },
+      { id: "status-failed", eventType: "STATUS_FAILED", payload: { id: "wamid-1", status: "failed" }, providerMessageId: "wamid-1", receivedAt: new Date("2026-11-04T10:03:00Z"), processedAt: null },
+      { id: "status-delivered", eventType: "STATUS_DELIVERED", payload: { id: "wamid-1", status: "delivered" }, providerMessageId: "wamid-1", receivedAt: new Date("2026-11-04T10:02:00Z"), processedAt: null },
+    ]);
+    const result = await listWhatsAppConversations("business-1");
+    expect(result[0]?.messages[0]?.status).toBe("DELIVERED");
+  });
   it("sends a reply only within the customer's 24-hour service window", async () => {
     mocks.eventFindFirst.mockResolvedValue({
       payload: { from: "2348012345678", timestamp: String(Math.floor(Date.now() / 1000) - 60) },
