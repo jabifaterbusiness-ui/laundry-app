@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
@@ -35,10 +35,7 @@ function verifySignature(rawBody: Buffer, signature: string | undefined) {
   if (!signature || !signature.startsWith("sha256=")) {
     throw new AppError("Missing or invalid WhatsApp webhook signature", 401);
   }
-  const expected = createHash("sha256").update(rawBody).digest();
-  const { createHmac, timingSafeEqual } = require("node:crypto") as typeof import("node:crypto");
   const digest = createHmac("sha256", appSecret).update(rawBody).digest();
-  if (expected.length !== digest.length) throw new AppError("Invalid WhatsApp webhook signature", 401);
   let received: Buffer;
   try { received = Buffer.from(signature.slice(7), "hex"); } catch {
     throw new AppError("Invalid WhatsApp webhook signature", 401);
