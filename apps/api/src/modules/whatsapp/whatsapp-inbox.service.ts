@@ -67,7 +67,7 @@ export async function listWhatsAppConversations(businessId: string) {
 
   const phones = [...new Set(messages.map((message) => digits(message.phone)).filter(Boolean))];
   const customers = phones.length
-    ? await prisma.customer.findMany({ where: { businessId }, select: { id: true, name: true, phone: true } })
+    ? await prisma.customer.findMany({ where: { businessId, phone: { in: [...phones, ...phones.map((phone) => "+" + phone)] } }, select: { id: true, name: true, phone: true } })
     : [];
   const customerByPhone = new Map(customers.map((customer) => [digits(customer.phone), customer]));
 
@@ -127,16 +127,11 @@ export async function sendWhatsAppConversationReply(input: {
     throw new AppError("Connect this business's WhatsApp number before replying", 409);
   }
 
-  const recentInbound = await prisma.whatsAppWebhookEvent.findMany({
-    where: { businessId: input.businessId, eventType: "MESSAGE_RECEIVED" },
-    orderBy: { receivedAt: "desc" },
-    take: 1000,
-    select: { payload: true, receivedAt: true },
-  });
   const customerDigits = digits(customer.phone);
-  const lastInbound = recentInbound.find((event) => {
-    const payload = event.payload as MessagePayload;
-    return typeof payload.from === "string" && digits(payload.from) === customerDigits;
+  const lastInbound = await prisma.whatsAppWebhookEvent.findFirst({
+    where: { businessId: input.businessId, contactPhone: customerDigits, eventType: "MESSAGE_RECEIVED" },
+    orderBy: { receivedAt: "desc" },
+    select: { payload: true, receivedAt: true },
   });
   const lastInboundAt = lastInbound?.payload && (lastInbound.payload as MessagePayload).timestamp
     ? Number((lastInbound.payload as MessagePayload).timestamp) * 1000
@@ -153,7 +148,7 @@ export async function sendWhatsAppConversationReply(input: {
   const eventKey = createHash("sha256").update(`MESSAGE_SENT:${input.businessId}:${sent.id}`).digest("hex");
   await prisma.whatsAppWebhookEvent.create({
     data: {
-      eventKey, businessId: input.businessId, eventType: "MESSAGE_SENT",
+      eventKey, businessId: input.businessId, contactPhone: customerDigits, eventType: "MESSAGE_SENT",
       providerMessageId: sent.id, payload: payload as Prisma.InputJsonValue,
     },
   });
@@ -167,13 +162,10 @@ export async function markWhatsAppConversationRead(input: { businessId: string; 
   });
   if (!customer) throw new AppError("Customer not found in this business", 404);
   const inbound = await prisma.whatsAppWebhookEvent.findMany({
-    where: { businessId: input.businessId, eventType: "MESSAGE_RECEIVED", processedAt: null },
+    where: { businessId: input.businessId, contactPhone: digits(customer.phone), eventType: "MESSAGE_RECEIVED", processedAt: null },
     select: { id: true, payload: true },
   });
-  const matchingIds = inbound.filter((event) => {
-    const payload = event.payload as MessagePayload;
-    return typeof payload.from === "string" && digits(payload.from) === digits(customer.phone);
-  }).map((event) => event.id);
+  const matchingIds = inbound.map((event) => event.id);
   if (matchingIds.length) {
     await prisma.whatsAppWebhookEvent.updateMany({
       where: { businessId: input.businessId, id: { in: matchingIds }, processedAt: null },
