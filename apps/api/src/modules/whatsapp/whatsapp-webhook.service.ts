@@ -177,7 +177,7 @@ export async function processWhatsAppWebhook(rawBody: Buffer, signature: string 
         await persistEvent({
           ...context,
           ...(typeof message.id === "string" ? { providerMessageId: message.id } : {}),
-          ...(typeof message.from === "string" ? { contactPhone: message.from.replace(/\\D/g, "") } : {}),
+          ...(typeof message.from === "string" ? { contactPhone: message.from.replace(/\D/g, "") } : {}),
           eventType: "MESSAGE_RECEIVED",
           payload: message,
         });
