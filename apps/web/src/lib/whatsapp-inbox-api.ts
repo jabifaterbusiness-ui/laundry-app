@@ -48,7 +48,7 @@ export async function getApprovedWhatsAppTemplates(accessToken: string | null) {
   return apiFetch<{ data: ApprovedWhatsAppTemplate[] }>("/whatsapp/inbox/templates", { accessToken });
 }
 export async function sendWhatsAppTemplate(input: { customerId?: string | null; phone: string; templateName: string; language: string; variables: string[] }, accessToken: string | null) {
-  return apiFetch<{ providerMessageId: string; customerId: string; phone: string; template: string; status: string }>(
+  return apiFetch<{ providerMessageId: string; customerId: string | null; phone: string; template: string; status: string }>(
     "/whatsapp/inbox/templates/send",
     { method: "POST", accessToken, body: JSON.stringify(input) },
   );
