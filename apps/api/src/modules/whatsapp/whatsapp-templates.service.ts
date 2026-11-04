@@ -38,8 +38,8 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     // requiring dynamic header or URL-button parameters rather than offering
     // a send action that Meta would reject.
     .filter((template) => !(template.components ?? []).some((component) =>
-      (component.type === "HEADER" && typeof component.text === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(component.text)) ||
-      (component.type === "BUTTONS" && typeof component.text === "string" && /\\{\\{\\s*\\d+\\s*\\}\\}/.test(component.text))
+      (component.type === "HEADER" && typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)) ||
+      (component.type === "BUTTONS" && typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text))
     ))
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
