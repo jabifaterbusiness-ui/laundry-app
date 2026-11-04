@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
@@ -141,17 +139,6 @@ export async function sendWhatsAppConversationReply(input: {
   }
 
   const sent = await sendWhatsAppText({ businessId: input.businessId, to: customer.phone, body });
-  const payload: MessagePayload = {
-    id: sent.id, to: customer.phone, timestamp: String(Math.floor(Date.now() / 1000)),
-    type: "text", text: { body },
-  };
-  const eventKey = createHash("sha256").update(`MESSAGE_SENT:${input.businessId}:${sent.id}`).digest("hex");
-  await prisma.whatsAppWebhookEvent.create({
-    data: {
-      eventKey, businessId: input.businessId, contactPhone: customerDigits, eventType: "MESSAGE_SENT",
-      providerMessageId: sent.id, payload: payload as Prisma.InputJsonValue,
-    },
-  });
   return { id: sent.id, customerId: customer.id, customerName: customer.name, phone: customer.phone, body, sentAt: new Date().toISOString(), status: "SENT" };
 }
 
