@@ -18,16 +18,19 @@ whatsappInboxRouter.get("/conversations", requirePermission("customers.view"), a
   res.status(200).json({ data: await listWhatsAppConversations(businessId(req)) });
 }));
 
-whatsappInboxRouter.post("/conversations/:customerId/replies", requirePermission("customers.update"), asyncHandler(async (req, res) => {
-  const params = z.object({ customerId: z.string().uuid() }).parse(req.params);
-  const input = z.object({ body: z.string().trim().min(1).max(4096) }).strict().parse(req.body);
-  const result = await sendWhatsAppConversationReply({ businessId: businessId(req), customerId: params.customerId, body: input.body });
+whatsappInboxRouter.post("/conversations/replies", requirePermission("customers.update"), asyncHandler(async (req, res) => {
+  const input = z.object({
+    customerId: z.string().uuid().optional(),
+    phone: z.string().min(8).max(32),
+    body: z.string().trim().min(1).max(4096),
+  }).strict().parse(req.body);
+  const result = await sendWhatsAppConversationReply({ businessId: businessId(req), ...input });
   res.status(201).json(result);
 }));
 
-whatsappInboxRouter.post("/conversations/:customerId/read", requirePermission("customers.view"), asyncHandler(async (req, res) => {
-  const params = z.object({ customerId: z.string().uuid() }).parse(req.params);
-  const result = await markWhatsAppConversationRead({ businessId: businessId(req), customerId: params.customerId });
+whatsappInboxRouter.post("/conversations/read", requirePermission("customers.view"), asyncHandler(async (req, res) => {
+  const input = z.object({ customerId: z.string().uuid().optional(), phone: z.string().min(8).max(32) }).strict().parse(req.body);
+  const result = await markWhatsAppConversationRead({ businessId: businessId(req), ...input });
   res.status(200).json(result);
 }));
 
