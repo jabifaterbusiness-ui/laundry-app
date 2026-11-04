@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
+import { getWhatsAppConnection } from "../../lib/communications-api.js";
 import { getApprovedWhatsAppTemplates, getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, sendWhatsAppTemplate, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
 
 function formatTime(value: string) {
@@ -16,6 +17,8 @@ export function WhatsAppInboxPanel() {
   const [templateName, setTemplateName] = useState("");
   const [templateLanguage, setTemplateLanguage] = useState("");
   const [templateVariables, setTemplateVariables] = useState<string[]>([]);
+  const connectionQuery = useQuery({ queryKey: ["whatsapp", "connection"], queryFn: () => getWhatsAppConnection({ accessToken }), enabled: Boolean(accessToken) });
+  const isConnected = connectionQuery.data?.connection?.status === "CONNECTED";
   const conversationsQuery = useQuery({
     queryKey: ["whatsapp", "conversations"],
     queryFn: () => getWhatsAppConversations(accessToken),
@@ -23,10 +26,10 @@ export function WhatsAppInboxPanel() {
     refetchInterval: 15000,
   });
   const conversations = conversationsQuery.data?.data ?? [];
-  const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken), staleTime: 60000 });
+  const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken && isConnected), staleTime: 60000 });
   const templates = templatesQuery.data?.data ?? [];
   const selectedTemplate = templates.find((item) => item.name === templateName && item.language === templateLanguage) ?? templates[0] ?? null;
-  useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id]);
+  useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id, selectedTemplate?.bodyVariableCount]);
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
   const readMutation = useMutation({
     mutationFn: (customerId: string) => markWhatsAppConversationRead(customerId, accessToken),
@@ -59,7 +62,7 @@ export function WhatsAppInboxPanel() {
         <div><p style={{ color: "#0f766e", fontSize: 12, fontWeight: 800, letterSpacing: ".08em", margin: 0 }}>CUSTOMER MESSAGING</p><h2 style={{ margin: "5px 0" }}>WhatsApp inbox</h2><p style={{ color: "#64748b", margin: 0 }}>Receive customer messages and reply using your business WhatsApp number.</p></div>
         <span style={{ background: "#ecfdf5", color: "#047857", borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700 }}>Live updates · 15 sec</span>
       </div>
-      {conversationsQuery.isLoading ? <p>Loading conversations…</p> : null}
+      {!connectionQuery.isLoading && !isConnected ? <div style={{ marginTop: 18, padding: 24, background: "#fff7ed", borderRadius: 14, color: "#9a3412" }}>Connect this company’s WhatsApp Business number above to start receiving and replying to customer messages.</div> : null}\n      {conversationsQuery.isLoading || connectionQuery.isLoading ? <p>Loading conversations…</p> : null}
       {conversationsQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>WhatsApp conversations could not be loaded. Check the connection and refresh.</p> : null}
       {!conversationsQuery.isLoading && conversations.length === 0 ? <div style={{ marginTop: 18, padding: 30, textAlign: "center", background: "#f8fafc", borderRadius: 14 }}><h3>No customer messages yet</h3><p style={{ color: "#64748b" }}>When customers message your connected WhatsApp number, their conversations will appear here.</p></div> : null}
       {conversations.length > 0 ? (
