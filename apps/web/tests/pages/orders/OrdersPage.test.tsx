@@ -958,9 +958,9 @@ describe("OrdersPage customer-specific pricing", () => {
     await screen.findByText("No orders found.");
     await openNewOrderForCustomer(customerA);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Loading this customer's agreed service prices",
-    );
+    expect(await screen.findByText(
+      "Loading this customer's agreed service prices before calculating the order…",
+    )).toHaveAttribute("role", "status");
     expect(screen.getByRole("button", { name: /create order/i })).toBeDisabled();
 
     const serviceSelect = screen.getAllByRole("combobox").find((element) =>
