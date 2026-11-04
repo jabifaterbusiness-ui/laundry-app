@@ -63,3 +63,33 @@ export async function sendUnpickedReminders(input: { orderIds: string[]; channel
 export async function listCommunicationDeliveries(auth: { accessToken: string | null }) {
   return apiFetch<{ data: CommunicationDelivery[] }>("/communications/deliveries", { accessToken: auth.accessToken });
 }
+
+
+export interface WhatsAppBusinessConnection {
+  id: string;
+  wabaId: string;
+  phoneNumberId: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  status: string;
+  connectedAt: string;
+  tokenExpiresAt: string | null;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+}
+export interface WhatsAppConnectionStatus {
+  configured: boolean;
+  appId: string | null;
+  configurationId: string | null;
+  apiVersion: string | null;
+  connection: WhatsAppBusinessConnection | null;
+}
+export async function getWhatsAppConnection(auth: { accessToken: string | null }) {
+  return apiFetch<WhatsAppConnectionStatus>("/whatsapp/connection", { accessToken: auth.accessToken });
+}
+export async function completeWhatsAppConnection(input: { code: string; wabaId: string; phoneNumberId: string }, auth: { accessToken: string | null }) {
+  return apiFetch<{ connection: WhatsAppBusinessConnection }>("/whatsapp/connection/embedded-signup", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function disconnectWhatsAppConnection(auth: { accessToken: string | null }) {
+  return apiFetch<void>("/whatsapp/connection", { method: "DELETE", accessToken: auth.accessToken });
+}
