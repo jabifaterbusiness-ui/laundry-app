@@ -1,14 +1,18 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type BusinessScope = {
   businessId: string;
+  branchId?: string;
+  userId?: string;
 };
 
 type BranchScope = {
   businessId: string;
   branchId: string;
+  userId?: string;
 };
 
 type CreateInventoryItemInput = {
@@ -26,6 +30,7 @@ export async function createInventoryItem(
   scope: BusinessScope,
   input: CreateInventoryItemInput,
 ) {
+  if (!scope.branchId) throw new AppError("A valid branch context is required", 400);
   const name = input.name.trim();
 
   if (!name) {
@@ -36,6 +41,7 @@ export async function createInventoryItem(
     return await prisma.inventoryItem.create({
       data: {
         businessId: scope.businessId,
+        ownerBranchId: scope.branchId,
         name,
         sku: input.sku?.trim() || null,
         category: input.category?.trim() || null,
@@ -83,17 +89,17 @@ export async function updateInventoryItem(
   inventoryItemId: string,
   input: UpdateInventoryItemInput,
 ) {
+  if (!scope.branchId || !scope.userId) throw new AppError("A valid branch and user context are required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
   const existing = await prisma.inventoryItem.findFirst({
-    where: {
-      id: inventoryItemId,
-      businessId: scope.businessId,
-    },
+    where: { id: inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
   });
 
   if (!existing) {
     throw new AppError("Inventory item not found", 404);
   }
 
+  await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: existing.ownerBranchId, resourceId: inventoryItemId });
   const data: Prisma.InventoryItemUpdateInput = {};
 
   if (input.name !== undefined) {
@@ -106,10 +112,9 @@ export async function updateInventoryItem(
     const duplicate = await prisma.inventoryItem.findFirst({
       where: {
         businessId: scope.businessId,
+        ownerBranchId: existing.ownerBranchId,
         name,
-        NOT: {
-          id: inventoryItemId,
-        },
+        NOT: { id: inventoryItemId },
       },
     });
 
@@ -177,8 +182,11 @@ export async function listInventoryItems(
     pageSize: number;
   },
 ) {
+  if (!scope.branchId || !scope.userId) throw new AppError("A valid branch and user context are required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
   const where: Prisma.InventoryItemWhereInput = {
     businessId: scope.businessId,
+    OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }],
   };
 
   if (input.isActive !== undefined) {
@@ -187,11 +195,11 @@ export async function listInventoryItems(
 
   const term = input.search?.trim();
   if (term) {
-    where.OR = [
+    where.AND = [{ OR: [
       { name: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { category: { contains: term, mode: "insensitive" } },
-    ];
+    ] }];
   }
 
   const skip = (input.page - 1) * input.pageSize;

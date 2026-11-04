@@ -45,18 +45,21 @@ inventoryRouter.use(
 inventoryRouter.get(
   "/",
   requirePermission("inventory.view"),
+  asyncHandler(requireBranchContext),
   asyncHandler(listItems),
 );
 
 inventoryRouter.post(
   "/",
   requirePermission("inventory.manage"),
+  asyncHandler(requireBranchContext),
   asyncHandler(createItem),
 );
 
 inventoryRouter.patch(
   "/:id",
   requirePermission("inventory.manage"),
+  asyncHandler(requireBranchContext),
   asyncHandler(updateItem),
 );
 

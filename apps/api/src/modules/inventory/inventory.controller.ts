@@ -77,10 +77,11 @@ export async function createItem(
   res: Response,
 ) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const input = createInventoryItemSchema.parse(req.body);
 
   const item = await createInventoryItem(
-    { businessId },
+    { businessId, branchId, userId: req.user!.id },
     {
       name: input.name,
       ...(input.sku !== undefined && { sku: input.sku }),
@@ -121,11 +122,12 @@ export async function updateItem(
   res: Response,
 ) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = inventoryItemIdParamSchema.parse(req.params);
   const input = updateInventoryItemSchema.parse(req.body);
 
   const item = await updateInventoryItem(
-    { businessId },
+    { businessId, branchId, userId: req.user!.id },
     id,
     {
       ...(input.name !== undefined && { name: input.name }),
@@ -171,10 +173,11 @@ export async function listItems(
   res: Response,
 ) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const query = listInventoryItemsQuerySchema.parse(req.query);
 
   const result = await listInventoryItems(
-    { businessId },
+    { businessId, branchId, userId: req.user!.id },
     {
       page: query.page,
       pageSize: query.pageSize,
@@ -319,7 +322,7 @@ export async function listMovements(req: Request, res: Response) {
   const branchId = requireBranchId(req);
   const query = listInventoryMovementsQuerySchema.parse(req.query);
   const result = await listInventoryMovements(
-    { businessId, branchId },
+    { businessId, branchId, userId: req.user!.id },
     {
       page: query.page,
       pageSize: query.pageSize,
@@ -363,7 +366,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const input = createInventoryPurchaseOrderSchema.parse(req.body);
-  const order = await createInventoryPurchaseOrder({ businessId, branchId }, {
+  const order = await createInventoryPurchaseOrder({ businessId, branchId, userId: req.user!.id }, {
     supplierId: input.supplierId,
     orderNumber: input.orderNumber,
     createdById: req.user!.id,
@@ -381,7 +384,7 @@ export async function listPurchaseOrders(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const query = listInventoryPurchaseOrdersQuerySchema.parse(req.query);
-  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId }, {
+  res.status(200).json(await listInventoryPurchaseOrders({ businessId, branchId, userId: req.user!.id }, {
     page: query.page,
     pageSize: query.pageSize,
     ...(query.status !== undefined ? { status: query.status } : {}),
@@ -393,7 +396,7 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
   const branchId = requireBranchId(req);
   const { id } = inventoryItemIdParamSchema.parse({ id: req.params.id });
   const input = receiveInventoryPurchaseOrderSchema.parse(req.body);
-  const result = await receiveInventoryPurchaseOrder({ businessId, branchId }, {
+  const result = await receiveInventoryPurchaseOrder({ businessId, branchId, userId: req.user!.id }, {
     purchaseOrderId: id,
     receiptNumber: input.receiptNumber,
     receivedById: req.user!.id,
@@ -414,7 +417,7 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
 export async function createTransfer(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryTransferSchema.parse(req.body);
-  const transfer = await createInventoryTransfer({ businessId, branchId }, { destinationBranchId: input.destinationBranchId, transferNumber: input.transferNumber, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
+  const transfer = await createInventoryTransfer({ businessId, branchId, userId: req.user!.id }, { destinationBranchId: input.destinationBranchId, transferNumber: input.transferNumber, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.transfer_dispatched", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, destinationBranchId: transfer.destinationBranchId, lineCount: transfer.lines.length } });
   res.status(201).json({ data: transfer });
 }
@@ -423,34 +426,34 @@ export async function receiveTransfer(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
   const input = receiveInventoryTransferSchema.parse(req.body);
-  const transfer = await receiveInventoryTransfer({ businessId, branchId }, { transferId: id, receivedById: req.user!.id, lines: input.lines });
+  const transfer = await receiveInventoryTransfer({ businessId, branchId, userId: req.user!.id }, { transferId: id, receivedById: req.user!.id, lines: input.lines });
   await recordAuditEvent({ action: "inventory.transfer_received", entityType: "InventoryTransfer", entityId: transfer.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { transferNumber: transfer.transferNumber, status: transfer.status } });
   res.status(200).json({ data: transfer });
 }
 
 export async function listTransfers(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
-  const result = await listInventoryTransfers({ businessId, branchId }, { page: 1, pageSize: 100 });
+  const result = await listInventoryTransfers({ businessId, branchId, userId: req.user!.id }, { page: 1, pageSize: 100 });
   res.status(200).json(result);
 }
 
 export async function createStocktake(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryStocktakeSchema.parse(req.body);
-  const stocktake = await createInventoryStocktake({ businessId, branchId }, { reference: input.reference, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
+  const stocktake = await createInventoryStocktake({ businessId, branchId, userId: req.user!.id }, { reference: input.reference, ...(input.notes !== undefined ? { notes: input.notes } : {}), lines: input.lines, createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_created", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(201).json({ data: stocktake });
 }
 
 export async function listStocktakes(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
-  res.status(200).json(await listInventoryStocktakes({ businessId, branchId }));
+  res.status(200).json(await listInventoryStocktakes({ businessId, branchId, userId: req.user!.id }));
 }
 
 export async function submitStocktake(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
-  const stocktake = await submitInventoryStocktake({ businessId, branchId }, { stocktakeId: id, submittedById: req.user!.id });
+  const stocktake = await submitInventoryStocktake({ businessId, branchId, userId: req.user!.id }, { stocktakeId: id, submittedById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_submitted", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
   res.status(200).json({ data: stocktake });
 }
@@ -458,7 +461,7 @@ export async function submitStocktake(req: Request, res: Response) {
 export async function approveStocktake(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
-  const stocktake = await approveInventoryStocktake({ businessId, branchId }, { stocktakeId: id, approvedById: req.user!.id });
+  const stocktake = await approveInventoryStocktake({ businessId, branchId, userId: req.user!.id }, { stocktakeId: id, approvedById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_approved", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference } });
   res.status(200).json({ data: stocktake });
 }
@@ -466,21 +469,21 @@ export async function approveStocktake(req: Request, res: Response) {
 export async function applyStocktake(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
-  const stocktake = await applyInventoryStocktake({ businessId, branchId }, { stocktakeId: id, appliedById: req.user!.id });
+  const stocktake = await applyInventoryStocktake({ businessId, branchId, userId: req.user!.id }, { stocktakeId: id, appliedById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stocktake_applied", entityType: "InventoryStocktake", entityId: stocktake.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { reference: stocktake.reference, lineCount: stocktake.lines.length } });
   res.status(200).json({ data: stocktake });
 }
 
 export async function listReservations(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
-  const reservations = await listInventoryReservations({ businessId, branchId });
+  const reservations = await listInventoryReservations({ businessId, branchId, userId: req.user!.id });
   res.status(200).json({ data: reservations });
 }
 
 export async function createReservation(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const input = createInventoryReservationSchema.parse(req.body);
-  const reservation = await createInventoryReservation({ businessId, branchId }, { inventoryItemId: input.inventoryItemId, quantity: input.quantity, ...(input.reference !== undefined ? { reference: input.reference } : {}), ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}), createdById: req.user!.id });
+  const reservation = await createInventoryReservation({ businessId, branchId, userId: req.user!.id }, { inventoryItemId: input.inventoryItemId, quantity: input.quantity, ...(input.reference !== undefined ? { reference: input.reference } : {}), ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}), createdById: req.user!.id });
   await recordAuditEvent({ action: "inventory.stock_reserved", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { inventoryItemId: reservation.inventoryItemId, quantity: reservation.quantity } });
   res.status(201).json({ data: reservation });
 }
@@ -489,19 +492,19 @@ export async function releaseReservation(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
   const { id } = inventoryOperationIdParamSchema.parse(req.params);
   const consumed = req.body?.consumed === true;
-  const reservation = await releaseInventoryReservation({ businessId, branchId }, { reservationId: id, consumed, actedById: req.user!.id });
+  const reservation = await releaseInventoryReservation({ businessId, branchId, userId: req.user!.id }, { reservationId: id, consumed, actedById: req.user!.id });
   await recordAuditEvent({ action: consumed ? "inventory.reservation_consumed" : "inventory.reservation_released", entityType: "InventoryReservation", entityId: reservation.id, businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { status: reservation.status } });
   res.status(200).json({ data: reservation });
 }
 
 export async function reorderRecommendations(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
-  res.status(200).json({ data: await getInventoryReorderRecommendations({ businessId, branchId }) });
+  res.status(200).json({ data: await getInventoryReorderRecommendations({ businessId, branchId, userId: req.user!.id }) });
 }
 
 export async function inventoryReports(req: Request, res: Response) {
   const businessId = requireBusinessId(req), branchId = requireBranchId(req);
-  res.status(200).json({ data: await getInventoryReports({ businessId, branchId }) });
+  res.status(200).json({ data: await getInventoryReports({ businessId, branchId, userId: req.user!.id }) });
 }
 
 
