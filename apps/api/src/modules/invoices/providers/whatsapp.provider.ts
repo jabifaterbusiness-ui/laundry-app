@@ -50,7 +50,7 @@ async function resolveCredentials(businessId?: string) {
 
 async function persistBusinessOutbound(input: { businessId?: string; to: string; providerMessageId: string; type: "text" | "image"; body?: string }) {
   if (!input.businessId) return;
-  const contactPhone = input.to.replace(/\D/g, "");
+  const contactPhone = normalizeWhatsAppRecipient(input.to);
   const payload = {
     id: input.providerMessageId, to: normalizeWhatsAppRecipient(input.to), timestamp: String(Math.floor(Date.now() / 1000)),
     type: input.type,
