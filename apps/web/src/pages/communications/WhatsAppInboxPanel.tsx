@@ -22,7 +22,7 @@ export function WhatsAppInboxPanel() {
   const conversationsQuery = useQuery({
     queryKey: ["whatsapp", "conversations"],
     queryFn: () => getWhatsAppConversations(accessToken),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && isConnected),
     refetchInterval: 15000,
   });
   const conversations = conversationsQuery.data?.data ?? [];
@@ -62,9 +62,10 @@ export function WhatsAppInboxPanel() {
         <div><p style={{ color: "#0f766e", fontSize: 12, fontWeight: 800, letterSpacing: ".08em", margin: 0 }}>CUSTOMER MESSAGING</p><h2 style={{ margin: "5px 0" }}>WhatsApp inbox</h2><p style={{ color: "#64748b", margin: 0 }}>Receive customer messages and reply using your business WhatsApp number.</p></div>
         <span style={{ background: "#ecfdf5", color: "#047857", borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700 }}>Live updates · 15 sec</span>
       </div>
-      {!connectionQuery.isLoading && !isConnected ? <div style={{ marginTop: 18, padding: 24, background: "#fff7ed", borderRadius: 14, color: "#9a3412" }}>Connect this company’s WhatsApp Business number above to start receiving and replying to customer messages.</div> : null}\n      {conversationsQuery.isLoading || connectionQuery.isLoading ? <p>Loading conversations…</p> : null}
-      {conversationsQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>WhatsApp conversations could not be loaded. Check the connection and refresh.</p> : null}
-      {!conversationsQuery.isLoading && conversations.length === 0 ? <div style={{ marginTop: 18, padding: 30, textAlign: "center", background: "#f8fafc", borderRadius: 14 }}><h3>No customer messages yet</h3><p style={{ color: "#64748b" }}>When customers message your connected WhatsApp number, their conversations will appear here.</p></div> : null}
+      {!connectionQuery.isLoading && !isConnected ? <div style={{ marginTop: 18, padding: 24, background: "#fff7ed", borderRadius: 14, color: "#9a3412" }}>Connect this company’s WhatsApp Business number above to start receiving and replying to customer messages.</div> : null}
+      {conversationsQuery.isLoading || connectionQuery.isLoading ? <p>Loading conversations…</p> : null}
+      {isConnected && conversationsQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>WhatsApp conversations could not be loaded. Check the connection and refresh.</p> : null}
+      {isConnected && !conversationsQuery.isLoading && conversations.length === 0 ? <div style={{ marginTop: 18, padding: 30, textAlign: "center", background: "#f8fafc", borderRadius: 14 }}><h3>No customer messages yet</h3><p style={{ color: "#64748b" }}>When customers message your connected WhatsApp number, their conversations will appear here.</p></div> : null}
       {conversations.length > 0 ? (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(0, 1.7fr)", gap: 14, marginTop: 18, minHeight: 430 }}>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 13, overflow: "auto", maxHeight: 520 }}>
