@@ -77,7 +77,7 @@ const allowedPreviousStatuses: Record<string, string[]> = {
 };
 
 async function persistEvent(input: {
-  wabaId?: string; phoneNumberId?: string; providerMessageId?: string;
+  wabaId?: string; phoneNumberId?: string; providerMessageId?: string; contactPhone?: string;
   eventType: string; payload: object;
 }) {
   const connection = input.phoneNumberId
@@ -97,7 +97,7 @@ async function persistEvent(input: {
     create: {
       eventKey, businessId: connection?.businessId ?? null, connectionId: connection?.id ?? null,
       wabaId: input.wabaId ?? null, phoneNumberId: input.phoneNumberId ?? null,
-      providerMessageId: input.providerMessageId ?? null, eventType: input.eventType,
+      providerMessageId: input.providerMessageId ?? null, contactPhone: input.contactPhone ?? null, eventType: input.eventType,
       payload: input.payload as Prisma.InputJsonValue,
     },
     update: {},
@@ -177,6 +177,7 @@ export async function processWhatsAppWebhook(rawBody: Buffer, signature: string 
         await persistEvent({
           ...context,
           ...(typeof message.id === "string" ? { providerMessageId: message.id } : {}),
+          ...(typeof message.from === "string" ? { contactPhone: message.from.replace(/\\D/g, "") } : {}),
           eventType: "MESSAGE_RECEIVED",
           payload: message,
         });
