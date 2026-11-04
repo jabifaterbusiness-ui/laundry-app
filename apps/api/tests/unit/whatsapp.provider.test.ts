@@ -8,6 +8,8 @@ vi.stubGlobal("fetch", fetchMock);
 
 vi.mock("../../src/config/index.js", () => ({
   config: {
+    log: { level: "silent" },
+    isProduction: true,
     receiptDelivery: {
       whatsappApiVersion: "v23.0",
       whatsappPhoneNumberId: "phone-number-id-123",
