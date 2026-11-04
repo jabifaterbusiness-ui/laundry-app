@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
 import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
+import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
@@ -88,6 +89,9 @@ async function deliverMessage(input: {
       where: { id: delivery.id, status: "PENDING" },
       data: { status: "SENT", providerMessageId, sentAt: new Date() },
     });
+    if (input.channel === "WHATSAPP") {
+      await replayPendingWhatsAppStatusEvents(providerMessageId);
+    }
     return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Message delivery failed";
