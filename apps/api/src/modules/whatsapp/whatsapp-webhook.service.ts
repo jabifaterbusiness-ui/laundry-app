@@ -87,11 +87,11 @@ async function processStatus(status: WhatsAppStatus) {
   if (
     typeof status.id !== "string" ||
     !status.id ||
-    typeof status.status !== "string" ||
-    !Object.prototype.hasOwnProperty.call(allowedPreviousStatuses, status.status)
+    typeof status.status !== "string"
   ) return false;
 
   const nextStatus = status.status.toUpperCase();
+  if (!Object.prototype.hasOwnProperty.call(allowedPreviousStatuses, nextStatus)) return false;
   await prisma.communicationDelivery.updateMany({
     where: {
       channel: "WHATSAPP",
