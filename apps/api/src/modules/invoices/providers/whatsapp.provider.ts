@@ -18,7 +18,7 @@ interface WhatsAppApiResponse {
   error?: { message?: string };
 }
 
-async function resolveCredentials(businessId?: string) {
+export function normalizeWhatsAppRecipient(value: string): string {\n  const normalized = value.replace(/\\D/g, "");\n  return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized;\n}\n\nasync function resolveCredentials(businessId?: string) {
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = config.receiptDelivery;
   if (!whatsappApiVersion) throw new Error("WhatsApp provider API version is not configured");
   if (businessId) {
@@ -84,7 +84,7 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
       method: "POST",
       headers: { Authorization: `Bearer ${whatsappAccessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        messaging_product: "whatsapp", recipient_type: "individual", to: input.to,
+        messaging_product: "whatsapp", recipient_type: "individual", to: normalizeWhatsAppRecipient(input.to),
         type: "image", image: { id: mediaId, ...(input.caption ? { caption: input.caption } : {}) },
       }),
     },
