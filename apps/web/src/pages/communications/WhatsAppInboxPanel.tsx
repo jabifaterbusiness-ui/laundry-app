@@ -67,7 +67,7 @@ export function WhatsAppInboxPanel() {
       {isConnected && conversationsQuery.isError ? <p role="alert" style={{ color: "#b91c1c" }}>WhatsApp conversations could not be loaded. Check the connection and refresh.</p> : null}
       {isConnected && !conversationsQuery.isLoading && conversations.length === 0 ? <div style={{ marginTop: 18, padding: 30, textAlign: "center", background: "#f8fafc", borderRadius: 14 }}><h3>No customer messages yet</h3><p style={{ color: "#64748b" }}>When customers message your connected WhatsApp number, their conversations will appear here.</p></div> : null}
       {conversations.length > 0 ? (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(0, 1.7fr)", gap: 14, marginTop: 18, minHeight: 430 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 14, marginTop: 18, minHeight: 430 }}>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 13, overflow: "auto", maxHeight: 520 }}>
             {conversations.map((conversation: WhatsAppConversation) => (
               <button key={conversation.phone} type="button" onClick={() => { setSelectedPhone(conversation.phone); setFeedback(""); if (conversation.unreadCount > 0) readMutation.mutate(conversation); }} style={{ display: "block", width: "100%", textAlign: "left", padding: 13, border: 0, borderBottom: "1px solid #edf2f7", background: selected?.phone === conversation.phone ? "#ecfdf5" : "#fff", cursor: "pointer" }}>
