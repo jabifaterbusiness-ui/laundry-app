@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const updateMany = vi.fn();
+const { updateMany } = vi.hoisted(() => ({ updateMany: vi.fn() }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: { communicationDelivery: { updateMany } },
