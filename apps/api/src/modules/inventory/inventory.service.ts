@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type BusinessScope = {
   businessId: string;
@@ -234,9 +235,15 @@ export async function listInventoryStock(
     pageSize: number;
   },
 ) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
+  const itemVisibility = {
+    OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }],
+  };
   const where: Prisma.InventoryStockWhereInput = {
     businessId: scope.businessId,
     branchId: scope.branchId,
+    inventoryItem: { is: itemVisibility },
   };
 
   if (input.inventoryItemId) {
@@ -249,6 +256,10 @@ export async function listInventoryStock(
     const itemFilter = input.inventoryItemId
       ? Prisma.sql`AND s."inventoryItemId" = ${input.inventoryItemId}`
       : Prisma.empty;
+    const ownerBranchFilter = Prisma.sql`AND (i."ownerBranchId" IS NULL OR i."ownerBranchId" IN (${Prisma.join(itemScope.ownerBranchIds)}))`;
+    const resourceFilter = itemScope.resourceIds.length
+      ? Prisma.sql`OR i.id IN (${Prisma.join(itemScope.resourceIds)})`
+      : Prisma.empty;
 
     const [stockRows, countRows] = await prisma.$transaction([
       prisma.$queryRaw<Array<{ id: string }>>(
@@ -260,6 +271,8 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
+            ${ownerBranchFilter}
+            ${resourceFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
           ORDER BY i.name ASC, s.id ASC
           LIMIT ${input.pageSize}
@@ -275,6 +288,8 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
+            ${ownerBranchFilter}
+            ${resourceFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
         `,
       ),
@@ -364,16 +379,17 @@ export async function createInventoryMovement(
     throw new AppError(`${input.type} movements require an audit reason`, 422);
   }
   const result = await prisma.$transaction(async (tx) => {
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" }, tx);
     const item = await tx.inventoryItem.findFirst({
-      where: {
-        id: input.inventoryItemId,
-        businessId: scope.businessId,
-      },
+      where: { id: input.inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
     });
 
     if (!item) {
       throw new AppError("Inventory item not found", 404);
     }
+
+    await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: item.ownerBranchId, resourceId: item.id }, tx);
 
     if (!item.isActive) {
       throw new AppError("Cannot create movement for an inactive inventory item", 422);
@@ -467,16 +483,17 @@ export async function adjustInventoryStock(
     throw new AppError("Adjustment reason is required", 422);
   }
   const result = await prisma.$transaction(async (tx) => {
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" }, tx);
     const item = await tx.inventoryItem.findFirst({
-      where: {
-        id: input.inventoryItemId,
-        businessId: scope.businessId,
-      },
+      where: { id: input.inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
     });
 
     if (!item) {
       throw new AppError("Inventory item not found", 404);
     }
+
+    await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: item.ownerBranchId, resourceId: item.id }, tx);
 
     if (!item.isActive) {
       throw new AppError(
@@ -568,9 +585,12 @@ export async function listInventoryMovements(
     pageSize: number;
   },
 ) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
   const where: Prisma.InventoryMovementWhereInput = {
     businessId: scope.businessId,
     branchId: scope.branchId,
+    inventoryItem: { is: { OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] } },
     ...(input.inventoryItemId ? { inventoryItemId: input.inventoryItemId } : {}),
     ...(input.type ? { type: input.type } : {}),
   };
