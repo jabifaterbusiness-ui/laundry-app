@@ -137,8 +137,19 @@ async function processStatus(status: WhatsAppStatus, context: { wabaId?: string;
     await prisma.whatsAppWebhookEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), processingError: null } });
     return true;
   }
-  // Keep unmatched callbacks pending. The send path replays them after it
-  // stores the provider message ID, closing the webhook-before-persist race.
+  // Inbox replies and template/receipt sends may not have a CommunicationDelivery
+  // row. Their tenant-scoped outbound event is the durable message record.
+  if (connection) {
+    const inboxMessage = await prisma.whatsAppWebhookEvent.findFirst({
+      where: { businessId: connection.businessId, providerMessageId: status.id, eventType: "MESSAGE_SENT" },
+      select: { id: true },
+    });
+    if (inboxMessage) {
+      await prisma.whatsAppWebhookEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), processingError: null } });
+      return true;
+    }
+  }
+  // Keep unmatched callbacks pending until the corresponding send is persisted.
   return false;
 }
 
