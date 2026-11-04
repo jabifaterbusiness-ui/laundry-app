@@ -20,6 +20,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
   sendWhatsAppText: mocks.sendText,
+  normalizeWhatsAppRecipient: (value: string) => { const normalized = value.replace(/\D/g, ""); return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized; },
 }));
 
 import { listWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppConversationReply } from "../../src/modules/whatsapp/whatsapp-inbox.service.js";
