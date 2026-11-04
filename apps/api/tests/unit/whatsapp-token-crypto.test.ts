@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const encryptionKey = "0123456789abcdef".repeat(4);
+const { encryptionKey } = vi.hoisted(() => ({ encryptionKey: "0123456789abcdef".repeat(4) }));
 vi.mock("../../src/config/index.js", () => ({
   config: { receiptDelivery: { whatsappTokenEncryptionKey: encryptionKey } },
 }));
