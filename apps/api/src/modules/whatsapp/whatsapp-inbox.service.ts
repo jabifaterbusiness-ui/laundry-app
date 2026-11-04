@@ -106,7 +106,7 @@ export async function listWhatsAppConversations(businessId: string) {
 }
 
 export async function sendWhatsAppConversationReply(input: {
-  businessId: string; customerId?: string; phone: string; body: string;
+  businessId: string; customerId?: string | null; phone: string; body: string;
 }) {
   const body = input.body.trim();
   if (!body || body.length > 4096) throw new AppError("Reply must contain between 1 and 4,096 characters", 422);
@@ -152,7 +152,7 @@ export async function sendWhatsAppConversationReply(input: {
   return { id: sent.id, customerId, customerName, phone: recipient, body, sentAt: new Date().toISOString(), status: "SENT" };
 }
 
-export async function markWhatsAppConversationRead(input: { businessId: string; customerId?: string; phone: string }) {
+export async function markWhatsAppConversationRead(input: { businessId: string; customerId?: string | null; phone: string }) {
   let contactPhone = normalizeWhatsAppRecipient(input.phone);
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
