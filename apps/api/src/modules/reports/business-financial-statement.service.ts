@@ -6,10 +6,9 @@ export interface BusinessFinancialStatementDateRange {
 }
 
 /**
- * Consolidated business-wide monthly financial statement / P&L.
- *
- * Unlike getFinancialStatement(), this deliberately does NOT use a
- * branchId. It aggregates every branch belonging to the business.
+ * Financial statement / P&L. When branchId is supplied, every source query
+ * is restricted to that branch; omitting it is reserved for explicitly
+ * authorized consolidated reporting.
  *
  * Accounting treatment:
  *
@@ -35,6 +34,7 @@ export interface BusinessFinancialStatementDateRange {
 export async function getBusinessFinancialStatement(
   businessId: string,
   range: BusinessFinancialStatementDateRange,
+  branchId?: string,
 ) {
   if (range.from > range.to) {
     throw new Error("The statement start date must be before the end date");
@@ -49,6 +49,7 @@ export async function getBusinessFinancialStatement(
     prisma.invoice.findMany({
       where: {
         businessId,
+        ...(branchId ? { branchId } : {}),
         status: "ISSUED",
         createdAt: {
           gte: range.from,
@@ -70,6 +71,7 @@ export async function getBusinessFinancialStatement(
     prisma.payment.findMany({
       where: {
         businessId,
+        ...(branchId ? { branchId } : {}),
         type: "REFUND",
         status: "POSTED",
         createdAt: {
@@ -92,6 +94,7 @@ export async function getBusinessFinancialStatement(
     prisma.expense.findMany({
       where: {
         businessId,
+        ...(branchId ? { branchId } : {}),
         status: "APPROVED",
         recognizedAt: {
           gte: range.from,
@@ -115,6 +118,7 @@ export async function getBusinessFinancialStatement(
     prisma.payrollRecord.findMany({
       where: {
         businessId,
+        ...(branchId ? { branchId } : {}),
         payrollPeriod: {
           status: "FINALIZED",
           periodStart: {

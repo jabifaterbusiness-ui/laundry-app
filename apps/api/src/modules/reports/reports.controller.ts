@@ -98,10 +98,12 @@ export async function financialStatement(req: Request, res: Response) {
 
 export async function annualReport(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { year } = annualReportYearSchema.parse(req.query);
 
   const report = await getAnnualReport({
     businessId,
+    branchId,
     year,
   });
 

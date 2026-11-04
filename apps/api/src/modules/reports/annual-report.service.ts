@@ -5,6 +5,7 @@ import {
 
 export interface AnnualReportInput {
   businessId: string;
+  branchId: string;
   year: number;
 }
 
@@ -41,7 +42,7 @@ function emptyMonth(month: string) {
 }
 
 export async function getAnnualReport(input: AnnualReportInput) {
-  const { businessId, year } = input;
+  const { businessId, branchId, year } = input;
 
   const from = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
   const to = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
@@ -61,11 +62,12 @@ export async function getAnnualReport(input: AnnualReportInput) {
   const report = await getBusinessFinancialStatement(businessId, {
     from,
     to,
-  });
+  }, branchId);
 
   const outstandingInvoices = await prisma.invoice.findMany({
     where: {
       businessId,
+      branchId,
       status: "ISSUED",
       createdAt: {
         lte: to,
@@ -90,6 +92,7 @@ export async function getAnnualReport(input: AnnualReportInput) {
       ? await prisma.payment.findMany({
           where: {
             businessId,
+            branchId,
             invoiceId: {
               in: outstandingInvoiceIds,
             },

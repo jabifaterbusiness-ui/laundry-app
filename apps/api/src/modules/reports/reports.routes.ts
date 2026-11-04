@@ -41,5 +41,6 @@ reportsRouter.get(
 reportsRouter.get(
   "/annual",
   requirePermission("reports.view"),
+  asyncHandler(requireBranchContext),
   asyncHandler(annualReport),
 );
