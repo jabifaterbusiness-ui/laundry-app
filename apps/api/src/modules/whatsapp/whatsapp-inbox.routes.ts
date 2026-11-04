@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { listWhatsAppConversations, sendWhatsAppConversationReply } from "./whatsapp-inbox.service.js";
+import { listWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppConversationReply } from "./whatsapp-inbox.service.js";
 
 export const whatsappInboxRouter = Router();
 
@@ -22,4 +22,10 @@ whatsappInboxRouter.post("/conversations/:customerId/replies", requirePermission
   const input = z.object({ body: z.string().trim().min(1).max(4096) }).strict().parse(req.body);
   const result = await sendWhatsAppConversationReply({ businessId: businessId(req), customerId: params.customerId, body: input.body });
   res.status(201).json(result);
+}));
+
+whatsappInboxRouter.post("/conversations/:customerId/read", requirePermission("customers.view"), asyncHandler(async (req, res) => {
+  const params = z.object({ customerId: z.string().uuid() }).parse(req.params);
+  const result = await markWhatsAppConversationRead({ businessId: businessId(req), customerId: params.customerId });
+  res.status(200).json(result);
 }));
