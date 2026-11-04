@@ -40,7 +40,7 @@ describe("WhatsApp webhook", () => {
       .send(payload);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ received: true, processedStatuses: 0 });
+    expect(res.body).toEqual({ received: true, processedStatuses: 0, receivedMessages: 0 });
   });
 
   it("rejects an unsigned or incorrectly signed callback", async () => {
