@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { getApprovedWhatsAppTemplates, getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, sendWhatsAppTemplate, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
@@ -26,6 +26,7 @@ export function WhatsAppInboxPanel() {
   const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken), staleTime: 60000 });
   const templates = templatesQuery.data?.data ?? [];
   const selectedTemplate = templates.find((item) => item.name === templateName && item.language === templateLanguage) ?? templates[0] ?? null;
+  useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id]);
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
   const readMutation = useMutation({
     mutationFn: (customerId: string) => markWhatsAppConversationRead(customerId, accessToken),
@@ -104,7 +105,7 @@ export function WhatsAppInboxPanel() {
                 {selectedTemplate ? (
                   <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
                     <label style={{ display: "grid", gap: 4, fontSize: 13 }}>Approved template
-                      <select value={templateName + "|" + templateLanguage} onChange={(event) => { const [name, language] = event.target.value.split("|"); setTemplateName(name ?? ""); setTemplateLanguage(language ?? ""); const match = templates.find((item) => item.name === name && item.language === language); setTemplateVariables(Array(match?.bodyVariableCount ?? 0).fill("")); }} style={{ padding: 9, border: "1px solid #cbd5e1", borderRadius: 8 }}>
+                      <select value={selectedTemplate ? selectedTemplate.name + "|" + selectedTemplate.language : ""} onChange={(event) => { const [name, language] = event.target.value.split("|"); setTemplateName(name ?? ""); setTemplateLanguage(language ?? ""); const match = templates.find((item) => item.name === name && item.language === language); setTemplateVariables(Array(match?.bodyVariableCount ?? 0).fill("")); }} style={{ padding: 9, border: "1px solid #cbd5e1", borderRadius: 8 }}>
                         {templates.map((item) => <option key={item.id} value={item.name + "|" + item.language}>{item.name} · {item.language} · {item.category}</option>)}
                       </select>
                     </label>
