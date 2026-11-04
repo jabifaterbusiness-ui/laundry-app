@@ -84,6 +84,7 @@ describe("processWhatsAppWebhook", () => {
       entry: [{
         changes: [{
           value: {
+            metadata: { phone_number_id: "phone-12345" },
             statuses: [{
               id: "wamid-already-delivered",
               status: "failed",
