@@ -40,7 +40,8 @@ whatsappInboxRouter.get("/templates", requirePermission("customers.view"), async
 
 whatsappInboxRouter.post("/templates/send", requirePermission("customers.update"), asyncHandler(async (req, res) => {
   const input = z.object({
-    customerId: z.string().uuid(),
+    customerId: z.string().uuid().optional(),
+    phone: z.string().min(8).max(32),
     templateName: z.string().min(1).max(512),
     language: z.string().min(2).max(32),
     variables: z.array(z.string().max(1024)).max(20).default([]),
