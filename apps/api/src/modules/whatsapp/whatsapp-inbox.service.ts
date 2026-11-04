@@ -37,11 +37,12 @@ async function loadBusinessEvents(businessId: string) {
 
 export async function listWhatsAppConversations(businessId: string) {
   const events = await loadBusinessEvents(businessId);
-  const statusByMessageId = new Map<string, string>();
+  const statusByMessageId = new Map<string, Set<string>>();
   for (const event of events) {
-    if (event.eventType.startsWith("STATUS_") && event.providerMessageId && !statusByMessageId.has(event.providerMessageId)) {
-      statusByMessageId.set(event.providerMessageId, event.eventType.slice(7));
-    }
+    if (!event.eventType.startsWith("STATUS_") || !event.providerMessageId) continue;
+    const statuses = statusByMessageId.get(event.providerMessageId) ?? new Set<string>();
+    statuses.add(event.eventType.slice(7));
+    statusByMessageId.set(event.providerMessageId, statuses);
   }
 
   const messages = events
@@ -58,7 +59,7 @@ export async function listWhatsAppConversations(businessId: string) {
         text: messageText(payload),
         messageType: payload.type ?? "text",
         timestamp: payload.timestamp ? new Date(Number(payload.timestamp) * 1000).toISOString() : event.receivedAt.toISOString(),
-        status: event.providerMessageId ? statusByMessageId.get(event.providerMessageId) ?? (direction === "OUTBOUND" ? "SENT" : "RECEIVED") : direction === "OUTBOUND" ? "SENT" : "RECEIVED",
+        status: event.providerMessageId ? (statusByMessageId.get(event.providerMessageId)?.has("READ") ? "READ" : statusByMessageId.get(event.providerMessageId)?.has("DELIVERED") ? "DELIVERED" : statusByMessageId.get(event.providerMessageId)?.has("FAILED") ? "FAILED" : statusByMessageId.get(event.providerMessageId)?.has("SENT") ? "SENT" : direction === "OUTBOUND" ? "SENT" : "RECEIVED") : direction === "OUTBOUND" ? "SENT" : "RECEIVED",
       };
     })
     .filter((message) => message.phone);
