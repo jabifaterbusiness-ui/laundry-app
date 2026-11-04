@@ -128,6 +128,7 @@ model Business {
   updatedAt DateTime @updatedAt
 
   branches                    Branch[]
+  branchResourceShares        BranchResourceShare[]
   users                       User[]
   auditLogs                   AuditLog[]
   customers                   Customer[]                   @relation("BusinessCustomers")
@@ -207,6 +208,15 @@ model Branch {
   garments                    Garment[]
 
   employeeCompensations EmployeeCompensation[]
+  customers Customer[] @relation("CustomerOwningBranch")
+  services Service[] @relation("ServiceOwningBranch")
+  customerServicePrices CustomerServicePrice[]
+  priceAdjustments PriceAdjustment[]
+  taxRules TaxRule[]
+  customerAccounts CustomerAccount[]
+  inventoryItems InventoryItem[] @relation("InventoryItemOwningBranch")
+  resourceSharesOwned BranchResourceShare[] @relation("BranchResourceShareOwner")
+  resourceSharesReceived BranchResourceShare[] @relation("BranchResourceShareTarget")
   payrollPeriods        PayrollPeriod[]
   payrollRecords        PayrollRecord[]
   payrollPayments       PayrollPayment[]
@@ -227,6 +237,35 @@ model Branch {
 
   @@index([businessId])
   @@map("branches")
+}
+
+model BranchResourceShare {
+  id String @id @default(uuid())
+
+  businessId String
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  ownerBranchId String
+  ownerBranch Branch @relation("BranchResourceShareOwner", fields: [ownerBranchId], references: [id], onDelete: Cascade)
+
+  targetBranchId String
+  targetBranch Branch @relation("BranchResourceShareTarget", fields: [targetBranchId], references: [id], onDelete: Cascade)
+
+  resourceType String
+  resourceId String?
+  userId String?
+  user User? @relation("BranchResourceShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  accessLevel String @default("READ")
+  createdByUserId String?
+  createdBy User? @relation("BranchResourceShareCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, targetBranchId, resourceType])
+  @@index([businessId, ownerBranchId, resourceType])
+  @@index([businessId, userId])
+  @@map("branch_resource_shares")
 }
 
 model User {
@@ -258,6 +297,8 @@ model User {
   // against this table (never trusted from a client-supplied value or
   // baked into a long-lived token).
   branches UserBranch[]
+  branchResourceShares BranchResourceShare[] @relation("BranchResourceShareUser")
+  createdBranchResourceShares BranchResourceShare[] @relation("BranchResourceShareCreatedBy")
 
   refreshTokens           RefreshToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -456,6 +497,8 @@ model Customer {
   id         String   @id @default(uuid())
   businessId String
   business   Business @relation("BusinessCustomers", fields: [businessId], references: [id], onDelete: Cascade)
+  ownerBranchId String?
+  ownerBranch Branch? @relation("CustomerOwningBranch", fields: [ownerBranchId], references: [id], onDelete: Restrict)
 
   name  String
   // Stored normalized (digits only, optional leading "+") - see
@@ -487,7 +530,7 @@ model Customer {
 
   orders        Order[]
   statusHistory CustomerStatusHistory[]
-  account       CustomerAccount?
+  accounts      CustomerAccount[]
   servicePrices CustomerServicePrice[]
   announcementRecipients AnnouncementRecipient[]
   communicationDeliveries CommunicationDelivery[]
@@ -549,6 +592,8 @@ model Service {
   id         String   @id @default(uuid())
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ownerBranchId String?
+  ownerBranch Branch? @relation("ServiceOwningBranch", fields: [ownerBranchId], references: [id], onDelete: Restrict)
 
   name      String
   pieces    Int
@@ -900,15 +945,19 @@ model CustomerAccount {
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  customerId String   @unique
+  customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branchId String?
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   transactions CustomerAccountTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([customerId, branchId])
   @@index([businessId])
+  @@index([businessId, branchId])
   @@map("customer_accounts")
 }
 
@@ -1235,6 +1284,8 @@ model InventoryItem {
 
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ownerBranchId String?
+  ownerBranch Branch? @relation("InventoryItemOwningBranch", fields: [ownerBranchId], references: [id], onDelete: Restrict)
 
   name        String
   sku         String?
@@ -1262,8 +1313,8 @@ model InventoryItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([businessId, name])
-  @@unique([businessId, sku])
+  @@unique([businessId, ownerBranchId, name])
+  @@unique([businessId, ownerBranchId, sku])
   @@index([businessId, category])
   @@index([businessId, isActive])
   @@index([businessId, name])
@@ -2700,6 +2751,8 @@ model PriceAdjustment {
   id         String   @id @default(uuid())
   businessId String
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId String?
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   name       String
   percentage Float
   isActive   Boolean  @default(true)
@@ -2719,8 +2772,8 @@ model PriceAdjustment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([businessId, name])
-  @@index([businessId, isActive])
+  @@unique([businessId, branchId, name])
+  @@index([businessId, branchId, isActive])
   @@index([businessId, targetScope, startsAt, endsAt])
   @@index([businessId, customerId])
   @@index([businessId, groupId])
@@ -2731,6 +2784,8 @@ model TaxRule {
   id                 String   @id @default(uuid())
   businessId         String
   business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId           String?
+  branch             Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   name               String
   kind               String   // PERCENTAGE or FIXED
   value              Float
@@ -2741,8 +2796,8 @@ model TaxRule {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  @@unique([businessId, name])
-  @@index([businessId, isActive, enabledByDefault])
+  @@unique([businessId, branchId, name])
+  @@index([businessId, branchId, isActive, enabledByDefault])
   @@map("tax_rules")
 }
 
@@ -2751,13 +2806,15 @@ model CustomerServicePrice {
   businessId String
   customerId String
   serviceId  String
+  branchId String?
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   unitPrice  Int
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@unique([customerId, serviceId])
+  @@unique([customerId, serviceId, branchId])
   @@index([businessId, customerId])
   @@index([businessId, serviceId])
   @@map("customer_service_prices")
