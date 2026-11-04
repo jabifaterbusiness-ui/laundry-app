@@ -64,7 +64,9 @@ async function refreshStoredAccessToken(): Promise<string | null> {
 
 async function fetchWithTokenRefresh(url: string, init: RequestInit, path: string, accessToken?: string | null): Promise<Response> {
   const response = await fetch(url, init);
-  if (response.status !== 401 || !accessToken || /^\\/auth\\/(login|refresh|logout|forgot-password|reset-password)$/.test(path)) return response;
+  const endpoint = path.split("?")[0];
+  const isAuthenticationEndpoint = ["/auth/login", "/auth/refresh", "/auth/logout", "/auth/forgot-password", "/auth/reset-password"].includes(endpoint ?? path);
+  if (response.status !== 401 || !accessToken || isAuthenticationEndpoint) return response;
   const currentAccessToken = useAuthStore.getState().accessToken;
   const replacementToken = currentAccessToken && currentAccessToken !== accessToken
     ? currentAccessToken
