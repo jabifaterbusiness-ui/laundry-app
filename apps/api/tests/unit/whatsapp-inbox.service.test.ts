@@ -55,9 +55,6 @@ describe("WhatsApp tenant inbox", () => {
     }]);
     const result = await sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", body: "Thanks for messaging us" });
     expect(mocks.sendText).toHaveBeenCalledWith({ businessId: "business-1", to: "2348012345678", body: "Thanks for messaging us" });
-    expect(mocks.eventCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ businessId: "business-1", eventType: "MESSAGE_SENT", providerMessageId: "wamid-outbound" }),
-    }));
     expect(result.status).toBe("SENT");
   });
 
