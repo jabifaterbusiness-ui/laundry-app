@@ -81,8 +81,11 @@ async function deliverMessage(input: {
       await assertWhatsAppMessagingEnabled();
       providerMessageId = (await sendWhatsAppText({ to: input.destination, body: input.body })).id;
     }
-    await prisma.communicationDelivery.update({
-      where: { id: delivery.id },
+    // A fast provider webhook may arrive before the send request returns.
+    // Only promote PENDING rows so an already-recorded DELIVERED/READ/FAILED
+    // callback is never overwritten by this later API response.
+    await prisma.communicationDelivery.updateMany({
+      where: { id: delivery.id, status: "PENDING" },
       data: { status: "SENT", providerMessageId, sentAt: new Date() },
     });
     return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
