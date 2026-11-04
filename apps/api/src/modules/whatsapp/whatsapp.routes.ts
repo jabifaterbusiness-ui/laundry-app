@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { config } from "../../config/index.js";
+import { processWhatsAppWebhook } from "./whatsapp-webhook.service.js";
 
 export const whatsappRouter = Router();
 
@@ -20,9 +21,18 @@ whatsappRouter.get("/webhook", (req, res) => {
   return res.status(403).send("Forbidden");
 });
 
-whatsappRouter.post("/webhook", (req, res) => {
-  // Meta expects a successful response to webhook notifications.
-  // Message/status processing can be added here without affecting
-  // the existing WhatsApp receipt-delivery provider.
-  return res.status(200).json({ received: true });
+whatsappRouter.post("/webhook", async (req, res, next) => {
+  const rawBody = (req as typeof req & { rawBody?: Buffer }).rawBody;
+  const signature = req.header("x-hub-signature-256");
+
+  if (!rawBody) {
+    return res.status(400).json({ error: "Missing webhook request body" });
+  }
+
+  try {
+    const result = await processWhatsAppWebhook(rawBody, signature);
+    return res.status(200).json({ received: true, ...result });
+  } catch (error) {
+    return next(error);
+  }
 });
