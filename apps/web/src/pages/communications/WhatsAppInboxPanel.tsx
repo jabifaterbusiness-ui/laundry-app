@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
-import { getWhatsAppConversations, sendWhatsAppReply, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
+import { getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
@@ -21,6 +21,10 @@ export function WhatsAppInboxPanel() {
   });
   const conversations = conversationsQuery.data?.data ?? [];
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
+  const readMutation = useMutation({
+    mutationFn: (customerId: string) => markWhatsAppConversationRead(customerId, accessToken),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }),
+  });
   const sendMutation = useMutation({
     mutationFn: () => {
       if (!selected?.customerId) throw new Error("This number is not linked to a customer record yet.");
@@ -47,11 +51,11 @@ export function WhatsAppInboxPanel() {
         <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, .8fr) minmax(0, 1.7fr)", gap: 14, marginTop: 18, minHeight: 430 }}>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 13, overflow: "auto", maxHeight: 520 }}>
             {conversations.map((conversation: WhatsAppConversation) => (
-              <button key={conversation.phone} type="button" onClick={() => { setSelectedPhone(conversation.phone); setFeedback(""); }} style={{ display: "block", width: "100%", textAlign: "left", padding: 13, border: 0, borderBottom: "1px solid #edf2f7", background: selected?.phone === conversation.phone ? "#ecfdf5" : "#fff", cursor: "pointer" }}>
+              <button key={conversation.phone} type="button" onClick={() => { setSelectedPhone(conversation.phone); setFeedback(""); if (conversation.customerId && conversation.unreadCount > 0) readMutation.mutate(conversation.customerId); }} style={{ display: "block", width: "100%", textAlign: "left", padding: 13, border: 0, borderBottom: "1px solid #edf2f7", background: selected?.phone === conversation.phone ? "#ecfdf5" : "#fff", cursor: "pointer" }}>
                 <strong style={{ display: "block", color: "#0f172a" }}>{conversation.customerName}</strong>
                 <small style={{ color: "#64748b" }}>{conversation.phone}</small>
                 <span style={{ display: "block", color: "#475569", fontSize: 12, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", marginTop: 5 }}>{conversation.lastMessage}</span>
-                <small style={{ color: "#94a3b8" }}>{formatTime(conversation.lastMessageAt)}</small>
+                <small style={{ color: "#94a3b8" }}>{formatTime(conversation.lastMessageAt)}</small>\n                {conversation.unreadCount > 0 ? <span style={{ float: "right", background: "#0f766e", color: "#fff", borderRadius: 99, padding: "2px 7px", fontSize: 11 }}>{conversation.unreadCount} new</span> : null}
               </button>
             ))}
           </div>
