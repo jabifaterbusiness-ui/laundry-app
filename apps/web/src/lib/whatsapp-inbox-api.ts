@@ -1,0 +1,32 @@
+import { apiFetch } from "./api-client.js";
+
+export interface WhatsAppInboxMessage {
+  id: string;
+  providerMessageId: string | null;
+  direction: "INBOUND" | "OUTBOUND";
+  phone: string;
+  text: string;
+  messageType: string;
+  timestamp: string;
+  status: string;
+}
+export interface WhatsAppConversation {
+  customerId: string | null;
+  customerName: string;
+  phone: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  lastDirection: string;
+  lastStatus: string;
+  unreadCount: number;
+  messages: WhatsAppInboxMessage[];
+}
+export async function getWhatsAppConversations(accessToken: string | null) {
+  return apiFetch<{ data: WhatsAppConversation[] }>("/whatsapp/inbox/conversations", { accessToken });
+}
+export async function sendWhatsAppReply(customerId: string, body: string, accessToken: string | null) {
+  return apiFetch<{ id: string; customerId: string; customerName: string; phone: string; body: string; sentAt: string; status: string }>(
+    `/whatsapp/inbox/conversations/${encodeURIComponent(customerId)}/replies`,
+    { method: "POST", accessToken, body: JSON.stringify({ body }) },
+  );
+}
