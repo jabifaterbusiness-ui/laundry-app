@@ -70,7 +70,8 @@ export function WhatsAppInboxPanel() {
                 <strong style={{ display: "block", color: "#0f172a" }}>{conversation.customerName}</strong>
                 <small style={{ color: "#64748b" }}>{conversation.phone}</small>
                 <span style={{ display: "block", color: "#475569", fontSize: 12, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", marginTop: 5 }}>{conversation.lastMessage}</span>
-                <small style={{ color: "#94a3b8" }}>{formatTime(conversation.lastMessageAt)}</small>\n                {conversation.unreadCount > 0 ? <span style={{ float: "right", background: "#0f766e", color: "#fff", borderRadius: 99, padding: "2px 7px", fontSize: 11 }}>{conversation.unreadCount} new</span> : null}
+                <small style={{ color: "#94a3b8" }}>{formatTime(conversation.lastMessageAt)}</small>
+                {conversation.unreadCount > 0 ? <span style={{ float: "right", background: "#0f766e", color: "#fff", borderRadius: 99, padding: "2px 7px", fontSize: 11 }}>{conversation.unreadCount} new</span> : null}
               </button>
             ))}
           </div>
