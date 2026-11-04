@@ -13,7 +13,7 @@ type MessagePayload = {
 };
 
 function digits(value: string) {
-  return value.replace(/\D/g, "");
+  return normalizeWhatsAppRecipient(value);
 }
 
 function messageText(payload: MessagePayload) {
