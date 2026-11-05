@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  mocks.fetchMock: vi.fn(),
+  fetchMock: vi.fn(),
   inboundFindFirst: vi.fn(),
 }));
 
