@@ -739,6 +739,7 @@ describe("inventory.service", () => {
       expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
         data: {
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: "5 litre detergent",
           unit: "LITRE",
@@ -1539,6 +1540,7 @@ describe("createInventoryItem catalogue metadata", () => {
     expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
       data: {
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
