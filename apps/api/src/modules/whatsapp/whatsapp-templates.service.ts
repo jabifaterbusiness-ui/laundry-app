@@ -44,10 +44,30 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
   const url = new URL(`https://graph.facebook.com/${connection.apiVersion}/${connection.wabaId}/message_templates`);
   url.searchParams.set("fields", "id,name,status,language,category,components");
   url.searchParams.set("limit", "100");
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${connection.token}` } });
-  const payload = await response.json() as TemplateListResponse;
-  if (!response.ok) throw new AppError(payload.error?.message ?? "Unable to load WhatsApp templates from Meta", 502);
-  return (payload.data ?? [])
+  const templatesFromMeta: MetaTemplate[] = [];
+  let nextUrl: URL | null = url;
+  // WABAs with many approved templates can span multiple Graph API pages.
+  // Follow only Meta Graph URLs and cap pagination to avoid unbounded requests.
+  for (let page = 0; nextUrl && page < 10; page += 1) {
+    if (nextUrl.protocol !== "https:" || nextUrl.hostname !== "graph.facebook.com") {
+      throw new AppError("Meta returned an unexpected template pagination URL", 502);
+    }
+    const response = await fetch(nextUrl, { headers: { Authorization: `Bearer ${connection.token}` } });
+    const payload = await response.json() as TemplateListResponse;
+    if (!response.ok) throw new AppError(payload.error?.message ?? "Unable to load WhatsApp templates from Meta", 502);
+    templatesFromMeta.push(...(payload.data ?? []));
+    if (!payload.paging?.next) {
+      nextUrl = null;
+    } else {
+      try {
+        nextUrl = new URL(payload.paging.next);
+      } catch {
+        throw new AppError("Meta returned an invalid template pagination URL", 502);
+      }
+    }
+  }
+  const uniqueTemplates = [...new Map(templatesFromMeta.map((template) => [template.id, template])).values()];
+  return uniqueTemplates
     .filter((template) => template.status === "APPROVED")
     // The inbox composer currently supports BODY text variables. Hide templates
     // requiring dynamic header or URL-button parameters rather than offering
