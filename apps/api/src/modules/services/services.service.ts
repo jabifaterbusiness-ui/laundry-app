@@ -99,13 +99,11 @@ export async function updateService(
     patch.unitPrice = data.unitPrice;
   }
 
-  const existing = await getServiceForBusiness(id, businessId, branchId, userId);
-  if (!existing) throw new AppError("Service not found", 404);
-  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "SERVICES", ownerBranchId: existing.ownerBranchId, resourceId: id });
   const result = await prisma.service.updateMany({
     where: {
       id,
       businessId,
+      ownerBranchId: existing.ownerBranchId,
     },
     data: patch,
   });
@@ -124,19 +122,30 @@ export async function setServiceActiveStatus(
   userId: string,
   isActive: boolean,
 ) {
+  const existing = await getServiceForBusiness(id, businessId, branchId, userId);
+  if (!existing) throw new AppError("Service not found", 404);
+
+  await assertBranchResourceWriteAccess({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "SERVICES",
+    ownerBranchId: existing.ownerBranchId,
+    resourceId: id,
+  });
+
   const result = await prisma.service.updateMany({
     where: {
       id,
       businessId,
+      ownerBranchId: existing.ownerBranchId,
     },
-    data: {
-      isActive,
-    },
+    data: { isActive },
   });
 
   if (result.count === 0) {
     throw new AppError("Service not found", 404);
   }
 
-  return getServiceForBusiness(id, businessId);
+  return getServiceForBusiness(id, businessId, branchId, userId);
 }
