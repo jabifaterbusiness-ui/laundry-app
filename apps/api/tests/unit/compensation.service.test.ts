@@ -88,6 +88,7 @@ describe("compensation service", () => {
     await expect(
       createCompensation({
         businessId: "biz-1",
+        branchId: "branch-1",
         employeeId: "employee-other",
         basicSalary: 100000,
         effectiveFrom: new Date("2026-09-01"),
@@ -125,6 +126,7 @@ describe("compensation service", () => {
     await expect(
       createCompensation({
         businessId: "biz-1",
+        branchId: "branch-1",
         employeeId: "employee-1",
         basicSalary: 120000,
         effectiveFrom: new Date("2026-09-01"),
@@ -190,6 +192,7 @@ describe("compensation service", () => {
 
     const result = await getCompensation({
       businessId: "biz-1",
+      branchId: "branch-1",
       id: "comp-1",
     });
 
