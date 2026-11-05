@@ -1504,6 +1504,11 @@ describe("Quick Operations routes - SC", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -1611,7 +1616,7 @@ describe("Quick Operations routes - SC", () => {
 
 
 describe("Quick Operations routes - TC", () => {
-  it("transfers every order from Customer A to Customer B across the business", async () => {
+  it("transfers only Customer A orders from the active branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
@@ -1672,6 +1677,7 @@ describe("Quick Operations routes - TC", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       select: {
@@ -1687,6 +1693,7 @@ describe("Quick Operations routes - TC", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       data: {
@@ -1798,7 +1805,7 @@ describe("Quick Operations routes - TC", () => {
 
 
 describe("Quick Operations routes - MA", () => {
-  it("merges Customer A into Customer B across the business and deactivates Customer A", async () => {
+  it("merges Customer A into Customer B within the active branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
@@ -1864,6 +1871,7 @@ describe("Quick Operations routes - MA", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       select: {
@@ -1879,6 +1887,7 @@ describe("Quick Operations routes - MA", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       data: {
