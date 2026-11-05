@@ -1713,7 +1713,7 @@ describe("Quick Operations routes - TC", () => {
           targetCustomerId: CUSTOMER_B,
           transferredOrderCount: 1,
           transferredOrderIds: transferredOrders.map((order) => order.id),
-          transferredOrderNumbers: ["00042", "00043"],
+          transferredOrderNumbers: ["00042"],
         }),
       }),
     );
@@ -1896,6 +1896,7 @@ describe("Quick Operations routes - MA", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       },
       data: {
         isActive: false,
