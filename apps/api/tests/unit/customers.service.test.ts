@@ -172,7 +172,17 @@ describe("getCustomerForBusiness - tenant isolation", () => {
 
     await getCustomerForBusiness("cust-1", "biz-1", "branch-A", "user-A");
 
-    expect(findFirst).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" } });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "cust-1",
+        businessId: "biz-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      },
+    });
   });
 
   it("business A can retrieve its own customer", async () => {
@@ -188,7 +198,9 @@ describe("getCustomerForBusiness - tenant isolation", () => {
     findFirst.mockResolvedValue(null);
     const result = await getCustomerForBusiness("cust-1", "biz-B", "branch-A", "user-A");
     expect(result).toBeNull();
-    expect(findFirst).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-B" } });
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: "cust-1", businessId: "biz-B" }),
+    }));
   });
 });
 
@@ -199,7 +211,16 @@ describe("findPossibleDuplicates", () => {
     await findPossibleDuplicates("biz-1", "branch-A", "user-A", "5551234567");
 
     expect(findMany).toHaveBeenCalledWith({
-      where: { businessId: "biz-1", phone: "5551234567", isActive: true },
+      where: {
+        businessId: "biz-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+        phone: "5551234567",
+        isActive: true,
+      },
       select: { id: true, name: true, phone: true },
     });
   });
@@ -210,7 +231,17 @@ describe("findPossibleDuplicates", () => {
     await findPossibleDuplicates("biz-1", "branch-A", "user-A", "5551234567", "cust-1");
 
     expect(findMany).toHaveBeenCalledWith({
-      where: { businessId: "biz-1", phone: "5551234567", isActive: true, id: { not: "cust-1" } },
+      where: {
+        businessId: "biz-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+        phone: "5551234567",
+        isActive: true,
+        id: { not: "cust-1" },
+      },
       select: { id: true, name: true, phone: true },
     });
   });
@@ -223,7 +254,7 @@ describe("createCustomer", () => {
     await createCustomer({ businessId: "biz-1", branchId: "branch-A", name: "Jane", phone: "5551234567" });
 
     expect(create).toHaveBeenCalledWith({
-      data: { businessId: "biz-1", name: "Jane", phone: "5551234567", email: null, address: null, notes: null, whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null },
+      data: { businessId: "biz-1", ownerBranchId: "branch-A", name: "Jane", phone: "5551234567", email: null, address: null, notes: null, whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null },
     });
   });
 
