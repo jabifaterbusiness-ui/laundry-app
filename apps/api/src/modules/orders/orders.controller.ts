@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { prisma } from "../../lib/prisma.js";
 import {
   createOrderSchema,
   editOrderSchema,
@@ -177,6 +178,9 @@ export async function updateStatus(req: Request, res: Response) {
   const { id } = orderIdParamSchema.parse(req.params);
   const input = updateOrderStatusSchema.parse(req.body);
 
+  const previousOrder = await getOrderForBusiness(id, businessId, branchId);
+  if (!previousOrder) throw new AppError("Order not found", 404);
+
   const order = await updateOrderStatus(
     id,
     businessId,
@@ -194,11 +198,46 @@ export async function updateStatus(req: Request, res: Response) {
     correlationId: req.correlationId ?? null,
     metadata: {
       orderNumber: order.orderNumber,
+      previousStatus: previousOrder.status,
       status: order.status,
     },
   });
 
   res.status(200).json(order);
+}
+
+export async function statusHistory(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = orderIdParamSchema.parse(req.params);
+  const order = await getOrderForBusiness(id, businessId, branchId);
+  if (!order) throw new AppError("Order not found", 404);
+
+  const entries = await prisma.auditLog.findMany({
+    where: {
+      businessId,
+      branchId,
+      entityType: "Order",
+      entityId: id,
+      action: "order.status_updated",
+    },
+    include: { actor: { select: { fullName: true } } },
+    orderBy: { timestamp: "desc" },
+    take: 100,
+  });
+
+  res.status(200).json(entries.map((entry) => {
+    const metadata = entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata)
+      ? entry.metadata as Record<string, unknown>
+      : {};
+    return {
+      id: entry.id,
+      previousStatus: typeof metadata.previousStatus === "string" ? metadata.previousStatus : null,
+      status: typeof metadata.status === "string" ? metadata.status : "UNKNOWN",
+      changedAt: entry.timestamp,
+      changedBy: entry.actor?.fullName ?? "Unknown user",
+    };
+  }));
 }
 
 export async function editInvoice(req: Request, res: Response) {
