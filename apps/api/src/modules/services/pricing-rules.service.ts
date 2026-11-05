@@ -104,12 +104,12 @@ export async function setPriceAdjustmentActive(id: string, businessId: string, b
   if (!existing) throw new AppError("Price adjustment not found", 404);
   await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id });
   const result = await prisma.priceAdjustment.updateMany({
-    where: { id, businessId },
+    where: { id, businessId, branchId: existing.branchId },
     data: { isActive },
   });
   if (!result.count) throw new AppError("Price adjustment not found", 404);
   return prisma.priceAdjustment.findFirst({
-    where: { id, businessId },
+    where: { id, businessId, branchId: existing.branchId },
     include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } },
   });
 }
@@ -119,7 +119,7 @@ export async function deletePriceAdjustment(id: string, businessId: string, bran
   const existing = await prisma.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
   if (!existing) throw new AppError("Price adjustment not found", 404);
   await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id });
-  const result = await prisma.priceAdjustment.deleteMany({ where: { id, businessId } });
+  const result = await prisma.priceAdjustment.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
   if (!result.count) throw new AppError("Price adjustment not found", 404);
 }
 
@@ -145,6 +145,6 @@ export async function deleteTaxRule(id: string, businessId: string, branchId: st
   const existing = await prisma.taxRule.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
   if (!existing) throw new AppError("Tax rule not found", 404);
   await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "TAX_RULES", ownerBranchId: existing.branchId, resourceId: id });
-  const result = await prisma.taxRule.deleteMany({ where: { id, businessId } });
+  const result = await prisma.taxRule.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
   if (!result.count) throw new AppError("Tax rule not found", 404);
 }
