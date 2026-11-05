@@ -203,6 +203,7 @@ describe("compensation service", () => {
           id: "comp-1",
           businessId: "biz-1",
           OR: [{ branchId: "branch-1" }, { branchId: null }],
+          employee: { is: { branches: { some: { branchId: "branch-1" } } } },
         },
       }),
     );
@@ -237,6 +238,7 @@ describe("compensation service", () => {
         where: {
           businessId: "biz-1",
           OR: [{ branchId: "branch-1" }, { branchId: null }],
+          employee: { is: { branches: { some: { branchId: "branch-1" } } } },
           employeeId: "employee-1",
         },
       }),
