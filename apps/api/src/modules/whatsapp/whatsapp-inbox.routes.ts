@@ -24,13 +24,13 @@ whatsappInboxRouter.post("/conversations/replies", requirePermission("customers.
     phone: z.string().min(8).max(32),
     body: z.string().trim().min(1).max(4096),
   }).strict().parse(req.body);
-  const result = await sendWhatsAppConversationReply({ businessId: businessId(req), ...input });
+  const result = await sendWhatsAppConversationReply({ businessId: businessId(req), ...(input.customerId !== undefined ? { customerId: input.customerId } : {}), phone: input.phone, body: input.body });
   res.status(201).json(result);
 }));
 
 whatsappInboxRouter.post("/conversations/read", requirePermission("customers.view"), asyncHandler(async (req, res) => {
   const input = z.object({ customerId: z.string().uuid().nullable().optional(), phone: z.string().min(8).max(32) }).strict().parse(req.body);
-  const result = await markWhatsAppConversationRead({ businessId: businessId(req), ...input });
+  const result = await markWhatsAppConversationRead({ businessId: businessId(req), ...(input.customerId !== undefined ? { customerId: input.customerId } : {}), phone: input.phone, body: input.body });
   res.status(200).json(result);
 }));
 
@@ -46,6 +46,6 @@ whatsappInboxRouter.post("/templates/send", requirePermission("customers.update"
     language: z.string().min(2).max(32),
     variables: z.array(z.string().max(1024)).max(20).default([]),
   }).strict().parse(req.body);
-  const result = await sendApprovedWhatsAppTemplate({ businessId: businessId(req), ...input });
+  const result = await sendApprovedWhatsAppTemplate({ businessId: businessId(req), ...(input.customerId !== undefined ? { customerId: input.customerId } : {}), phone: input.phone, body: input.body });
   res.status(201).json(result);
 }));
