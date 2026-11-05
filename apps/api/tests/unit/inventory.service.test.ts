@@ -1257,7 +1257,7 @@ describe("listInventoryStock", () => {
       },
     ];
 
-    prismaMock.branchResourceShare.findMany.mockResolvedValue([
+    prismaMock.branchResourceShare.findMany.mockResolvedValueOnce([
       { ownerBranchId: "branch-2", resourceId: "shared-item-1", accessLevel: "READ" },
     ] as never);
 
