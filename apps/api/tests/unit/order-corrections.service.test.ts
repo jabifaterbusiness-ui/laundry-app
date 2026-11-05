@@ -310,6 +310,20 @@ describe("editOrderWithCorrection", () => {
       "Customer requested correction",
     );
 
+    expect(tx.customerServicePrice.findMany).toHaveBeenCalledWith({
+      where: {
+        businessId: BUSINESS_A,
+        customerId: CUSTOMER_A,
+        serviceId: { in: [SERVICE_SHIRT] },
+        OR: [
+          { branchId: null },
+          { branchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+      select: { serviceId: true, unitPrice: true },
+    });
+
     expect(tx.orderItem.update).toHaveBeenCalledWith({
       where: {
         id: ITEM_SHIRT,
