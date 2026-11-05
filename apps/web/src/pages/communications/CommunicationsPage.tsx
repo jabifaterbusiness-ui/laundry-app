@@ -228,7 +228,7 @@ export function CommunicationsPage() {
         <p>Send a company-wide message or select individual customers. Delivery results are recorded for follow-up.</p>
         <form onSubmit={(event) => { event.preventDefault(); announcementMutation.mutate(); }}>
           <label>Announcement title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required /></label>
-          <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
+          <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={announcementChannels.includes("WHATSAPP") ? 1024 : 4000} required /></label>
           {announcementChannels.includes("WHATSAPP") && (
             <>
               <label>Approved WhatsApp MARKETING template
