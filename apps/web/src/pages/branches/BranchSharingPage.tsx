@@ -13,8 +13,6 @@ const resourceTypes: Array<{ value: BranchResourceType; label: string }> = [
   { value: "DISCOUNTS", label: "Discounts and promotions" },
   { value: "TAX_RULES", label: "Tax rules" },
   { value: "INVENTORY", label: "Inventory" },
-  { value: "PAYROLL", label: "Payroll and compensation" },
-  { value: "REPORTS", label: "Reports" },
 ];
 
 export function BranchSharingPage() {
