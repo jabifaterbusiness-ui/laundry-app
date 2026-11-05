@@ -1,6 +1,47 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 
+
+async function assertCanManageOwnerBranch(input: {
+  businessId: string;
+  ownerBranchId: string;
+  actorUserId: string;
+}) {
+  const actor = await prisma.user.findFirst({
+    where: {
+      id: input.actorUserId,
+      businessId: input.businessId,
+      isActive: true,
+      deletedAt: null,
+    },
+    select: { securityRole: true },
+  });
+
+  if (!actor) {
+    throw new AppError("An active user in this business is required", 403);
+  }
+
+  // Business owners administer resources across their business. Other
+  // users must belong to the branch whose resources they are sharing.
+  if (actor.securityRole === "BUSINESS_OWNER" || actor.securityRole === "PLATFORM_ADMIN") {
+    return;
+  }
+
+  const membership = await prisma.userBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId: input.actorUserId,
+        branchId: input.ownerBranchId,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    throw new AppError("You must belong to the resource-owning branch to manage its sharing rules", 403);
+  }
+}
+
 export type BranchResourceType =
   | "CUSTOMERS"
   | "SERVICES"
@@ -108,6 +149,8 @@ export async function saveBranchResourceShare(input: {
     throw new AppError("A branch cannot share resources with itself", 400);
   }
 
+  await assertCanManageOwnerBranch({ businessId: input.businessId, ownerBranchId: input.ownerBranchId, actorUserId: input.createdByUserId });
+
   const branches = await prisma.branch.findMany({
     where: { businessId: input.businessId, id: { in: [input.ownerBranchId, input.targetBranchId] } },
     select: { id: true },
@@ -167,11 +210,12 @@ export async function saveBranchResourceShare(input: {
   });
 }
 
-export async function deleteBranchResourceShare(input: { businessId: string; id: string }) {
+export async function deleteBranchResourceShare(input: { businessId: string; id: string; actorUserId: string }) {
   const share = await prisma.branchResourceShare.findFirst({
     where: { id: input.id, businessId: input.businessId },
-    select: { id: true },
+    select: { id: true, ownerBranchId: true },
   });
   if (!share) throw new AppError("Branch sharing rule not found", 404);
+  await assertCanManageOwnerBranch({ businessId: input.businessId, ownerBranchId: share.ownerBranchId, actorUserId: input.actorUserId });
   await prisma.branchResourceShare.delete({ where: { id: share.id } });
 }
