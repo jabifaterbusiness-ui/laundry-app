@@ -24,6 +24,8 @@ export async function sendAnnouncement(req: Request, res: Response) {
   const result = await createAnnouncement({
     businessId: id, createdByUserId: req.user!.id,
     title: input.title, message: input.message, channels: input.channels, audience: input.audience,
+    ...(input.whatsappTemplateName !== undefined ? { whatsappTemplateName: input.whatsappTemplateName } : {}),
+    ...(input.whatsappTemplateLanguage !== undefined ? { whatsappTemplateLanguage: input.whatsappTemplateLanguage } : {}),
     ...(input.customerIds !== undefined ? { customerIds: input.customerIds } : {}),
     ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
   });
