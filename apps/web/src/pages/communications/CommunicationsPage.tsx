@@ -289,7 +289,7 @@ export function CommunicationsPage() {
             setWhatsappTemplateLanguage(selected?.language ?? "");
           }}>
             <option value="">No approved template fallback</option>
-            {(approvedTemplatesQuery.data?.data ?? []).map((template) => (
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY").map((template) => (
               <option key={template.id} value={`${template.name}|${template.language}`}>
                 {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
               </option>
@@ -297,7 +297,7 @@ export function CommunicationsPage() {
           </select>
         </label>
         <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
-          Template BODY variables are filled in this order: {"{{1}}"} customer name, {"{{2}}"} order number, {"{{3}}"} order status, {"{{4}}"} company name. Use the matching order in the approved Meta template. Templates are only used when the free-form 24-hour window has closed.
+          Template BODY variables are filled in this order: {"{{1}}"} customer name, {"{{2}}"} order number, {"{{3}}"} order status, {"{{4}}"} company name. Use the matching order in the approved Meta template. Only approved UTILITY templates are offered. Templates are used when the free-form 24-hour window has closed.
         </small>
         <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
         <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
