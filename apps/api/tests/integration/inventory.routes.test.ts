@@ -364,7 +364,19 @@ describe("Inventory movement history", () => {
     expect(res.body.movements).toHaveLength(1);
     expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { businessId: "biz-A", branchId: BRANCH_A },
+        where: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
+      },
         include: { inventoryItem: true },
       }),
     );
@@ -426,16 +438,30 @@ describe("Inventory routes - business-scoped items", () => {
     expect(res.body.items).toHaveLength(1);
   });
 
-  it("updates an inventory item without requiring a branch header", async () => {
+  it("updates an inventory item within the active branch", async () => {
     vi.mocked(prisma.inventoryItem.findFirst).mockResolvedValueOnce({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
       lowStockThreshold: 5,
       isActive: true,
     } as never);
+    vi.mocked(prisma.inventoryItem.findFirst)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
+        name: "Liquid Detergent",
+        description: "Laundry detergent",
+        unit: "LITRE",
+        lowStockThreshold: 10,
+        isActive: true,
+      } as never);
+    vi.mocked(prisma.inventoryItem.updateMany).mockResolvedValue({ count: 1 } as never);
 
     vi.mocked(prisma.inventoryItem.update).mockResolvedValue({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -466,8 +492,8 @@ describe("Inventory routes - business-scoped items", () => {
       lowStockThreshold: 10,
       isActive: true,
     });
-    expect(prisma.inventoryItem.update).toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 404 when updating a non-existent inventory item", async () => {
@@ -480,8 +506,8 @@ describe("Inventory routes - business-scoped items", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toBe("Inventory item not found");
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 409 when updating an inventory item to a duplicate name", async () => {
@@ -514,8 +540,8 @@ describe("Inventory routes - business-scoped items", () => {
     expect(res.body.error.message).toBe(
       "An inventory item with this name already exists",
     );
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 404 when updating an inventory item from another business", async () => {
@@ -574,7 +600,7 @@ describe("Inventory routes - business-scoped items", () => {
         reorderQuantity: 24,
       }),
     }));
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 });
 
@@ -803,7 +829,7 @@ describe("Inventory routes - branch-scoped stock", () => {
   it("rejects stock requests without X-Branch-Id", async () => {
     const res = await request(app)
       .get("/api/v1/inventory/stock")
-      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A);
+      .set("Authorization", `Bearer ${OWNER_A}`);
 
     expect(res.status).toBe(400);
     expect(userBranchFindUnique).not.toHaveBeenCalled();
