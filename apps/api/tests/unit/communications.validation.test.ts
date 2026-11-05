@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnnouncementSchema, customerGroupSchema, statusRuleSchema } from "../../src/modules/communications/communications.validation.js";
+import { createAnnouncementSchema, customerGroupSchema, reminderConfigSchema, statusRuleSchema } from "../../src/modules/communications/communications.validation.js";
 
 const customerId = "d2719f8b-0c4d-4a9d-8f1e-3a8f3f8e7d10";
 const groupId = "c9719f8b-0c4d-4a9d-8f1e-3a8f3f8e7d10";
@@ -76,5 +76,22 @@ describe("WhatsApp notification template route validation", () => {
       status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
       whatsappTemplateName: "", whatsappTemplateLanguage: "en",
     }).success).toBe(false);
+  });
+});
+
+
+describe("unpicked reminder template route validation", () => {
+  it("accepts an approved template fallback", () => {
+    expect(reminderConfigSchema.safeParse({
+      enabled: true, thresholdMonths: 2,
+      whatsappTemplateName: "unpicked_order", whatsappTemplateLanguage: "en",
+    }).success).toBe(true);
+  });
+
+  it("accepts clearing an existing template fallback", () => {
+    expect(reminderConfigSchema.safeParse({
+      enabled: true, thresholdMonths: 2,
+      whatsappTemplateName: null, whatsappTemplateLanguage: null,
+    }).success).toBe(true);
   });
 });
