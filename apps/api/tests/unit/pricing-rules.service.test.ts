@@ -37,7 +37,7 @@ beforeEach(() => {
   findServices.mockResolvedValue([{ id: "service-1" }] as never);
   create.mockResolvedValue({ id: "discount-1" } as never);
   updateMany.mockResolvedValue({ count: 1 } as never);
-  findAdjustment.mockResolvedValue({ id: "discount-1", isActive: false } as never);
+  findAdjustment.mockResolvedValue({ id: "discount-1", branchId: "branch-A", isActive: false } as never);
 });
 
 describe("automatic price adjustments", () => {
