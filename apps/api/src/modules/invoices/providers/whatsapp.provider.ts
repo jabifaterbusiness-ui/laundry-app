@@ -100,7 +100,7 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
   }
   const id = messagePayload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
-  await persistBusinessOutbound({ businessId: input.businessId, to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "image", body: input.caption });
+  await persistBusinessOutbound({ ...(input.businessId ? { businessId: input.businessId } : {}), to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "image", body: input.caption });
   return { id };
 }
 
@@ -129,6 +129,6 @@ export async function sendWhatsAppText(input: SendWhatsAppTextInput): Promise<{ 
   }
   const id = payload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
-  await persistBusinessOutbound({ businessId: input.businessId, to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "text", body: input.body });
+  await persistBusinessOutbound({ ...(input.businessId ? { businessId: input.businessId } : {}), to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "text", body: input.body });
   return { id };
 }
