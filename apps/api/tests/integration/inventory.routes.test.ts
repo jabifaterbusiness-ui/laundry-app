@@ -645,6 +645,7 @@ describe("Inventory routes - branch-scoped stock", () => {
     vi.mocked(prisma.inventoryItem.findFirst).mockResolvedValueOnce({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
@@ -834,7 +835,7 @@ describe("Inventory routes - branch-scoped stock", () => {
       .set("Authorization", `Bearer ${OWNER_A}`);
 
     expect(res.status).toBe(400);
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("rejects stock requests for a branch the user cannot access", async () => {
