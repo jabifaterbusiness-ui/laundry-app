@@ -36,7 +36,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mocks.upsert.mockReset().mockResolvedValue({ id: "event-1", processedAt: null });
     mocks.updateEvent.mockReset().mockResolvedValue({});
-    mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1" });
+    mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1", wabaId: "waba-12345" });
     mocks.findMany.mockReset().mockResolvedValue([]);
   });
 
@@ -143,6 +143,21 @@ describe("processWhatsAppWebhook", () => {
     expect(result).toEqual({ processedStatuses: 0, receivedMessages: 1 });
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ eventType: "MESSAGE_RECEIVED", providerMessageId: "wamid-inbound", contactPhone: "2348000000000" }),
+    }));
+  });
+
+  it("does not route a signed callback to a tenant when the WABA does not own the phone number", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ id: "waba-other", changes: [{ value: {
+        metadata: { phone_number_id: "phone-12345" },
+        messages: [{ id: "wamid-cross-account", from: "2348000000000", type: "text", text: { body: "Hello" } }],
+      } }] }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    await processWhatsAppWebhook(body, makeSignature(body));
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ businessId: null, connectionId: null, eventType: "MESSAGE_RECEIVED" }),
     }));
   });
 
