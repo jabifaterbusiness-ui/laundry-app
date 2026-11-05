@@ -45,6 +45,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: true,
       },
       orderBy: { name: "asc" },
@@ -64,6 +65,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: false,
       },
       orderBy: { name: "asc" },
@@ -103,6 +105,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: true,
         name: {
           contains: "shirt",
@@ -156,6 +159,7 @@ describe("createService", () => {
 
     await createService({
       businessId: "biz-1",
+      branchId: "branch-A",
       name: "Shirt",
       pieces: 1,
       unitPrice: 500,
@@ -179,6 +183,7 @@ describe("updateService", () => {
     findFirst.mockResolvedValue({
       id: "service-1",
       businessId: "biz-1",
+      ownerBranchId: "branch-A",
     } as never);
 
     await updateService(
@@ -193,7 +198,7 @@ describe("updateService", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        ownerBranchId: "branch-A",
       },
       data: {
         name: "Premium Shirt",
@@ -220,6 +225,7 @@ describe("updateService", () => {
     findFirst.mockResolvedValue({
       id: "service-1",
       businessId: "biz-1",
+      ownerBranchId: "branch-A",
     } as never);
 
     await updateService(
@@ -237,7 +243,7 @@ describe("updateService", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        ownerBranchId: "branch-A",
       },
       data: {
         pieces: 3,
@@ -267,7 +273,7 @@ describe("setServiceActiveStatus", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        ownerBranchId: "branch-A",
       },
       data: {
         isActive: false,
@@ -296,7 +302,7 @@ describe("setServiceActiveStatus", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        ownerBranchId: "branch-A",
       },
       data: {
         isActive: true,
