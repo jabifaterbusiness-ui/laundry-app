@@ -46,6 +46,9 @@ export const createCustomerSchema = z.object({
 }).refine((data) => !data.whatsappOptIn || Boolean(data.whatsappOptInSource), {
   message: "Record how the customer gave WhatsApp consent",
   path: ["whatsappOptInSource"],
+}).refine((data) => data.whatsappOptIn || data.whatsappOptInSource === undefined, {
+  message: "A consent source can only be recorded when WhatsApp opt-in is enabled",
+  path: ["whatsappOptInSource"],
 });
 
 export const updateCustomerSchema = z
@@ -69,6 +72,10 @@ export const updateCustomerSchema = z
   .refine(
     (data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource),
     { message: "Record how the customer gave WhatsApp consent", path: ["whatsappOptInSource"] },
+  )
+  .refine(
+    (data) => data.whatsappOptIn === true || data.whatsappOptInSource === undefined,
+    { message: "A consent source can only be recorded when WhatsApp opt-in is enabled", path: ["whatsappOptInSource"] },
   )
   .refine(
     (data) =>
