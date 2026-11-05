@@ -297,7 +297,7 @@ describe("updateCustomer - tenant isolation", () => {
   it("throws 404 (not a silent no-op) when nothing matched, e.g. cross-business", async () => {
     updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(updateCustomer("cust-1", "biz-B", { name: "New Name" })).rejects.toThrow(AppError);
+    await expect(updateCustomer("cust-1", "biz-B", "branch-A", "user-A", { name: "New Name" })).rejects.toThrow(AppError);
   });
 });
 
