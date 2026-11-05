@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fetchMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  mocks.fetchMock: vi.fn(),
+  inboundFindFirst: vi.fn(),
 }));
 
-vi.stubGlobal("fetch", fetchMock);
+vi.stubGlobal("fetch", mocks.fetchMock);
 
 vi.mock("../../src/config/index.js", () => ({
   config: {
@@ -18,14 +19,21 @@ vi.mock("../../src/config/index.js", () => ({
   },
 }));
 
-import { sendWhatsAppReceipt } from "../../src/modules/invoices/providers/whatsapp.provider.js";
+vi.mock("../../src/lib/prisma.js", () => ({
+  prisma: { whatsAppWebhookEvent: { findFirst: mocks.inboundFindFirst } },
+}));
+vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
+  decryptWhatsAppAccessToken: () => "decrypted-test-token",
+}));
+
+import { sendWhatsAppReceipt, sendWhatsAppText } from "../../src/modules/invoices/providers/whatsapp.provider.js";
 
 const IMAGE = Buffer.from("fake-png");
 
 beforeEach(() => {
   vi.clearAllMocks();
 
-  fetchMock
+  mocks.fetchMock
     .mockResolvedValueOnce({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -51,9 +59,9 @@ describe("whatsapp.provider", () => {
       id: "wamid.test-123",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
 
-    const [mediaUrl, mediaOptions] = fetchMock.mock.calls[0] ?? [];
+    const [mediaUrl, mediaOptions] = mocks.fetchMock.mock.calls[0] ?? [];
 
     expect(mediaUrl).toBe(
       "https://graph.facebook.com/v23.0/phone-number-id-123/media",
@@ -75,7 +83,7 @@ describe("whatsapp.provider", () => {
     expect(uploadedFile).toBeInstanceOf(Blob);
     expect((uploadedFile as Blob).type).toBe("image/png");
 
-    const [messageUrl, messageOptions] = fetchMock.mock.calls[1] ?? [];
+    const [messageUrl, messageOptions] = mocks.fetchMock.mock.calls[1] ?? [];
 
     expect(messageUrl).toBe(
       "https://graph.facebook.com/v23.0/phone-number-id-123/messages",
@@ -99,10 +107,29 @@ describe("whatsapp.provider", () => {
     });
   });
 
-  it("rejects Meta media upload failures", async () => {
-    fetchMock.mockReset();
+  it("blocks tenant free-form text outside the 24-hour customer-service window", async () => {
+    mocks.inboundFindFirst.mockResolvedValue({
+      payload: { timestamp: String(Math.floor(Date.now() / 1000) - 25 * 60 * 60) },
+      receivedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    });
+    await expect(sendWhatsAppText({
+      businessId: "business-1", to: "2348012345678", body: "Your order is ready",
+    })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
 
-    fetchMock.mockResolvedValueOnce({
+  it("blocks tenant receipt images outside the 24-hour customer-service window", async () => {
+    mocks.inboundFindFirst.mockResolvedValue(null);
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1", to: "2348012345678", image: IMAGE,
+    })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects Meta media upload failures", async () => {
+    mocks.fetchMock.mockReset();
+
+    mocks.fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: vi.fn().mockResolvedValue({
@@ -121,13 +148,13 @@ describe("whatsapp.provider", () => {
       "WhatsApp media upload failed: Invalid OAuth access token",
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a successful media upload without a media ID", async () => {
-    fetchMock.mockReset();
+    mocks.fetchMock.mockReset();
 
-    fetchMock.mockResolvedValueOnce({
+    mocks.fetchMock.mockResolvedValueOnce({
       ok: true,
       json: vi.fn().mockResolvedValue({
         id: undefined,
@@ -144,13 +171,13 @@ describe("whatsapp.provider", () => {
       "WhatsApp media upload returned no media ID",
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects Meta WhatsApp message failures", async () => {
-    fetchMock.mockReset();
+    mocks.fetchMock.mockReset();
 
-    fetchMock
+    mocks.fetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
@@ -176,13 +203,13 @@ describe("whatsapp.provider", () => {
       "WhatsApp delivery failed: Invalid parameter",
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("rejects a successful WhatsApp response without a message ID", async () => {
-    fetchMock.mockReset();
+    mocks.fetchMock.mockReset();
 
-    fetchMock
+    mocks.fetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
@@ -205,6 +232,6 @@ describe("whatsapp.provider", () => {
       "WhatsApp delivery returned no message ID",
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
   });
 });
