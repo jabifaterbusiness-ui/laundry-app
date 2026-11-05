@@ -364,6 +364,7 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           businessId: "biz-A",
           OR: [{ branchId: "branch-A" }, { branchId: null }],
+          employee: { is: { branches: { some: { branchId: "branch-A" } } } },
         },
       }),
     );
@@ -384,6 +385,7 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           businessId: "biz-A",
           OR: [{ branchId: "branch-A" }, { branchId: null }],
+          employee: { is: { branches: { some: { branchId: "branch-A" } } } },
           employeeId: EMPLOYEE_A,
         },
       }),
