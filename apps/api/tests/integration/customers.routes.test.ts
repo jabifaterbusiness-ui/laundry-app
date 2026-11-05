@@ -139,14 +139,11 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
 
-  userBranchFindUnique.mockResolvedValue({
-    userId: "user-1",
-    branchId: "branch-A",
-    branch: {
-      id: "branch-A",
-      businessId: "biz-A",
-    },
-  } as never);
+  userBranchFindUnique.mockImplementation(async ({ where }: any) => {
+    const { userId, branchId } = where.userId_branchId;
+    const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+    return { userId, branchId, branch: { id: branchId, businessId } } as never;
+  });
 
   sensitiveAuthorizationFindUnique.mockResolvedValue({
     id: "sensitive-auth-1",
@@ -178,7 +175,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
     findMany.mockResolvedValue([{ id: "cust-1", businessId: "biz-A", name: "Jane" }] as never);
     count.mockResolvedValue(1);
 
-    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
+    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A").set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
@@ -194,7 +191,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     const res = await request(app)
       .get("/api/v1/customers/11111111-1111-1111-1111-111111111111")
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B");
 
     expect(res.status).toBe(404);
     expect(findFirst).toHaveBeenCalledWith({
@@ -211,7 +208,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", businessId: "biz-B" });
 
     expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ businessId: "biz-A", ownerBranchId: "branch-A" }) });
@@ -223,7 +220,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     await request(app)
       .get("/api/v1/customers?businessId=biz-B")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
   });
@@ -237,7 +234,7 @@ describe("Customers routes - permission enforcement", () => {
 
     const response = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Blocked Customer" });
 
     expect(response.status).toBe(403);
@@ -254,7 +251,7 @@ describe("Customers routes - authorization matrix", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567" });
 
     expect(res.status).toBe(201);
@@ -266,14 +263,14 @@ describe("Customers routes - authorization matrix", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${STAFF_A}`);
+    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
     expect(res.status).toBe(200);
   });
 
   it("STAFF cannot activate a customer", async () => {
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/activate")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -281,7 +278,7 @@ describe("Customers routes - authorization matrix", () => {
   it("STAFF cannot deactivate a customer", async () => {
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/deactivate")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -294,7 +291,7 @@ describe("Customers routes - authorization matrix", () => {
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/deactivate")
-      .set("Authorization", `Bearer ${MANAGER_A}`);
+      .set("Authorization", `Bearer ${MANAGER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -305,7 +302,7 @@ describe("Customers routes - authorization matrix", () => {
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/activate")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -315,7 +312,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with no name (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ phone: "555-123-4567" });
 
     expect(res.status).toBe(422);
@@ -324,7 +321,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with an invalid phone (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "abc" });
 
     expect(res.status).toBe(422);
@@ -333,7 +330,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with an invalid email (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", email: "not-an-email" });
 
     expect(res.status).toBe(422);
@@ -342,7 +339,7 @@ describe("Customers routes - validation", () => {
   it("rejects oversized notes (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", notes: "a".repeat(2001) });
 
     expect(res.status).toBe(422);
@@ -355,7 +352,7 @@ describe("Customers routes - duplicate handling", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane Doe", phone: "555-123-4567" });
 
     expect(res.status).toBe(409);
@@ -369,7 +366,7 @@ describe("Customers routes - duplicate handling", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane Doe", phone: "555-123-4567", confirmDuplicate: true });
 
     expect(res.status).toBe(201);
@@ -386,7 +383,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-999-8888" });
 
@@ -399,7 +396,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -418,7 +415,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -435,7 +432,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
@@ -459,7 +456,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -471,7 +468,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -485,7 +482,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
@@ -519,7 +516,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.balance).toBe(8000);
@@ -552,7 +549,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -571,7 +568,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B");
 
     expect(res.status).toBe(404);
     expect(customerAccountFindFirst).not.toHaveBeenCalled();
@@ -582,7 +579,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
     expect(customerAccountFindFirst).not.toHaveBeenCalled();
@@ -593,7 +590,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
@@ -623,7 +620,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .send({ amount: 5000 });
 
@@ -638,7 +635,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
@@ -661,7 +658,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", "branch-B")
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
@@ -697,7 +694,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({
@@ -756,7 +753,7 @@ describe("Customers routes - customer account / POA", () => {
     ]) {
       const res = await request(app)
         .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
         .set("X-Branch-Id", BRANCH_A)
         .set("X-Sensitive-Authorization", "a".repeat(64))
         .send(body);
@@ -776,7 +773,7 @@ describe("Customers routes - list search/pagination", () => {
 
     await request(app)
       .get("/api/v1/customers?search=Jane&page=2&pageSize=5")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
