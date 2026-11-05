@@ -70,6 +70,7 @@ beforeEach(() => {
   transaction.mockImplementation(
     async (callback) => callback(prismaMock as never),
   );
+  prismaMock.order.findFirst.mockReset();
 });
 
 describe("listCustomers", () => {
@@ -109,12 +110,13 @@ describe("listCustomers", () => {
     await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 25, status: "active", search: "555-1234" });
 
     const call = findMany.mock.calls[0]![0];
-    expect(call!.where!.OR).toEqual([
+    expect(call!.where!.AND).toEqual([{ OR: [
       { name: { contains: "555-1234", mode: "insensitive" } },
       { email: { contains: "555-1234", mode: "insensitive" } },
       {
         orders: {
           some: {
+            branchId: "branch-A",
             orderNumber: { contains: "555-1234", mode: "insensitive" },
           },
         },
@@ -122,6 +124,7 @@ describe("listCustomers", () => {
       {
         orders: {
           some: {
+            branchId: "branch-A",
             invoice: {
               is: {
                 invoiceNumber: { contains: "555-1234", mode: "insensitive" },
@@ -131,7 +134,7 @@ describe("listCustomers", () => {
         },
       },
       { phone: { contains: "5551234" } },
-    ]);
+    ] }]);
   });
 
   it("does not add a phone search clause for a purely alphabetic search", async () => {
@@ -141,12 +144,13 @@ describe("listCustomers", () => {
     await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 25, status: "active", search: "Jane" });
 
     const call = findMany.mock.calls[0]![0];
-    expect(call!.where!.OR).toEqual([
+    expect(call!.where!.AND).toEqual([{ OR: [
       { name: { contains: "Jane", mode: "insensitive" } },
       { email: { contains: "Jane", mode: "insensitive" } },
       {
         orders: {
           some: {
+            branchId: "branch-A",
             orderNumber: { contains: "Jane", mode: "insensitive" },
           },
         },
@@ -154,6 +158,7 @@ describe("listCustomers", () => {
       {
         orders: {
           some: {
+            branchId: "branch-A",
             invoice: {
               is: {
                 invoiceNumber: { contains: "Jane", mode: "insensitive" },
