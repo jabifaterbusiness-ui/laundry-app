@@ -11,7 +11,8 @@ export interface CustomerGroup {
 }
 export interface StatusNotificationRule {
   id: string; status: string; enabled: boolean; channel: CommunicationChannel | "BOTH";
-  whatsappMessage: string | null; emailSubject: string | null; emailMessage: string | null;
+  whatsappMessage: string | null; whatsappTemplateName: string | null; whatsappTemplateLanguage: string | null;
+  emailSubject: string | null; emailMessage: string | null;
 }
 export interface CommunicationDelivery {
   id: string; channel: CommunicationChannel; messageType: string; destination: string;
