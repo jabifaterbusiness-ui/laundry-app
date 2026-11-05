@@ -76,16 +76,23 @@ const allowedPreviousStatuses: Record<string, string[]> = {
   FAILED: ["PENDING", "SENT"],
 };
 
+async function resolveWebhookConnection(context: { wabaId?: string; phoneNumberId?: string }) {
+  if (!context.phoneNumberId) return null;
+  const connection = await prisma.whatsAppBusinessConnection.findUnique({
+    where: { phoneNumberId: context.phoneNumberId },
+    select: { id: true, businessId: true, wabaId: true },
+  });
+  // A signed webhook must still identify the same WABA/phone pair that this
+  // tenant connected. Never route a callback to a tenant on phone ID alone.
+  if (context.wabaId && connection?.wabaId !== context.wabaId) return null;
+  return connection;
+}
+
 async function persistEvent(input: {
   wabaId?: string; phoneNumberId?: string; providerMessageId?: string; contactPhone?: string;
   eventType: string; payload: object;
 }) {
-  const connection = input.phoneNumberId
-    ? await prisma.whatsAppBusinessConnection.findUnique({
-        where: { phoneNumberId: input.phoneNumberId },
-        select: { id: true, businessId: true },
-      })
-    : null;
+  const connection = await resolveWebhookConnection(input);
   const eventKey = createHash("sha256").update(JSON.stringify({
     wabaId: input.wabaId ?? null,
     phoneNumberId: input.phoneNumberId ?? null,
@@ -115,12 +122,7 @@ async function processStatus(status: WhatsAppStatus, context: { wabaId?: string;
   });
   if (event.processedAt) return true;
 
-  const connection = context.phoneNumberId
-    ? await prisma.whatsAppBusinessConnection.findUnique({
-        where: { phoneNumberId: context.phoneNumberId },
-        select: { businessId: true },
-      })
-    : null;
+  const connection = await resolveWebhookConnection(context);
   const result = await prisma.communicationDelivery.updateMany({
     where: {
       businessId: connection?.businessId ?? "__unmatched_whatsapp_business__",
