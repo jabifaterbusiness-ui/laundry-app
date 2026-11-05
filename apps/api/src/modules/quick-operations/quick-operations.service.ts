@@ -597,6 +597,7 @@ export async function executeQuickOperation(
         {
           businessId: context.businessId,
           branchId: context.branchId,
+          userId: context.userId,
         },
         {
           inventoryItemId: parsed.inventoryItemId,
