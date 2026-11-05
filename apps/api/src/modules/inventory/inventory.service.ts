@@ -149,9 +149,21 @@ export async function updateInventoryItem(
   }
 
   try {
-    return await prisma.inventoryItem.update({
-      where: { id: inventoryItemId },
+    const updated = await prisma.inventoryItem.updateMany({
+      where: {
+        id: inventoryItemId,
+        businessId: scope.businessId,
+        ownerBranchId: existing.ownerBranchId,
+      },
       data,
+    });
+    if (!updated.count) throw new AppError("Inventory item not found", 404);
+    return prisma.inventoryItem.findFirst({
+      where: {
+        id: inventoryItemId,
+        businessId: scope.businessId,
+        ownerBranchId: existing.ownerBranchId,
+      },
     });
   } catch (error) {
     if (
@@ -801,9 +813,37 @@ export async function createInventoryTransfer(scope: BranchScope, input: {
     if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) {
       throw new AppError("Transfer must contain unique inventory items", 422);
     }
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
     const ids = input.lines.map((line) => line.inventoryItemId);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
-    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: ids },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     const transferLines: Array<{ inventoryItemId: string; quantity: number; unitCost: number; resultingQuantity: number }> = [];
     for (const line of input.lines) {
       if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) throw new AppError("Transfer quantities must be positive whole numbers", 422);
@@ -1009,8 +1049,34 @@ export async function createInventoryReservation(scope: BranchScope, input: {
     if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
       throw new AppError("Reservation expiry must be in the future", 422);
     }
-    const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, businessId: scope.businessId, isActive: true } });
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const item = await tx.inventoryItem.findFirst({
+      where: {
+        id: input.inventoryItemId,
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
     if (!item) throw new AppError("Inventory item not found or inactive", 404);
+    await assertBranchResourceWriteAccess({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+      ownerBranchId: item.ownerBranchId,
+      resourceId: item.id,
+    }, tx);
     const stock = await tx.inventoryStock.upsert({
       where: { inventoryItemId_branchId: { inventoryItemId: input.inventoryItemId, branchId: scope.branchId } },
       create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: input.inventoryItemId, quantity: 0 },
@@ -1073,8 +1139,23 @@ export async function releaseInventoryReservation(scope: BranchScope, input: { r
 }
 
 export async function getInventoryReorderRecommendations(scope: BranchScope) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    userId: scope.userId,
+    resourceType: "INVENTORY",
+  });
   const items = await prisma.inventoryItem.findMany({
-    where: { businessId: scope.businessId, isActive: true },
+    where: {
+      businessId: scope.businessId,
+      isActive: true,
+      OR: [
+        { ownerBranchId: null },
+        { ownerBranchId: { in: itemScope.ownerBranchIds } },
+        { id: { in: itemScope.resourceIds } },
+      ],
+    },
     include: { stocks: { where: { businessId: scope.businessId, branchId: scope.branchId } } },
     orderBy: { name: "asc" },
   });
