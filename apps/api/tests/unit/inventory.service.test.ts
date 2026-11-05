@@ -462,7 +462,6 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
-          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: 5,
           type: "ADJUSTMENT",
@@ -542,7 +541,6 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
-          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: -3,
           type: "ADJUSTMENT",
