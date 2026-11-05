@@ -79,7 +79,13 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
   if (!Number.isSafeInteger(input.unitPrice) || input.unitPrice < 0) throw new AppError("Customer price must be a non-negative whole-naira amount", 422);
   return prisma.customerServicePrice.upsert({
     where: { customerId_serviceId_branchId: { customerId: input.customerId, serviceId: input.serviceId, branchId: input.branchId } },
-    create: { ...input, branchId: input.branchId },
+    create: {
+      businessId: input.businessId,
+      branchId: input.branchId,
+      customerId: input.customerId,
+      serviceId: input.serviceId,
+      unitPrice: input.unitPrice,
+    },
     update: { unitPrice: input.unitPrice },
     include: { service: { select: { id: true, name: true, pieces: true, unitPrice: true } } },
   });
