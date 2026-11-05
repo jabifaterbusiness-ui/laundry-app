@@ -56,7 +56,7 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
       const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
       const unsupportedBodyVariables = bodyVariableIndexes(template) === null;
       const unsupportedComponents = (template.components ?? []).some((component) =>
-        (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)))) ||
+        (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && component.text.includes("{{")))) ||
         (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => button.type === "URL" || button.type === "OTP" || (typeof button.url === "string" && /\{\{\s*\d+\s*\}\}/.test(button.url))))
       );
       return !unsupportedBodyVariables && !unsupportedComponents;
