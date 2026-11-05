@@ -11,10 +11,10 @@ export interface Customer {
   email: string | null;
   address: string | null;
   notes: string | null;
-  whatsappOptIn: boolean;
-  whatsappOptInAt: string | null;
-  whatsappOptInSource: string | null;
-  whatsappOptOutAt: string | null;
+  whatsappOptIn?: boolean;
+  whatsappOptInAt?: string | null;
+  whatsappOptInSource?: string | null;
+  whatsappOptOutAt?: string | null;
   isActive: boolean;
   lifecycleStatus: CustomerLifecycleStatus;
   statusReason: string | null;
