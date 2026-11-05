@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     service: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -36,6 +37,8 @@ describe("listServices", () => {
 
     await listServices({
       businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
       status: "active",
     });
 
@@ -53,6 +56,8 @@ describe("listServices", () => {
 
     await listServices({
       businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
       status: "inactive",
     });
 
@@ -70,12 +75,15 @@ describe("listServices", () => {
 
     await listServices({
       businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
       status: "all",
     });
 
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       orderBy: { name: "asc" },
     });
@@ -86,6 +94,8 @@ describe("listServices", () => {
 
     await listServices({
       businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
       status: "active",
       search: "shirt",
     });
@@ -108,12 +118,13 @@ describe("getServiceForBusiness", () => {
   it("scopes lookup by id and businessId", async () => {
     findFirst.mockResolvedValue(null);
 
-    await getServiceForBusiness("service-1", "biz-1");
+    await getServiceForBusiness("service-1", "biz-1", "branch-A", "user-A");
 
     expect(findFirst).toHaveBeenCalledWith({
       where: {
         id: "service-1",
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
     });
   });
@@ -124,6 +135,8 @@ describe("getServiceForBusiness", () => {
     const result = await getServiceForBusiness(
       "service-1",
       "biz-B",
+      "branch-A",
+      "user-A",
     );
 
     expect(result).toBeNull();
@@ -135,6 +148,7 @@ describe("createService", () => {
     create.mockResolvedValue({
       id: "service-1",
       businessId: "biz-1",
+      branchId: "branch-A",
       name: "Shirt",
       pieces: 1,
       unitPrice: 500,
@@ -150,6 +164,7 @@ describe("createService", () => {
     expect(create).toHaveBeenCalledWith({
       data: {
         businessId: "biz-1",
+        ownerBranchId: "branch-A",
         name: "Shirt",
         pieces: 1,
         unitPrice: 500,
@@ -169,6 +184,8 @@ describe("updateService", () => {
     await updateService(
       "service-1",
       "biz-1",
+      "branch-A",
+      "user-A",
       { name: "Premium Shirt" },
     );
 
@@ -176,6 +193,7 @@ describe("updateService", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       data: {
         name: "Premium Shirt",
@@ -190,6 +208,8 @@ describe("updateService", () => {
       updateService(
         "service-1",
         "biz-B",
+        "branch-A",
+        "user-A",
         { name: "Updated" },
       ),
     ).rejects.toThrow(AppError);
@@ -205,6 +225,8 @@ describe("updateService", () => {
     await updateService(
       "service-1",
       "biz-1",
+      "branch-A",
+      "user-A",
       {
         pieces: 3,
         unitPrice: 1500,
@@ -215,6 +237,7 @@ describe("updateService", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       data: {
         pieces: 3,
@@ -235,6 +258,8 @@ describe("setServiceActiveStatus", () => {
     const result = await setServiceActiveStatus(
       "service-1",
       "biz-1",
+      "branch-A",
+      "user-A",
       false,
     );
 
@@ -242,6 +267,7 @@ describe("setServiceActiveStatus", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       data: {
         isActive: false,
@@ -261,6 +287,8 @@ describe("setServiceActiveStatus", () => {
     const result = await setServiceActiveStatus(
       "service-1",
       "biz-1",
+      "branch-A",
+      "user-A",
       true,
     );
 
@@ -268,6 +296,7 @@ describe("setServiceActiveStatus", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
+        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       data: {
         isActive: true,
@@ -284,6 +313,8 @@ describe("setServiceActiveStatus", () => {
       setServiceActiveStatus(
         "service-1",
         "biz-B",
+        "branch-A",
+        "user-A",
         false,
       ),
     ).rejects.toThrow(AppError);
