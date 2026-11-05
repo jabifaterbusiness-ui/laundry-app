@@ -182,6 +182,8 @@ export async function createCustomerWithOfflineQueue(
         email: input.email,
         address: input.address,
         notes: input.notes,
+        whatsappOptIn: input.whatsappOptIn,
+        whatsappOptInSource: input.whatsappOptInSource,
       },
     });
 
