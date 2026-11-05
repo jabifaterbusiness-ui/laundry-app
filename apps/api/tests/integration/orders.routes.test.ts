@@ -29,6 +29,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       }),
     },
     $transaction: vi.fn(),
+    auditLog: {
+      findMany: vi.fn(),
+    },
     order: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -68,6 +71,7 @@ vi.mock("../../src/lib/audit.js", () => ({
 import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
+const auditLogFindMany = vi.mocked(prisma.auditLog.findMany);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderCount = vi.mocked(prisma.order.count);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
@@ -594,6 +598,49 @@ describe("Orders routes - authorization", () => {
       .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
+  });
+
+  it("returns order status history scoped to the active business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "COMPLETED",
+    } as never);
+    auditLogFindMany.mockResolvedValue([
+      {
+        id: "status-event-1",
+        timestamp: new Date("2026-11-05T12:00:00.000Z"),
+        metadata: { previousStatus: "IN_PROGRESS", status: "COMPLETED" },
+        actor: { fullName: "Branch Manager" },
+      },
+    ] as never);
+
+    const res = await request(app)
+      .get(`/api/v1/orders/${ORDER_A}/status-history`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: "status-event-1",
+        previousStatus: "IN_PROGRESS",
+        status: "COMPLETED",
+        changedAt: "2026-11-05T12:00:00.000Z",
+        changedBy: "Branch Manager",
+      },
+    ]);
+    expect(auditLogFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        entityType: "Order",
+        entityId: ORDER_A,
+        action: "order.status_updated",
+      },
+    }));
   });
 
   it("BUSINESS_OWNER can change order status", async () => {
