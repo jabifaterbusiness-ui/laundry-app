@@ -208,6 +208,7 @@ async function ensureOwnerRecipients(
 }
 
 async function deliverOne(
+  businessId: string,
   statementId: string,
   recipientId: string,
   channel: "EMAIL" | "WHATSAPP",
@@ -276,6 +277,7 @@ async function deliverOne(
             html: renderFinancialStatementEmail(input),
           })
         : await sendWhatsAppReceipt({
+            businessId,
             to: destination,
             image: await renderFinancialStatementImage(input),
             caption: `${input.businessName} — Monthly Financial Statement — ${input.periodLabel}`,
@@ -359,6 +361,7 @@ async function processBusiness(
     if (config.emailEnabled && recipient.user.email) {
       try {
         await deliverOne(
+          business.id,
           statement.id,
           recipient.id,
           "EMAIL",
@@ -386,6 +389,7 @@ async function processBusiness(
     ) {
       try {
         await deliverOne(
+          business.id,
           statement.id,
           recipient.id,
           "WHATSAPP",

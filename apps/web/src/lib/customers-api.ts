@@ -15,6 +15,8 @@ export interface CreateCustomerInput {
   email?: string;
   address?: string;
   notes?: string;
+  whatsappOptIn?: boolean;
+  whatsappOptInSource?: "CUSTOMER_VERBAL" | "CUSTOMER_WRITTEN" | "CUSTOMER_WEBSITE" | "CUSTOMER_OTHER";
   confirmDuplicate?: boolean;
 }
 
@@ -180,6 +182,8 @@ export async function createCustomerWithOfflineQueue(
         email: input.email,
         address: input.address,
         notes: input.notes,
+        whatsappOptIn: input.whatsappOptIn,
+        whatsappOptInSource: input.whatsappOptInSource,
       },
     });
 

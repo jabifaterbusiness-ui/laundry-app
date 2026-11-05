@@ -218,7 +218,21 @@ describe("createCustomer", () => {
     await createCustomer({ businessId: "biz-1", name: "Jane", phone: "5551234567" });
 
     expect(create).toHaveBeenCalledWith({
-      data: { businessId: "biz-1", name: "Jane", phone: "5551234567", email: null, address: null, notes: null },
+      data: { businessId: "biz-1", name: "Jane", phone: "5551234567", email: null, address: null, notes: null, whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null },
+    });
+  });
+
+  it("records explicit consent source and timestamp only when the customer opts in", async () => {
+    create.mockResolvedValue({ id: "cust-2" } as never);
+    await createCustomer({
+      businessId: "biz-1", name: "Ada", phone: "2348012345678",
+      whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        businessId: "biz-1", whatsappOptIn: true,
+        whatsappOptInAt: expect.any(Date), whatsappOptInSource: "CUSTOMER_WRITTEN",
+      }),
     });
   });
 });
@@ -231,6 +245,17 @@ describe("updateCustomer - tenant isolation", () => {
     await updateCustomer("cust-1", "biz-1", { name: "New Name" });
 
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { name: "New Name" } });
+  });
+
+  it("records opt-out only when a previously opted-in customer withdraws consent", async () => {
+    findFirst.mockResolvedValue({ whatsappOptIn: true } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValueOnce({ whatsappOptIn: true } as never).mockResolvedValueOnce({ id: "cust-1" } as never);
+    await updateCustomer("cust-1", "biz-1", { whatsappOptIn: false });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-1", businessId: "biz-1" },
+      data: { whatsappOptIn: false, whatsappOptOutAt: expect.any(Date) },
+    });
   });
 
   it("throws 404 (not a silent no-op) when nothing matched, e.g. cross-business", async () => {

@@ -4,6 +4,8 @@ import { AppError } from "../../middleware/error-handler.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
 import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
+import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
+import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
@@ -51,7 +53,24 @@ async function deliverMessage(input: {
   businessId: string; customerId: string; orderId?: string; campaignId?: string;
   channel: Channel; messageType: string; destination: string; subject: string;
   body: string; dedupeKey: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+  whatsappTemplateVariables?: string[]; whatsappTemplateCategory?: "UTILITY" | "MARKETING";
 }) {
+  if (input.channel === "WHATSAPP") {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { whatsappOptIn: true },
+    });
+    if (!customer?.whatsappOptIn) {
+      return recordMissingDestination({
+        businessId: input.businessId, customerId: input.customerId,
+        ...(input.orderId ? { orderId: input.orderId } : {}),
+        ...(input.campaignId ? { campaignId: input.campaignId } : {}),
+        channel: input.channel, messageType: input.messageType, dedupeKey: input.dedupeKey,
+        reason: "Customer has not explicitly opted in to WhatsApp messages. Record consent before sending business-initiated messages.",
+      });
+    }
+  }
   let delivery;
   try {
     delivery = await prisma.communicationDelivery.create({
@@ -79,17 +98,40 @@ async function deliverMessage(input: {
       })).id;
     } else {
       await assertWhatsAppMessagingEnabled();
-      providerMessageId = (await sendWhatsAppText({ to: input.destination, body: input.body })).id;
+      try {
+        providerMessageId = (await sendWhatsAppText({ businessId: input.businessId, to: input.destination, body: input.body })).id;
+      } catch (error) {
+        const serviceWindowClosed = error instanceof Error && error.message.includes("24-hour WhatsApp customer-service window is closed");
+        if (!serviceWindowClosed || !input.whatsappTemplateName || !input.whatsappTemplateLanguage) throw error;
+        providerMessageId = (await sendAutomatedWhatsAppTemplate({
+          businessId: input.businessId,
+          customerId: input.customerId,
+          phone: input.destination,
+          templateName: input.whatsappTemplateName,
+          language: input.whatsappTemplateLanguage,
+          variableValues: input.whatsappTemplateVariables ?? [],
+          templateCategory: input.whatsappTemplateCategory ?? "UTILITY",
+        })).providerMessageId;
+      }
     }
-    await prisma.communicationDelivery.update({
-      where: { id: delivery.id },
+    // A fast provider webhook may arrive before the send request returns.
+    // Only promote PENDING rows so an already-recorded DELIVERED/READ/FAILED
+    // callback is never overwritten by this later API response.
+    await prisma.communicationDelivery.updateMany({
+      where: { id: delivery.id, status: "PENDING" },
       data: { status: "SENT", providerMessageId, sentAt: new Date() },
     });
+    if (input.channel === "WHATSAPP") {
+      await replayPendingWhatsAppStatusEvents(providerMessageId);
+    }
     return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Message delivery failed";
-    await prisma.communicationDelivery.update({
-      where: { id: delivery.id },
+    // A provider callback can race with the send request (or status replay).
+    // Only mark a still-pending delivery as failed; never downgrade a status
+    // already confirmed by Meta as SENT, DELIVERED, or READ.
+    await prisma.communicationDelivery.updateMany({
+      where: { id: delivery.id, status: "PENDING" },
       data: { status: "FAILED", errorMessage: message.slice(0, 1000) },
     });
     return { status: "FAILED" as const, deliveryId: delivery.id, error: message };
@@ -138,6 +180,11 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
       subject: renderTemplate(rule.emailSubject || "Order update from {{companyName}}", values),
       body: renderTemplate((channel === "EMAIL" ? rule.emailMessage : rule.whatsappMessage) || fallback, values),
       dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
+      ...(channel === "WHATSAPP" && rule.whatsappTemplateName && rule.whatsappTemplateLanguage ? {
+        whatsappTemplateName: rule.whatsappTemplateName,
+        whatsappTemplateLanguage: rule.whatsappTemplateLanguage,
+        whatsappTemplateVariables: [values.customerName, values.orderNumber, values.status, values.companyName],
+      } : {}),
     });
     results.push({ ...deliveryResult, channel });
   }
@@ -150,7 +197,8 @@ export async function listOrderStatusRules(businessId: string) {
 }
 export async function saveOrderStatusRule(input: {
   businessId: string; status: string; enabled: boolean; channel: "WHATSAPP" | "EMAIL" | "BOTH";
-  whatsappMessage?: string | null; emailSubject?: string | null; emailMessage?: string | null;
+  whatsappMessage?: string | null; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+  emailSubject?: string | null; emailMessage?: string | null;
 }) {
   return prisma.orderStatusNotificationRule.upsert({
     where: { businessId_status: { businessId: input.businessId, status: input.status } },
@@ -158,6 +206,8 @@ export async function saveOrderStatusRule(input: {
     update: {
       enabled: input.enabled, channel: input.channel,
       whatsappMessage: input.whatsappMessage ?? null,
+      whatsappTemplateName: input.whatsappTemplateName ?? null,
+      whatsappTemplateLanguage: input.whatsappTemplateLanguage ?? null,
       emailSubject: input.emailSubject ?? null,
       emailMessage: input.emailMessage ?? null,
     },
@@ -242,6 +292,7 @@ type AnnouncementCustomer = { id: string; name: string; email: string | null; ph
 export async function createAnnouncement(input: {
   businessId: string; createdByUserId: string; title: string; message: string;
   channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
   let customers: AnnouncementCustomer[];
@@ -273,6 +324,8 @@ export async function createAnnouncement(input: {
     data: {
       businessId: input.businessId, createdByUserId: input.createdByUserId,
       title: input.title, message: input.message, channels: input.channels,
+      whatsappTemplateName: input.whatsappTemplateName ?? null,
+      whatsappTemplateLanguage: input.whatsappTemplateLanguage ?? null,
       audience: input.audience, status: "SENDING",
       recipients: { create: customers.map((customer) => ({ customerId: customer.id })) },
     },
@@ -293,6 +346,12 @@ export async function createAnnouncement(input: {
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
       body: renderTemplate(input.message, { customerName: customer.name, companyName }),
       dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
+      ...(channel === "WHATSAPP" && input.whatsappTemplateName && input.whatsappTemplateLanguage ? {
+        whatsappTemplateName: input.whatsappTemplateName,
+        whatsappTemplateLanguage: input.whatsappTemplateLanguage,
+        whatsappTemplateCategory: "MARKETING" as const,
+        whatsappTemplateVariables: [customer.name, companyName, renderTemplate(input.message, { customerName: customer.name, companyName })],
+      } : {}),
     });
     return { ...result, customerId: customer.id, channel };
   }));
@@ -315,9 +374,19 @@ export async function getUnpickedOrderReminderConfig(businessId: string) {
     update: {},
   });
 }
-export async function saveUnpickedOrderReminderConfig(businessId: string, input: { enabled: boolean; thresholdMonths: number }) {
+export async function saveUnpickedOrderReminderConfig(businessId: string, input: {
+  enabled: boolean; thresholdMonths: number;
+  whatsappTemplateName?: string | null | undefined;
+  whatsappTemplateLanguage?: string | null | undefined;
+}) {
+  const data = {
+    enabled: input.enabled,
+    thresholdMonths: input.thresholdMonths,
+    ...(input.whatsappTemplateName !== undefined ? { whatsappTemplateName: input.whatsappTemplateName } : {}),
+    ...(input.whatsappTemplateLanguage !== undefined ? { whatsappTemplateLanguage: input.whatsappTemplateLanguage } : {}),
+  };
   return prisma.unpickedOrderReminderConfig.upsert({
-    where: { businessId }, create: { businessId, ...input }, update: input,
+    where: { businessId }, create: { businessId, ...data }, update: data,
   });
 }
 export async function listUnpickedOrders(businessId: string, branchId: string) {
@@ -360,6 +429,11 @@ export async function sendUnpickedReminders(input: {
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "UNPICKED_REMINDER", destination, subject: `Unpicked order ${order.orderNumber}`,
       body, dedupeKey,
+      ...(channel === "WHATSAPP" && config.whatsappTemplateName && config.whatsappTemplateLanguage ? {
+        whatsappTemplateName: config.whatsappTemplateName,
+        whatsappTemplateLanguage: config.whatsappTemplateLanguage,
+        whatsappTemplateVariables: [order.customer.name, order.orderNumber, "ready for pickup", order.business.name],
+      } : {}),
     });
     return { ...result, orderId: order.id, channel };
   }));

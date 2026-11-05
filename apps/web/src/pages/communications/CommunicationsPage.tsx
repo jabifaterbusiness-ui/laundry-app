@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { WhatsAppConnectionPanel } from "./WhatsAppConnectionPanel.js";
+import { WhatsAppInboxPanel } from "./WhatsAppInboxPanel.js";
+import { getApprovedWhatsAppTemplates } from "../../lib/whatsapp-inbox-api.js";
 import {
   createAnnouncement, deleteStatusRule, getReminderConfig, listCustomerGroups,
-  listCommunicationDeliveries, listStatusRules, listUnpickedOrders,
+  listCommunicationDeliveries, listStatusRules, listUnpickedOrders, getWhatsAppConnection,
   saveReminderConfig, saveStatusRule, sendUnpickedReminders,
   type CommunicationChannel,
 } from "../../lib/communications-api.js";
@@ -20,6 +23,8 @@ export function CommunicationsPage() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementTemplateName, setAnnouncementTemplateName] = useState("");
+  const [announcementTemplateLanguage, setAnnouncementTemplateLanguage] = useState("");
   const [audience, setAudience] = useState<"ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP">("ALL_CUSTOMERS");
   const [groupId, setGroupId] = useState("");
   const [customerIds, setCustomerIds] = useState<string[]>([]);
@@ -29,9 +34,13 @@ export function CommunicationsPage() {
   const [ruleEnabled, setRuleEnabled] = useState(true);
   const [ruleChannel, setRuleChannel] = useState<"WHATSAPP" | "EMAIL" | "BOTH">("WHATSAPP");
   const [whatsappTemplate, setWhatsappTemplate] = useState("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
+  const [whatsappTemplateName, setWhatsappTemplateName] = useState("");
+  const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState("");
   const [emailSubject, setEmailSubject] = useState("Order update from {{companyName}}");
   const [emailTemplate, setEmailTemplate] = useState("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
   const [thresholdMonths, setThresholdMonths] = useState(2);
+  const [reminderTemplateName, setReminderTemplateName] = useState("");
+  const [reminderTemplateLanguage, setReminderTemplateLanguage] = useState("");
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [reminderMessage, setReminderMessage] = useState(DEFAULT_REMINDER);
@@ -42,6 +51,16 @@ export function CommunicationsPage() {
     queryKey: ["customers", "communications", customerPage],
     queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
     enabled: Boolean(accessToken),
+  });
+  const connectionQuery = useQuery({
+    queryKey: ["whatsapp", "connection"],
+    queryFn: () => getWhatsAppConnection({ accessToken }),
+    enabled: Boolean(accessToken),
+  });
+  const approvedTemplatesQuery = useQuery({
+    queryKey: ["whatsapp", "templates"],
+    queryFn: () => getApprovedWhatsAppTemplates(accessToken),
+    enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
   });
   const groupsQuery = useQuery({
     queryKey: ["communications", "customer-groups"],
@@ -61,12 +80,16 @@ export function CommunicationsPage() {
       setRuleEnabled(rule.enabled);
       setRuleChannel(rule.channel);
       setWhatsappTemplate(rule.whatsappMessage ?? "");
+      setWhatsappTemplateName(rule.whatsappTemplateName ?? "");
+      setWhatsappTemplateLanguage(rule.whatsappTemplateLanguage ?? "");
       setEmailSubject(rule.emailSubject ?? "");
       setEmailTemplate(rule.emailMessage ?? "");
     } else {
       setRuleEnabled(false);
       setRuleChannel("WHATSAPP");
       setWhatsappTemplate("");
+      setWhatsappTemplateName("");
+      setWhatsappTemplateLanguage("");
       setEmailSubject("");
       setEmailTemplate("");
     }
@@ -82,7 +105,14 @@ export function CommunicationsPage() {
     if (!reminderConfigQuery.data) return;
     setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
     setRemindersEnabled(reminderConfigQuery.data.enabled);
-  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
+    setReminderTemplateName(reminderConfigQuery.data.whatsappTemplateName ?? "");
+    setReminderTemplateLanguage(reminderConfigQuery.data.whatsappTemplateLanguage ?? "");
+  }, [
+    reminderConfigQuery.data?.thresholdMonths,
+    reminderConfigQuery.data?.enabled,
+    reminderConfigQuery.data?.whatsappTemplateName,
+    reminderConfigQuery.data?.whatsappTemplateLanguage,
+  ]);
 
   const unpickedQuery = useQuery({
     queryKey: ["communications", "unpicked-orders", activeBranchId],
@@ -93,7 +123,11 @@ export function CommunicationsPage() {
   const announcementMutation = useMutation({
     mutationFn: () => createAnnouncement({
       title: title.trim(), message: announcementMessage.trim(), audience,
-      channels: announcementChannels, ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
+      channels: announcementChannels,
+      ...(announcementTemplateName && announcementTemplateLanguage ? {
+        whatsappTemplateName: announcementTemplateName, whatsappTemplateLanguage: announcementTemplateLanguage,
+      } : {}),
+      ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
       ...(audience === "CUSTOMER_GROUP" ? { groupId } : {}),
     }, { accessToken }),
     onSuccess: async (result) => {
@@ -106,7 +140,10 @@ export function CommunicationsPage() {
   const ruleMutation = useMutation({
     mutationFn: () => saveStatusRule({
       status, enabled: ruleEnabled, channel: ruleChannel,
-      whatsappMessage: whatsappTemplate, emailSubject, emailMessage: emailTemplate,
+      whatsappMessage: whatsappTemplate,
+      whatsappTemplateName: whatsappTemplateName || null,
+      whatsappTemplateLanguage: whatsappTemplateLanguage || null,
+      emailSubject, emailMessage: emailTemplate,
     }, { accessToken }),
     onSuccess: async () => {
       setFeedback(`Notification rule saved for ${status.replaceAll("_", " ")}.`);
@@ -119,7 +156,11 @@ export function CommunicationsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] }),
   });
   const configMutation = useMutation({
-    mutationFn: () => saveReminderConfig({ enabled: remindersEnabled, thresholdMonths }, { accessToken, branchId: activeBranchId }),
+    mutationFn: () => saveReminderConfig({
+      enabled: remindersEnabled, thresholdMonths,
+      whatsappTemplateName: reminderTemplateName || null,
+      whatsappTemplateLanguage: reminderTemplateLanguage || null,
+    }, { accessToken, branchId: activeBranchId }),
     onSuccess: async () => {
       setFeedback("Unpicked-order reminder settings saved.");
       await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
@@ -141,11 +182,16 @@ export function CommunicationsPage() {
   }
   function loadRule(rule: NonNullable<typeof rulesQuery.data>["data"][number]) {
     setStatus(rule.status); setRuleEnabled(rule.enabled); setRuleChannel(rule.channel);
-    setWhatsappTemplate(rule.whatsappMessage ?? ""); setEmailSubject(rule.emailSubject ?? ""); setEmailTemplate(rule.emailMessage ?? "");
+    setWhatsappTemplate(rule.whatsappMessage ?? "");
+    setWhatsappTemplateName(rule.whatsappTemplateName ?? "");
+    setWhatsappTemplateLanguage(rule.whatsappTemplateLanguage ?? "");
+    setEmailSubject(rule.emailSubject ?? ""); setEmailTemplate(rule.emailMessage ?? "");
   }
 
   return (
     <main style={{ maxWidth: 1180, margin: "0 auto", padding: "1.25rem" }}>
+      <WhatsAppConnectionPanel />
+      <WhatsAppInboxPanel />
       <header style={{ marginBottom: "1.5rem" }}>
         <p style={{ color: "#0f766e", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>Customer engagement</p>
         <h1>Announcements & Notifications</h1>
@@ -158,7 +204,28 @@ export function CommunicationsPage() {
         <p>Send a company-wide message or select individual customers. Delivery results are recorded for follow-up.</p>
         <form onSubmit={(event) => { event.preventDefault(); announcementMutation.mutate(); }}>
           <label>Announcement title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required /></label>
-          <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
+          <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={announcementChannels.includes("WHATSAPP") ? 1024 : 4000} required /></label>
+          {announcementChannels.includes("WHATSAPP") && (
+            <>
+              <label>Approved WhatsApp MARKETING template
+                <select value={announcementTemplateName && announcementTemplateLanguage ? `${announcementTemplateName}|${announcementTemplateLanguage}` : ""} onChange={(event) => {
+                  const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "MARKETING" && `${item.name}|${item.language}` === event.target.value);
+                  setAnnouncementTemplateName(selected?.name ?? "");
+                  setAnnouncementTemplateLanguage(selected?.language ?? "");
+                }} required>
+                  <option value="">Choose an approved marketing template</option>
+                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING" && template.bodyVariableCount === 3).map((template) => (
+                    <option key={template.id} value={`${template.name}|${template.language}`}>
+                      {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+                Marketing template BODY variables use this order: {"{{1}}"} customer name, {"{{2}}"} company name, {"{{3}}"} your announcement message. Only approved templates are available.
+              </small>
+            </>
+          )}
           <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option><option value="CUSTOMER_GROUP">Customer group</option></select></label>
           {audience === "SELECTED_CUSTOMERS" && (
             <>
@@ -187,7 +254,7 @@ export function CommunicationsPage() {
             <label><input type="checkbox" checked={announcementChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", announcementChannels, setAnnouncementChannels)} /> WhatsApp</label>
             <label><input type="checkbox" checked={announcementChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", announcementChannels, setAnnouncementChannels)} /> Email</label>
           </div>
-          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId)}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
+          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId) || (announcementChannels.includes("WHATSAPP") && (!announcementTemplateName || !announcementTemplateLanguage))}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
         </form>
       </section>
 
@@ -200,6 +267,23 @@ export function CommunicationsPage() {
           <label><input type="checkbox" checked={ruleEnabled} onChange={(event) => setRuleEnabled(event.target.checked)} /> Enable this notification</label>
         </div>
         <label>WhatsApp message<textarea rows={3} value={whatsappTemplate} onChange={(event) => setWhatsappTemplate(event.target.value)} /></label>
+        <label>Approved WhatsApp template fallback (outside the 24-hour window)
+          <select value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => `${item.name}|${item.language}` === event.target.value);
+            setWhatsappTemplateName(selected?.name ?? "");
+            setWhatsappTemplateLanguage(selected?.language ?? "");
+          }}>
+            <option value="">No approved template fallback</option>
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
+              <option key={template.id} value={`${template.name}|${template.language}`}>
+                {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+              </option>
+            ))}
+          </select>
+        </label>
+        <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+          Template BODY variables are filled in this order: {"{{1}}"} customer name, {"{{2}}"} order number, {"{{3}}"} order status, {"{{4}}"} company name. Use the matching order in the approved Meta template. Only approved UTILITY templates are offered. Templates are used when the free-form 24-hour window has closed.
+        </small>
         <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
         <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
         <button type="button" disabled={ruleMutation.isPending} onClick={() => ruleMutation.mutate()}>Save status notification</button>
@@ -228,6 +312,23 @@ export function CommunicationsPage() {
           {(unpickedQuery.data?.data ?? []).length === 0 && <p>No unpicked orders match the current threshold.</p>}
         </div>
         <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
+        <label>Approved WhatsApp template fallback (outside the 24-hour window)
+          <select value={reminderTemplateName && reminderTemplateLanguage ? `${reminderTemplateName}|${reminderTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.bodyVariableCount <= 4 && `${item.name}|${item.language}` === event.target.value);
+            setReminderTemplateName(selected?.name ?? "");
+            setReminderTemplateLanguage(selected?.language ?? "");
+          }}>
+            <option value="">No approved template fallback</option>
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
+              <option key={template.id} value={`${template.name}|${template.language}`}>
+                {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+              </option>
+            ))}
+          </select>
+        </label>
+        <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+          For approved UTILITY templates, BODY variables use the same order: customer name, order number, order status, company name.
+        </small>
         <label><input type="checkbox" checked={reminderChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", reminderChannels, setReminderChannels)} /> WhatsApp</label>
         <label><input type="checkbox" checked={reminderChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", reminderChannels, setReminderChannels)} /> Email</label>
         <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
