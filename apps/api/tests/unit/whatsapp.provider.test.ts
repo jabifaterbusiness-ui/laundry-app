@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   inboundFindFirst: vi.fn(),
+  customerFindFirst: vi.fn(),
 }));
 
 vi.stubGlobal("fetch", mocks.fetchMock);
@@ -20,7 +21,10 @@ vi.mock("../../src/config/index.js", () => ({
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
-  prisma: { whatsAppWebhookEvent: { findFirst: mocks.inboundFindFirst } },
+  prisma: {
+    whatsAppWebhookEvent: { findFirst: mocks.inboundFindFirst },
+    customer: { findFirst: mocks.customerFindFirst },
+  },
 }));
 vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
   decryptWhatsAppAccessToken: () => "decrypted-test-token",
@@ -32,6 +36,7 @@ const IMAGE = Buffer.from("fake-png");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
 
   mocks.fetchMock
     .mockResolvedValueOnce({
@@ -116,6 +121,15 @@ describe("whatsapp.provider", () => {
       businessId: "business-1", to: "2348012345678", body: "Your order is ready",
     })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
     expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks business-initiated WhatsApp receipts when the customer has not opted in", async () => {
+    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1", to: "2348012345678", image: IMAGE,
+    })).rejects.toThrow("has not explicitly opted in");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+    expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
   });
 
   it("blocks tenant receipt images outside the 24-hour customer-service window", async () => {
