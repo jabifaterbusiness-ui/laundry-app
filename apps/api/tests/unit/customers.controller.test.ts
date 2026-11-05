@@ -36,6 +36,7 @@ function makeReq(overrides: Partial<Request> = {}): Request {
     params: {},
     query: {},
     correlationId: "corr-1",
+    branchId: "branch-A",
     user: { id: "user-1", email: "a@example.com", role: "BUSINESS_OWNER", businessId: "biz-1" },
     ...overrides,
   } as unknown as Request;
@@ -103,7 +104,7 @@ describe("create - security: businessId cannot be client-controlled", () => {
     await create(req, makeRes());
 
     expect(service.createCustomer).toHaveBeenCalledWith(expect.objectContaining({ businessId: "real-biz-id" }));
-    expect(service.findPossibleDuplicates).toHaveBeenCalledWith("real-biz-id", expect.any(String));
+    expect(service.findPossibleDuplicates).toHaveBeenCalledWith("real-biz-id", "branch-A", "user-1", expect.any(String));
   });
 });
 
@@ -173,7 +174,7 @@ describe("update - duplicate phone handling", () => {
     const req = makeReq({ params: { id }, body: { phone: "555-123-4567" } });
     await update(req, makeRes());
 
-    expect(service.findPossibleDuplicates).toHaveBeenCalledWith("biz-1", "5551234567", id);
+    expect(service.findPossibleDuplicates).toHaveBeenCalledWith("biz-1", "branch-A", "user-1", "5551234567", id);
   });
 
   it("does not run the duplicate check when phone is not part of the update", async () => {
