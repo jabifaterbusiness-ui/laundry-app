@@ -355,7 +355,11 @@ async function getEditableCustomerAccountForBranch(
     where: {
       customerId,
       businessId,
-      OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }],
+      OR: [
+        { branchId: null },
+        { branchId: { in: scope.ownerBranchIds } },
+        { id: { in: scope.resourceIds } },
+      ],
     },
     select: { id: true, branchId: true },
   });
