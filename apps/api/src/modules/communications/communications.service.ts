@@ -53,6 +53,21 @@ async function deliverMessage(input: {
   channel: Channel; messageType: string; destination: string; subject: string;
   body: string; dedupeKey: string;
 }) {
+  if (input.channel === "WHATSAPP") {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { whatsappOptIn: true },
+    });
+    if (!customer?.whatsappOptIn) {
+      return recordMissingDestination({
+        businessId: input.businessId, customerId: input.customerId,
+        ...(input.orderId ? { orderId: input.orderId } : {}),
+        ...(input.campaignId ? { campaignId: input.campaignId } : {}),
+        channel: input.channel, messageType: input.messageType, dedupeKey: input.dedupeKey,
+        reason: "Customer has not explicitly opted in to WhatsApp messages. Record consent before sending business-initiated messages.",
+      });
+    }
+  }
   let delivery;
   try {
     delivery = await prisma.communicationDelivery.create({
