@@ -108,6 +108,7 @@ export async function update(req: Request, res: Response) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       fields: Object.keys(input),
