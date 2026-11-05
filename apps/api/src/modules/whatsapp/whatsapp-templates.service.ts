@@ -21,9 +21,19 @@ async function getConnection(businessId: string) {
   return { ...connection, apiVersion, token: decryptWhatsAppAccessToken(connection.encryptedAccessToken) };
 }
 
-function bodyVariableCount(template: MetaTemplate) {
+function bodyVariableIndexes(template: MetaTemplate): number[] | null {
   const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
-  return [...body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].length;
+  const placeholders = [...body.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)];
+  const indexes = placeholders.map((match) => /^\d+$/.test(match[1] ?? "") ? Number(match[1]) : NaN);
+  if (indexes.some((index) => !Number.isSafeInteger(index) || index < 1)) return null;
+  const unique = [...new Set(indexes)].sort((a, b) => a - b);
+  // Meta expects positional BODY parameters numbered contiguously from 1.
+  if (unique.some((index, position) => index !== position + 1)) return null;
+  return unique;
+}
+
+function bodyVariableCount(template: MetaTemplate) {
+  return bodyVariableIndexes(template)?.length ?? 0;
 }
 
 export async function listApprovedWhatsAppTemplates(businessId: string) {
@@ -41,12 +51,12 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     // a send action that Meta would reject.
     .filter((template) => {
       const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
-      const unsupportedNamedBodyVariables = body.includes("{{") && !/\{\{\s*\d+\s*\}\}/.test(body);
+      const unsupportedBodyVariables = bodyVariableIndexes(template) === null;
       const unsupportedComponents = (template.components ?? []).some((component) =>
         (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && /\{\{\s*\d+\s*\}\}/.test(component.text)))) ||
         (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => button.type === "URL" || button.type === "OTP" || (typeof button.url === "string" && /\{\{\s*\d+\s*\}\}/.test(button.url))))
       );
-      return !unsupportedNamedBodyVariables && !unsupportedComponents;
+      return !unsupportedBodyVariables && !unsupportedComponents;
     })
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
