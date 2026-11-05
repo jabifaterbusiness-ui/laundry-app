@@ -1257,6 +1257,10 @@ describe("listInventoryStock", () => {
       },
     ];
 
+    prismaMock.branchResourceShare.findMany.mockResolvedValue([
+      { ownerBranchId: "branch-2", resourceId: "shared-item-1", accessLevel: "READ" },
+    ] as never);
+
     prismaMock.$queryRaw
       .mockResolvedValueOnce([
         { id: "stock-1" },
@@ -1296,6 +1300,7 @@ describe("listInventoryStock", () => {
     expect(stockQuery.sql).toContain('"businessId"');
     expect(stockQuery.sql).toContain('"branchId"');
     expect(stockQuery.sql).toContain('"lowStockThreshold"');
+    expect(stockQuery.sql).toMatch(/AND \\(i\."ownerBranchId".*OR i\.id IN/);
     expect(stockQuery.sql).not.toContain("inventory_item_id");
     expect(stockQuery.sql).not.toContain("low_stock_threshold");
 
@@ -1311,7 +1316,7 @@ describe("listInventoryStock", () => {
             OR: [
               { ownerBranchId: null },
               { ownerBranchId: { in: ["branch-1"] } },
-              { id: { in: [] } },
+              { id: { in: ["shared-item-1"] } },
             ],
           },
         },
