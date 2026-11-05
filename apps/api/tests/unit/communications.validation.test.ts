@@ -36,6 +36,7 @@ describe("customer communication audience validation", () => {
       title: "Update",
       message: "Hello",
       channels: ["WHATSAPP"],
+      whatsappTemplateName: "customer_announcement", whatsappTemplateLanguage: "en",
       audience: "SELECTED_CUSTOMERS",
       customerIds: [customerId],
     }).success).toBe(true);
