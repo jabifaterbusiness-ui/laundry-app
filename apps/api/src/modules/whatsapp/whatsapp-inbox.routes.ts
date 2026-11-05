@@ -5,6 +5,7 @@ import { requirePermission } from "../../middleware/permissions.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { listWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppConversationReply } from "./whatsapp-inbox.service.js";
 import { listApprovedWhatsAppTemplates, sendApprovedWhatsAppTemplate } from "./whatsapp-templates.service.js";
+import { getWhatsAppMediaPreview } from "./whatsapp-media.service.js";
 
 export const whatsappInboxRouter = Router();
 
@@ -16,6 +17,16 @@ function businessId(req: Request): string {
 
 whatsappInboxRouter.get("/conversations", requirePermission("customers.view"), asyncHandler(async (req, res) => {
   res.status(200).json({ data: await listWhatsAppConversations(businessId(req)) });
+}));
+
+whatsappInboxRouter.get("/media/:mediaId", requirePermission("customers.view"), asyncHandler(async (req, res) => {
+  const media = await getWhatsAppMediaPreview(businessId(req), req.params.mediaId ?? "");
+  res.setHeader("Content-Type", media.contentType);
+  res.setHeader("Content-Length", String(media.bytes.length));
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.status(200).send(media.bytes);
 }));
 
 whatsappInboxRouter.post("/conversations/replies", requirePermission("customers.update"), asyncHandler(async (req, res) => {
