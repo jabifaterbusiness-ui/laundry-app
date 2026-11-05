@@ -943,10 +943,38 @@ export async function createInventoryStocktake(scope: BranchScope, input: {
   return prisma.$transaction(async (tx) => {
     const branch = await tx.branch.findFirst({ where: { id: scope.branchId, businessId: scope.businessId, isActive: true } });
     if (!branch) throw new AppError("Branch not found or inactive", 404);
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
     if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) throw new AppError("Stocktake requires unique inventory items", 422);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
     const ids = input.lines.map((line) => line.inventoryItemId);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
-    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: ids },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     const lines = [];
     for (const line of input.lines) {
       if (!Number.isSafeInteger(line.countedQuantity) || line.countedQuantity < 0) throw new AppError("Counted quantities cannot be negative", 422);
