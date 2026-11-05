@@ -139,7 +139,6 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
-          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: 5,
           type: "RECEIPT",
@@ -374,13 +373,11 @@ describe("inventory.service", () => {
           inventoryItemId_branchId: {
             inventoryItemId: "item-2",
             branchId: "branch-A",
-            userId: "user-1",
           },
         },
         create: {
           businessId: "biz-A",
           branchId: "branch-A",
-          userId: "user-1",
           inventoryItemId: "item-2",
           quantity: 0,
         },
@@ -1062,7 +1059,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1080,7 +1076,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
     });
   });
@@ -1273,7 +1268,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1291,7 +1285,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
     });
   });
@@ -1333,7 +1326,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1351,7 +1343,6 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
-        userId: "user-1",
       },
     });
   });
