@@ -7,6 +7,7 @@ type GraphError = { error?: { message?: string; code?: number; error_subcode?: n
 type TokenResponse = { access_token?: string; token_type?: string; expires_in?: number } & GraphError;
 type PhoneResponse = { id?: string; display_phone_number?: string; verified_name?: string } & GraphError;
 type WabaResponse = { id?: string; name?: string } & GraphError;
+type PhoneNumbersResponse = { data?: Array<{ id?: string }>; paging?: { next?: string } } & GraphError;
 
 function requireMetaConfig() {
   const { whatsappApiVersion, whatsappAppId, whatsappAppSecret, whatsappTokenEncryptionKey } = config.receiptDelivery;
@@ -78,6 +79,15 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   if (phone.id !== input.phoneNumberId || waba.id !== input.wabaId) {
     throw new AppError("The WhatsApp phone number and business account could not be verified", 422);
   }
+  // Verify the selected phone is actually owned by the selected WABA. A valid
+  // token may have access to multiple assets, so checking each ID separately
+  // is not sufficient to establish their relationship.
+  const phoneNumbers = await graphRequest<PhoneNumbersResponse>(
+    `${base}/${input.wabaId}/phone_numbers?fields=id&limit=100`, accessToken,
+  );
+  if (!phoneNumbers.data?.some((item) => item.id === input.phoneNumberId)) {
+    throw new AppError("The selected WhatsApp phone number does not belong to this WhatsApp Business Account", 422);
+  }
 
   await graphRequest<GraphError>(`${base}/${input.wabaId}/subscribed_apps`, accessToken, { method: "POST" });
 
@@ -113,15 +123,19 @@ export async function completeWhatsAppEmbeddedSignup(input: {
 export async function disconnectWhatsAppBusiness(businessId: string) {
   const connection = await prisma.whatsAppBusinessConnection.findUnique({ where: { businessId } });
   if (!connection) return;
-  const { whatsappApiVersion } = requireMetaConfig();
-  const token = decryptWhatsAppAccessToken(connection.encryptedAccessToken);
-  try {
-    await fetch(`https://graph.facebook.com/${whatsappApiVersion}/${connection.wabaId}/subscribed_apps`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    // Local disconnection must remain possible if Meta is temporarily unavailable.
+  const whatsappApiVersion = config.receiptDelivery.whatsappApiVersion;
+  // Best-effort remote unsubscribe. Always remove the local connection, even
+  // when Meta is unavailable or a platform key has been rotated/lost.
+  if (whatsappApiVersion) {
+    try {
+      const token = decryptWhatsAppAccessToken(connection.encryptedAccessToken);
+      await fetch(`https://graph.facebook.com/${whatsappApiVersion}/${connection.wabaId}/subscribed_apps`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // Local disconnection must remain possible if Meta is temporarily unavailable.
+    }
   }
   await prisma.whatsAppBusinessConnection.delete({ where: { businessId } });
 }
