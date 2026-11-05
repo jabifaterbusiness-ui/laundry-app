@@ -95,8 +95,11 @@ async function deliverMessage(input: {
     return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Message delivery failed";
-    await prisma.communicationDelivery.update({
-      where: { id: delivery.id },
+    // A provider callback can race with the send request (or status replay).
+    // Only mark a still-pending delivery as failed; never downgrade a status
+    // already confirmed by Meta as SENT, DELIVERED, or READ.
+    await prisma.communicationDelivery.updateMany({
+      where: { id: delivery.id, status: "PENDING" },
       data: { status: "FAILED", errorMessage: message.slice(0, 1000) },
     });
     return { status: "FAILED" as const, deliveryId: delivery.id, error: message };
