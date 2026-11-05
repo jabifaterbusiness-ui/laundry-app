@@ -172,6 +172,7 @@ for (const field of Object.keys(patch) as Array<keyof typeof patch>) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       changedFields: Object.keys(after),
@@ -205,6 +206,7 @@ export async function changeStatus(req: Request, res: Response) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       previousStatus: result.previousStatus,
