@@ -2873,6 +2873,8 @@ model OrderStatusNotificationRule {
   enabled            Boolean  @default(true)
   channel            String   @default("WHATSAPP")
   whatsappMessage    String?
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   emailSubject       String?
   emailMessage       String?
   createdAt          DateTime @default(now())
