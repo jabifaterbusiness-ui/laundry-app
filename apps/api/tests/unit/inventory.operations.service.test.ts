@@ -285,7 +285,7 @@ describe("inventory operations", () => {
   it("lists stocktakes within the active business and branch", async () => {
     db.inventoryStocktake.findMany.mockResolvedValue([{ id: "count-1" }]);
     await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE, userId: USER })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });
-    expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE, userId: USER } }));
+    expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE } }));
   });
 
   it("requires a submitted stocktake and a different user to approve it", async () => {
