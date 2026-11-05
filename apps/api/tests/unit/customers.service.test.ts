@@ -167,7 +167,7 @@ describe("listCustomers", () => {
           },
         },
       },
-    ]);
+    ] }]);
   });
 });
 
