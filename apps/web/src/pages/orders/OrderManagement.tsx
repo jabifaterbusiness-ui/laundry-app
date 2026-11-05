@@ -1309,8 +1309,8 @@ function OrderManagementContent({
                       <strong>
                         {entry.previousStatus
                           ? entry.previousStatus.replaceAll("_", " ")
-                          : "Initial status"}{" "}
-                        → {entry.status.replaceAll("_", " ")}
+                          : "Status set to"}{" "}
+                        {entry.previousStatus ? "→ " : ""}{entry.status.replaceAll("_", " ")}
                       </strong>
                       <div>Date/Time: {formatDate(entry.changedAt)}</div>
                       <div>Changed by: {entry.changedBy}</div>
