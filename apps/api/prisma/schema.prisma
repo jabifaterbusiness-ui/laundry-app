@@ -469,6 +469,12 @@ model Customer {
   address String?
   notes   String?
 
+  // Explicit business-initiated WhatsApp consent. Existing customers remain opted out.
+  whatsappOptIn       Boolean   @default(false)
+  whatsappOptInAt     DateTime?
+  whatsappOptInSource String?
+  whatsappOptOutAt    DateTime?
+
   // Persistent customer-specific instructions/preferences.
   // Examples: "Always fold his items" or "Do not give him items on credit".
   customerInstructions String?
