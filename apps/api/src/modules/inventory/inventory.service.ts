@@ -679,8 +679,37 @@ export async function createInventoryPurchaseOrder(scope: BranchScope, input: {
     if (!supplier) throw new AppError("Supplier not found or inactive for this business", 404);
     const itemIds = [...new Set(input.lines.map((line) => line.inventoryItemId))];
     if (itemIds.length !== input.lines.length) throw new AppError("Each inventory item may appear only once on a purchase order", 422);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: itemIds }, businessId: scope.businessId, isActive: true }, select: { id: true } });
-    if (items.length !== itemIds.length) throw new AppError("One or more inventory items are unavailable in this business", 422);
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: itemIds },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (items.length !== itemIds.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     try {
       return await tx.inventoryPurchaseOrder.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, supplierId: supplier.id,
@@ -745,6 +774,39 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
     if (!order) throw new AppError("Purchase order not found for this branch", 404);
     if (order.status !== "ORDERED" && order.status !== "PARTIALLY_RECEIVED") {
       throw new AppError("Only ordered or partially received purchase orders can receive goods", 422);
+    }
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const orderItemIds = [...new Set(order.lines.map((line) => line.inventoryItemId))];
+    const accessibleItems = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: orderItemIds },
+        businessId: scope.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (accessibleItems.length !== orderItemIds.length) {
+      throw new AppError("One or more purchase order items are no longer available to this branch", 422);
+    }
+    for (const item of accessibleItems) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
     }
     if (input.lines.length === 0) throw new AppError("At least one receipt line is required", 422);
     const ids = [...new Set(input.lines.map((line) => line.purchaseOrderLineId))];
