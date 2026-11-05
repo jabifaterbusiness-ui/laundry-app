@@ -5,6 +5,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     user: { findFirst: vi.fn() },
     userBranch: { findUnique: vi.fn(), findFirst: vi.fn() },
     branch: { findMany: vi.fn() },
+    inventoryItem: { findFirst: vi.fn() },
     branchResourceShare: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -25,6 +26,7 @@ import {
 const actorFindFirst = vi.mocked(prisma.user.findFirst);
 const membershipFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const branchFindMany = vi.mocked(prisma.branch.findMany);
+const inventoryItemFindFirst = vi.mocked(prisma.inventoryItem.findFirst);
 const shareFindFirst = vi.mocked(prisma.branchResourceShare.findFirst);
 const shareCreate = vi.mocked(prisma.branchResourceShare.create);
 const shareDelete = vi.mocked(prisma.branchResourceShare.delete);
@@ -90,6 +92,27 @@ describe("branch resource sharing authorization", () => {
       select: { id: true },
     });
     expect(shareCreate).toHaveBeenCalled();
+  });
+
+  it("rejects an individual resource that is not owned by the selected branch", async () => {
+    actorFindFirst.mockResolvedValue({ securityRole: "BRANCH_MANAGER" } as never);
+    membershipFindUnique.mockResolvedValue({ id: "membership-1" } as never);
+    inventoryItemFindFirst.mockResolvedValue(null);
+
+    await expect(saveBranchResourceShare({
+      ...baseInput,
+      resourceId: "11111111-1111-4111-8111-111111111111",
+    })).rejects.toBeInstanceOf(AppError);
+
+    expect(inventoryItemFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "11111111-1111-4111-8111-111111111111",
+        businessId: "business-a",
+        ownerBranchId: "owner-branch",
+      },
+      select: { id: true },
+    });
+    expect(shareCreate).not.toHaveBeenCalled();
   });
 
   it("prevents a staff member from deleting another branch's sharing rule", async () => {
