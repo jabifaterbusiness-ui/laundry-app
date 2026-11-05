@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { normalizeWhatsAppRecipient, sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 
+type MessageMedia = { id?: string; mime_type?: string; caption?: string; filename?: string };
 type MessagePayload = {
   id?: string;
   from?: string;
@@ -9,11 +10,11 @@ type MessagePayload = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
-  image?: { id?: string; mime_type?: string; caption?: string };
-  video?: { id?: string; mime_type?: string; caption?: string };
-  audio?: { id?: string; mime_type?: string };
-  document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
-  sticker?: { id?: string; mime_type?: string };
+  image?: MessageMedia;
+  video?: MessageMedia;
+  audio?: MessageMedia;
+  document?: MessageMedia;
+  sticker?: MessageMedia;
   status?: string;
 };
 
@@ -40,8 +41,8 @@ function mediaDetails(payload: MessagePayload) {
   return {
     mediaId: media?.id ?? null,
     mediaMimeType: media?.mime_type ?? null,
-    mediaCaption: "caption" in (media ?? {}) ? media?.caption ?? null : null,
-    mediaFilename: "filename" in (media ?? {}) ? media?.filename ?? null : null,
+    mediaCaption: media?.caption ?? null,
+    mediaFilename: media?.filename ?? null,
   };
 }
 
