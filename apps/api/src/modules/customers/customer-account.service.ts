@@ -48,20 +48,26 @@ export async function getOrCreateCustomerAccount(
   }
 
   const accountScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_ACCOUNTS" }, db);
-  const account = await db.customerAccount.findFirst({
+  const include = { transactions: { orderBy: { createdAt: "asc" as const } } };
+  const localAccount = await db.customerAccount.findFirst({
+    where: { businessId, customerId, branchId },
+    include,
+  });
+  if (localAccount) return localAccount;
+
+  const sharedOrEditableAccount = await db.customerAccount.findFirst({
     where: {
       businessId,
       customerId,
       OR: [
         { branchId: null },
-        { branchId: { in: accountScope.editableOwnerBranchIds } },
+        { branchId: { in: accountScope.editableOwnerBranchIds.filter((id) => id !== branchId) } },
         { id: { in: accountScope.editableResourceIds } },
       ],
     },
-    orderBy: { branchId: "desc" },
-    include: { transactions: { orderBy: { createdAt: "asc" } } },
+    include,
   });
-  if (account) return account;
+  if (sharedOrEditableAccount) return sharedOrEditableAccount;
   return db.customerAccount.upsert({
     where: { customerId_branchId: { customerId, branchId } },
     create: { businessId, customerId, branchId },
