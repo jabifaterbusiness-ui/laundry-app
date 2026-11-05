@@ -238,7 +238,7 @@ export function CommunicationsPage() {
                   setAnnouncementTemplateLanguage(selected?.language ?? "");
                 }} required>
                   <option value="">Choose an approved marketing template</option>
-                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING").map((template) => (
+                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING" && template.bodyVariableCount === 3).map((template) => (
                     <option key={template.id} value={`${template.name}|${template.language}`}>
                       {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
                     </option>
