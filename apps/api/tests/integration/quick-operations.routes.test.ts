@@ -201,6 +201,7 @@ function mockTransaction() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  orderFindFirst.mockReset();
   mockTransaction();
   vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
     const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
