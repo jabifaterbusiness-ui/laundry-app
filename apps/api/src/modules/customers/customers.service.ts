@@ -143,6 +143,8 @@ export interface CreateCustomerData {
   email?: string;
   address?: string;
   notes?: string;
+  whatsappOptIn?: boolean;
+  whatsappOptInSource?: string;
 }
 
 export async function createCustomer(
@@ -157,6 +159,9 @@ export async function createCustomer(
       email: data.email ?? null,
       address: data.address ?? null,
       notes: data.notes ?? null,
+      whatsappOptIn: data.whatsappOptIn ?? false,
+      whatsappOptInAt: data.whatsappOptIn ? new Date() : null,
+      whatsappOptInSource: data.whatsappOptIn ? data.whatsappOptInSource ?? null : null,
     },
   });
 }
@@ -167,6 +172,8 @@ export interface UpdateCustomerData {
   email?: string;
   address?: string;
   notes?: string;
+  whatsappOptIn?: boolean;
+  whatsappOptInSource?: string;
 }
 
 /**
@@ -188,6 +195,15 @@ export async function updateCustomer(
   if (data.email !== undefined) patch.email = data.email;
   if (data.address !== undefined) patch.address = data.address;
   if (data.notes !== undefined) patch.notes = data.notes;
+  if (data.whatsappOptIn === true) {
+    patch.whatsappOptIn = true;
+    patch.whatsappOptInAt = new Date();
+    patch.whatsappOptInSource = data.whatsappOptInSource ?? null;
+    patch.whatsappOptOutAt = null;
+  } else if (data.whatsappOptIn === false) {
+    patch.whatsappOptIn = false;
+    patch.whatsappOptOutAt = new Date();
+  }
 
   const result = await db.customer.updateMany({
     where: { id, businessId },
