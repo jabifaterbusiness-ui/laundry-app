@@ -554,14 +554,15 @@ describe("Inventory routes - business-scoped items", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toBe("Inventory item not found");
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
-  it("creates an inventory item without requiring a branch header", async () => {
+  it("creates an inventory item owned by the active branch", async () => {
     vi.mocked(prisma.inventoryItem.create).mockResolvedValue({
       id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
@@ -594,6 +595,7 @@ describe("Inventory routes - business-scoped items", () => {
     expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         sku: "DET-001",
         category: "Chemicals",
         storageLocation: "Store A / Shelf 2",
