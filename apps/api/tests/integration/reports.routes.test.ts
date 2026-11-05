@@ -289,10 +289,12 @@ describe("Reports routes - branch context", () => {
 });
 
 describe("Reports routes - annual report", () => {
-  it("BUSINESS_OWNER can access the business-wide annual report without branch context", async () => {
+  it("BUSINESS_OWNER can access the annual report for the active branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=2026")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(res.body.period.year).toBe(2026);
@@ -301,17 +303,21 @@ describe("Reports routes - annual report", () => {
   });
 
   it("STAFF cannot access the annual report without reports.view permission", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=2026")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
   });
 
   it("rejects an invalid annual report year", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=abc")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
   });
