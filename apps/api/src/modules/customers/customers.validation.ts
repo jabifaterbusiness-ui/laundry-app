@@ -28,6 +28,7 @@ const emailSchema = z.string().trim().email("Email is invalid").max(254).optiona
 const addressSchema = z.string().trim().max(300, "Address is too long").optional();
 
 const notesSchema = z.string().trim().max(2000, "Notes are too long").optional();
+const whatsappConsentSourceSchema = z.enum(["CUSTOMER_VERBAL", "CUSTOMER_WRITTEN", "CUSTOMER_WEBSITE", "CUSTOMER_OTHER"]);
 
 export const createCustomerSchema = z.object({
   name: nameSchema,
@@ -35,11 +36,16 @@ export const createCustomerSchema = z.object({
   email: emailSchema,
   address: addressSchema,
   notes: notesSchema,
+  whatsappOptIn: z.boolean().optional().default(false),
+  whatsappOptInSource: whatsappConsentSourceSchema.optional(),
   // If a likely duplicate is found, the API responds 409 with the
   // matches. The caller resubmits with confirmDuplicate: true to create
   // anyway (see docs/CUSTOMERS.md section E). Never used to bypass any
   // other validation.
   confirmDuplicate: z.boolean().optional().default(false),
+}).refine((data) => !data.whatsappOptIn || Boolean(data.whatsappOptInSource), {
+  message: "Record how the customer gave WhatsApp consent",
+  path: ["whatsappOptInSource"],
 });
 
 export const updateCustomerSchema = z
@@ -49,6 +55,8 @@ export const updateCustomerSchema = z
     email: emailSchema,
     address: addressSchema,
     notes: notesSchema,
+    whatsappOptIn: z.boolean().optional(),
+    whatsappOptInSource: whatsappConsentSourceSchema.optional(),
     // Mirrors the create flow's duplicate-override flag (see
     // docs/CUSTOMERS.md section E). Deliberately has no `default()` -
     // giving it a default would make it always present in the parsed
@@ -59,12 +67,18 @@ export const updateCustomerSchema = z
     confirmDuplicate: z.boolean().optional(),
   })
   .refine(
+    (data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource),
+    { message: "Record how the customer gave WhatsApp consent", path: ["whatsappOptInSource"] },
+  )
+  .refine(
     (data) =>
       data.name !== undefined ||
       data.phone !== undefined ||
       data.email !== undefined ||
       data.address !== undefined ||
-      data.notes !== undefined,
+      data.notes !== undefined ||
+      data.whatsappOptIn !== undefined ||
+      data.whatsappOptInSource !== undefined,
     { message: "At least one field must be provided" },
   );
 
