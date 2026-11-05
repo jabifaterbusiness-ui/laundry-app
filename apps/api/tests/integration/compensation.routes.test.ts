@@ -49,11 +49,15 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
     },
     userBranch: {
-      findUnique: vi.fn().mockResolvedValue({
-        id: "membership-a",
-        userId: "user-owner-a",
-        branchId: "branch-A",
-        branch: { id: "branch-A", businessId: "biz-A", name: "Main", address: null, isActive: true },
+      findUnique: vi.fn().mockImplementation(async ({ where }: { where: { userId_branchId: { userId: string; branchId: string } } }) => {
+        const { userId, branchId } = where.userId_branchId;
+        const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+        return {
+          id: `membership-${userId}-${branchId}`,
+          userId,
+          branchId,
+          branch: { id: branchId, businessId, name: "Main", address: null, isActive: true },
+        };
       }),
     },
     employeeCompensation: {
@@ -156,16 +160,13 @@ describe("Compensation routes - authentication", () => {
     expect(res.status).toBe(403);
   });
 
-  it("requires branch context", async () => {
-    compensationFindMany.mockResolvedValue([] as never);
-
+  it("rejects requests without branch context", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${OWNER_A}`)
-      .set("x-branch-id", "branch-A")
-      .set("x-branch-id", "branch-A");
+      .set("Authorization", `Bearer ${OWNER_A}`);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    expect(compensationFindMany).not.toHaveBeenCalled();
   });
 });
 
@@ -395,7 +396,7 @@ describe("Compensation routes - history and isolation", () => {
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/${COMPENSATION_A}`)
       .set("Authorization", `Bearer ${OWNER_B}`)
-      .set("x-branch-id", "branch-A");
+      .set("x-branch-id", "branch-B");
 
     expect(res.status).toBe(404);
 
@@ -404,7 +405,7 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           id: COMPENSATION_A,
           businessId: "biz-B",
-          OR: [{ branchId: "branch-A" }, { branchId: null }],
+          OR: [{ branchId: "branch-B" }, { branchId: null }],
         },
       }),
     );
