@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnnouncementSchema, customerGroupSchema } from "../../src/modules/communications/communications.validation.js";
+import { createAnnouncementSchema, customerGroupSchema, statusRuleSchema } from "../../src/modules/communications/communications.validation.js";
 
 const customerId = "d2719f8b-0c4d-4a9d-8f1e-3a8f3f8e7d10";
 const groupId = "c9719f8b-0c4d-4a9d-8f1e-3a8f3f8e7d10";
@@ -50,6 +50,31 @@ describe("customer communication audience validation", () => {
     expect(customerGroupSchema.safeParse({
       name: " ",
       customerIds: ["not-a-uuid"],
+    }).success).toBe(false);
+  });
+});
+
+
+describe("WhatsApp notification template route validation", () => {
+  it("accepts a selected approved template and language for an order status", () => {
+    expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      whatsappMessage: "Your order is ready",
+      whatsappTemplateName: "order_ready", whatsappTemplateLanguage: "en",
+    }).success).toBe(true);
+  });
+
+  it("accepts clearing a template fallback", () => {
+    expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      whatsappTemplateName: null, whatsappTemplateLanguage: null,
+    }).success).toBe(true);
+  });
+
+  it("rejects an invalid template name or language", () => {
+    expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      whatsappTemplateName: "", whatsappTemplateLanguage: "en",
     }).success).toBe(false);
   });
 });
