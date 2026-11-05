@@ -674,6 +674,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-from-biz-B",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -1437,6 +1438,7 @@ describe("updateInventoryItem", () => {
           isActive: true,
         })
         .mockResolvedValueOnce(null);
+      prismaMock.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
       prismaMock.inventoryItem.update.mockResolvedValue({
         id: "item-1",
         businessId: "biz-A",
@@ -1453,6 +1455,8 @@ describe("updateInventoryItem", () => {
 
       const result = await updateInventoryItem({
         businessId: "biz-A",
+        branchId: "branch-A",
+        userId: "user-1",
       }, "item-1", {
         name: " Fabric Softener ",
         sku: " FAB-002 ",
@@ -1478,8 +1482,8 @@ describe("updateInventoryItem", () => {
         lowStockThreshold: 5,
         isActive: false,
       });
-      expect(prismaMock.inventoryItem.update).toHaveBeenCalledWith({
-        where: { id: "item-1" },
+      expect(prismaMock.inventoryItem.updateMany).toHaveBeenCalledWith({
+        where: { id: "item-1", businessId: "biz-A", ownerBranchId: "branch-A" },
         data: {
           name: "Fabric Softener",
           sku: "FAB-002",
@@ -1501,6 +1505,8 @@ describe("updateInventoryItem", () => {
       await expect(
         updateInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, "item-from-biz-B", {
           name: "Unauthorized Update",
         }),
@@ -1534,6 +1540,8 @@ describe("updateInventoryItem", () => {
       await expect(
         updateInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, "item-1", {
           name: " Fabric Softener ",
         }),
