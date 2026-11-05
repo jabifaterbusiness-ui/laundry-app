@@ -88,6 +88,7 @@ export async function createCompensation({
     const future = await tx.employeeCompensation.findFirst({
       where: {
         businessId,
+        branchId,
         employeeId,
         effectiveFrom: {
           gt: effectiveFrom,
