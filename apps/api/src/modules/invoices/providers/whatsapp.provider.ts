@@ -100,7 +100,7 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
   }
   const id = messagePayload.messages?.[0]?.id;
   if (!id) throw new Error("WhatsApp delivery returned no message ID");
-  await persistBusinessOutbound({ ...(input.businessId ? { businessId: input.businessId } : {}), to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "image", body: input.caption });
+  await persistBusinessOutbound({ ...(input.businessId ? { businessId: input.businessId } : {}), to: normalizeWhatsAppRecipient(input.to), providerMessageId: id, type: "image", ...(input.caption !== undefined ? { body: input.caption } : {}) });
   return { id };
 }
 
