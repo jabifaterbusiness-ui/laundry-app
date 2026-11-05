@@ -465,6 +465,33 @@ describe("mergeCustomer - duplicate account merge", () => {
     });
   });
 
+  it("keeps the source active when another branch still has its orders", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+    orderFindMany.mockResolvedValue(orders as never);
+    prismaMock.order.findFirst.mockResolvedValue({ id: "foreign-order" } as never);
+
+    const result = await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      "branch-A",
+      "user-A",
+      targetCustomer.id,
+    );
+
+    expect(result.sourceDeactivated).toBe(false);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.order.findFirst).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: sourceCustomer.id,
+        branchId: { not: "branch-A" },
+      },
+      select: { id: true },
+    });
+  });
+
   it("merges an account with no orders and still deactivates the source", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
