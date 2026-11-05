@@ -6,9 +6,10 @@ import { listCustomers } from "../../lib/customers-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { WhatsAppConnectionPanel } from "./WhatsAppConnectionPanel.js";
 import { WhatsAppInboxPanel } from "./WhatsAppInboxPanel.js";
+import { getApprovedWhatsAppTemplates } from "../../lib/whatsapp-inbox-api.js";
 import {
   createAnnouncement, deleteCustomerGroup, deleteStatusRule, getReminderConfig, listCustomerGroups, saveCustomerGroup,
-  listCommunicationDeliveries, listStatusRules, listUnpickedOrders,
+  listCommunicationDeliveries, listStatusRules, listUnpickedOrders, getWhatsAppConnection,
   saveReminderConfig, saveStatusRule, sendUnpickedReminders,
   type CommunicationChannel,
 } from "../../lib/communications-api.js";
@@ -36,6 +37,8 @@ export function CommunicationsPage() {
   const [ruleEnabled, setRuleEnabled] = useState(true);
   const [ruleChannel, setRuleChannel] = useState<"WHATSAPP" | "EMAIL" | "BOTH">("WHATSAPP");
   const [whatsappTemplate, setWhatsappTemplate] = useState("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
+  const [whatsappTemplateName, setWhatsappTemplateName] = useState("");
+  const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState("");
   const [emailSubject, setEmailSubject] = useState("Order update from {{companyName}}");
   const [emailTemplate, setEmailTemplate] = useState("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
   const [thresholdMonths, setThresholdMonths] = useState(2);
@@ -49,6 +52,16 @@ export function CommunicationsPage() {
     queryKey: ["customers", "communications", customerPage],
     queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
     enabled: Boolean(accessToken),
+  });
+  const connectionQuery = useQuery({
+    queryKey: ["whatsapp", "connection"],
+    queryFn: () => getWhatsAppConnection({ accessToken }),
+    enabled: Boolean(accessToken),
+  });
+  const approvedTemplatesQuery = useQuery({
+    queryKey: ["whatsapp", "templates"],
+    queryFn: () => getApprovedWhatsAppTemplates(accessToken),
+    enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
   });
   const groupsQuery = useQuery({
     queryKey: ["communications", "customer-groups"],
@@ -68,12 +81,16 @@ export function CommunicationsPage() {
       setRuleEnabled(rule.enabled);
       setRuleChannel(rule.channel);
       setWhatsappTemplate(rule.whatsappMessage ?? "");
+      setWhatsappTemplateName(rule.whatsappTemplateName ?? "");
+      setWhatsappTemplateLanguage(rule.whatsappTemplateLanguage ?? "");
       setEmailSubject(rule.emailSubject ?? "");
       setEmailTemplate(rule.emailMessage ?? "");
     } else {
       setRuleEnabled(false);
       setRuleChannel("WHATSAPP");
       setWhatsappTemplate("");
+      setWhatsappTemplateName("");
+      setWhatsappTemplateLanguage("");
       setEmailSubject("");
       setEmailTemplate("");
     }
@@ -132,7 +149,10 @@ export function CommunicationsPage() {
   const ruleMutation = useMutation({
     mutationFn: () => saveStatusRule({
       status, enabled: ruleEnabled, channel: ruleChannel,
-      whatsappMessage: whatsappTemplate, emailSubject, emailMessage: emailTemplate,
+      whatsappMessage: whatsappTemplate,
+      whatsappTemplateName: whatsappTemplateName || null,
+      whatsappTemplateLanguage: whatsappTemplateLanguage || null,
+      emailSubject, emailMessage: emailTemplate,
     }, { accessToken }),
     onSuccess: async () => {
       setFeedback(`Notification rule saved for ${status.replaceAll("_", " ")}.`);
@@ -167,7 +187,10 @@ export function CommunicationsPage() {
   }
   function loadRule(rule: NonNullable<typeof rulesQuery.data>["data"][number]) {
     setStatus(rule.status); setRuleEnabled(rule.enabled); setRuleChannel(rule.channel);
-    setWhatsappTemplate(rule.whatsappMessage ?? ""); setEmailSubject(rule.emailSubject ?? ""); setEmailTemplate(rule.emailMessage ?? "");
+    setWhatsappTemplate(rule.whatsappMessage ?? "");
+    setWhatsappTemplateName(rule.whatsappTemplateName ?? "");
+    setWhatsappTemplateLanguage(rule.whatsappTemplateLanguage ?? "");
+    setEmailSubject(rule.emailSubject ?? ""); setEmailTemplate(rule.emailMessage ?? "");
   }
 
   return (
@@ -259,6 +282,23 @@ export function CommunicationsPage() {
           <label><input type="checkbox" checked={ruleEnabled} onChange={(event) => setRuleEnabled(event.target.checked)} /> Enable this notification</label>
         </div>
         <label>WhatsApp message<textarea rows={3} value={whatsappTemplate} onChange={(event) => setWhatsappTemplate(event.target.value)} /></label>
+        <label>Approved WhatsApp template fallback (outside the 24-hour window)
+          <select value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => `${item.name}|${item.language}` === event.target.value);
+            setWhatsappTemplateName(selected?.name ?? "");
+            setWhatsappTemplateLanguage(selected?.language ?? "");
+          }}>
+            <option value="">No approved template fallback</option>
+            {(approvedTemplatesQuery.data?.data ?? []).map((template) => (
+              <option key={template.id} value={`${template.name}|${template.language}`}>
+                {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+              </option>
+            ))}
+          </select>
+        </label>
+        <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+          Template BODY variables are filled in this order: {"{{1}}"} customer name, {"{{2}}"} order number, {"{{3}}"} order status, {"{{4}}"} company name. Use the matching order in the approved Meta template. Templates are only used when the free-form 24-hour window has closed.
+        </small>
         <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
         <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
         <button type="button" disabled={ruleMutation.isPending} onClick={() => ruleMutation.mutate()}>Save status notification</button>
