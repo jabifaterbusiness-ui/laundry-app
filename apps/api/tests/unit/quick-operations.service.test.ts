@@ -659,12 +659,9 @@ describe("quick-operations.service", () => {
           operationName: "Transfer Customer",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
-          transferredOrderCount: 2,
-          transferredOrderIds: [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-          ],
-          transferredOrderNumbers: ["00042", "00043"],
+          transferredOrderCount: 1,
+          transferredOrderIds: ["11111111-1111-4111-8111-111111111111"],
+          transferredOrderNumbers: ["00042"],
         },
       });
     });
@@ -702,17 +699,12 @@ describe("quick-operations.service", () => {
           businessId: "biz-A",
           isActive: true,
         },
-        mergedOrderCount: 2,
+        mergedOrderCount: 1,
         mergedOrders: [
           {
             id: "11111111-1111-4111-8111-111111111111",
             orderNumber: "00042",
             branchId: "branch-A",
-          },
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            orderNumber: "00043",
-            branchId: "branch-B",
           },
         ],
         sourceDeactivated: true,
@@ -734,6 +726,8 @@ describe("quick-operations.service", () => {
       expect(mergeCustomerMock).toHaveBeenCalledWith(
         result.customer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         result.targetCustomer.id,
       );
 
@@ -754,12 +748,9 @@ describe("quick-operations.service", () => {
           operationName: "Merge Account",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
-          mergedOrderCount: 2,
-          mergedOrderIds: [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-          ],
-          mergedOrderNumbers: ["00042", "00043"],
+          mergedOrderCount: 1,
+          mergedOrderIds: ["11111111-1111-4111-8111-111111111111"],
+          mergedOrderNumbers: ["00042"],
           sourceDeactivated: true,
         },
       });
@@ -1970,6 +1961,8 @@ describe("SC — Switch Customer", () => {
     expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
       customer.id,
       "biz-A",
+      "33333333-3333-4333-8333-333333333333",
+      "user-staff-a",
     );
   });
 
