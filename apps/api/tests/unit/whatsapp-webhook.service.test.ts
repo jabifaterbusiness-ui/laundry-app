@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   updateEvent: vi.fn(),
   findUnique: vi.fn(),
   findMany: vi.fn(),
+  customerUpdateMany: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -18,6 +19,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       update: mocks.updateEvent,
       findMany: mocks.findMany,
     },
+    customer: { updateMany: mocks.customerUpdateMany },
   },
 }));
 
@@ -38,6 +40,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateEvent.mockReset().mockResolvedValue({});
     mocks.findUnique.mockReset().mockResolvedValue({ id: "connection-1", businessId: "business-1", wabaId: "waba-12345" });
     mocks.findMany.mockReset().mockResolvedValue([]);
+    mocks.customerUpdateMany.mockReset().mockResolvedValue({ count: 1 });
   });
 
   it("records delivered, read, and failed statuses against provider message IDs", async () => {
@@ -144,6 +147,35 @@ describe("processWhatsAppWebhook", () => {
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ eventType: "MESSAGE_RECEIVED", providerMessageId: "wamid-inbound", contactPhone: "2348000000000" }),
     }));
+  });
+
+  it("honors an inbound STOP message by opting the matching tenant customer out", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ id: "waba-12345", changes: [{ value: {
+        metadata: { phone_number_id: "phone-12345" },
+        messages: [{ id: "wamid-stop", from: "2348012345678", type: "text", text: { body: "STOP" } }],
+      } }] }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    await processWhatsAppWebhook(body, makeSignature(body));
+    expect(mocks.customerUpdateMany).toHaveBeenCalledWith({
+      where: { businessId: "business-1", phone: { in: ["2348012345678", "+2348012345678", "08012345678"] }, whatsappOptIn: true },
+      data: { whatsappOptIn: false, whatsappOptOutAt: expect.any(Date) },
+    });
+  });
+
+  it("does not treat ordinary inbound messages containing unsubscribe words as opt-out commands", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ id: "waba-12345", changes: [{ value: {
+        metadata: { phone_number_id: "phone-12345" },
+        messages: [{ id: "wamid-ordinary", from: "2348012345678", type: "text", text: { body: "Please stop the machine" } }],
+      } }] }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    await processWhatsAppWebhook(body, makeSignature(body));
+    expect(mocks.customerUpdateMany).not.toHaveBeenCalled();
   });
 
   it("does not route a signed callback to a tenant when the WABA does not own the phone number", async () => {
