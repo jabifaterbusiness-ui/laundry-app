@@ -53,18 +53,19 @@ export async function getOrCreateCustomerAccount(
       businessId,
       customerId,
       OR: [
-        { branchId },
         { branchId: null },
-        { branchId: { in: accountScope.ownerBranchIds } },
-        { id: { in: accountScope.resourceIds } },
+        { branchId: { in: accountScope.editableOwnerBranchIds } },
+        { id: { in: accountScope.editableResourceIds } },
       ],
     },
     orderBy: { branchId: "desc" },
     include: { transactions: { orderBy: { createdAt: "asc" } } },
   });
   if (account) return account;
-  return db.customerAccount.create({
-    data: { businessId, customerId, branchId },
+  return db.customerAccount.upsert({
+    where: { customerId_branchId: { customerId, branchId } },
+    create: { businessId, customerId, branchId },
+    update: {},
     include: { transactions: { orderBy: { createdAt: "asc" } } },
   });
 }
