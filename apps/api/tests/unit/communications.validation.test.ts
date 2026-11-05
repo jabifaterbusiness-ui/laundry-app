@@ -14,11 +14,22 @@ describe("customer communication audience validation", () => {
     }).success).toBe(true);
   });
 
+  it("requires an approved marketing template fallback for WhatsApp announcements", () => {
+    expect(createAnnouncementSchema.safeParse({
+      title: "Update", message: "Hello", channels: ["WHATSAPP"], audience: "ALL_CUSTOMERS",
+    }).success).toBe(false);
+    expect(createAnnouncementSchema.safeParse({
+      title: "Update", message: "Hello", channels: ["WHATSAPP"], audience: "ALL_CUSTOMERS",
+      whatsappTemplateName: "customer_announcement", whatsappTemplateLanguage: "en",
+    }).success).toBe(true);
+  });
+
   it("requires explicit customer IDs for selected-customer announcements", () => {
     expect(createAnnouncementSchema.safeParse({
       title: "Update",
       message: "Hello",
       channels: ["WHATSAPP"],
+      whatsappTemplateName: "customer_announcement", whatsappTemplateLanguage: "en",
       audience: "SELECTED_CUSTOMERS",
     }).success).toBe(false);
     expect(createAnnouncementSchema.safeParse({
@@ -35,6 +46,7 @@ describe("customer communication audience validation", () => {
       title: "Group update",
       message: "Hello {{customerName}}",
       channels: ["WHATSAPP"],
+      whatsappTemplateName: "group_announcement", whatsappTemplateLanguage: "en",
       audience: "CUSTOMER_GROUP",
     };
     expect(createAnnouncementSchema.safeParse(base).success).toBe(false);
