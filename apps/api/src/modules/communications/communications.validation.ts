@@ -26,6 +26,8 @@ export const statusRuleSchema = z.object({
   enabled: z.boolean(),
   channel: z.enum(["WHATSAPP", "EMAIL", "BOTH"]),
   whatsappMessage: z.string().max(4000).nullable().optional(),
+  whatsappTemplateName: z.string().trim().min(1).max(512).nullable().optional(),
+  whatsappTemplateLanguage: z.string().trim().min(2).max(20).nullable().optional(),
   emailSubject: z.string().max(180).nullable().optional(),
   emailMessage: z.string().max(4000).nullable().optional(),
 }).strict();
