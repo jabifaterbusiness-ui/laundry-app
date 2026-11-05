@@ -274,6 +274,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-from-biz-B",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 5,
@@ -368,6 +369,7 @@ describe("inventory.service", () => {
           inventoryItemId_branchId: {
             inventoryItemId: "item-2",
             branchId: "branch-A",
+            userId: "user-1",
           },
         },
         create: {
@@ -576,6 +578,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -601,6 +604,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-from-biz-B",
@@ -637,6 +641,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -791,7 +796,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(2);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 1,
         pageSize: 10,
@@ -839,7 +844,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(1);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         search: "detergent",
         page: 1,
@@ -891,7 +896,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(1);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         isActive: true,
         page: 1,
@@ -934,7 +939,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(21);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 2,
         pageSize: 10,
@@ -976,7 +981,7 @@ describe("listInventoryItems empty results", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(0);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 1,
         pageSize: 10,
@@ -1029,6 +1034,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 1,
@@ -1050,6 +1056,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1067,6 +1074,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
     });
   });
@@ -1093,6 +1101,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         inventoryItemId: "item-1",
@@ -1171,6 +1180,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         lowStockOnly: true,
@@ -1235,6 +1245,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 2,
@@ -1256,6 +1267,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1273,6 +1285,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
     });
   });
@@ -1299,6 +1312,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         lowStockOnly: false,
@@ -1313,6 +1327,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       include: {
         inventoryItem: true,
@@ -1330,6 +1345,7 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
     });
   });
@@ -1344,6 +1360,7 @@ describe("listInventoryStock empty results", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 1,
