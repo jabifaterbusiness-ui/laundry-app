@@ -175,6 +175,9 @@ export async function sendAutomatedWhatsAppTemplate(input: {
   if (template.category !== requiredCategory) {
     throw new AppError(`This notification must use an approved ${requiredCategory} WhatsApp template`, 422);
   }
+  if (requiredCategory === "MARKETING" && template.bodyVariableCount !== 3) {
+    throw new AppError("Announcement marketing templates must have exactly three BODY variables: customer name, company name, and announcement message", 422);
+  }
   if (template.bodyVariableCount > input.variableValues.length) {
     throw new AppError("The configured WhatsApp template needs more body variables than this notification can provide", 422);
   }
