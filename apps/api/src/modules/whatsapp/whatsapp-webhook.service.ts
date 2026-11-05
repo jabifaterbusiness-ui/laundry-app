@@ -14,7 +14,7 @@ type WhatsAppStatus = {
     error_data?: { details?: unknown };
   }>;
 };
-type WhatsAppMessageEvent = { id?: unknown; from?: unknown; timestamp?: unknown; type?: unknown; [key: string]: unknown };
+type WhatsAppMessageEvent = { id?: unknown; from?: unknown; timestamp?: unknown; type?: unknown; text?: { body?: unknown }; [key: string]: unknown };
 type WhatsAppWebhookPayload = {
   object?: unknown;
   entry?: Array<{
@@ -157,6 +157,22 @@ export async function replayPendingWhatsAppStatusEvents(providerMessageId: strin
   }
 }
 
+async function processCustomerWhatsAppOptOut(message: WhatsAppMessageEvent, context: { wabaId?: string; phoneNumberId?: string }) {
+  if (message.type !== "text" || typeof message.text?.body !== "string" || typeof message.from !== "string") return;
+  const command = message.text.body.trim().toUpperCase().replace(/[.!?]+$/g, "");
+  if (!["STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REMOVE"].includes(command)) return;
+  const connection = await resolveWebhookConnection(context);
+  if (!connection) return;
+  const phone = message.from.replace(/\D/g, "");
+  if (!phone) return;
+  const variants = [phone, `+${phone}`];
+  if (phone.startsWith("234") && phone.length === 13) variants.push(`0${phone.slice(3)}`);
+  await prisma.customer.updateMany({
+    where: { businessId: connection.businessId, phone: { in: variants }, whatsappOptIn: true },
+    data: { whatsappOptIn: false, whatsappOptOutAt: new Date() },
+  });
+}
+
 export async function processWhatsAppWebhook(rawBody: Buffer, signature: string | undefined) {
   verifySignature(rawBody, signature);
   const payload = parsePayload(rawBody);
@@ -182,6 +198,7 @@ export async function processWhatsAppWebhook(rawBody: Buffer, signature: string 
           eventType: "MESSAGE_RECEIVED",
           payload: message,
         });
+        await processCustomerWhatsAppOptOut(message, context);
         receivedMessages += 1;
       }
     }
