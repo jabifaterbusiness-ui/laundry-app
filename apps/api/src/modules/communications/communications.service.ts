@@ -375,7 +375,9 @@ export async function getUnpickedOrderReminderConfig(businessId: string) {
   });
 }
 export async function saveUnpickedOrderReminderConfig(businessId: string, input: {
-  enabled: boolean; thresholdMonths: number; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+  enabled: boolean; thresholdMonths: number;
+  whatsappTemplateName?: string | null | undefined;
+  whatsappTemplateLanguage?: string | null | undefined;
 }) {
   return prisma.unpickedOrderReminderConfig.upsert({
     where: { businessId }, create: { businessId, ...input }, update: input,
