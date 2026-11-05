@@ -2,7 +2,53 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { getWhatsAppConnection } from "../../lib/communications-api.js";
-import { getApprovedWhatsAppTemplates, getWhatsAppConversations, markWhatsAppConversationRead, sendWhatsAppReply, sendWhatsAppTemplate, type WhatsAppConversation } from "../../lib/whatsapp-inbox-api.js";
+import { getApprovedWhatsAppTemplates, getWhatsAppConversations, getWhatsAppMediaPreview, markWhatsAppConversationRead, sendWhatsAppReply, sendWhatsAppTemplate, type WhatsAppConversation, type WhatsAppInboxMessage } from "../../lib/whatsapp-inbox-api.js";
+
+function WhatsAppMediaPreview({ message, accessToken }: { message: WhatsAppInboxMessage; accessToken: string | null }) {
+  const [preview, setPreview] = useState<{ url: string; type: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!message.mediaId) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setLoading(true);
+    setError("");
+    getWhatsAppMediaPreview(message.mediaId, accessToken)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreview({ url: objectUrl, type: blob.type.toLowerCase() });
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "Attachment preview is unavailable.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [message.mediaId, accessToken]);
+
+  if (!message.mediaId) return null;
+  if (loading) return <small style={{ display: "block", color: "#64748b", marginTop: 7 }}>Loading attachment…</small>;
+  if (error) return <small role="status" style={{ display: "block", color: "#b45309", marginTop: 7 }}>{error}</small>;
+  if (!preview) return null;
+  if (preview.type.startsWith("image/")) {
+    return <img src={preview.url} alt={message.mediaCaption || "Customer WhatsApp attachment"} loading="lazy" style={{ display: "block", maxWidth: "100%", maxHeight: 240, objectFit: "contain", borderRadius: 9, marginTop: 8 }} />;
+  }
+  if (preview.type.startsWith("video/")) {
+    return <video controls preload="metadata" src={preview.url} style={{ display: "block", maxWidth: "100%", maxHeight: 240, borderRadius: 9, marginTop: 8 }} />;
+  }
+  if (preview.type.startsWith("audio/")) {
+    return <audio controls preload="metadata" src={preview.url} style={{ display: "block", maxWidth: "100%", marginTop: 8 }} />;
+  }
+  if (preview.type === "application/pdf") {
+    return <a href={preview.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, color: "#0f766e", fontWeight: 700 }}>Open PDF attachment</a>;
+  }
+  return <a href={preview.url} download={message.mediaFilename || "whatsapp-attachment"} style={{ display: "inline-block", marginTop: 8, color: "#0f766e", fontWeight: 700 }}>Download attachment</a>;
+}
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
@@ -87,6 +133,7 @@ export function WhatsAppInboxPanel() {
                   <div key={message.id} style={{ display: "flex", justifyContent: message.direction === "OUTBOUND" ? "flex-end" : "flex-start", marginBottom: 10 }}>
                     <div style={{ maxWidth: "82%", padding: "9px 12px", borderRadius: 13, background: message.direction === "OUTBOUND" ? "#dcfce7" : "#fff", border: "1px solid #e2e8f0" }}>
                       <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.text}</div>
+                      {message.direction === "INBOUND" ? <WhatsAppMediaPreview message={message} accessToken={accessToken} /> : null}
                       <small style={{ display: "block", color: "#64748b", marginTop: 5, textAlign: "right" }}>{formatTime(message.timestamp)} · {message.status}</small>
                     </div>
                   </div>
