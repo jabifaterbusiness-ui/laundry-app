@@ -15,7 +15,12 @@ const prismaMock = vi.hoisted(() => ({
   },
   order: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     updateMany: vi.fn(),
+  },
+  branchResourceShare: {
+    findMany: vi.fn().mockResolvedValue([]),
+    findFirst: vi.fn().mockResolvedValue(null),
   },
   customerAccount: {
     findFirst: vi.fn(),
@@ -72,7 +77,7 @@ describe("listCustomers", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active" });
+    await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 25, status: "active" });
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-1", lifecycleStatus: "ACTIVE" }) }),
@@ -83,7 +88,7 @@ describe("listCustomers", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    await listCustomers({ businessId: "biz-1", page: 3, pageSize: 10, status: "all" });
+    await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 3, pageSize: 10, status: "all" });
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 20, take: 10 }));
   });
@@ -92,7 +97,7 @@ describe("listCustomers", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(47);
 
-    const result = await listCustomers({ businessId: "biz-1", page: 1, pageSize: 20, status: "active" });
+    const result = await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 20, status: "active" });
 
     expect(result.pagination).toEqual({ page: 1, pageSize: 20, total: 47, totalPages: 3 });
   });
@@ -101,7 +106,7 @@ describe("listCustomers", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active", search: "555-1234" });
+    await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 25, status: "active", search: "555-1234" });
 
     const call = findMany.mock.calls[0]![0];
     expect(call!.where!.OR).toEqual([
@@ -133,7 +138,7 @@ describe("listCustomers", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    await listCustomers({ businessId: "biz-1", page: 1, pageSize: 25, status: "active", search: "Jane" });
+    await listCustomers({ businessId: "biz-1", branchId: "branch-A", userId: "user-A", page: 1, pageSize: 25, status: "active", search: "Jane" });
 
     const call = findMany.mock.calls[0]![0];
     expect(call!.where!.OR).toEqual([
@@ -165,14 +170,14 @@ describe("getCustomerForBusiness - tenant isolation", () => {
   it("looks up by id AND businessId in a single query", async () => {
     findFirst.mockResolvedValue(null);
 
-    await getCustomerForBusiness("cust-1", "biz-1");
+    await getCustomerForBusiness("cust-1", "biz-1", "branch-A", "user-A");
 
     expect(findFirst).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" } });
   });
 
   it("business A can retrieve its own customer", async () => {
     findFirst.mockResolvedValue({ id: "cust-1", businessId: "biz-A" } as never);
-    const result = await getCustomerForBusiness("cust-1", "biz-A");
+    const result = await getCustomerForBusiness("cust-1", "biz-A", "branch-A", "user-A");
     expect(result).not.toBeNull();
   });
 
@@ -181,7 +186,7 @@ describe("getCustomerForBusiness - tenant isolation", () => {
     // in the where clause doesn't match - this is the actual isolation
     // boundary, not a check performed after the fact.
     findFirst.mockResolvedValue(null);
-    const result = await getCustomerForBusiness("cust-1", "biz-B");
+    const result = await getCustomerForBusiness("cust-1", "biz-B", "branch-A", "user-A");
     expect(result).toBeNull();
     expect(findFirst).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-B" } });
   });
@@ -191,7 +196,7 @@ describe("findPossibleDuplicates", () => {
   it("only matches active customers with the same normalized phone in the same business", async () => {
     findMany.mockResolvedValue([]);
 
-    await findPossibleDuplicates("biz-1", "5551234567");
+    await findPossibleDuplicates("biz-1", "branch-A", "user-A", "5551234567");
 
     expect(findMany).toHaveBeenCalledWith({
       where: { businessId: "biz-1", phone: "5551234567", isActive: true },
@@ -202,7 +207,7 @@ describe("findPossibleDuplicates", () => {
   it("excludes the given id from the match set when excludeId is provided (update flow)", async () => {
     findMany.mockResolvedValue([]);
 
-    await findPossibleDuplicates("biz-1", "5551234567", "cust-1");
+    await findPossibleDuplicates("biz-1", "branch-A", "user-A", "5551234567", "cust-1");
 
     expect(findMany).toHaveBeenCalledWith({
       where: { businessId: "biz-1", phone: "5551234567", isActive: true, id: { not: "cust-1" } },
@@ -215,7 +220,7 @@ describe("createCustomer", () => {
   it("writes the given businessId (never a client-controlled one) onto the record", async () => {
     create.mockResolvedValue({ id: "cust-1" } as never);
 
-    await createCustomer({ businessId: "biz-1", name: "Jane", phone: "5551234567" });
+    await createCustomer({ businessId: "biz-1", branchId: "branch-A", name: "Jane", phone: "5551234567" });
 
     expect(create).toHaveBeenCalledWith({
       data: { businessId: "biz-1", name: "Jane", phone: "5551234567", email: null, address: null, notes: null, whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null },
@@ -242,7 +247,7 @@ describe("updateCustomer - tenant isolation", () => {
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValue({ id: "cust-1" } as never);
 
-    await updateCustomer("cust-1", "biz-1", { name: "New Name" });
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", { name: "New Name" });
 
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { name: "New Name" } });
   });
@@ -251,7 +256,7 @@ describe("updateCustomer - tenant isolation", () => {
     findFirst.mockResolvedValue({ whatsappOptIn: true } as never);
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValueOnce({ whatsappOptIn: true } as never).mockResolvedValueOnce({ id: "cust-1" } as never);
-    await updateCustomer("cust-1", "biz-1", { whatsappOptIn: false });
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", { whatsappOptIn: false });
     expect(updateMany).toHaveBeenCalledWith({
       where: { id: "cust-1", businessId: "biz-1" },
       data: { whatsappOptIn: false, whatsappOptOutAt: expect.any(Date) },
@@ -273,6 +278,8 @@ describe("setCustomerLifecycleStatus", () => {
       setCustomerLifecycleStatus(
         "cust-1",
         "biz-B",
+        "branch-A",
+        "user-A",
         "BLOCKED",
         "Repeated failed collection attempts",
         "user-1",
@@ -300,6 +307,8 @@ describe("setCustomerLifecycleStatus", () => {
     const result = await setCustomerLifecycleStatus(
       "cust-1",
       "biz-1",
+      "branch-A",
+      "user-A",
       "BLOCKED",
       "Repeated failed collection attempts",
       "user-1",
