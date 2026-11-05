@@ -5,6 +5,7 @@ import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
 import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
+import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
@@ -52,6 +53,8 @@ async function deliverMessage(input: {
   businessId: string; customerId: string; orderId?: string; campaignId?: string;
   channel: Channel; messageType: string; destination: string; subject: string;
   body: string; dedupeKey: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+  whatsappTemplateVariables?: string[];
 }) {
   if (input.channel === "WHATSAPP") {
     const customer = await prisma.customer.findFirst({
@@ -95,7 +98,20 @@ async function deliverMessage(input: {
       })).id;
     } else {
       await assertWhatsAppMessagingEnabled();
-      providerMessageId = (await sendWhatsAppText({ businessId: input.businessId, to: input.destination, body: input.body })).id;
+      try {
+        providerMessageId = (await sendWhatsAppText({ businessId: input.businessId, to: input.destination, body: input.body })).id;
+      } catch (error) {
+        const serviceWindowClosed = error instanceof Error && error.message.includes("24-hour WhatsApp customer-service window is closed");
+        if (!serviceWindowClosed || !input.whatsappTemplateName || !input.whatsappTemplateLanguage) throw error;
+        providerMessageId = (await sendAutomatedWhatsAppTemplate({
+          businessId: input.businessId,
+          customerId: input.customerId,
+          phone: input.destination,
+          templateName: input.whatsappTemplateName,
+          language: input.whatsappTemplateLanguage,
+          variableValues: input.whatsappTemplateVariables ?? [],
+        })).providerMessageId;
+      }
     }
     // A fast provider webhook may arrive before the send request returns.
     // Only promote PENDING rows so an already-recorded DELIVERED/READ/FAILED
@@ -163,6 +179,11 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
       subject: renderTemplate(rule.emailSubject || "Order update from {{companyName}}", values),
       body: renderTemplate((channel === "EMAIL" ? rule.emailMessage : rule.whatsappMessage) || fallback, values),
       dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
+      ...(channel === "WHATSAPP" && rule.whatsappTemplateName && rule.whatsappTemplateLanguage ? {
+        whatsappTemplateName: rule.whatsappTemplateName,
+        whatsappTemplateLanguage: rule.whatsappTemplateLanguage,
+        whatsappTemplateVariables: [values.customerName, values.orderNumber, values.status, values.companyName],
+      } : {}),
     });
     results.push({ ...deliveryResult, channel });
   }
@@ -175,7 +196,8 @@ export async function listOrderStatusRules(businessId: string) {
 }
 export async function saveOrderStatusRule(input: {
   businessId: string; status: string; enabled: boolean; channel: "WHATSAPP" | "EMAIL" | "BOTH";
-  whatsappMessage?: string | null; emailSubject?: string | null; emailMessage?: string | null;
+  whatsappMessage?: string | null; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+  emailSubject?: string | null; emailMessage?: string | null;
 }) {
   return prisma.orderStatusNotificationRule.upsert({
     where: { businessId_status: { businessId: input.businessId, status: input.status } },
@@ -183,6 +205,8 @@ export async function saveOrderStatusRule(input: {
     update: {
       enabled: input.enabled, channel: input.channel,
       whatsappMessage: input.whatsappMessage ?? null,
+      whatsappTemplateName: input.whatsappTemplateName ?? null,
+      whatsappTemplateLanguage: input.whatsappTemplateLanguage ?? null,
       emailSubject: input.emailSubject ?? null,
       emailMessage: input.emailMessage ?? null,
     },
