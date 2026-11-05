@@ -4,6 +4,8 @@ export const createAnnouncementSchema = z.object({
   title: z.string().trim().min(1).max(180),
   message: z.string().trim().min(1).max(4000),
   channels: z.array(channelSchema).min(1).max(2),
+  whatsappTemplateName: z.string().trim().min(1).max(512).nullable().optional(),
+  whatsappTemplateLanguage: z.string().trim().min(2).max(20).nullable().optional(),
   audience: z.enum(["ALL_CUSTOMERS", "SELECTED_CUSTOMERS", "CUSTOMER_GROUP"]),
   customerIds: z.array(z.string().uuid()).max(2000).optional(),
   groupId: z.string().uuid().optional(),
@@ -13,6 +15,12 @@ export const createAnnouncementSchema = z.object({
   }
   if (value.audience === "CUSTOMER_GROUP" && !value.groupId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose a customer group", path: ["groupId"] });
+  }
+  if (value.channels.includes("WHATSAPP") && (!value.whatsappTemplateName || !value.whatsappTemplateLanguage)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose an approved WhatsApp MARKETING template for the announcement", path: ["whatsappTemplateName"] });
+  }
+  if (Boolean(value.whatsappTemplateName) !== Boolean(value.whatsappTemplateLanguage)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose both a template and its language", path: ["whatsappTemplateLanguage"] });
   }
 });
 export const customerGroupSchema = z.object({
