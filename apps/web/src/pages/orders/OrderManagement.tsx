@@ -28,6 +28,7 @@ import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
 import {
   getOrder,
+  getOrderStatusHistory,
   listAllOrders,
   updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
@@ -98,6 +99,7 @@ function OrderManagementContent({
     | "invoice-void"
     | "invoice-delete"
     | "invoice-history"
+    | "status-history"
   >("none");
   const [dirty, setDirty] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -195,6 +197,18 @@ function OrderManagementContent({
         invoiceQuery.data?.id &&
         canViewInvoices &&
         layer === "invoice-history",
+    ),
+  });
+
+  const statusHistoryQuery = useQuery({
+    queryKey: ["order-management", "status-history", order?.id, activeBranchId],
+    queryFn: () => getOrderStatusHistory(order!.id, { accessToken }, activeBranchId),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        mode === "view" &&
+        order?.id &&
+        layer === "status-history",
     ),
   });
 
@@ -823,6 +837,13 @@ function OrderManagementContent({
         <button type="button" onClick={() => setLayer("history")}>
           History
         </button>
+        <button
+          type="button"
+          disabled={mode !== "view" || !order}
+          onClick={() => setLayer("status-history")}
+        >
+          Status History
+        </button>
         <button type="button" onClick={() => setLayer("notes")}>
           Notes
         </button>
@@ -1271,6 +1292,34 @@ function OrderManagementContent({
                   Cancel
                 </button>
               </div>
+            </>
+          )}
+
+          {layer === "status-history" && (
+            <>
+              <h3>Order Status History</h3>
+              {statusHistoryQuery.isLoading ? (
+                <p>Loading status history...</p>
+              ) : statusHistoryQuery.isError ? (
+                <p role="alert">Unable to load order status history.</p>
+              ) : statusHistoryQuery.data?.length ? (
+                <ol style={{ display: "grid", gap: 10, paddingLeft: 22 }}>
+                  {statusHistoryQuery.data.map((entry) => (
+                    <li key={entry.id}>
+                      <strong>
+                        {entry.previousStatus
+                          ? entry.previousStatus.replaceAll("_", " ")
+                          : "Initial status"}{" "}
+                        → {entry.status.replaceAll("_", " ")}
+                      </strong>
+                      <div>Date/Time: {formatDate(entry.changedAt)}</div>
+                      <div>Changed by: {entry.changedBy}</div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>No status changes have been recorded for this order yet.</p>
+              )}
             </>
           )}
 
