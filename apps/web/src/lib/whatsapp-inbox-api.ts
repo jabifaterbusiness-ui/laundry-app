@@ -1,4 +1,4 @@
-import { apiFetch } from "./api-client.js";
+import { apiFetch, apiFetchBlob } from "./api-client.js";
 
 export interface WhatsAppInboxMessage {
   id: string;
@@ -7,6 +7,10 @@ export interface WhatsAppInboxMessage {
   phone: string;
   text: string;
   messageType: string;
+  mediaId: string | null;
+  mediaMimeType: string | null;
+  mediaCaption: string | null;
+  mediaFilename: string | null;
   timestamp: string;
   status: string;
 }
@@ -52,4 +56,8 @@ export async function sendWhatsAppTemplate(input: { customerId?: string | null; 
     "/whatsapp/inbox/templates/send",
     { method: "POST", accessToken, body: JSON.stringify(input) },
   );
+}
+
+export async function getWhatsAppMediaPreview(mediaId: string, accessToken: string | null) {
+  return apiFetchBlob(`/whatsapp/inbox/media/${encodeURIComponent(mediaId)}`, { accessToken });
 }
