@@ -42,6 +42,8 @@ export function CommunicationsPage() {
   const [emailSubject, setEmailSubject] = useState("Order update from {{companyName}}");
   const [emailTemplate, setEmailTemplate] = useState("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
   const [thresholdMonths, setThresholdMonths] = useState(2);
+  const [reminderTemplateName, setReminderTemplateName] = useState("");
+  const [reminderTemplateLanguage, setReminderTemplateLanguage] = useState("");
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [reminderMessage, setReminderMessage] = useState(DEFAULT_REMINDER);
@@ -106,6 +108,8 @@ export function CommunicationsPage() {
     if (!reminderConfigQuery.data) return;
     setThresholdMonths(reminderConfigQuery.data.thresholdMonths);
     setRemindersEnabled(reminderConfigQuery.data.enabled);
+    setReminderTemplateName(reminderConfigQuery.data.whatsappTemplateName ?? "");
+    setReminderTemplateLanguage(reminderConfigQuery.data.whatsappTemplateLanguage ?? "");
   }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
 
   const unpickedQuery = useQuery({
@@ -165,7 +169,11 @@ export function CommunicationsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] }),
   });
   const configMutation = useMutation({
-    mutationFn: () => saveReminderConfig({ enabled: remindersEnabled, thresholdMonths }, { accessToken, branchId: activeBranchId }),
+    mutationFn: () => saveReminderConfig({
+      enabled: remindersEnabled, thresholdMonths,
+      whatsappTemplateName: reminderTemplateName || null,
+      whatsappTemplateLanguage: reminderTemplateLanguage || null,
+    }, { accessToken, branchId: activeBranchId }),
     onSuccess: async () => {
       setFeedback("Unpicked-order reminder settings saved.");
       await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
@@ -327,6 +335,23 @@ export function CommunicationsPage() {
           {(unpickedQuery.data?.data ?? []).length === 0 && <p>No unpicked orders match the current threshold.</p>}
         </div>
         <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
+        <label>Approved WhatsApp template fallback (outside the 24-hour window)
+          <select value={reminderTemplateName && reminderTemplateLanguage ? `${reminderTemplateName}|${reminderTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && `${item.name}|${item.language}` === event.target.value);
+            setReminderTemplateName(selected?.name ?? "");
+            setReminderTemplateLanguage(selected?.language ?? "");
+          }}>
+            <option value="">No approved template fallback</option>
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY").map((template) => (
+              <option key={template.id} value={`${template.name}|${template.language}`}>
+                {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+              </option>
+            ))}
+          </select>
+        </label>
+        <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+          For approved UTILITY templates, BODY variables use the same order: customer name, order number, order status, company name.
+        </small>
         <label><input type="checkbox" checked={reminderChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", reminderChannels, setReminderChannels)} /> WhatsApp</label>
         <label><input type="checkbox" checked={reminderChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", reminderChannels, setReminderChannels)} /> Email</label>
         <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
