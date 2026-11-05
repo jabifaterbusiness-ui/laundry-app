@@ -61,6 +61,7 @@ describe("tenant-scoped WhatsApp media previews", () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(mocks.fetch).toHaveBeenNthCalledWith(2, expect.any(URL), {
       headers: { Authorization: "Bearer decrypted-test-token" },
+      redirect: "error",
     });
   });
 
