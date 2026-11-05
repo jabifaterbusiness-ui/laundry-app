@@ -27,7 +27,10 @@ export interface UnpickedOrder {
   customer: { id: string; name: string; phone: string; email: string | null };
   branch: { name: string };
 }
-export interface ReminderConfig { id: string; enabled: boolean; thresholdMonths: number }
+export interface ReminderConfig {
+  id: string; enabled: boolean; thresholdMonths: number;
+  whatsappTemplateName: string | null; whatsappTemplateLanguage: string | null;
+}
 export async function listCustomerGroups(auth: { accessToken: string | null }) {
   return apiFetch<{ data: CustomerGroup[] }>("/communications/customer-groups", { accessToken: auth.accessToken });
 }
@@ -52,7 +55,9 @@ export async function deleteStatusRule(id: string, auth: { accessToken: string |
 export async function getReminderConfig(auth: { accessToken: string | null; branchId?: string | null }) {
   return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { accessToken: auth.accessToken, branchId: auth.branchId });
 }
-export async function saveReminderConfig(input: { enabled: boolean; thresholdMonths: number }, auth: { accessToken: string | null; branchId?: string | null }) {
+export async function saveReminderConfig(input: {
+  enabled: boolean; thresholdMonths: number; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+}, auth: { accessToken: string | null; branchId?: string | null }) {
   return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { method: "PUT", accessToken: auth.accessToken, branchId: auth.branchId, body: JSON.stringify(input) });
 }
 export async function listUnpickedOrders(auth: { accessToken: string | null; branchId?: string | null }) {
