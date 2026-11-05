@@ -166,12 +166,14 @@ export async function sendApprovedWhatsAppTemplate(input: {
 
 export async function sendAutomatedWhatsAppTemplate(input: {
   businessId: string; customerId: string; phone: string; templateName: string; language: string; variableValues: string[];
+  templateCategory?: "UTILITY" | "MARKETING";
 }) {
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
   const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
   if (!template) throw new AppError("The configured WhatsApp notification template is not approved or is no longer available", 422);
-  if (template.category !== "UTILITY") {
-    throw new AppError("Order-status notifications must use an approved UTILITY WhatsApp template", 422);
+  const requiredCategory = input.templateCategory ?? "UTILITY";
+  if (template.category !== requiredCategory) {
+    throw new AppError(`This notification must use an approved ${requiredCategory} WhatsApp template`, 422);
   }
   if (template.bodyVariableCount > input.variableValues.length) {
     throw new AppError("The configured WhatsApp template needs more body variables than this notification can provide", 422);
