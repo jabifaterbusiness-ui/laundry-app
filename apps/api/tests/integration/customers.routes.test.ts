@@ -495,7 +495,7 @@ describe("Customers routes - customer account / POA", () => {
   const CUSTOMER_ID = "11111111-1111-1111-1111-111111111111";
   const BRANCH_A = "branch-A";
 
-  it("views a customer account without requiring branch context", async () => {
+  it("views a customer account within the active branch", async () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     findFirst.mockResolvedValue({
@@ -525,7 +525,14 @@ describe("Customers routes - customer account / POA", () => {
       where: {
         customerId: CUSTOMER_ID,
         businessId: "biz-A",
+        OR: [
+          { branchId: "branch-A" },
+          { branchId: null },
+          { branchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
       },
+      orderBy: { branchId: "desc" },
       include: {
         transactions: {
           orderBy: {
@@ -534,7 +541,7 @@ describe("Customers routes - customer account / POA", () => {
         },
       },
     });
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns a zero balance when the customer has no account yet", async () => {
@@ -556,6 +563,7 @@ describe("Customers routes - customer account / POA", () => {
       id: null,
       customerId: CUSTOMER_ID,
       businessId: "biz-A",
+      branchId: "branch-A",
       balance: 0,
       transactions: [],
     });
@@ -596,7 +604,7 @@ describe("Customers routes - customer account / POA", () => {
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
     expect(customerAccountUpsert).not.toHaveBeenCalled();
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
