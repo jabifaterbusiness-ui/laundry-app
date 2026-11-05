@@ -166,6 +166,59 @@ export async function saveBranchResourceShare(input: {
   }
 
   const resourceId = input.resourceId ?? null;
+  if (resourceId) {
+    let resourceBelongsToOwnerBranch = false;
+    const resourceWhere = { id: resourceId, businessId: input.businessId };
+
+    switch (input.resourceType) {
+      case "CUSTOMERS":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.customer.findFirst({
+          where: { ...resourceWhere, ownerBranchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "SERVICES":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.service.findFirst({
+          where: { ...resourceWhere, ownerBranchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "CUSTOMER_PRICING":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.customerServicePrice.findFirst({
+          where: { ...resourceWhere, branchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "CUSTOMER_ACCOUNTS":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.customerAccount.findFirst({
+          where: { ...resourceWhere, branchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "DISCOUNTS":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.priceAdjustment.findFirst({
+          where: { ...resourceWhere, branchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "TAX_RULES":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.taxRule.findFirst({
+          where: { ...resourceWhere, branchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "INVENTORY":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.inventoryItem.findFirst({
+          where: { ...resourceWhere, ownerBranchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+    }
+
+    if (!resourceBelongsToOwnerBranch) {
+      throw new AppError("The selected record does not belong to the chosen owner branch or cannot be shared individually", 404);
+    }
+  }
   const userId = input.userId ?? null;
   const existing = await prisma.branchResourceShare.findFirst({
     where: {
