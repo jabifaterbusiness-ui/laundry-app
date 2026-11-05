@@ -24,6 +24,8 @@ export function CommunicationsPage() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementTemplateName, setAnnouncementTemplateName] = useState("");
+  const [announcementTemplateLanguage, setAnnouncementTemplateLanguage] = useState("");
   const [audience, setAudience] = useState<"ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP">("ALL_CUSTOMERS");
   const [groupId, setGroupId] = useState("");
   const [groupName, setGroupName] = useState("");
@@ -145,7 +147,11 @@ export function CommunicationsPage() {
   const announcementMutation = useMutation({
     mutationFn: () => createAnnouncement({
       title: title.trim(), message: announcementMessage.trim(), audience,
-      channels: announcementChannels, ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
+      channels: announcementChannels,
+      ...(announcementTemplateName && announcementTemplateLanguage ? {
+        whatsappTemplateName: announcementTemplateName, whatsappTemplateLanguage: announcementTemplateLanguage,
+      } : {}),
+      ...(audience === "SELECTED_CUSTOMERS" ? { customerIds } : {}),
       ...(audience === "CUSTOMER_GROUP" ? { groupId } : {}),
     }, { accessToken }),
     onSuccess: async (result) => {
@@ -223,6 +229,27 @@ export function CommunicationsPage() {
         <form onSubmit={(event) => { event.preventDefault(); announcementMutation.mutate(); }}>
           <label>Announcement title<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required /></label>
           <label>Message<textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} rows={4} maxLength={4000} required /></label>
+          {announcementChannels.includes("WHATSAPP") && (
+            <>
+              <label>Approved WhatsApp MARKETING template
+                <select value={announcementTemplateName && announcementTemplateLanguage ? `${announcementTemplateName}|${announcementTemplateLanguage}` : ""} onChange={(event) => {
+                  const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "MARKETING" && `${item.name}|${item.language}` === event.target.value);
+                  setAnnouncementTemplateName(selected?.name ?? "");
+                  setAnnouncementTemplateLanguage(selected?.language ?? "");
+                }} required>
+                  <option value="">Choose an approved marketing template</option>
+                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING").map((template) => (
+                    <option key={template.id} value={`${template.name}|${template.language}`}>
+                      {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <small style={{ display: "block", color: "#64748b", marginTop: 4 }}>
+                Marketing template BODY variables use this order: {"{{1}}"} customer name, {"{{2}}"} company name, {"{{3}}"} your announcement message. Only approved templates are available.
+              </small>
+            </>
+          )}
           <label>Recipients<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="ALL_CUSTOMERS">All active customers</option><option value="SELECTED_CUSTOMERS">Selected customers</option><option value="CUSTOMER_GROUP">Customer group</option></select></label>
           {audience === "SELECTED_CUSTOMERS" && (
             <>
@@ -251,7 +278,7 @@ export function CommunicationsPage() {
             <label><input type="checkbox" checked={announcementChannels.includes("WHATSAPP")} onChange={() => toggleChannel("WHATSAPP", announcementChannels, setAnnouncementChannels)} /> WhatsApp</label>
             <label><input type="checkbox" checked={announcementChannels.includes("EMAIL")} onChange={() => toggleChannel("EMAIL", announcementChannels, setAnnouncementChannels)} /> Email</label>
           </div>
-          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId)}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
+          <button type="submit" disabled={announcementMutation.isPending || !title.trim() || !announcementMessage.trim() || !announcementChannels.length || (audience === "SELECTED_CUSTOMERS" && !customerIds.length) || (audience === "CUSTOMER_GROUP" && !groupId) || (announcementChannels.includes("WHATSAPP") && (!announcementTemplateName || !announcementTemplateLanguage))}>{announcementMutation.isPending ? "Sending..." : "Send announcement"}</button>
         </form>
       </section>
 
