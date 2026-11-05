@@ -156,6 +156,17 @@ export async function saveBranchResourceShare(input: {
   if (branches.length !== 2) throw new AppError("Both branches must belong to this business", 404);
 
   if (input.userId) {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        id: input.userId,
+        businessId: input.businessId,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!targetUser) throw new AppError("The selected user is not active in this business", 400);
+
     const membership = await prisma.userBranch.findFirst({
       where: { userId: input.userId, branchId: input.targetBranchId },
       select: { id: true },
