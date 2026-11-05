@@ -57,6 +57,7 @@ export async function create(req: Request, res: Response) {
 
   const customer = await createCustomer({
   businessId,
+  branchId,
   name: input.name,
   phone: normalizedPhone,
   ...(input.email !== undefined && { email: input.email }),
