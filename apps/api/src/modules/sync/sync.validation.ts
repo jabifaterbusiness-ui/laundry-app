@@ -15,6 +15,9 @@ const customerCreatePayloadSchema = z
   .strict()
   .refine((data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource), {
     message: "Record how the customer gave WhatsApp consent",
+  })
+  .refine((data) => data.whatsappOptIn || data.whatsappOptInSource === undefined, {
+    message: "A consent source can only be recorded when WhatsApp opt-in is enabled",
   });
 
 const customerUpdateDataSchema = z
@@ -31,6 +34,10 @@ const customerUpdateDataSchema = z
   .refine(
     (data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource),
     { message: "Record how the customer gave WhatsApp consent" },
+  )
+  .refine(
+    (data) => data.whatsappOptIn === true || data.whatsappOptInSource === undefined,
+    { message: "A consent source can only be recorded when WhatsApp opt-in is enabled" },
   )
   .refine(
     (data) => Object.values(data).some((value) => value !== undefined),
