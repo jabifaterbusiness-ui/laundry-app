@@ -9,6 +9,11 @@ type MessagePayload = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
+  image?: { id?: string; mime_type?: string; caption?: string };
+  video?: { id?: string; mime_type?: string; caption?: string };
+  audio?: { id?: string; mime_type?: string };
+  document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+  sticker?: { id?: string; mime_type?: string };
   status?: string;
 };
 
@@ -18,12 +23,26 @@ function digits(value: string) {
 
 function messageText(payload: MessagePayload) {
   if (payload.text?.body) return payload.text.body;
-  if (payload.type === "image") return "Image received";
+  if (payload.type === "image") return payload.image?.caption || "Image received";
   if (payload.type === "audio" || payload.type === "voice") return "Audio message received";
-  if (payload.type === "document") return "Document received";
-  if (payload.type === "video") return "Video received";
+  if (payload.type === "document") return payload.document?.caption || payload.document?.filename || "Document received";
+  if (payload.type === "video") return payload.video?.caption || "Video received";
   if (payload.type === "location") return "Location received";
   return `${payload.type ?? "WhatsApp"} message received`;
+}
+
+function mediaDetails(payload: MessagePayload) {
+  const media = payload.type === "image" ? payload.image
+    : payload.type === "video" ? payload.video
+      : payload.type === "audio" ? payload.audio
+        : payload.type === "document" ? payload.document
+          : payload.type === "sticker" ? payload.sticker : undefined;
+  return {
+    mediaId: media?.id ?? null,
+    mediaMimeType: media?.mime_type ?? null,
+    mediaCaption: "caption" in (media ?? {}) ? media?.caption ?? null : null,
+    mediaFilename: "filename" in (media ?? {}) ? media?.filename ?? null : null,
+  };
 }
 
 async function loadBusinessEvents(businessId: string) {
@@ -66,6 +85,7 @@ export async function listWhatsAppConversations(businessId: string) {
         phone: phone ?? "",
         text: messageText(payload),
         messageType: payload.type ?? "text",
+        ...mediaDetails(payload),
         timestamp: payload.timestamp ? new Date(Number(payload.timestamp) * 1000).toISOString() : event.receivedAt.toISOString(),
         status: event.providerMessageId ? (statusByMessageId.get(event.providerMessageId) ?? (direction === "OUTBOUND" ? "SENT" : "RECEIVED")) : direction === "OUTBOUND" ? "SENT" : "RECEIVED",
       };
