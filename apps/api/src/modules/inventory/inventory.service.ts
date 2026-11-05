@@ -267,10 +267,10 @@ export async function listInventoryStock(
     const itemFilter = input.inventoryItemId
       ? Prisma.sql`AND s."inventoryItemId" = ${input.inventoryItemId}`
       : Prisma.empty;
-    const ownerBranchFilter = Prisma.sql`AND (i."ownerBranchId" IS NULL OR i."ownerBranchId" IN (${Prisma.join(itemScope.ownerBranchIds)}))`;
-    const resourceFilter = itemScope.resourceIds.length
+    const resourceCondition = itemScope.resourceIds.length
       ? Prisma.sql`OR i.id IN (${Prisma.join(itemScope.resourceIds)})`
       : Prisma.empty;
+    const ownerBranchFilter = Prisma.sql`AND (i."ownerBranchId" IS NULL OR i."ownerBranchId" IN (${Prisma.join(itemScope.ownerBranchIds)}) ${resourceCondition})`;
 
     const [stockRows, countRows] = await prisma.$transaction([
       prisma.$queryRaw<Array<{ id: string }>>(
@@ -283,7 +283,6 @@ export async function listInventoryStock(
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
             ${ownerBranchFilter}
-            ${resourceFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
           ORDER BY i.name ASC, s.id ASC
           LIMIT ${input.pageSize}
@@ -300,7 +299,6 @@ export async function listInventoryStock(
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
             ${ownerBranchFilter}
-            ${resourceFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
         `,
       ),
