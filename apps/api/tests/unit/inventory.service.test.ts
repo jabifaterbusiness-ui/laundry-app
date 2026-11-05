@@ -762,6 +762,8 @@ describe("inventory.service", () => {
       await expect(
         createInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, {
           name: "Laundry Detergent",
           unit: "LITRE",
