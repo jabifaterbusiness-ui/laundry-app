@@ -54,7 +54,7 @@ async function deliverMessage(input: {
   channel: Channel; messageType: string; destination: string; subject: string;
   body: string; dedupeKey: string;
   whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
-  whatsappTemplateVariables?: string[];
+  whatsappTemplateVariables?: string[]; whatsappTemplateCategory?: "UTILITY" | "MARKETING";
 }) {
   if (input.channel === "WHATSAPP") {
     const customer = await prisma.customer.findFirst({
@@ -110,6 +110,7 @@ async function deliverMessage(input: {
           templateName: input.whatsappTemplateName,
           language: input.whatsappTemplateLanguage,
           variableValues: input.whatsappTemplateVariables ?? [],
+          templateCategory: input.whatsappTemplateCategory ?? "UTILITY",
         })).providerMessageId;
       }
     }
@@ -291,6 +292,7 @@ type AnnouncementCustomer = { id: string; name: string; email: string | null; ph
 export async function createAnnouncement(input: {
   businessId: string; createdByUserId: string; title: string; message: string;
   channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
   let customers: AnnouncementCustomer[];
@@ -322,6 +324,8 @@ export async function createAnnouncement(input: {
     data: {
       businessId: input.businessId, createdByUserId: input.createdByUserId,
       title: input.title, message: input.message, channels: input.channels,
+      whatsappTemplateName: input.whatsappTemplateName ?? null,
+      whatsappTemplateLanguage: input.whatsappTemplateLanguage ?? null,
       audience: input.audience, status: "SENDING",
       recipients: { create: customers.map((customer) => ({ customerId: customer.id })) },
     },
@@ -342,6 +346,12 @@ export async function createAnnouncement(input: {
       channel, messageType: "ANNOUNCEMENT", destination, subject: input.title,
       body: renderTemplate(input.message, { customerName: customer.name, companyName }),
       dedupeKey: `announcement:${campaign.id}:${customer.id}:${channel}`,
+      ...(channel === "WHATSAPP" && input.whatsappTemplateName && input.whatsappTemplateLanguage ? {
+        whatsappTemplateName: input.whatsappTemplateName,
+        whatsappTemplateLanguage: input.whatsappTemplateLanguage,
+        whatsappTemplateCategory: "MARKETING" as const,
+        whatsappTemplateVariables: [customer.name, companyName, renderTemplate(input.message, { customerName: customer.name, companyName })],
+      } : {}),
     });
     return { ...result, customerId: customer.id, channel };
   }));
