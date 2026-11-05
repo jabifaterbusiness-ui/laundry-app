@@ -110,7 +110,12 @@ export function CommunicationsPage() {
     setRemindersEnabled(reminderConfigQuery.data.enabled);
     setReminderTemplateName(reminderConfigQuery.data.whatsappTemplateName ?? "");
     setReminderTemplateLanguage(reminderConfigQuery.data.whatsappTemplateLanguage ?? "");
-  }, [reminderConfigQuery.data?.thresholdMonths, reminderConfigQuery.data?.enabled]);
+  }, [
+    reminderConfigQuery.data?.thresholdMonths,
+    reminderConfigQuery.data?.enabled,
+    reminderConfigQuery.data?.whatsappTemplateName,
+    reminderConfigQuery.data?.whatsappTemplateLanguage,
+  ]);
 
   const unpickedQuery = useQuery({
     queryKey: ["communications", "unpicked-orders", activeBranchId],
