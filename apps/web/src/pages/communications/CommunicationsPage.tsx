@@ -329,7 +329,7 @@ export function CommunicationsPage() {
             setWhatsappTemplateLanguage(selected?.language ?? "");
           }}>
             <option value="">No approved template fallback</option>
-            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY").map((template) => (
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
               <option key={template.id} value={`${template.name}|${template.language}`}>
                 {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
               </option>
@@ -369,7 +369,7 @@ export function CommunicationsPage() {
         <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
         <label>Approved WhatsApp template fallback (outside the 24-hour window)
           <select value={reminderTemplateName && reminderTemplateLanguage ? `${reminderTemplateName}|${reminderTemplateLanguage}` : ""} onChange={(event) => {
-            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && `${item.name}|${item.language}` === event.target.value);
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.bodyVariableCount <= 4 && `${item.name}|${item.language}` === event.target.value);
             setReminderTemplateName(selected?.name ?? "");
             setReminderTemplateLanguage(selected?.language ?? "");
           }}>
