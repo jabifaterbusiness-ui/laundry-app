@@ -15,6 +15,8 @@ export interface CreateCustomerInput {
   email?: string;
   address?: string;
   notes?: string;
+  whatsappOptIn?: boolean;
+  whatsappOptInSource?: "CUSTOMER_VERBAL" | "CUSTOMER_WRITTEN" | "CUSTOMER_WEBSITE" | "CUSTOMER_OTHER";
   confirmDuplicate?: boolean;
 }
 
