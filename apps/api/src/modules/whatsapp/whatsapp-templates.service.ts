@@ -48,7 +48,8 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
   let nextUrl: URL | null = url;
   // WABAs with many approved templates can span multiple Graph API pages.
   // Follow only Meta Graph URLs and cap pagination to avoid unbounded requests.
-  for (let page = 0; nextUrl && page < 10; page += 1) {
+  let pagesFetched = 0;
+  while (nextUrl && pagesFetched < 10) {
     if (nextUrl.protocol !== "https:" || nextUrl.hostname !== "graph.facebook.com") {
       throw new AppError("Meta returned an unexpected template pagination URL", 502);
     }
@@ -56,6 +57,7 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     const payload = await response.json() as TemplateListResponse;
     if (!response.ok) throw new AppError(payload.error?.message ?? "Unable to load WhatsApp templates from Meta", 502);
     templatesFromMeta.push(...(payload.data ?? []));
+    pagesFetched += 1;
     if (!payload.paging?.next) {
       nextUrl = null;
     } else {
@@ -65,6 +67,9 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
         throw new AppError("Meta returned an invalid template pagination URL", 502);
       }
     }
+  }
+  if (nextUrl) {
+    throw new AppError("This WhatsApp account has more than 1,000 templates. Refine the template catalogue or contact support.", 502);
   }
   const uniqueTemplates = [...new Map(templatesFromMeta.map((template) => [template.id, template])).values()];
   return uniqueTemplates
