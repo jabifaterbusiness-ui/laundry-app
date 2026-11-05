@@ -35,6 +35,8 @@ export const statusRuleIdSchema = z.object({ id: z.string().uuid() });
 export const reminderConfigSchema = z.object({
   enabled: z.boolean(),
   thresholdMonths: z.number().int().min(1).max(36),
+  whatsappTemplateName: z.string().trim().min(1).max(512).nullable().optional(),
+  whatsappTemplateLanguage: z.string().trim().min(2).max(20).nullable().optional(),
 }).strict();
 export const reminderSendSchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1).max(500),
