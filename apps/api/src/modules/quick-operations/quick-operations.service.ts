@@ -197,6 +197,8 @@ export async function executeQuickOperation(
       const result = await transferCustomer(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
         parsed.targetCustomerId,
       );
 
@@ -232,6 +234,8 @@ export async function executeQuickOperation(
       const result = await mergeCustomer(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
         parsed.targetCustomerId,
       );
 
@@ -372,6 +376,8 @@ export async function executeQuickOperation(
       const result = await getCustomerForBusiness(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
       );
 
       if (!result) {
