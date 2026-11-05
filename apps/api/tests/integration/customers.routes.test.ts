@@ -49,6 +49,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerStatusHistory: {
       create: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     customerAccount: {
       findFirst: vi.fn(),
       upsert: vi.fn(),
@@ -194,7 +198,10 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     expect(res.status).toBe(404);
     expect(findFirst).toHaveBeenCalledWith({
-      where: { id: "11111111-1111-1111-1111-111111111111", businessId: "biz-B" },
+      where: expect.objectContaining({
+        id: "11111111-1111-1111-1111-111111111111",
+        businessId: "biz-B",
+      }),
     });
   });
 
@@ -207,7 +214,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .send({ name: "Jane", phone: "555-123-4567", businessId: "biz-B" });
 
-    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ businessId: "biz-A" }) });
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ businessId: "biz-A", ownerBranchId: "branch-A" }) });
   });
 
   it("security: a client-supplied businessId in the query string does not change which business is queried", async () => {
