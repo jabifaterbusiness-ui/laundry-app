@@ -94,6 +94,7 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
 
 export async function sendApprovedWhatsAppTemplate(input: {
   businessId: string; customerId?: string | null; phone: string; templateName: string; language: string; variables: string[];
+  requireInboundConversation?: boolean;
 }) {
   const connection = await getConnection(input.businessId);
   let recipient = normalizeWhatsAppRecipient(input.phone);
@@ -101,18 +102,26 @@ export async function sendApprovedWhatsAppTemplate(input: {
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { id: true, phone: true },
+      select: { id: true, phone: true, whatsappOptIn: true },
     });
     if (!customer) throw new AppError("Customer not found in this business", 404);
     recipient = normalizeWhatsAppRecipient(customer.phone);
     customerId = customer.id;
+    if (input.requireInboundConversation === false && !customer.whatsappOptIn) {
+      throw new AppError("Customer has not explicitly opted in to business-initiated WhatsApp messages", 422);
+    }
   }
-  const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
-    where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
-    select: { id: true },
-  });
-  if (!priorInbound) {
-    throw new AppError("A customer-initiated WhatsApp conversation is required before sending a template from this inbox.", 422);
+  if (input.requireInboundConversation === false && !customerId) {
+    throw new AppError("A saved customer with recorded WhatsApp consent is required for automated template delivery", 422);
+  }
+  if (input.requireInboundConversation !== false) {
+    const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
+      where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+      select: { id: true },
+    });
+    if (!priorInbound) {
+      throw new AppError("A customer-initiated WhatsApp conversation is required before sending a template from this inbox.", 422);
+    }
   }
 
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
@@ -152,4 +161,26 @@ export async function sendApprovedWhatsAppTemplate(input: {
     logger.warn({ businessId: input.businessId, providerMessageId }, "WhatsApp template sent but inbox history could not be persisted");
   }
   return { providerMessageId, customerId, phone: recipient, template: template.name, status: "SENT" };
+}
+
+
+export async function sendAutomatedWhatsAppTemplate(input: {
+  businessId: string; customerId: string; phone: string; templateName: string; language: string; variableValues: string[];
+}) {
+  const templates = await listApprovedWhatsAppTemplates(input.businessId);
+  const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
+  if (!template) throw new AppError("The configured WhatsApp notification template is not approved or is no longer available", 422);
+  if (template.bodyVariableCount > input.variableValues.length) {
+    throw new AppError("The configured WhatsApp template needs more body variables than this notification can provide", 422);
+  }
+  const variables = input.variableValues.slice(0, template.bodyVariableCount);
+  return sendApprovedWhatsAppTemplate({
+    businessId: input.businessId,
+    customerId: input.customerId,
+    phone: input.phone,
+    templateName: input.templateName,
+    language: input.language,
+    variables,
+    requireInboundConversation: false,
+  });
 }
