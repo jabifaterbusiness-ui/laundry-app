@@ -69,12 +69,12 @@ describe("approved WhatsApp template pagination", () => {
   });
 
   it("sends an approved notification template without requiring an inbound message when consent is recorded", async () => {
-    const approved = page([
+    const approvedPage = () => page([
       { id: "template-1", name: "order_update", language: "en", status: "APPROVED", category: "UTILITY", components: [{ type: "BODY", text: "Hello {{1}}, order {{2}} is updated" }] },
     ]);
     mocks.fetch
-      .mockResolvedValueOnce(approved)
-      .mockResolvedValueOnce(approved)
+      .mockImplementationOnce(async () => approvedPage())
+      .mockImplementationOnce(async () => approvedPage())
       .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [{ id: "wamid-template-1" }] }), { status: 200 }));
     const result = await sendAutomatedWhatsAppTemplate({
       businessId: "business-1", customerId: "customer-1", phone: "2348012345678",
