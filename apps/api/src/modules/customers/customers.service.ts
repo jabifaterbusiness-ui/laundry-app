@@ -317,263 +317,115 @@ export async function setCustomerLifecycleStatus(
  * Customer records themselves are not deleted or merged here. Full duplicate
  * account consolidation belongs to MA.
  */
-export async function mergeCustomer(
+async function getEditableCustomerForBranch(
+  tx: CustomerDb,
   customerId: string,
   businessId: string,
-  targetCustomerId: string,
+  branchId: string,
+  userId: string,
+  notFoundMessage: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.findFirst({
-      where: {
-        id: customerId,
-        businessId,
-      },
-      select: {
-        id: true,
-        name: true,
-        businessId: true,
-        isActive: true,
-      },
-    });
-
-    if (!customer) {
-      throw new AppError("Customer not found", 404);
-    }
-
-    if (customer.id === targetCustomerId) {
-      throw new AppError(
-        "Customer cannot be merged into the same customer",
-        422,
-      );
-    }
-
-    const targetCustomer = await tx.customer.findFirst({
-      where: {
-        id: targetCustomerId,
-        businessId,
-      },
-      select: {
-        id: true,
-        name: true,
-        businessId: true,
-        isActive: true,
-      },
-    });
-
-    if (!targetCustomer) {
-      throw new AppError("Target customer not found", 404);
-    }
-
-    const orders = await tx.order.findMany({
-      where: {
-        businessId,
-        customerId: customer.id,
-      },
-      select: {
-        id: true,
-        orderNumber: true,
-        branchId: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
-
-    if (orders.length > 0) {
-      await tx.order.updateMany({
-        where: {
-          businessId,
-          customerId: customer.id,
-        },
-        data: {
-          customerId: targetCustomer.id,
-        },
-      });
-    }
-
-    const sourceAccount = await tx.customerAccount.findFirst({
-      where: {
-        customerId: customer.id,
-        businessId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    const targetAccount = await tx.customerAccount.findFirst({
-      where: {
-        customerId: targetCustomer.id,
-        businessId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (sourceAccount && targetAccount) {
-      await tx.customerAccountTransaction.updateMany({
-        where: {
-          businessId,
-          customerAccountId: sourceAccount.id,
-        },
-        data: {
-          customerAccountId: targetAccount.id,
-        },
-      });
-
-      await tx.customerAccount.delete({
-        where: {
-          id: sourceAccount.id,
-        },
-      });
-    } else if (sourceAccount && !targetAccount) {
-      await tx.customerAccount.update({
-        where: {
-          id: sourceAccount.id,
-        },
-        data: {
-          customerId: targetCustomer.id,
-        },
-      });
-    }
-
-    await tx.customer.updateMany({
-      where: {
-        id: customer.id,
-        businessId,
-      },
-      data: {
-        isActive: false,
-      },
-    });
-
-    return {
-      customer,
-      targetCustomer,
-      mergedOrderCount: orders.length,
-      mergedOrders: orders,
-      sourceDeactivated: true,
-    };
-  });
+  const customer = await getCustomerForBusiness(customerId, businessId, branchId, userId, tx);
+  if (!customer) throw new AppError(notFoundMessage, 404);
+  await assertBranchResourceWriteAccess({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+    ownerBranchId: customer.ownerBranchId,
+    resourceId: customer.id,
+  }, tx);
+  return customer;
 }
 
+async function getEditableCustomerAccountForBranch(
+  tx: CustomerDb,
+  customerId: string,
+  businessId: string,
+  branchId: string,
+  userId: string,
+) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMER_ACCOUNTS",
+  }, tx);
+  const account = await tx.customerAccount.findFirst({
+    where: {
+      customerId,
+      businessId,
+      OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }],
+    },
+    select: { id: true, branchId: true },
+  });
+  if (account) {
+    await assertBranchResourceWriteAccess({
+      businessId,
+      branchId,
+      userId,
+      resourceType: "CUSTOMER_ACCOUNTS",
+      ownerBranchId: account.branchId,
+      resourceId: account.id,
+    }, tx);
+  }
+  return account;
+}
+
+/**
+ * Transfers the selected branch's orders and customer-account history only.
+ * Customer visibility and edit access are checked for both records first;
+ * records belonging to other branches remain untouched.
+ */
 export async function transferCustomer(
   customerId: string,
   businessId: string,
+  branchId: string,
+  userId: string,
   targetCustomerId: string,
 ) {
   return prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.findFirst({
-      where: {
-        id: customerId,
-        businessId,
-      },
-      select: {
-        id: true,
-        name: true,
-        businessId: true,
-      },
-    });
-
-    if (!customer) {
-      throw new AppError("Customer not found", 404);
-    }
-
+    const customer = await getEditableCustomerForBranch(
+      tx, customerId, businessId, branchId, userId, "Customer not found",
+    );
     if (customer.id === targetCustomerId) {
-      throw new AppError(
-        "Customer cannot be transferred to the same customer",
-        422,
-      );
+      throw new AppError("Customer cannot be transferred to the same customer", 422);
     }
-
-    const targetCustomer = await tx.customer.findFirst({
-      where: {
-        id: targetCustomerId,
-        businessId,
-      },
-      select: {
-        id: true,
-        name: true,
-        businessId: true,
-      },
-    });
-
-    if (!targetCustomer) {
-      throw new AppError("Target customer not found", 404);
-    }
+    const targetCustomer = await getEditableCustomerForBranch(
+      tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
+    );
 
     const orders = await tx.order.findMany({
-      where: {
-        businessId,
-        customerId: customer.id,
-      },
-      select: {
-        id: true,
-        orderNumber: true,
-        branchId: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
+      where: { businessId, branchId, customerId: customer.id },
+      select: { id: true, orderNumber: true, branchId: true },
+      orderBy: { createdAt: "asc" },
     });
-
     if (orders.length > 0) {
       await tx.order.updateMany({
-        where: {
-          businessId,
-          customerId: customer.id,
-        },
-        data: {
-          customerId: targetCustomer.id,
-        },
+        where: { businessId, branchId, customerId: customer.id },
+        data: { customerId: targetCustomer.id },
       });
     }
 
-    const sourceAccount = await tx.customerAccount.findFirst({
-      where: {
-        customerId: customer.id,
-        businessId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    const targetAccount = await tx.customerAccount.findFirst({
-      where: {
-        customerId: targetCustomer.id,
-        businessId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
+    const sourceAccount = await getEditableCustomerAccountForBranch(
+      tx, customer.id, businessId, branchId, userId,
+    );
+    const targetAccount = await getEditableCustomerAccountForBranch(
+      tx, targetCustomer.id, businessId, branchId, userId,
+    );
+    if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
+      throw new AppError("Customer accounts belong to different branches and cannot be transferred together", 409);
+    }
     if (sourceAccount && targetAccount) {
       await tx.customerAccountTransaction.updateMany({
-        where: {
-          businessId,
-          customerAccountId: sourceAccount.id,
-        },
-        data: {
-          customerAccountId: targetAccount.id,
-        },
+        where: { businessId, customerAccountId: sourceAccount.id },
+        data: { customerAccountId: targetAccount.id },
       });
-
-      await tx.customerAccount.delete({
-        where: {
-          id: sourceAccount.id,
-        },
-      });
+      await tx.customerAccount.delete({ where: { id: sourceAccount.id } });
     } else if (sourceAccount && !targetAccount) {
       await tx.customerAccount.update({
-        where: {
-          id: sourceAccount.id,
-        },
-        data: {
-          customerId: targetCustomer.id,
-        },
+        where: { id: sourceAccount.id },
+        data: { customerId: targetCustomer.id },
       });
     }
 
@@ -582,6 +434,107 @@ export async function transferCustomer(
       targetCustomer,
       transferredOrderCount: orders.length,
       transferredOrders: orders,
+    };
+  });
+}
+
+/**
+ * Merges records in the selected branch without rewriting other branches'
+ * order or account history. The source customer is deactivated only when it
+ * is owned by this branch and no other branch still references or shares it.
+ */
+export async function mergeCustomer(
+  customerId: string,
+  businessId: string,
+  branchId: string,
+  userId: string,
+  targetCustomerId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const customer = await getEditableCustomerForBranch(
+      tx, customerId, businessId, branchId, userId, "Customer not found",
+    );
+    if (customer.id === targetCustomerId) {
+      throw new AppError("Customer cannot be merged into the same customer", 422);
+    }
+    const targetCustomer = await getEditableCustomerForBranch(
+      tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
+    );
+
+    const orders = await tx.order.findMany({
+      where: { businessId, branchId, customerId: customer.id },
+      select: { id: true, orderNumber: true, branchId: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (orders.length > 0) {
+      await tx.order.updateMany({
+        where: { businessId, branchId, customerId: customer.id },
+        data: { customerId: targetCustomer.id },
+      });
+    }
+
+    const sourceAccount = await getEditableCustomerAccountForBranch(
+      tx, customer.id, businessId, branchId, userId,
+    );
+    const targetAccount = await getEditableCustomerAccountForBranch(
+      tx, targetCustomer.id, businessId, branchId, userId,
+    );
+    if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
+      throw new AppError("Customer accounts belong to different branches and cannot be merged together", 409);
+    }
+    if (sourceAccount && targetAccount) {
+      await tx.customerAccountTransaction.updateMany({
+        where: { businessId, customerAccountId: sourceAccount.id },
+        data: { customerAccountId: targetAccount.id },
+      });
+      await tx.customerAccount.delete({ where: { id: sourceAccount.id } });
+    } else if (sourceAccount && !targetAccount) {
+      await tx.customerAccount.update({
+        where: { id: sourceAccount.id },
+        data: { customerId: targetCustomer.id },
+      });
+    }
+
+    const [otherBranchOrder, otherBranchAccount, externalShare] = await Promise.all([
+      tx.order.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.customerAccount.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      customer.ownerBranchId === branchId
+        ? tx.branchResourceShare.findFirst({
+            where: {
+              businessId,
+              ownerBranchId: branchId,
+              targetBranchId: { not: branchId },
+              resourceType: "CUSTOMERS",
+              OR: [{ resourceId: null }, { resourceId: customer.id }],
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const sourceDeactivated = customer.ownerBranchId === branchId &&
+      !otherBranchOrder && !otherBranchAccount && !externalShare &&
+      sourceAccount?.branchId !== null;
+
+    if (sourceDeactivated) {
+      await tx.customer.updateMany({
+        where: { id: customer.id, businessId, ownerBranchId: branchId },
+        data: { isActive: false },
+      });
+    }
+
+    return {
+      customer,
+      targetCustomer,
+      mergedOrderCount: orders.length,
+      mergedOrders: orders,
+      sourceDeactivated,
     };
   });
 }
