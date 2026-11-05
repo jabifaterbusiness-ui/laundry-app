@@ -80,8 +80,21 @@ export async function getWhatsAppMediaPreview(businessId: string, mediaId: strin
   const mediaUrl = isMetaMediaUrl(metadata.url);
   if (!mediaUrl) throw new AppError("Meta returned an unexpected media download URL", 502);
 
-  const mediaResponse = await fetch(mediaUrl, { headers: { Authorization: `Bearer ${token}` } });
+  let mediaResponse: Response;
+  try {
+    // Do not follow redirects from the trusted CDN URL to an unverified host.
+    mediaResponse = await fetch(mediaUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+      redirect: "error",
+    });
+  } catch {
+    throw new AppError("Meta media URL could not be fetched safely", 502);
+  }
   if (!mediaResponse.ok) throw new AppError("WhatsApp media download failed", 502);
+  const contentLength = Number(mediaResponse.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_MEDIA_BYTES) {
+    throw new AppError("This WhatsApp attachment is too large to preview (10 MB maximum)", 413);
+  }
   const contentType = (metadata.mime_type ?? mediaResponse.headers.get("content-type") ?? "")
     .split(";")[0]?.trim().toLowerCase();
   if (!contentType || !ALLOWED_MEDIA_TYPES.has(contentType)) {
