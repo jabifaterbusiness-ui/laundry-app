@@ -61,6 +61,7 @@ describe("compensation service", () => {
 
     const result = await createCompensation({
       businessId: "biz-1",
+      branchId: "branch-1",
       employeeId: "employee-1",
       basicSalary: 100000,
       effectiveFrom: new Date("2026-09-01"),
@@ -69,6 +70,9 @@ describe("compensation service", () => {
 
     expect(result.id).toBe("comp-1");
     expect(tx.employeeCompensation.create).toHaveBeenCalled();
+    expect(tx.employeeCompensation.findFirst).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: expect.objectContaining({ businessId: "biz-1", branchId: "branch-1", employeeId: "employee-1" }),
+    }));
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "employee_compensation.created",
@@ -163,6 +167,7 @@ describe("compensation service", () => {
 
     await createCompensation({
       businessId: "biz-1",
+      branchId: "branch-1",
       employeeId: "employee-1",
       basicSalary: 150000,
       effectiveFrom: new Date("2026-09-01"),
@@ -194,6 +199,7 @@ describe("compensation service", () => {
         where: {
           id: "comp-1",
           businessId: "biz-1",
+          OR: [{ branchId: "branch-1" }, { branchId: null }],
         },
       }),
     );
@@ -205,6 +211,7 @@ describe("compensation service", () => {
     await expect(
       getCompensation({
         businessId: "biz-1",
+        branchId: "branch-1",
         id: "comp-other",
       }),
     ).rejects.toMatchObject({
@@ -218,6 +225,7 @@ describe("compensation service", () => {
 
     await listCompensation({
       businessId: "biz-1",
+      branchId: "branch-1",
       employeeId: "employee-1",
     });
 
@@ -225,6 +233,7 @@ describe("compensation service", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-1",
+          OR: [{ branchId: "branch-1" }, { branchId: null }],
           employeeId: "employee-1",
         },
       }),
@@ -239,6 +248,7 @@ describe("compensation service", () => {
 
     const result = await getCurrentCompensation({
       businessId: "biz-1",
+      branchId: "branch-1",
       employeeId: "employee-1",
       effectiveDate: new Date("2026-08-15"),
     });
