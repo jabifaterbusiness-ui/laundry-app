@@ -5,8 +5,10 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     inventoryItem: {
       update: vi.fn(),
+      updateMany: vi.fn(),
       create: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -83,6 +85,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -93,6 +96,7 @@ describe("inventory.service", () => {
         id: "movement-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 5,
         type: "RECEIPT",
@@ -119,6 +123,7 @@ describe("inventory.service", () => {
       const result = await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, input);
 
       expect(result).toEqual({
@@ -134,6 +139,7 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: 5,
           type: "RECEIPT",
@@ -174,6 +180,7 @@ describe("inventory.service", () => {
       const result = await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, {
         inventoryItemId: "item-1",
         quantity: 4,
@@ -209,6 +216,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 4,
@@ -231,6 +239,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-from-biz-B",
           quantity: 5,
@@ -297,6 +306,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 5,
@@ -327,6 +337,7 @@ describe("inventory.service", () => {
         id: "stock-2",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-2",
         quantity: 0,
       });
@@ -344,6 +355,7 @@ describe("inventory.service", () => {
       await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, {
         inventoryItemId: "item-2",
         quantity: 20,
@@ -361,6 +373,7 @@ describe("inventory.service", () => {
         create: {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
           inventoryItemId: "item-2",
           quantity: 0,
         },
@@ -385,6 +398,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -395,6 +409,7 @@ describe("inventory.service", () => {
         id: "movement-adjustment-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 5,
         type: "ADJUSTMENT",
@@ -417,6 +432,7 @@ describe("inventory.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         },
         {
           inventoryItemId: "item-1",
@@ -442,6 +458,7 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: 5,
           type: "ADJUSTMENT",
@@ -466,6 +483,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -476,6 +494,7 @@ describe("inventory.service", () => {
         id: "movement-adjustment-2",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: -3,
         type: "ADJUSTMENT",
@@ -498,6 +517,7 @@ describe("inventory.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         },
         {
           inventoryItemId: "item-1",
@@ -518,6 +538,7 @@ describe("inventory.service", () => {
         data: {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
           inventoryItemId: "item-1",
           quantity: -3,
           type: "ADJUSTMENT",
@@ -545,6 +566,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 3,
       });
