@@ -56,6 +56,8 @@ export async function create(req: Request, res: Response) {
   ...(input.email !== undefined && { email: input.email }),
   ...(input.address !== undefined && { address: input.address }),
   ...(input.notes !== undefined && { notes: input.notes }),
+  whatsappOptIn: input.whatsappOptIn,
+  ...(input.whatsappOptInSource !== undefined && { whatsappOptInSource: input.whatsappOptInSource }),
 });
 
   await recordAuditEvent({
