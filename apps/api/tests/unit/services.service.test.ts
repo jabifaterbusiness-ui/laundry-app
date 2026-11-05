@@ -258,6 +258,7 @@ describe("setServiceActiveStatus", () => {
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValue({
       id: "service-1",
+      ownerBranchId: "branch-A",
       isActive: false,
     } as never);
 
@@ -287,6 +288,7 @@ describe("setServiceActiveStatus", () => {
     updateMany.mockResolvedValue({ count: 1 });
     findFirst.mockResolvedValue({
       id: "service-1",
+      ownerBranchId: "branch-A",
       isActive: true,
     } as never);
 
