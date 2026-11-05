@@ -49,7 +49,7 @@ export async function createBranchResourceShareController(req: Request, res: Res
 export async function deleteBranchResourceShareController(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id } = branchResourceShareIdSchema.parse(req.params);
-  await deleteBranchResourceShare({ businessId, id });
+  await deleteBranchResourceShare({ businessId, id, actorUserId: req.user!.id });
   await recordAuditEvent({
     action: "branch.resource_share.deleted",
     entityType: "BranchResourceShare",
