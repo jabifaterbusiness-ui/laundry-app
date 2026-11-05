@@ -374,7 +374,7 @@ export function CommunicationsPage() {
             setReminderTemplateLanguage(selected?.language ?? "");
           }}>
             <option value="">No approved template fallback</option>
-            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY").map((template) => (
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
               <option key={template.id} value={`${template.name}|${template.language}`}>
                 {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
               </option>
