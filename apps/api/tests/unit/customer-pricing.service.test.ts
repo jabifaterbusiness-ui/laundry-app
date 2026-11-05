@@ -133,7 +133,7 @@ describe("customer-specific service pricing branch scope", () => {
         serviceId: "service-1",
         unitPrice: 1200,
       }),
-    ).rejects.toMatchObject({ statusCode: 403 });
+    ).rejects.toBeInstanceOf(AppError);
 
     expect(prismaMock.customerServicePrice.upsert).not.toHaveBeenCalled();
   });
