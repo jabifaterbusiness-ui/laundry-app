@@ -189,18 +189,21 @@ export async function updateCustomer(
   data: UpdateCustomerData,
   db: CustomerDb = prisma,
 ) {
+  const existingConsent = (data.whatsappOptIn !== undefined)
+    ? await db.customer.findFirst({ where: { id, businessId }, select: { whatsappOptIn: true } })
+    : null;
   const patch: Prisma.CustomerUpdateManyMutationInput = {};
   if (data.name !== undefined) patch.name = data.name;
   if (data.phone !== undefined) patch.phone = data.phone;
   if (data.email !== undefined) patch.email = data.email;
   if (data.address !== undefined) patch.address = data.address;
   if (data.notes !== undefined) patch.notes = data.notes;
-  if (data.whatsappOptIn === true) {
+  if (data.whatsappOptIn === true && !existingConsent?.whatsappOptIn) {
     patch.whatsappOptIn = true;
     patch.whatsappOptInAt = new Date();
     patch.whatsappOptInSource = data.whatsappOptInSource ?? null;
     patch.whatsappOptOutAt = null;
-  } else if (data.whatsappOptIn === false) {
+  } else if (data.whatsappOptIn === false && existingConsent?.whatsappOptIn) {
     patch.whatsappOptIn = false;
     patch.whatsappOptOutAt = new Date();
   }
