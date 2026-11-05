@@ -1095,6 +1095,7 @@ describe("quick-operations.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-A",
         },
         {
           inventoryItemId: "55555555-5555-4555-8555-555555555555",
@@ -1165,6 +1166,7 @@ describe("quick-operations.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-A",
         },
         {
           inventoryItemId: "88888888-8888-4888-8888-888888888888",
