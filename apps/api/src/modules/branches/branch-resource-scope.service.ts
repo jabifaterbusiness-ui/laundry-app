@@ -4,7 +4,7 @@ import { AppError } from "../../middleware/error-handler.js";
 
 export type BranchResourceType =
   | "CUSTOMERS" | "SERVICES" | "CUSTOMER_PRICING" | "CUSTOMER_ACCOUNTS"
-  | "DISCOUNTS" | "TAX_RULES" | "INVENTORY" | "PAYROLL" | "REPORTS";
+  | "DISCOUNTS" | "TAX_RULES" | "INVENTORY";
 
 export interface BranchResourceScope {
   ownerBranchIds: string[];
