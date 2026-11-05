@@ -64,6 +64,11 @@ describe("createCustomerSchema", () => {
     expect(result).not.toHaveProperty("businessId");
   });
 
+  it("requires a recorded consent source when WhatsApp opt-in is enabled", () => {
+    expect(() => createCustomerSchema.parse({ ...valid, whatsappOptIn: true })).toThrow();
+    expect(() => createCustomerSchema.parse({ ...valid, whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN" })).not.toThrow();
+  });
+
   it("defaults confirmDuplicate to false", () => {
     const result = createCustomerSchema.parse(valid);
     expect(result.confirmDuplicate).toBe(false);
@@ -77,6 +82,11 @@ describe("updateCustomerSchema", () => {
 
   it("accepts a single-field patch", () => {
     expect(() => updateCustomerSchema.parse({ notes: "called back" })).not.toThrow();
+  });
+
+  it("requires a consent source when opting in", () => {
+    expect(() => updateCustomerSchema.parse({ whatsappOptIn: true })).toThrow();
+    expect(() => updateCustomerSchema.parse({ whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_VERBAL" })).not.toThrow();
   });
 
   it("does not accept isActive - status changes go through activate/deactivate only", () => {
