@@ -1563,6 +1563,11 @@ describe("Quick Operations routes - SC", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
     });
 
@@ -1706,7 +1711,7 @@ describe("Quick Operations routes - TC", () => {
           operationCode: "TC",
           operationName: "Transfer Customer",
           targetCustomerId: CUSTOMER_B,
-          transferredOrderCount: 2,
+          transferredOrderCount: 1,
           transferredOrderIds: transferredOrders.map((order) => order.id),
           transferredOrderNumbers: ["00042", "00043"],
         }),
@@ -1816,12 +1821,14 @@ describe("Quick Operations routes - MA", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never)
       .mockResolvedValueOnce({
         id: CUSTOMER_B,
         name: "Customer B",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never);
 
