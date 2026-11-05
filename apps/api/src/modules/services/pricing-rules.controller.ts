@@ -32,7 +32,7 @@ export async function createAdjustment(req: Request, res: Response) {
     ...(input.startsAt !== undefined ? { startsAt: input.startsAt } : {}),
     ...(input.endsAt !== undefined ? { endsAt: input.endsAt } : {}),
   });
-  await recordAuditEvent({ action: "pricing.adjustment_created", entityType: "PriceAdjustment", entityId: result.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  await recordAuditEvent({ action: "pricing.adjustment_created", entityType: "PriceAdjustment", entityId: result.id, businessId: id, branchId: branch, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(201).json(result);
 }
 
@@ -47,6 +47,7 @@ export async function updateAdjustmentStatus(req: Request, res: Response) {
     entityType: "PriceAdjustment",
     entityId: ruleId,
     businessId: id,
+    branchId: branch,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
   });
@@ -58,7 +59,7 @@ export async function removeAdjustment(req: Request, res: Response) {
   const branch = branchId(req);
   const { id: ruleId } = pricingRuleIdSchema.parse(req.params);
   await deletePriceAdjustment(ruleId, id, branch, req.user!.id);
-  await recordAuditEvent({ action: "pricing.adjustment_deleted", entityType: "PriceAdjustment", entityId: ruleId, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  await recordAuditEvent({ action: "pricing.adjustment_deleted", entityType: "PriceAdjustment", entityId: ruleId, businessId: id, branchId: branch, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(204).send();
 }
 
@@ -67,7 +68,7 @@ export async function createTax(req: Request, res: Response) {
   const branch = branchId(req);
   const input = createTaxRuleSchema.parse(req.body);
   const result = await createTaxRule({ businessId: id, branchId: branch, ...input });
-  await recordAuditEvent({ action: "pricing.tax_created", entityType: "TaxRule", entityId: result.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  await recordAuditEvent({ action: "pricing.tax_created", entityType: "TaxRule", entityId: result.id, businessId: id, branchId: branch, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(201).json(result);
 }
 
@@ -76,6 +77,6 @@ export async function removeTax(req: Request, res: Response) {
   const branch = branchId(req);
   const { id: ruleId } = pricingRuleIdSchema.parse(req.params);
   await deleteTaxRule(ruleId, id, branch, req.user!.id);
-  await recordAuditEvent({ action: "pricing.tax_deleted", entityType: "TaxRule", entityId: ruleId, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  await recordAuditEvent({ action: "pricing.tax_deleted", entityType: "TaxRule", entityId: ruleId, businessId: id, branchId: branch, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
   res.status(204).send();
 }
