@@ -1645,11 +1645,6 @@ describe("Quick Operations routes - TC", () => {
         orderNumber: "00042",
         branchId: BRANCH_A,
       },
-      {
-        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        orderNumber: "00043",
-        branchId: BRANCH_B,
-      },
     ];
 
     orderFindMany.mockResolvedValue(transferredOrders as never);
@@ -1835,11 +1830,6 @@ describe("Quick Operations routes - MA", () => {
         id: ORDER_A,
         orderNumber: "00042",
         branchId: BRANCH_A,
-      },
-      {
-        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        orderNumber: "00043",
-        branchId: BRANCH_B,
       },
     ];
 
