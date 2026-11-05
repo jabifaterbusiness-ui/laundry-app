@@ -835,7 +835,7 @@ describe("Inventory routes - branch-scoped stock", () => {
       .set("Authorization", `Bearer ${OWNER_A}`);
 
     expect(res.status).toBe(400);
-    expect(userBranchFindUnique).toHaveBeenCalled();
+    expect(userBranchFindUnique).not.toHaveBeenCalled();
   });
 
   it("rejects stock requests for a branch the user cannot access", async () => {
