@@ -178,7 +178,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
     findMany.mockResolvedValue([{ id: "cust-1", businessId: "biz-A", name: "Jane" }] as never);
     count.mockResolvedValue(1);
 
-    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`);
+    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
