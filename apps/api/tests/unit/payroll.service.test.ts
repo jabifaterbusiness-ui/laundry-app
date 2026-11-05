@@ -616,6 +616,7 @@ describe("payroll.service", () => {
       expect(employeeCompensationFindFirst).toHaveBeenCalledWith({
         where: {
           businessId: "business-1",
+          branchId: "branch-1",
           employeeId: "employee-1",
           effectiveFrom: {
             lte: period.periodEnd,
