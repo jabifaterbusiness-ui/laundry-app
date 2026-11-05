@@ -230,7 +230,7 @@ describe("createCustomer", () => {
   it("records explicit consent source and timestamp only when the customer opts in", async () => {
     create.mockResolvedValue({ id: "cust-2" } as never);
     await createCustomer({
-      businessId: "biz-1", name: "Ada", phone: "2348012345678",
+      businessId: "biz-1", branchId: "branch-A", name: "Ada", phone: "2348012345678",
       whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
     expect(create).toHaveBeenCalledWith({
@@ -348,6 +348,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     name: "Customer A",
     businessId: "biz-A",
+    ownerBranchId: "branch-A",
     isActive: true,
   };
 
@@ -355,6 +356,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     name: "Customer B",
     businessId: "biz-A",
+    ownerBranchId: "branch-A",
     isActive: true,
   };
 
@@ -363,11 +365,6 @@ describe("mergeCustomer - duplicate account merge", () => {
       id: "11111111-1111-4111-8111-111111111111",
       orderNumber: "00042",
       branchId: "branch-A",
-    },
-    {
-      id: "22222222-2222-4222-8222-222222222222",
-      orderNumber: "00043",
-      branchId: "branch-B",
     },
   ];
 
@@ -383,6 +380,8 @@ describe("mergeCustomer - duplicate account merge", () => {
     const result = await mergeCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -391,6 +390,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: "branch-A",
         customerId: sourceCustomer.id,
       },
       select: {
@@ -406,6 +406,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: "branch-A",
         customerId: sourceCustomer.id,
       },
       data: {
@@ -417,6 +418,7 @@ describe("mergeCustomer - duplicate account merge", () => {
       where: {
         id: sourceCustomer.id,
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
       },
       data: {
         isActive: false,
@@ -443,6 +445,8 @@ describe("mergeCustomer - duplicate account merge", () => {
     const result = await mergeCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -453,6 +457,7 @@ describe("mergeCustomer - duplicate account merge", () => {
       where: {
         id: sourceCustomer.id,
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
       },
       data: {
         isActive: false,
@@ -485,6 +490,8 @@ describe("mergeCustomer - duplicate account merge", () => {
       mergeCustomer(
         sourceCustomer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       ),
     ).rejects.toThrow("Target customer not found");
@@ -501,6 +508,8 @@ describe("mergeCustomer - duplicate account merge", () => {
       mergeCustomer(
         sourceCustomer.id,
         "biz-B",
+        "branch-A",
+        "user-A",
         targetCustomer.id,
       ),
     ).rejects.toThrow("Customer not found");
@@ -526,6 +535,8 @@ describe("mergeCustomer - duplicate account merge", () => {
     await mergeCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -566,6 +577,8 @@ describe("mergeCustomer - duplicate account merge", () => {
     await mergeCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -594,6 +607,8 @@ describe("mergeCustomer - duplicate account merge", () => {
     await mergeCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -604,6 +619,7 @@ describe("mergeCustomer - duplicate account merge", () => {
       where: {
         id: sourceCustomer.id,
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
       },
       data: {
         isActive: false,
@@ -631,11 +647,6 @@ describe("transferCustomer - full account transfer", () => {
       orderNumber: "00042",
       branchId: "branch-A",
     },
-    {
-      id: "22222222-2222-4222-8222-222222222222",
-      orderNumber: "00043",
-      branchId: "branch-B",
-    },
   ];
 
   it("moves every order belonging to Customer A to Customer B in one transaction", async () => {
@@ -649,6 +660,8 @@ describe("transferCustomer - full account transfer", () => {
     const result = await transferCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -657,6 +670,7 @@ describe("transferCustomer - full account transfer", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: "branch-A",
         customerId: sourceCustomer.id,
       },
       select: {
@@ -672,6 +686,7 @@ describe("transferCustomer - full account transfer", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: "branch-A",
         customerId: sourceCustomer.id,
       },
       data: {
@@ -697,6 +712,8 @@ describe("transferCustomer - full account transfer", () => {
     const result = await transferCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -710,7 +727,7 @@ describe("transferCustomer - full account transfer", () => {
     findFirst.mockResolvedValueOnce(sourceCustomer as never);
 
     await expect(
-      transferCustomer(sourceCustomer.id, "biz-A", sourceCustomer.id),
+      transferCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", sourceCustomer.id),
     ).rejects.toThrow("Customer cannot be transferred to the same customer");
 
     expect(orderFindMany).not.toHaveBeenCalled();
@@ -726,6 +743,8 @@ describe("transferCustomer - full account transfer", () => {
       transferCustomer(
         sourceCustomer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       ),
     ).rejects.toThrow("Target customer not found");
@@ -741,6 +760,8 @@ describe("transferCustomer - full account transfer", () => {
       transferCustomer(
         sourceCustomer.id,
         "biz-B",
+        "branch-A",
+        "user-A",
         targetCustomer.id,
       ),
     ).rejects.toThrow("Customer not found");
@@ -764,6 +785,8 @@ describe("transferCustomer - full account transfer", () => {
     await transferCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -803,6 +826,8 @@ describe("transferCustomer - full account transfer", () => {
     await transferCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
@@ -830,6 +855,8 @@ describe("transferCustomer - full account transfer", () => {
     await transferCustomer(
       sourceCustomer.id,
       "biz-A",
+      "branch-A",
+      "user-A",
       targetCustomer.id,
     );
 
