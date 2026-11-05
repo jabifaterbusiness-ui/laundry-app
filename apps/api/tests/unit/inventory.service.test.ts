@@ -255,6 +255,11 @@ describe("inventory.service", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
       expect(prismaMock.branch.findFirst).not.toHaveBeenCalled();
@@ -1431,13 +1436,28 @@ describe("updateInventoryItem", () => {
         .mockResolvedValueOnce({
           id: "item-1",
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: "Old description",
           unit: "LITRE",
           lowStockThreshold: 10,
           isActive: true,
         })
-        .mockResolvedValueOnce(null);
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: "item-1",
+          businessId: "biz-A",
+          ownerBranchId: "branch-A",
+          name: "Fabric Softener",
+          sku: "FAB-002",
+          category: "Care",
+          storageLocation: "Shelf B2",
+          description: "New description",
+          unit: "BOTTLE",
+          reorderQuantity: 12,
+          lowStockThreshold: 5,
+          isActive: false,
+        } as never);
       prismaMock.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
       prismaMock.inventoryItem.update.mockResolvedValue({
         id: "item-1",
@@ -1521,7 +1541,7 @@ describe("updateInventoryItem", () => {
           businessId: "biz-A",
         },
       });
-      expect(prismaMock.inventoryItem.update).not.toHaveBeenCalled();
+      expect(prismaMock.inventoryItem.updateMany).not.toHaveBeenCalled();
     });
 
     it("rejects updating an inventory item to a duplicate name within the same business", async () => {
