@@ -4,6 +4,7 @@ export type CommunicationChannel = "WHATSAPP" | "EMAIL";
 export interface AnnouncementInput {
   title: string; message: string; channels: CommunicationChannel[];
   audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
 }
 export interface CustomerGroup {
   id: string; name: string; description: string | null;
