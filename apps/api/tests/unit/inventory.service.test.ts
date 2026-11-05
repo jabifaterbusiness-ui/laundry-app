@@ -817,6 +817,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -828,6 +833,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -859,10 +869,17 @@ describe("inventory.service", () => {
       where: {
         businessId: "business-1",
         OR: [
-          { name: { contains: "detergent", mode: "insensitive" } },
-          { sku: { contains: "detergent", mode: "insensitive" } },
-          { category: { contains: "detergent", mode: "insensitive" } },
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
         ],
+        AND: [{
+          OR: [
+            { name: { contains: "detergent", mode: "insensitive" } },
+            { sku: { contains: "detergent", mode: "insensitive" } },
+            { category: { contains: "detergent", mode: "insensitive" } },
+          ],
+        }],
       },
       orderBy: {
         name: "asc",
@@ -875,10 +892,17 @@ describe("inventory.service", () => {
       where: {
         businessId: "business-1",
         OR: [
-          { name: { contains: "detergent", mode: "insensitive" } },
-          { sku: { contains: "detergent", mode: "insensitive" } },
-          { category: { contains: "detergent", mode: "insensitive" } },
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
         ],
+        AND: [{
+          OR: [
+            { name: { contains: "detergent", mode: "insensitive" } },
+            { sku: { contains: "detergent", mode: "insensitive" } },
+            { category: { contains: "detergent", mode: "insensitive" } },
+          ],
+        }],
       },
     });
   });
@@ -910,6 +934,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
         isActive: true,
       },
       orderBy: {
@@ -922,6 +951,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
         isActive: true,
       },
     });
@@ -960,6 +994,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -971,6 +1010,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
