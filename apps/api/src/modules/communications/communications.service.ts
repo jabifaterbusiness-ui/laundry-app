@@ -379,8 +379,14 @@ export async function saveUnpickedOrderReminderConfig(businessId: string, input:
   whatsappTemplateName?: string | null | undefined;
   whatsappTemplateLanguage?: string | null | undefined;
 }) {
+  const data = {
+    enabled: input.enabled,
+    thresholdMonths: input.thresholdMonths,
+    ...(input.whatsappTemplateName !== undefined ? { whatsappTemplateName: input.whatsappTemplateName } : {}),
+    ...(input.whatsappTemplateLanguage !== undefined ? { whatsappTemplateLanguage: input.whatsappTemplateLanguage } : {}),
+  };
   return prisma.unpickedOrderReminderConfig.upsert({
-    where: { businessId }, create: { businessId, ...input }, update: input,
+    where: { businessId }, create: { businessId, ...data }, update: data,
   });
 }
 export async function listUnpickedOrders(businessId: string, branchId: string) {
