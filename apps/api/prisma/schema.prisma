@@ -2968,6 +2968,8 @@ model UnpickedOrderReminderConfig {
   business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   enabled        Boolean  @default(true)
   thresholdMonths Int     @default(2)
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
