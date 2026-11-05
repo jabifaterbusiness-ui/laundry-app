@@ -8,8 +8,6 @@ export const branchResourceTypeSchema = z.enum([
   "DISCOUNTS",
   "TAX_RULES",
   "INVENTORY",
-  "PAYROLL",
-  "REPORTS",
 ]);
 
 export const createBranchResourceShareSchema = z.object({
