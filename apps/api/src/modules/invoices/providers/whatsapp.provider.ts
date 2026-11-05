@@ -23,6 +23,24 @@ export function normalizeWhatsAppRecipient(value: string): string {
   return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized;
 }
 
+async function assertWhatsAppServiceWindow(businessId: string | undefined, recipient: string) {
+  if (!businessId) return; // Legacy platform sender is retained for internal migration only.
+  const contactPhone = normalizeWhatsAppRecipient(recipient);
+  const inbound = await prisma.whatsAppWebhookEvent.findFirst({
+    where: { businessId, contactPhone, eventType: "MESSAGE_RECEIVED" },
+    orderBy: { receivedAt: "desc" },
+    select: { payload: true, receivedAt: true },
+  });
+  const timestamp = inbound?.payload && typeof inbound.payload === "object" &&
+    "timestamp" in inbound.payload && typeof inbound.payload.timestamp === "string"
+    ? Number(inbound.payload.timestamp) * 1000
+    : inbound?.receivedAt.getTime() ?? 0;
+  if (!Number.isFinite(timestamp) || !timestamp || timestamp > Date.now() + 5 * 60 * 1000 ||
+      Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+    throw new Error("The 24-hour WhatsApp customer-service window is closed. Use an approved template for this customer instead.");
+  }
+}
+
 async function resolveCredentials(businessId?: string) {
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = config.receiptDelivery;
   if (!whatsappApiVersion) throw new Error("WhatsApp provider API version is not configured");
@@ -66,6 +84,7 @@ async function persistBusinessOutbound(input: { businessId?: string; to: string;
   }
 }
 export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Promise<{ id: string }> {
+  await assertWhatsAppServiceWindow(input.businessId, input.to);
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = await resolveCredentials(input.businessId);
   const mediaForm = new FormData();
   mediaForm.append("messaging_product", "whatsapp");
@@ -111,6 +130,7 @@ export interface SendWhatsAppTextInput {
 }
 
 export async function sendWhatsAppText(input: SendWhatsAppTextInput): Promise<{ id: string }> {
+  await assertWhatsAppServiceWindow(input.businessId, input.to);
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = await resolveCredentials(input.businessId);
   const response = await fetch(
     `https://graph.facebook.com/${whatsappApiVersion}/${whatsappPhoneNumberId}/messages`,
