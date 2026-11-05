@@ -15,6 +15,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 vi.mock("../../src/config/index.js", () => ({
   config: { receiptDelivery: { whatsappApiVersion: "v23.0" } },
 }));
+vi.mock("../../src/lib/logger.js", () => ({ logger: { warn: vi.fn() } }));
 vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
   decryptWhatsAppAccessToken: vi.fn(() => "decrypted-test-token"),
 }));
