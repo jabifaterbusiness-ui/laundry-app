@@ -610,17 +610,12 @@ describe("quick-operations.service", () => {
           name: "Customer B",
           businessId: "biz-A",
         },
-        transferredOrderCount: 2,
+        transferredOrderCount: 1,
         transferredOrders: [
           {
             id: "11111111-1111-4111-8111-111111111111",
             orderNumber: "00042",
             branchId: "branch-A",
-          },
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            orderNumber: "00043",
-            branchId: "branch-B",
           },
         ],
       };
@@ -641,6 +636,8 @@ describe("quick-operations.service", () => {
       expect(transferCustomerMock).toHaveBeenCalledWith(
         result.customer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         result.targetCustomer.id,
       );
 
@@ -654,6 +651,7 @@ describe("quick-operations.service", () => {
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: "biz-A",
+        branchId: "branch-A",
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
@@ -1928,6 +1926,8 @@ describe("SC — Switch Customer", () => {
     expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
       customer.id,
       "biz-A",
+      "33333333-3333-4333-8333-333333333333",
+      "user-staff-a",
     );
   });
 
