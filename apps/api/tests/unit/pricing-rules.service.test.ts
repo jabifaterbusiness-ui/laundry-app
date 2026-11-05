@@ -156,7 +156,15 @@ describe("automatic price adjustments", () => {
       data: { isActive: false },
     });
     expect(findAdjustment).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "discount-1", businessId: "business-1" },
+      where: {
+        id: "discount-1",
+        businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      },
     }));
   });
 });
