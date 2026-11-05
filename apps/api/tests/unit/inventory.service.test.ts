@@ -622,6 +622,11 @@ describe("inventory.service", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
       expect(prismaMock.branch.findFirst).not.toHaveBeenCalled();
@@ -713,6 +718,8 @@ describe("inventory.service", () => {
 
       const result = await createInventoryItem({
         businessId: "biz-A",
+        branchId: "branch-A",
+        userId: "user-1",
       }, {
         name: " Laundry Detergent ",
         description: " 5 litre detergent ",
@@ -1101,6 +1108,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1118,6 +1134,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1160,6 +1185,15 @@ describe("listInventoryStock", () => {
         businessId: "business-1",
         branchId: "branch-1",
         inventoryItemId: "item-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1178,6 +1212,15 @@ describe("listInventoryStock", () => {
         businessId: "business-1",
         branchId: "branch-1",
         inventoryItemId: "item-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1259,6 +1302,15 @@ describe("listInventoryStock", () => {
         id: {
           in: ["stock-1", "stock-2"],
         },
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1310,6 +1362,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1327,6 +1388,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1368,6 +1438,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1385,6 +1464,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1424,6 +1512,7 @@ describe("createInventoryItem catalogue metadata", () => {
     const created = {
       id: "item-catalogue-1",
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
       name: "Fabric Softener",
       sku: "FAB-002",
       category: "Fabric Care",
@@ -1436,7 +1525,7 @@ describe("createInventoryItem catalogue metadata", () => {
     };
     prismaMock.inventoryItem.create.mockResolvedValue(created);
 
-    const result = await createInventoryItem({ businessId: "biz-A" }, {
+    const result = await createInventoryItem({ businessId: "biz-A", branchId: "branch-A", userId: "user-1" }, {
       name: " Fabric Softener ",
       sku: " FAB-002 ",
       category: " Fabric Care ",
@@ -1450,6 +1539,7 @@ describe("createInventoryItem catalogue metadata", () => {
     expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
       data: {
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Fabric Care",
@@ -1495,6 +1585,7 @@ describe("updateInventoryItem", () => {
       prismaMock.inventoryItem.update.mockResolvedValue({
         id: "item-1",
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Care",
@@ -1525,6 +1616,7 @@ describe("updateInventoryItem", () => {
       expect(result).toEqual({
         id: "item-1",
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Care",
@@ -1572,6 +1664,11 @@ describe("updateInventoryItem", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
       expect(prismaMock.inventoryItem.updateMany).not.toHaveBeenCalled();
