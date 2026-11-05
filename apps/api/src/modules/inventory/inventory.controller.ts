@@ -205,6 +205,7 @@ export async function listStock(
     {
       businessId,
       branchId,
+      userId: req.user!.id,
     },
     {
       page: query.page,
@@ -233,6 +234,7 @@ export async function createMovement(
     {
       businessId,
       branchId,
+      userId: req.user!.id,
     },
     {
       inventoryItemId: input.inventoryItemId,
@@ -282,6 +284,7 @@ export async function adjustStock(
     {
       businessId,
       branchId,
+      userId: req.user!.id,
     },
     {
       inventoryItemId: input.inventoryItemId,
