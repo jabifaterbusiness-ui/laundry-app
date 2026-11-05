@@ -245,6 +245,7 @@ export async function executeQuickOperation(
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: context.businessId,
+        branchId: context.branchId,
         actorUserId: context.userId,
         correlationId: context.correlationId ?? null,
         metadata: {
