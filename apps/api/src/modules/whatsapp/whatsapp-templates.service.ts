@@ -24,6 +24,9 @@ async function getConnection(businessId: string) {
 function bodyVariableIndexes(template: MetaTemplate): number[] | null {
   const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
   const placeholders = [...body.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)];
+  const openingCount = (body.match(/\{\{/g) ?? []).length;
+  const closingCount = (body.match(/\}\}/g) ?? []).length;
+  if (openingCount !== closingCount || openingCount !== placeholders.length) return null;
   const indexes = placeholders.map((match) => /^\d+$/.test(match[1] ?? "") ? Number(match[1]) : NaN);
   if (indexes.some((index) => !Number.isSafeInteger(index) || index < 1)) return null;
   const unique = [...new Set(indexes)].sort((a, b) => a - b);
