@@ -776,6 +776,7 @@ describe("inventory.service", () => {
       expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
         data: {
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: null,
           unit: "LITRE",
