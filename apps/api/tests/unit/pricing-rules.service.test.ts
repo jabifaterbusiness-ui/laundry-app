@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     priceAdjustment: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -43,6 +44,8 @@ describe("automatic price adjustments", () => {
   it("creates a customer-specific discount scoped to the same business", async () => {
     await createPriceAdjustment({
       businessId: "business-1",
+      branchId: "branch-A",
+      userId: "user-A",
       name: "Personal 10%",
       percentage: -10,
       targetScope: "CUSTOMER",
@@ -50,7 +53,15 @@ describe("automatic price adjustments", () => {
     });
 
     expect(findCustomer).toHaveBeenCalledWith({
-      where: { id: "customer-1", businessId: "business-1" },
+      where: {
+        id: "customer-1",
+        businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      },
       select: { id: true },
     });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
@@ -70,6 +81,8 @@ describe("automatic price adjustments", () => {
   it("creates a customer-group discount after verifying the group belongs to the business", async () => {
     await createPriceAdjustment({
       businessId: "business-1",
+      branchId: "branch-A",
+      userId: "user-A",
       name: "VIP 15%",
       percentage: -15,
       targetScope: "GROUP",
@@ -95,6 +108,8 @@ describe("automatic price adjustments", () => {
   it("requires a start and end date for all-customer promotions", async () => {
     await expect(createPriceAdjustment({
       businessId: "business-1",
+      branchId: "branch-A",
+      userId: "user-A",
       name: "Holiday 10%",
       percentage: -10,
       targetScope: "ALL_CUSTOMERS",
@@ -106,6 +121,8 @@ describe("automatic price adjustments", () => {
   it("rejects positive automatic adjustments so they cannot become accidental surcharges", async () => {
     await expect(createPriceAdjustment({
       businessId: "business-1",
+      branchId: "branch-A",
+      userId: "user-A",
       name: "Invalid promotion",
       percentage: 5,
       targetScope: "ALL_CUSTOMERS",
@@ -119,6 +136,8 @@ describe("automatic price adjustments", () => {
   it("rejects an end date that is not after the start date", async () => {
     await expect(createPriceAdjustment({
       businessId: "business-1",
+      branchId: "branch-A",
+      userId: "user-A",
       name: "Invalid period",
       percentage: -5,
       targetScope: "ALL_CUSTOMERS",
@@ -130,10 +149,10 @@ describe("automatic price adjustments", () => {
   });
 
   it("supports pausing and resuming an existing discount within the business", async () => {
-    await setPriceAdjustmentActive("discount-1", "business-1", false);
+    await setPriceAdjustmentActive("discount-1", "business-1", "branch-A", "user-A", false);
 
     expect(updateMany).toHaveBeenCalledWith({
-      where: { id: "discount-1", businessId: "business-1" },
+      where: { id: "discount-1", businessId: "business-1", branchId: "branch-A" },
       data: { isActive: false },
     });
     expect(findAdjustment).toHaveBeenCalledWith(expect.objectContaining({
