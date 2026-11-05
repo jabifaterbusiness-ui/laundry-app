@@ -85,6 +85,9 @@ function invoiceItemFixture() {
 
 function createTx() {
   return {
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     order: {
       findFirst: vi.fn(),
       update: vi.fn(),
