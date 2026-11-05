@@ -37,12 +37,20 @@ async function loadBusinessEvents(businessId: string) {
 
 export async function listWhatsAppConversations(businessId: string) {
   const events = await loadBusinessEvents(businessId);
-  const statusByMessageId = new Map<string, Set<string>>();
-  for (const event of events) {
-    if (!event.eventType.startsWith("STATUS_") || !event.providerMessageId) continue;
-    const statuses = statusByMessageId.get(event.providerMessageId) ?? new Set<string>();
-    statuses.add(event.eventType.slice(7));
-    statusByMessageId.set(event.providerMessageId, statuses);
+  const statusByMessageId = new Map<string, string>();
+  // Apply callbacks in arrival order using the same monotonic transition rules
+  // as the delivery updater. A late DELIVERED callback must not turn a FAILED
+  // message into DELIVERED, just as a late FAILED callback cannot downgrade it.
+  const statusEvents = events
+    .filter((event) => event.eventType.startsWith("STATUS_") && event.providerMessageId)
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+  for (const event of statusEvents) {
+    const messageId = event.providerMessageId!;
+    const next = event.eventType.slice(7);
+    const current = statusByMessageId.get(messageId) ?? "SENT";
+    if (next === "DELIVERED" && current === "SENT") statusByMessageId.set(messageId, "DELIVERED");
+    else if (next === "READ" && (current === "SENT" || current === "DELIVERED")) statusByMessageId.set(messageId, "READ");
+    else if (next === "FAILED" && current === "SENT") statusByMessageId.set(messageId, "FAILED");
   }
 
   const messages = events
@@ -59,7 +67,7 @@ export async function listWhatsAppConversations(businessId: string) {
         text: messageText(payload),
         messageType: payload.type ?? "text",
         timestamp: payload.timestamp ? new Date(Number(payload.timestamp) * 1000).toISOString() : event.receivedAt.toISOString(),
-        status: event.providerMessageId ? (statusByMessageId.get(event.providerMessageId)?.has("READ") ? "READ" : statusByMessageId.get(event.providerMessageId)?.has("DELIVERED") ? "DELIVERED" : statusByMessageId.get(event.providerMessageId)?.has("FAILED") ? "FAILED" : statusByMessageId.get(event.providerMessageId)?.has("SENT") ? "SENT" : direction === "OUTBOUND" ? "SENT" : "RECEIVED") : direction === "OUTBOUND" ? "SENT" : "RECEIVED",
+        status: event.providerMessageId ? (statusByMessageId.get(event.providerMessageId) ?? (direction === "OUTBOUND" ? "SENT" : "RECEIVED")) : direction === "OUTBOUND" ? "SENT" : "RECEIVED",
       };
     })
     .filter((message) => message.phone);
