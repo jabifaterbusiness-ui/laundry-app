@@ -93,6 +93,18 @@ describe("approved WhatsApp template pagination", () => {
     expect(mocks.webhookEventCreate).toHaveBeenCalled();
   });
 
+  it("rejects marketing templates for automated order-status notifications", async () => {
+    const approved = page([
+      { id: "template-1", name: "order_update_marketing", language: "en", status: "APPROVED", category: "MARKETING", components: [{ type: "BODY", text: "Hello {{1}}" }] },
+    ]);
+    mocks.fetch.mockResolvedValueOnce(approved);
+    await expect(sendAutomatedWhatsAppTemplate({
+      businessId: "business-1", customerId: "customer-1", phone: "2348012345678",
+      templateName: "order_update_marketing", language: "en", variableValues: ["Ada"],
+    })).rejects.toThrow("must use an approved UTILITY");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses automated template delivery when the saved customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", phone: "2348012345678", whatsappOptIn: false });
     const approved = page([
