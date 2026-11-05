@@ -48,6 +48,14 @@ vi.mock("../../src/lib/prisma.js", () => ({
     user: {
       findFirst: vi.fn(),
     },
+    userBranch: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "membership-a",
+        userId: "user-owner-a",
+        branchId: "branch-A",
+        branch: { id: "branch-A", businessId: "biz-A", name: "Main", address: null, isActive: true },
+      }),
+    },
     employeeCompensation: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -113,6 +121,7 @@ const compensationFixture = {
   id: COMPENSATION_A,
   businessId: "biz-A",
   employeeId: EMPLOYEE_A,
+  branchId: "branch-A",
   basicSalary: 150000,
   effectiveFrom: new Date("2026-09-01T00:00:00.000Z"),
   effectiveTo: null,
@@ -141,17 +150,20 @@ describe("Compensation routes - authentication", () => {
   it("rejects PLATFORM_ADMIN because it has no business context", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(403);
   });
 
-  it("does not require branch context", async () => {
+  it("requires branch context", async () => {
     compensationFindMany.mockResolvedValue([] as never);
 
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -176,6 +188,7 @@ describe("Compensation routes - authorization", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -206,6 +219,7 @@ describe("Compensation routes - authorization", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -218,7 +232,8 @@ describe("Compensation routes - authorization", () => {
   it("STAFF cannot access compensation management", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -229,6 +244,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         basicSalary: 150000,
         effectiveFrom: "2026-09-01",
@@ -242,6 +258,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: "not-a-uuid",
         basicSalary: 150000,
@@ -256,6 +273,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 0,
@@ -270,6 +288,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -298,6 +317,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         businessId: "biz-B",
         employeeId: EMPLOYEE_A,
@@ -331,7 +351,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -341,6 +362,7 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          OR: [{ branchId: "branch-A" }, { branchId: null }],
         },
       }),
     );
@@ -351,7 +373,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation?employeeId=${EMPLOYEE_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
 
@@ -359,6 +382,7 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          OR: [{ branchId: "branch-A" }, { branchId: null }],
           employeeId: EMPLOYEE_A,
         },
       }),
@@ -370,7 +394,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/${COMPENSATION_A}`)
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(404);
 
@@ -379,6 +404,7 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           id: COMPENSATION_A,
           businessId: "biz-B",
+          OR: [{ branchId: "branch-A" }, { branchId: null }],
         },
       }),
     );
@@ -392,7 +418,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/${COMPENSATION_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(COMPENSATION_A);
@@ -407,7 +434,8 @@ describe("Compensation routes - effective salary lookup", () => {
       .get(
         `/api/v1/payroll/compensation/current/${EMPLOYEE_A}?effectiveDate=2026-09-15`,
       )
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.basicSalary).toBe(150000);
@@ -416,6 +444,7 @@ describe("Compensation routes - effective salary lookup", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-A",
+          branchId: "branch-A",
           employeeId: EMPLOYEE_A,
         }),
       }),
@@ -427,7 +456,8 @@ describe("Compensation routes - effective salary lookup", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/current/${EMPLOYEE_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -437,7 +467,8 @@ describe("Compensation routes - effective salary lookup", () => {
       .get(
         `/api/v1/payroll/compensation/current/${EMPLOYEE_A}?effectiveDate=invalid-date`,
       )
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(400);
     expect(compensationFindFirst).not.toHaveBeenCalled();
@@ -480,6 +511,7 @@ describe("Compensation routes - salary history", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
