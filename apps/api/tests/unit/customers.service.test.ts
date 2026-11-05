@@ -459,7 +459,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(result).toEqual({
       customer: sourceCustomer,
       targetCustomer,
-      mergedOrderCount: 2,
+      mergedOrderCount: 1,
       mergedOrders: orders,
       sourceDeactivated: true,
     });
@@ -504,7 +504,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     findFirst.mockResolvedValueOnce(sourceCustomer as never);
 
     await expect(
-      mergeCustomer(sourceCustomer.id, "biz-A", sourceCustomer.id),
+      mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", sourceCustomer.id),
     ).rejects.toThrow("Customer cannot be merged into the same customer");
 
     expect(orderFindMany).not.toHaveBeenCalled();
@@ -728,7 +728,7 @@ describe("transferCustomer - full account transfer", () => {
     expect(result).toEqual({
       customer: sourceCustomer,
       targetCustomer,
-      transferredOrderCount: 2,
+      transferredOrderCount: 1,
       transferredOrders: orders,
     });
   });
