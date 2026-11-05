@@ -84,6 +84,18 @@ async function persistBusinessOutbound(input: { businessId?: string; to: string;
   }
 }
 export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Promise<{ id: string }> {
+  if (input.businessId) {
+    const recipient = normalizeWhatsAppRecipient(input.to);
+    const phoneVariants = [recipient, `+${recipient}`];
+    if (recipient.startsWith("234") && recipient.length === 13) phoneVariants.push(`0${recipient.slice(3)}`);
+    const customer = await prisma.customer.findFirst({
+      where: { businessId: input.businessId, phone: { in: phoneVariants } },
+      select: { whatsappOptIn: true },
+    });
+    if (!customer?.whatsappOptIn) {
+      throw new Error("This customer has not explicitly opted in to WhatsApp receipts. Record their consent before sending.");
+    }
+  }
   await assertWhatsAppServiceWindow(input.businessId, input.to);
   const { whatsappApiVersion, whatsappPhoneNumberId, whatsappAccessToken } = await resolveCredentials(input.businessId);
   const mediaForm = new FormData();
