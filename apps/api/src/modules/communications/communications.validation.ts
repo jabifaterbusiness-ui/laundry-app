@@ -41,14 +41,22 @@ export const statusRuleSchema = z.object({
   whatsappTemplateLanguage: z.string().trim().min(2).max(20).nullable().optional(),
   emailSubject: z.string().max(180).nullable().optional(),
   emailMessage: z.string().max(4000).nullable().optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (Boolean(value.whatsappTemplateName) !== Boolean(value.whatsappTemplateLanguage)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose both a template and its language", path: ["whatsappTemplateLanguage"] });
+  }
+});
 export const statusRuleIdSchema = z.object({ id: z.string().uuid() });
 export const reminderConfigSchema = z.object({
   enabled: z.boolean(),
   thresholdMonths: z.number().int().min(1).max(36),
   whatsappTemplateName: z.string().trim().min(1).max(512).nullable().optional(),
   whatsappTemplateLanguage: z.string().trim().min(2).max(20).nullable().optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (Boolean(value.whatsappTemplateName) !== Boolean(value.whatsappTemplateLanguage)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose both a template and its language", path: ["whatsappTemplateLanguage"] });
+  }
+});
 export const reminderSendSchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1).max(500),
   channels: z.array(channelSchema).min(1).max(2),
