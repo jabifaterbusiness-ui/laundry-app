@@ -93,6 +93,23 @@ describe("approved WhatsApp template pagination", () => {
     expect(mocks.webhookEventCreate).toHaveBeenCalled();
   });
 
+  it("sends a marketing template for an opted-in announcement when explicitly selected", async () => {
+    const approvedPage = () => page([
+      { id: "template-marketing", name: "customer_announcement", language: "en", status: "APPROVED", category: "MARKETING", components: [{ type: "BODY", text: "Hello {{1}} from {{2}}: {{3}}" }] },
+    ]);
+    mocks.fetch
+      .mockImplementationOnce(async () => approvedPage())
+      .mockImplementationOnce(async () => approvedPage())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [{ id: "wamid-marketing-1" }] }), { status: 200 }));
+    const result = await sendAutomatedWhatsAppTemplate({
+      businessId: "business-1", customerId: "customer-1", phone: "2348012345678",
+      templateName: "customer_announcement", language: "en",
+      variableValues: ["Ada", "LaundryAngel", "Holiday opening hours"],
+      templateCategory: "MARKETING",
+    });
+    expect(result.providerMessageId).toBe("wamid-marketing-1");
+  });
+
   it("rejects marketing templates for automated order-status notifications", async () => {
     const approved = page([
       { id: "template-1", name: "order_update_marketing", language: "en", status: "APPROVED", category: "MARKETING", components: [{ type: "BODY", text: "Hello {{1}}" }] },
