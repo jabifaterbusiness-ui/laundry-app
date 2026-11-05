@@ -24,6 +24,13 @@ describe("customer communication audience validation", () => {
     }).success).toBe(true);
   });
 
+  it("rejects oversized WhatsApp announcement template variables", () => {
+    expect(createAnnouncementSchema.safeParse({
+      title: "Update", message: "x".repeat(1025), channels: ["WHATSAPP"], audience: "ALL_CUSTOMERS",
+      whatsappTemplateName: "customer_announcement", whatsappTemplateLanguage: "en",
+    }).success).toBe(false);
+  });
+
   it("requires explicit customer IDs for selected-customer announcements", () => {
     expect(createAnnouncementSchema.safeParse({
       title: "Update",
