@@ -1544,7 +1544,6 @@ describe("createInventoryItem catalogue metadata", () => {
       data: {
         businessId: "biz-A",
         ownerBranchId: "branch-A",
-        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Fabric Care",
