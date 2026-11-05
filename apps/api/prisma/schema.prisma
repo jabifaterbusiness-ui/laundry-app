@@ -2811,6 +2811,8 @@ model AnnouncementCampaign {
   title           String
   message         String
   channels        String[] @default([])
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   audience        String   // ALL_CUSTOMERS or SELECTED_CUSTOMERS
   status          String   @default("DRAFT")
   createdByUserId String
