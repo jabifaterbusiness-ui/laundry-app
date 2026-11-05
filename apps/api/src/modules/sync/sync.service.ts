@@ -463,6 +463,8 @@ async function applySyncOperation(
           email?: string;
           address?: string;
           notes?: string;
+          whatsappOptIn?: boolean;
+          whatsappOptInSource?: string;
         };
 
         const duplicates = await findPossibleDuplicates(
@@ -487,6 +489,8 @@ async function applySyncOperation(
             ...(input.email !== undefined && { email: input.email }),
             ...(input.address !== undefined && { address: input.address }),
             ...(input.notes !== undefined && { notes: input.notes }),
+            ...(input.whatsappOptIn !== undefined && { whatsappOptIn: input.whatsappOptIn }),
+            ...(input.whatsappOptInSource !== undefined && { whatsappOptInSource: input.whatsappOptInSource }),
           },
           tx,
         );
@@ -502,6 +506,8 @@ async function applySyncOperation(
             email?: string;
             address?: string;
             notes?: string;
+            whatsappOptIn?: boolean;
+            whatsappOptInSource?: string;
           };
         };
 

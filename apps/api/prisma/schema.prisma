@@ -178,6 +178,8 @@ model Business {
   subscriptionPayments         SubscriptionPayment[]
   paymentWebhookEvents         PaymentWebhookEvent[]
   backupSettings               BackupSettings?
+  whatsappConnection           WhatsAppBusinessConnection?
+  whatsappWebhookEvents        WhatsAppWebhookEvent[]
   backupSchedules              BackupSchedule[]
   backupConnections            BackupCloudConnection[]
   backupRuns                   BackupRun[]
@@ -466,6 +468,12 @@ model Customer {
   email   String?
   address String?
   notes   String?
+
+  // Explicit business-initiated WhatsApp consent. Existing customers remain opted out.
+  whatsappOptIn       Boolean   @default(false)
+  whatsappOptInAt     DateTime?
+  whatsappOptInSource String?
+  whatsappOptOutAt    DateTime?
 
   // Persistent customer-specific instructions/preferences.
   // Examples: "Always fold his items" or "Do not give him items on credit".
@@ -2803,6 +2811,8 @@ model AnnouncementCampaign {
   title           String
   message         String
   channels        String[] @default([])
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   audience        String   // ALL_CUSTOMERS or SELECTED_CUSTOMERS
   status          String   @default("DRAFT")
   createdByUserId String
@@ -2865,6 +2875,8 @@ model OrderStatusNotificationRule {
   enabled            Boolean  @default(true)
   channel            String   @default("WHATSAPP")
   whatsappMessage    String?
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   emailSubject       String?
   emailMessage       String?
   createdAt          DateTime @default(now())
@@ -2902,12 +2914,64 @@ model OrderStatusNotificationDelivery {
   @@map("order_status_notification_deliveries")
 }
 
+
+model WhatsAppBusinessConnection {
+  id                    String   @id @default(uuid())
+  businessId            String   @unique
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  wabaId                String
+  phoneNumberId         String   @unique
+  displayPhoneNumber    String?
+  verifiedName          String?
+  encryptedAccessToken  String   @db.Text
+  tokenExpiresAt        DateTime?
+  status                String   @default("CONNECTED")
+  connectedAt           DateTime @default(now())
+  lastVerifiedAt        DateTime?
+  lastError             String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  webhookEvents WhatsAppWebhookEvent[]
+
+  @@index([wabaId])
+  @@index([status, updatedAt])
+  @@map("whatsapp_business_connections")
+}
+
+model WhatsAppWebhookEvent {
+  id                 String   @id @default(uuid())
+  businessId         String?
+  business           Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  connectionId       String?
+  connection         WhatsAppBusinessConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  eventKey           String   @unique
+  wabaId             String?
+  phoneNumberId      String?
+  providerMessageId  String?
+  contactPhone       String?
+  eventType          String
+  payload            Json
+  processedAt        DateTime?
+  processingError    String?  @db.Text
+  receivedAt         DateTime @default(now())
+
+  @@index([businessId, receivedAt])
+  @@index([connectionId, receivedAt])
+  @@index([providerMessageId])
+  @@index([businessId, contactPhone, eventType, receivedAt], map: "wa_events_business_contact_type_received_idx")
+  @@index([processedAt, receivedAt])
+  @@map("whatsapp_webhook_events")
+}
+
 model UnpickedOrderReminderConfig {
   id             String   @id @default(uuid())
   businessId     String   @unique
   business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   enabled        Boolean  @default(true)
   thresholdMonths Int     @default(2)
+  whatsappTemplateName String?
+  whatsappTemplateLanguage String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

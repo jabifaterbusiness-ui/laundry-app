@@ -4,6 +4,7 @@ export type CommunicationChannel = "WHATSAPP" | "EMAIL";
 export interface AnnouncementInput {
   title: string; message: string; channels: CommunicationChannel[];
   audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
+  whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
 }
 export interface CustomerGroup {
   id: string; name: string; description: string | null;
@@ -11,7 +12,8 @@ export interface CustomerGroup {
 }
 export interface StatusNotificationRule {
   id: string; status: string; enabled: boolean; channel: CommunicationChannel | "BOTH";
-  whatsappMessage: string | null; emailSubject: string | null; emailMessage: string | null;
+  whatsappMessage: string | null; whatsappTemplateName: string | null; whatsappTemplateLanguage: string | null;
+  emailSubject: string | null; emailMessage: string | null;
 }
 export interface CommunicationDelivery {
   id: string; channel: CommunicationChannel; messageType: string; destination: string;
@@ -26,7 +28,10 @@ export interface UnpickedOrder {
   customer: { id: string; name: string; phone: string; email: string | null };
   branch: { name: string };
 }
-export interface ReminderConfig { id: string; enabled: boolean; thresholdMonths: number }
+export interface ReminderConfig {
+  id: string; enabled: boolean; thresholdMonths: number;
+  whatsappTemplateName: string | null; whatsappTemplateLanguage: string | null;
+}
 export async function listCustomerGroups(auth: { accessToken: string | null }) {
   return apiFetch<{ data: CustomerGroup[] }>("/communications/customer-groups", { accessToken: auth.accessToken });
 }
@@ -51,7 +56,9 @@ export async function deleteStatusRule(id: string, auth: { accessToken: string |
 export async function getReminderConfig(auth: { accessToken: string | null; branchId?: string | null }) {
   return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { accessToken: auth.accessToken, branchId: auth.branchId });
 }
-export async function saveReminderConfig(input: { enabled: boolean; thresholdMonths: number }, auth: { accessToken: string | null; branchId?: string | null }) {
+export async function saveReminderConfig(input: {
+  enabled: boolean; thresholdMonths: number; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+}, auth: { accessToken: string | null; branchId?: string | null }) {
   return apiFetch<ReminderConfig>("/communications/unpicked-orders/config", { method: "PUT", accessToken: auth.accessToken, branchId: auth.branchId, body: JSON.stringify(input) });
 }
 export async function listUnpickedOrders(auth: { accessToken: string | null; branchId?: string | null }) {
@@ -62,4 +69,34 @@ export async function sendUnpickedReminders(input: { orderIds: string[]; channel
 }
 export async function listCommunicationDeliveries(auth: { accessToken: string | null }) {
   return apiFetch<{ data: CommunicationDelivery[] }>("/communications/deliveries", { accessToken: auth.accessToken });
+}
+
+
+export interface WhatsAppBusinessConnection {
+  id: string;
+  wabaId: string;
+  phoneNumberId: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  status: string;
+  connectedAt: string;
+  tokenExpiresAt: string | null;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+}
+export interface WhatsAppConnectionStatus {
+  configured: boolean;
+  appId: string | null;
+  configurationId: string | null;
+  apiVersion: string | null;
+  connection: WhatsAppBusinessConnection | null;
+}
+export async function getWhatsAppConnection(auth: { accessToken: string | null }) {
+  return apiFetch<WhatsAppConnectionStatus>("/whatsapp/connection", { accessToken: auth.accessToken });
+}
+export async function completeWhatsAppConnection(input: { code: string; wabaId: string; phoneNumberId: string }, auth: { accessToken: string | null }) {
+  return apiFetch<{ connection: WhatsAppBusinessConnection }>("/whatsapp/connection/embedded-signup", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function disconnectWhatsAppConnection(auth: { accessToken: string | null }) {
+  return apiFetch<void>("/whatsapp/connection", { method: "DELETE", accessToken: auth.accessToken });
 }

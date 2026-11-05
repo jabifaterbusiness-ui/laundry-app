@@ -42,6 +42,10 @@ export const config = {
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN,
     whatsappVerifyToken: env.WHATSAPP_VERIFY_TOKEN,
+    whatsappAppSecret: env.WHATSAPP_APP_SECRET,
+    whatsappTokenEncryptionKey: env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
+    whatsappAppId: env.WHATSAPP_APP_ID,
+    whatsappEmbeddedSignupConfigId: env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
   },
   paymentProviders: {
     paystack: {

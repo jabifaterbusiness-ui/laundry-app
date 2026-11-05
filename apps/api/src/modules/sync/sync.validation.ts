@@ -9,8 +9,16 @@ const customerCreatePayloadSchema = z
     email: z.string().trim().email().max(254).optional(),
     address: z.string().trim().max(300).optional(),
     notes: z.string().trim().max(2000).optional(),
+    whatsappOptIn: z.boolean().optional(),
+    whatsappOptInSource: z.enum(["CUSTOMER_VERBAL", "CUSTOMER_WRITTEN", "CUSTOMER_WEBSITE", "CUSTOMER_OTHER"]).optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource), {
+    message: "Record how the customer gave WhatsApp consent",
+  })
+  .refine((data) => data.whatsappOptIn || data.whatsappOptInSource === undefined, {
+    message: "A consent source can only be recorded when WhatsApp opt-in is enabled",
+  });
 
 const customerUpdateDataSchema = z
   .object({
@@ -19,8 +27,18 @@ const customerUpdateDataSchema = z
     email: z.string().trim().email().max(254).optional(),
     address: z.string().trim().max(300).optional(),
     notes: z.string().trim().max(2000).optional(),
+    whatsappOptIn: z.boolean().optional(),
+    whatsappOptInSource: z.enum(["CUSTOMER_VERBAL", "CUSTOMER_WRITTEN", "CUSTOMER_WEBSITE", "CUSTOMER_OTHER"]).optional(),
   })
   .strict()
+  .refine(
+    (data) => data.whatsappOptIn !== true || Boolean(data.whatsappOptInSource),
+    { message: "Record how the customer gave WhatsApp consent" },
+  )
+  .refine(
+    (data) => data.whatsappOptIn === true || data.whatsappOptInSource === undefined,
+    { message: "A consent source can only be recorded when WhatsApp opt-in is enabled" },
+  )
   .refine(
     (data) => Object.values(data).some((value) => value !== undefined),
     {
