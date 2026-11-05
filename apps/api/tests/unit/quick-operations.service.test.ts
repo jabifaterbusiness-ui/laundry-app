@@ -741,6 +741,7 @@ describe("quick-operations.service", () => {
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: "biz-A",
+        branchId: "branch-A",
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
