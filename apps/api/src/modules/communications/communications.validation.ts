@@ -19,6 +19,9 @@ export const createAnnouncementSchema = z.object({
   if (value.channels.includes("WHATSAPP") && (!value.whatsappTemplateName || !value.whatsappTemplateLanguage)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose an approved WhatsApp MARKETING template for the announcement", path: ["whatsappTemplateName"] });
   }
+  if (value.channels.includes("WHATSAPP") && value.message.length > 1024) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WhatsApp announcement text must be 1,024 characters or fewer when used as a template variable", path: ["message"] });
+  }
   if (Boolean(value.whatsappTemplateName) !== Boolean(value.whatsappTemplateLanguage)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose both a template and its language", path: ["whatsappTemplateLanguage"] });
   }
