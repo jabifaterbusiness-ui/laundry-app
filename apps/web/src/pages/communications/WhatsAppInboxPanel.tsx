@@ -7,10 +7,11 @@ import { getApprovedWhatsAppTemplates, getWhatsAppConversations, getWhatsAppMedi
 function WhatsAppMediaPreview({ message, accessToken }: { message: WhatsAppInboxMessage; accessToken: string | null }) {
   const [preview, setPreview] = useState<{ url: string; type: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!message.mediaId) return;
+    if (!message.mediaId || !shouldLoad) return;
     let cancelled = false;
     let objectUrl: string | null = null;
     setLoading(true);
@@ -29,9 +30,10 @@ function WhatsAppMediaPreview({ message, accessToken }: { message: WhatsAppInbox
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [message.mediaId, accessToken]);
+  }, [message.mediaId, accessToken, shouldLoad]);
 
   if (!message.mediaId) return null;
+  if (!shouldLoad) return <button type="button" onClick={() => setShouldLoad(true)} style={{ display: "inline-block", marginTop: 8, border: "1px solid #cbd5e1", borderRadius: 8, padding: "6px 10px", background: "#fff", color: "#0f766e", fontWeight: 700, cursor: "pointer" }}>Load attachment preview</button>;
   if (loading) return <small style={{ display: "block", color: "#64748b", marginTop: 7 }}>Loading attachment…</small>;
   if (error) return <small role="status" style={{ display: "block", color: "#b45309", marginTop: 7 }}>{error}</small>;
   if (!preview) return null;
