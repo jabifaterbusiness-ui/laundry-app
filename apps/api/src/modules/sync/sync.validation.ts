@@ -9,6 +9,8 @@ const customerCreatePayloadSchema = z
     email: z.string().trim().email().max(254).optional(),
     address: z.string().trim().max(300).optional(),
     notes: z.string().trim().max(2000).optional(),
+    whatsappOptIn: z.boolean().optional(),
+    whatsappOptInSource: z.enum(["CUSTOMER_VERBAL", "CUSTOMER_WRITTEN", "CUSTOMER_WEBSITE", "CUSTOMER_OTHER"]).optional(),
   })
   .strict();
 
