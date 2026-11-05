@@ -364,7 +364,9 @@ export async function getUnpickedOrderReminderConfig(businessId: string) {
     update: {},
   });
 }
-export async function saveUnpickedOrderReminderConfig(businessId: string, input: { enabled: boolean; thresholdMonths: number }) {
+export async function saveUnpickedOrderReminderConfig(businessId: string, input: {
+  enabled: boolean; thresholdMonths: number; whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
+}) {
   return prisma.unpickedOrderReminderConfig.upsert({
     where: { businessId }, create: { businessId, ...input }, update: input,
   });
@@ -409,6 +411,11 @@ export async function sendUnpickedReminders(input: {
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "UNPICKED_REMINDER", destination, subject: `Unpicked order ${order.orderNumber}`,
       body, dedupeKey,
+      ...(channel === "WHATSAPP" && config.whatsappTemplateName && config.whatsappTemplateLanguage ? {
+        whatsappTemplateName: config.whatsappTemplateName,
+        whatsappTemplateLanguage: config.whatsappTemplateLanguage,
+        whatsappTemplateVariables: [order.customer.name, order.orderNumber, "ready for pickup", order.business.name],
+      } : {}),
     });
     return { ...result, orderId: order.id, channel };
   }));
