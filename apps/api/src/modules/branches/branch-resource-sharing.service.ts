@@ -49,9 +49,7 @@ export type BranchResourceType =
   | "CUSTOMER_ACCOUNTS"
   | "DISCOUNTS"
   | "TAX_RULES"
-  | "INVENTORY"
-  | "PAYROLL"
-  | "REPORTS";
+  | "INVENTORY";
 
 export interface BranchResourceScope {
   ownerBranchIds: string[];
