@@ -721,6 +721,8 @@ describe("replaySyncOperation", () => {
 
     expect(findPossibleDuplicates).toHaveBeenCalledWith(
       BUSINESS_A,
+      BRANCH_A,
+      USER_A,
       "08012345678",
       undefined,
       prismaMock,
@@ -729,6 +731,7 @@ describe("replaySyncOperation", () => {
     expect(createCustomer).toHaveBeenCalledWith(
       {
         businessId: BUSINESS_A,
+        branchId: BRANCH_A,
         name: "Replay Customer",
         phone: "08012345678",
       },
