@@ -64,6 +64,8 @@ export async function saveStatusRule(req: Request, res: Response) {
   const rule = await saveOrderStatusRule({
     businessId: id, status: input.status, enabled: input.enabled, channel: input.channel,
     ...(input.whatsappMessage !== undefined ? { whatsappMessage: input.whatsappMessage } : {}),
+    ...(input.whatsappTemplateName !== undefined ? { whatsappTemplateName: input.whatsappTemplateName } : {}),
+    ...(input.whatsappTemplateLanguage !== undefined ? { whatsappTemplateLanguage: input.whatsappTemplateLanguage } : {}),
     ...(input.emailSubject !== undefined ? { emailSubject: input.emailSubject } : {}),
     ...(input.emailMessage !== undefined ? { emailMessage: input.emailMessage } : {}),
   });
