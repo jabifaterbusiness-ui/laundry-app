@@ -385,6 +385,8 @@ describe("quick-operations.service", () => {
         "biz-A",
         "branch-A",
         "22222222-2222-4222-8222-222222222222",
+        expect.anything(),
+        "user-A",
       );
 
       expect(response).toEqual({
