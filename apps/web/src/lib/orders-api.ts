@@ -24,7 +24,12 @@ export interface OrderStatusHistoryEntry {
   changedAt: string;
   changedBy: string;
   branchName: string;
-  notificationResults?: Array<{ channel: string; status: string; deliveryId: string | null }>;
+  notificationResults?: Array<{
+    channel: string;
+    status: string;
+    deliveryId: string | null;
+    error?: string | null;
+  }>;
   notificationError?: string | null;
 }
 
