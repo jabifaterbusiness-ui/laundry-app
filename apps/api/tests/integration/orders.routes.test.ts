@@ -32,6 +32,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
     auditLog: {
       findMany: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn(),
+    },
     order: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -161,6 +165,10 @@ beforeEach(() => {
       order: {
         findFirst: orderFindFirst,
         update: orderUpdate,
+      },
+      branchResourceShare: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
       },
       customer: {
         findFirst: customerFindFirst,
