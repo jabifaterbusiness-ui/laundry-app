@@ -353,6 +353,9 @@ describe("InvoicesPage invoice correction workflow", () => {
     renderPage(["invoices.view", "invoices.manage", "payments.view"]);
     await selectInvoice();
 
+    // Garment colours must survive the order-to-invoice snapshot and remain visible on screen.
+    expect(screen.getByText("Blue")).toBeInTheDocument();
+
     const financialBreakdown = screen.getByRole("region", { name: "Invoice financial breakdown" });
     expect(within(financialBreakdown).getByText("Service subtotal")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Special customer (-10%)")).toBeInTheDocument();
