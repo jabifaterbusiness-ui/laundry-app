@@ -230,4 +230,4 @@ export async function fundCustomerAccount(data: {
       },
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-}}
+}
