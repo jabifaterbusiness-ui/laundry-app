@@ -1287,7 +1287,7 @@ function OrderManagementContent({
             </>
           )}
 
-undefined          {layer === "invoice-history" && (
+          {layer === "invoice-history" && (
             <>
               <h3>Edited History</h3>
               <section aria-label="Order status and notification history" style={{ marginBottom: 16 }}>
