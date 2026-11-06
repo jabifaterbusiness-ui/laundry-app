@@ -30,6 +30,10 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     return next(new AppError("Invalid or expired access token", 401));
   }
 
+  if (typeof payload.sub !== "string" || !payload.sub.trim()) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
   let account: { isActive: boolean; deletedAt: Date | null } | null;
 
   try {
