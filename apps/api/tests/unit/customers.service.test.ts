@@ -85,6 +85,33 @@ describe("listCustomers", () => {
     );
   });
 
+  it("includes owning branch details for the customer list and labels unassigned legacy records", async () => {
+    findMany.mockResolvedValue([
+      { id: "legacy-customer", ownerBranchId: null, ownerBranch: null },
+    ] as never);
+    count.mockResolvedValue(1);
+
+    const result = await listCustomers({
+      businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
+      page: 1,
+      pageSize: 25,
+      status: "all",
+    });
+
+    expect(result.data[0]).toMatchObject({
+      id: "legacy-customer",
+      ownerBranchId: null,
+      ownerBranch: null,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: { ownerBranch: { select: { id: true, name: true } } },
+      }),
+    );
+  });
+
   it("applies pagination skip/take", async () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
