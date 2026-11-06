@@ -44,9 +44,9 @@ export function CustomerDetailsPage() {
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
   const customerQuery = useQuery({
-    queryKey: ["customer", id],
+    queryKey: ["customer", activeBranchId, id],
     queryFn: () => getCustomer(id!, { accessToken }),
-    enabled: Boolean(id),
+    enabled: Boolean(id && activeBranchId),
   });
 
   const branchSharesQuery = useQuery({
@@ -62,19 +62,19 @@ export function CustomerDetailsPage() {
   });
 
   const servicesQuery = useQuery({
-    queryKey: ["services", "active"],
+    queryKey: ["services", "active", activeBranchId],
     queryFn: () => listServices({ status: "active" }, { accessToken }),
-    enabled: canManageServicePrices,
+    enabled: Boolean(activeBranchId && canManageServicePrices),
   });
   const customerPricesQuery = useQuery({
-    queryKey: ["customer-service-prices", id],
+    queryKey: ["customer-service-prices", activeBranchId, id],
     queryFn: () => listCustomerServicePrices(id!, { accessToken }),
-    enabled: Boolean(id) && canManageServicePrices,
+    enabled: Boolean(id && activeBranchId && canManageServicePrices),
   });
   const savePriceMutation = useMutation({
     mutationFn: async (input: { serviceId: string; unitPrice: number }) =>
       saveCustomerServicePrice({ customerId: id!, ...input }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", activeBranchId, id] }),
   });
   const removePriceMutation = useMutation({
     mutationFn: (priceId: string) => deleteCustomerServicePrice(priceId, { accessToken }),
@@ -82,9 +82,9 @@ export function CustomerDetailsPage() {
   });
 
   const accountQuery = useQuery({
-    queryKey: ["customer-account", id],
+    queryKey: ["customer-account", activeBranchId, id],
     queryFn: () => getCustomerAccount(id!, { accessToken }),
-    enabled: Boolean(id) && canViewAccount,
+    enabled: Boolean(id && activeBranchId && canViewAccount),
   });
 
   const fundMutation = useMutation({
@@ -127,7 +127,7 @@ export function CustomerDetailsPage() {
       setFundingOpen(false);
 
       await queryClient.invalidateQueries({
-        queryKey: ["customer-account", id],
+        queryKey: ["customer-account", activeBranchId, id],
       });
     },
     onError: (error) => {
