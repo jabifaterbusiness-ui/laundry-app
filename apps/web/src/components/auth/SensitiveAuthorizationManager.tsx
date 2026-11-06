@@ -1,7 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { ApiError } from "../../lib/api-client.js";
+import { recordSensitiveActivity } from "../../lib/auth-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
-const INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
+const ACTIVITY_HEARTBEAT_THROTTLE_MS = 15 * 1000;
 
 const ACTIVITY_EVENTS = [
   "mousedown",
@@ -13,12 +16,20 @@ const ACTIVITY_EVENTS = [
 ] as const;
 
 export function SensitiveAuthorizationManager() {
-  const clearSensitiveAuthorization = useAuthStore(
-    (state) => state.clearSensitiveAuthorization,
-  );
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const sensitiveAuthorization = useAuthStore((state) => state.sensitiveAuthorization);
+  const inactivityTimeoutMs = useAuthStore((state) => state.sensitiveAuthorizationInactivityTimeoutMs);
+  const setSensitiveAuthorization = useAuthStore((state) => state.setSensitiveAuthorization);
+  const clearSensitiveAuthorization = useAuthStore((state) => state.clearSensitiveAuthorization);
+  const lastHeartbeatAt = useRef(0);
+  const heartbeatInFlight = useRef(false);
 
   useEffect(() => {
+    if (!sensitiveAuthorization) return;
+
     let inactivityTimer: number | null = null;
+    const timeoutMs = inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
+    lastHeartbeatAt.current = Date.now();
 
     function resetInactivityTimer() {
       if (inactivityTimer !== null) {
@@ -28,7 +39,30 @@ export function SensitiveAuthorizationManager() {
       inactivityTimer = window.setTimeout(() => {
         clearSensitiveAuthorization();
         inactivityTimer = null;
-      }, INACTIVITY_TIMEOUT_MS);
+      }, timeoutMs);
+
+      if (!accessToken || heartbeatInFlight.current) return;
+      const now = Date.now();
+      if (now - lastHeartbeatAt.current < ACTIVITY_HEARTBEAT_THROTTLE_MS) return;
+
+      lastHeartbeatAt.current = now;
+      heartbeatInFlight.current = true;
+      void recordSensitiveActivity(sensitiveAuthorization, accessToken)
+        .then((activity) => {
+          setSensitiveAuthorization({
+            token: sensitiveAuthorization,
+            expiresAt: activity.expiresAt,
+            inactivityTimeoutMs: activity.inactivityTimeoutMs,
+          });
+        })
+        .catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 403) {
+            clearSensitiveAuthorization();
+          }
+        })
+        .finally(() => {
+          heartbeatInFlight.current = false;
+        });
     }
 
     ACTIVITY_EVENTS.forEach((eventName) => {
@@ -46,7 +80,13 @@ export function SensitiveAuthorizationManager() {
         window.removeEventListener(eventName, resetInactivityTimer);
       });
     };
-  }, [clearSensitiveAuthorization]);
+  }, [
+    accessToken,
+    clearSensitiveAuthorization,
+    inactivityTimeoutMs,
+    sensitiveAuthorization,
+    setSensitiveAuthorization,
+  ]);
 
   return null;
 }
