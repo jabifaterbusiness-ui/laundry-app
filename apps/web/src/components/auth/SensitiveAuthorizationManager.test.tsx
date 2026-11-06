@@ -13,6 +13,7 @@ describe("SensitiveAuthorizationManager", () => {
     });
 
     useAuthStore.setState({
+      accessToken: "access-token",
       sensitiveAuthorization: "sensitive-token",
       sensitiveAuthorizationExpiresAt: "2099-01-01T00:00:00.000Z",
       sensitiveAuthorizationInactivityTimeoutMs: 180_000,
@@ -50,16 +51,18 @@ describe("SensitiveAuthorizationManager", () => {
     ).toBeNull();
   });
 
-  it("resets the inactivity timer when the user is active", () => {
+  it("resets the inactivity timer and records active use on the server", async () => {
     render(<SensitiveAuthorizationManager />);
 
     act(() => {
       vi.advanceTimersByTime(2 * 60 * 1000);
     });
 
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(new Event("click"));
+      await Promise.resolve();
     });
+    expect(authApi.recordSensitiveActivity).toHaveBeenCalledWith("sensitive-token", "access-token");
 
     act(() => {
       vi.advanceTimersByTime(2 * 60 * 1000);
