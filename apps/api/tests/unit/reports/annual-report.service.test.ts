@@ -141,6 +141,7 @@ describe("getAnnualReport", () => {
   it("returns annual financial, collection and trend data", async () => {
     const report = await getAnnualReport({
       businessId: "business-1",
+      branchId: "branch-1",
       year: 2026,
     });
 
