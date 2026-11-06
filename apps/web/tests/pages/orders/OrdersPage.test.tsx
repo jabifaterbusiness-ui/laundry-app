@@ -1050,3 +1050,69 @@ describe("OrdersPage customer names", () => {
   });
 });
 });
+
+
+describe("OrdersPage customer-specific discounts", () => {
+  it("shows eligible automatic discounts as informational and keeps manual adjustments selectable", async () => {
+    vi.mocked(listPricingRules).mockResolvedValue({
+      adjustments: [
+        {
+          id: "automatic-customer-discount",
+          name: "Jane's discount",
+          percentage: -10,
+          isActive: true,
+          targetScope: "CUSTOMER",
+          customerId: customerA.id,
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: { id: customerA.id, name: customerA.name },
+          group: null,
+        },
+        {
+          id: "manual-adjustment",
+          name: "Courtesy adjustment",
+          percentage: -5,
+          isActive: true,
+          targetScope: "MANUAL",
+          customerId: null,
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+      ],
+      taxes: [],
+    });
+
+    renderPage();
+    await screen.findByText("No orders found.");
+
+    fireEvent.click(screen.getByRole("button", { name: /^New order$/i }));
+    await screen.findByRole("heading", { name: /find customer/i });
+    fireEvent.click(screen.getByRole("button", {
+      name: new RegExp(`^${customerA.name}(?:\\s|$)`, "i"),
+    }));
+
+    const automaticSection = await screen.findByLabelText("Automatic customer discounts");
+    const manualSection = await screen.findByLabelText("Manual adjustments");
+
+    expect(within(automaticSection).getByText("Jane's discount")).toBeInTheDocument();
+    expect(within(automaticSection).getByText(/applied automatically/i)).toBeInTheDocument();
+    expect(within(automaticSection).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(manualSection).getByText("Courtesy adjustment")).toBeInTheDocument();
+    expect(within(manualSection).getByRole("checkbox")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(listPricingRules).toHaveBeenCalledWith(
+        { accessToken: "test-token" },
+        customerA.id,
+      );
+    });
+  });
+});
