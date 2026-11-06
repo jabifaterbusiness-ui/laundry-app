@@ -1,3 +1,4 @@
+import type { Role } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
@@ -37,7 +38,7 @@ describe("refresh token rotation", () => {
   const user = {
     id: "user-1",
     email: "owner@example.com",
-    securityRole: "BUSINESS_OWNER",
+    securityRole: "BUSINESS_OWNER" as Role,
     businessId: "business-1",
     isActive: true,
   };
