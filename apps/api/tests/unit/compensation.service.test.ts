@@ -359,4 +359,78 @@ describe("compensation service", () => {
       }),
     );
   });
+
+  it("does not query or write compensation when employee membership is inactive or revoked", async () => {
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue(null) },
+      employeeCompensation: {
+        findFirst: vi.fn(),
+        update: vi.fn(),
+        create: vi.fn(),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    await expect(
+      createCompensation({
+        businessId: "biz-1",
+        branchId: "branch-1",
+        employeeId: "employee-1",
+        basicSalary: 120000,
+        effectiveFrom: new Date("2026-09-01"),
+        actorUserId: "owner-1",
+      }),
+    ).rejects.toMatchObject({
+      message: "Employee not found in this business",
+      statusCode: 404,
+    });
+
+    expect(tx.employeeCompensation.findFirst).not.toHaveBeenCalled();
+    expect(tx.employeeCompensation.update).not.toHaveBeenCalled();
+    expect(tx.employeeCompensation.create).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("ends a new compensation period at the next already-scheduled future period", async () => {
+    const futureStart = new Date("2027-01-01");
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
+            id: "comp-future",
+            effectiveFrom: futureStart,
+          }),
+        create: vi.fn().mockResolvedValue({ id: "comp-new" }),
+        update: vi.fn(),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    await createCompensation({
+      businessId: "biz-1",
+      branchId: "branch-1",
+      employeeId: "employee-1",
+      basicSalary: 140000,
+      effectiveFrom: new Date("2026-10-01"),
+      actorUserId: "owner-1",
+    });
+
+    expect(tx.employeeCompensation.create).toHaveBeenCalledWith({
+      data: {
+        businessId: "biz-1",
+        branchId: "branch-1",
+        employeeId: "employee-1",
+        basicSalary: 140000,
+        effectiveFrom: new Date("2026-10-01"),
+        effectiveTo: futureStart,
+      },
+    });
+    expect(tx.employeeCompensation.update).not.toHaveBeenCalled();
+  });
 });
