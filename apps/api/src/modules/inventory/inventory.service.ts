@@ -90,86 +90,47 @@ export async function updateInventoryItem(
   input: UpdateInventoryItemInput,
 ) {
   if (!scope.branchId || !scope.userId) throw new AppError("A valid branch and user context are required", 400);
-  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
-  const existing = await prisma.inventoryItem.findFirst({
-    where: { id: inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
-  });
-
-  if (!existing) {
-    throw new AppError("Inventory item not found", 404);
-  }
-
-  await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: existing.ownerBranchId, resourceId: inventoryItemId });
-  const data: Prisma.InventoryItemUpdateInput = {};
-
-  if (input.name !== undefined) {
-    const name = input.name.trim();
-
-    if (!name) {
-      throw new AppError("Inventory item name is required", 422);
-    }
-
-    const duplicate = await prisma.inventoryItem.findFirst({
-      where: {
-        businessId: scope.businessId,
-        ownerBranchId: existing.ownerBranchId,
-        name,
-        NOT: { id: inventoryItemId },
-      },
-    });
-
-    if (duplicate) {
-      throw new AppError(
-        "An inventory item with this name already exists",
-        409,
-      );
-    }
-
-    data.name = name;
-  }
-
-  if (input.sku !== undefined) data.sku = input.sku.trim() || null;
-  if (input.category !== undefined) data.category = input.category.trim() || null;
-  if (input.storageLocation !== undefined) data.storageLocation = input.storageLocation.trim() || null;
-  if (input.description !== undefined) {
-    data.description = input.description.trim() || null;
-  }
-
-  if (input.unit !== undefined) {
-    data.unit = input.unit;
-  }
-
-  if (input.reorderQuantity !== undefined) data.reorderQuantity = input.reorderQuantity;
-  if (input.lowStockThreshold !== undefined) {
-    data.lowStockThreshold = input.lowStockThreshold;
-  }
-
-  if (input.isActive !== undefined) {
-    data.isActive = input.isActive;
-  }
 
   try {
-    const updated = await prisma.inventoryItem.updateMany({
-      where: {
-        id: inventoryItemId,
-        businessId: scope.businessId,
-        ownerBranchId: existing.ownerBranchId,
-      },
-      data,
-    });
-    if (!updated.count) throw new AppError("Inventory item not found", 404);
-    return prisma.inventoryItem.findFirst({
-      where: {
-        id: inventoryItemId,
-        businessId: scope.businessId,
-        ownerBranchId: existing.ownerBranchId,
-      },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId!, userId: scope.userId!, resourceType: "INVENTORY" }, tx);
+      const existing = await tx.inventoryItem.findFirst({
+        where: { id: inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
+      });
+      if (!existing) throw new AppError("Inventory item not found", 404);
+
+      await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId!, userId: scope.userId!, resourceType: "INVENTORY", ownerBranchId: existing.ownerBranchId, resourceId: inventoryItemId }, tx);
+      const data: Prisma.InventoryItemUpdateInput = {};
+
+      if (input.name !== undefined) {
+        const name = input.name.trim();
+        if (!name) throw new AppError("Inventory item name is required", 422);
+        const duplicate = await tx.inventoryItem.findFirst({
+          where: { businessId: scope.businessId, ownerBranchId: existing.ownerBranchId, name, NOT: { id: inventoryItemId } },
+        });
+        if (duplicate) throw new AppError("An inventory item with this name already exists", 409);
+        data.name = name;
+      }
+      if (input.sku !== undefined) data.sku = input.sku.trim() || null;
+      if (input.category !== undefined) data.category = input.category.trim() || null;
+      if (input.storageLocation !== undefined) data.storageLocation = input.storageLocation.trim() || null;
+      if (input.description !== undefined) data.description = input.description.trim() || null;
+      if (input.unit !== undefined) data.unit = input.unit;
+      if (input.reorderQuantity !== undefined) data.reorderQuantity = input.reorderQuantity;
+      if (input.lowStockThreshold !== undefined) data.lowStockThreshold = input.lowStockThreshold;
+      if (input.isActive !== undefined) data.isActive = input.isActive;
+
+      const updated = await tx.inventoryItem.updateMany({
+        where: { id: inventoryItemId, businessId: scope.businessId, ownerBranchId: existing.ownerBranchId },
+        data,
+      });
+      if (!updated.count) throw new AppError("Inventory item not found", 404);
+      return tx.inventoryItem.findFirst({
+        where: { id: inventoryItemId, businessId: scope.businessId, ownerBranchId: existing.ownerBranchId },
+      });
+    }, { isolationLevel: "Serializable" });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const target = Array.isArray(error.meta?.target)
         ? error.meta.target.join(",").toLowerCase()
         : String(error.meta?.target ?? "").toLowerCase();
@@ -180,7 +141,6 @@ export async function updateInventoryItem(
         409,
       );
     }
-
     throw error;
   }
 }
