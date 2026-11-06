@@ -47,6 +47,8 @@ vi.mock("../../src/modules/businesses/businesses.controller.js", () => ({
   getLogo: vi.fn((_req, res) => res.status(200).send("logo")),
   uploadLogo: vi.fn((_req, res) => res.status(200).json({ ok: true })),
   removeLogo: vi.fn((_req, res) => res.status(200).json({ ok: true })),
+  getSecuritySettings: vi.fn((_req, res) => res.status(200).json({ sessionInactivityTimeoutMinutes: 3 })),
+  updateSecuritySettings: vi.fn((_req, res) => res.status(200).json({ sessionInactivityTimeoutMinutes: 5 })),
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
@@ -56,6 +58,8 @@ import {
   getLogo,
   uploadLogo,
   removeLogo,
+  getSecuritySettings,
+  updateSecuritySettings,
 } from "../../src/modules/businesses/businesses.controller.js";
 import { createApp } from "../../src/app.js";
 
@@ -167,6 +171,41 @@ describe("Businesses routes - granular permission enforcement", () => {
 
     expect(response.status).toBe(403);
     expect(updateBranding).not.toHaveBeenCalled();
+  });
+
+  it("uses business.view for session security settings reads", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const response = await request(app)
+      .get("/api/v1/businesses/security-settings")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(response.status).toBe(200);
+    expect(getSecuritySettings).toHaveBeenCalled();
+  });
+
+  it("uses business.update for session security settings changes", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const response = await request(app)
+      .patch("/api/v1/businesses/security-settings")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ sessionInactivityTimeoutMinutes: 5 });
+
+    expect(response.status).toBe(200);
+    expect(updateSecuritySettings).toHaveBeenCalled();
+  });
+
+  it("denies session security settings changes without business.update", async () => {
+    findUserOverride.mockResolvedValue({ allowed: false } as never);
+
+    const response = await request(app)
+      .patch("/api/v1/businesses/security-settings")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ sessionInactivityTimeoutMinutes: 5 });
+
+    expect(response.status).toBe(403);
+    expect(updateSecuritySettings).not.toHaveBeenCalled();
   });
 
   it("uses business.view for logo reads", async () => {
