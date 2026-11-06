@@ -19,34 +19,42 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   const header = req.headers.authorization;
 
   if (!header?.startsWith("Bearer ")) {
-    throw new AppError("Missing or malformed Authorization header", 401);
+    return next(new AppError("Missing or malformed Authorization header", 401));
   }
 
   const token = header.slice("Bearer ".length);
+  let payload: AccessTokenPayload;
 
   try {
-    const payload = jwt.verify(token, config.auth.accessTokenSecret) as AccessTokenPayload;
-    const account = await prisma.user.findUnique({
+    payload = jwt.verify(token, config.auth.accessTokenSecret) as AccessTokenPayload;
+  } catch {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  let account: { isActive: boolean; deletedAt: Date | null } | null;
+
+  try {
+    account = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: { isActive: true, deletedAt: true },
     });
-
-    if (!account || !account.isActive || account.deletedAt) {
-      throw new AppError("Invalid or expired access token", 401);
-    }
-
-    // No branchId here by design - see AccessTokenPayload / auth.service.ts.
-    req.user = {
-      id: payload.sub,
-      email: payload.email,
-      role: "",
-      securityRole: payload.securityRole,
-      businessId: payload.businessId,
-    };
-    next();
-  } catch {
-    throw new AppError("Invalid or expired access token", 401);
+  } catch (error) {
+    return next(error);
   }
+
+  if (!account || !account.isActive || account.deletedAt) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  // No branchId here by design - see AccessTokenPayload / auth.service.ts.
+  req.user = {
+    id: payload.sub,
+    email: payload.email,
+    role: "",
+    securityRole: payload.securityRole,
+    businessId: payload.businessId,
+  };
+  return next();
 }
 
 /**
