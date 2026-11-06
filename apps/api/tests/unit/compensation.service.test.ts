@@ -246,6 +246,7 @@ describe("compensation service", () => {
   });
 
   it("returns the compensation effective on a payroll date", async () => {
+    mocks.prisma.employeeCompensation.findFirst.mockClear();
     mocks.prisma.employeeCompensation.findFirst.mockResolvedValue({
       id: "comp-1",
       basicSalary: 100000,
@@ -272,6 +273,7 @@ describe("compensation service", () => {
   });
 
   it("does not treat an unassigned legacy compensation record as branch-owned", async () => {
+    mocks.prisma.employeeCompensation.findFirst.mockClear();
     mocks.prisma.employeeCompensation.findFirst.mockResolvedValue(null);
 
     await expect(

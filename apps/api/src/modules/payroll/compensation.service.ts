@@ -178,7 +178,7 @@ export async function listCompensation({
   return prisma.employeeCompensation.findMany({
     where: {
       businessId,
-      OR: [{ branchId }, { branchId: null }],
+      branchId,
       employee: { is: { branches: { some: { branchId } } } },
       ...(employeeId ? { employeeId } : {}),
     },
