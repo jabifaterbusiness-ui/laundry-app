@@ -99,7 +99,6 @@ function OrderManagementContent({
     | "invoice-void"
     | "invoice-delete"
     | "invoice-history"
-    | "status-history"
   >("none");
   const [dirty, setDirty] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -208,7 +207,7 @@ function OrderManagementContent({
         activeBranchId &&
         mode === "view" &&
         order?.id &&
-        (layer === "status-history" || layer === "invoice-history"),
+        layer === "invoice-history",
     ),
   });
 
@@ -837,13 +836,6 @@ function OrderManagementContent({
         <button type="button" onClick={() => setLayer("history")}>
           History
         </button>
-        <button
-          type="button"
-          disabled={mode !== "view" || !order}
-          onClick={() => setLayer("status-history")}
-        >
-          Status History
-        </button>
         <button type="button" onClick={() => setLayer("notes")}>
           Notes
         </button>
@@ -1295,43 +1287,7 @@ function OrderManagementContent({
             </>
           )}
 
-          {layer === "status-history" && (
-            <>
-              <h3>Order Status History</h3>
-              {statusHistoryQuery.isLoading ? (
-                <p>Loading status history...</p>
-              ) : statusHistoryQuery.isError ? (
-                <p role="alert">Unable to load order status history.</p>
-              ) : statusHistoryQuery.data?.length ? (
-                <ol style={{ display: "grid", gap: 10, paddingLeft: 22 }}>
-                  {statusHistoryQuery.data.map((entry) => (
-                    <li key={entry.id}>
-                      <strong>
-                        {entry.previousStatus
-                          ? entry.previousStatus.replaceAll("_", " ")
-                          : "Status set to"}{" "}
-                        {entry.previousStatus ? "→ " : ""}{entry.status.replaceAll("_", " ")}
-                      </strong>
-                      <div>Date/Time: {formatDate(entry.changedAt)}</div>
-                      <div>Changed by: {entry.changedBy}</div>
-                       <div>Branch: {entry.branchName}</div>
-                      <div>
-                        <strong>Notifications:</strong>{" "}
-                        {entry.notificationResults?.length
-                          ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
-                          : "No notification attempt recorded"}
-                      </div>
-                      {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>No status changes have been recorded for this order yet.</p>
-              )}
-            </>
-          )}
-
-          {layer === "invoice-history" && (
+undefined          {layer === "invoice-history" && (
             <>
               <h3>Edited History</h3>
               <section aria-label="Order status and notification history" style={{ marginBottom: 16 }}>
