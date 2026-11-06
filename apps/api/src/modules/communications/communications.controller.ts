@@ -103,5 +103,7 @@ export async function sendReminders(req: Request, res: Response) {
 
 
 export async function getDeliveries(req: Request, res: Response) {
-  res.status(200).json({ data: await listCommunicationDeliveries(requireBusinessId(req)) });
+  res.status(200).json({
+    data: await listCommunicationDeliveries(requireBusinessId(req), requireBranchId(req)),
+  });
 }
