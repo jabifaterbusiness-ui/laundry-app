@@ -195,8 +195,8 @@ export async function saveBranchResourceShare(input: {
   customerAccountMode?: "SHARED" | "SEPARATE";
   createdByUserId: string;
 }) {
-  const accountMode = input.customerAccountMode ?? "SHARED";
-  if (accountMode === "SEPARATE" && (input.resourceType !== "CUSTOMERS" || input.resourceId || input.userId)) {
+  const requestedAccountMode = input.customerAccountMode;
+  if (requestedAccountMode === "SEPARATE" && (input.resourceType !== "CUSTOMERS" || input.resourceId || input.userId)) {
     throw new AppError("Separate customer accounts require an all-customer rule for the whole target branch", 400);
   }
   if (input.ownerBranchId === input.targetBranchId) {
@@ -291,6 +291,7 @@ export async function saveBranchResourceShare(input: {
     select: { id: true, customerAccountMode: true },
   });
 
+  const accountMode = requestedAccountMode ?? existing?.customerAccountMode ?? "SHARED";
   const auditMetadata = {
     ownerBranchId: input.ownerBranchId,
     targetBranchId: input.targetBranchId,
