@@ -32,6 +32,7 @@ export function BranchSharingPage() {
   const [resourceId, setResourceId] = useState(searchParams.get("resourceId") ?? "");
   const [userId, setUserId] = useState("");
   const [accessLevel, setAccessLevel] = useState<"READ" | "EDIT">("READ");
+  const [customerAccountMode, setCustomerAccountMode] = useState<"SHARED" | "SEPARATE">("SHARED");
   const [message, setMessage] = useState("");
 
   const branchesQuery = useQuery({
@@ -60,11 +61,13 @@ export function BranchSharingPage() {
       resourceId: resourceId.trim() || null,
       userId: userId || null,
       accessLevel,
+      ...(resourceType === "CUSTOMERS" && !resourceId.trim() && !userId ? { customerAccountMode } : {}),
     }, accessToken!),
     onSuccess: async () => {
       setMessage("Branch sharing rule saved.");
       setResourceId("");
       setUserId("");
+      setCustomerAccountMode("SHARED");
       await queryClient.invalidateQueries({ queryKey: ["branches", "sharing-rules"] });
     },
     onError: (error) => setMessage(error instanceof Error ? error.message : "Unable to save sharing rule."),
@@ -125,6 +128,14 @@ export function BranchSharingPage() {
                 <option value="EDIT">Read and edit</option>
               </select>
             </label>
+            {resourceType === "CUSTOMERS" && !resourceId.trim() && !userId ? (
+              <label>Customer account handling
+                <select value={customerAccountMode} onChange={(event) => setCustomerAccountMode(event.target.value as "SHARED" | "SEPARATE")}>
+                  <option value="SHARED">Shared balance and transaction history</option>
+                  <option value="SEPARATE">Separate balance and history per branch</option>
+                </select>
+              </label>
+            ) : null}
           </div>
           <p style={{ color: "#64748b", fontSize: 13 }}>Leave Specific record ID blank to share every record in the selected category. Enter a record ID to share only that record. The receiving user must already belong to the receiving branch.</p>
           <button type="button" disabled={saveMutation.isPending || !ownerBranchId || !targetBranchId || ownerBranchId === targetBranchId} onClick={() => saveMutation.mutate()}>{saveMutation.isPending ? "Saving..." : "Save sharing rule"}</button>
@@ -138,7 +149,7 @@ export function BranchSharingPage() {
         {!sharesQuery.isLoading && shares.length === 0 && <p>No cross-branch sharing rules have been created.</p>}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th align="left">Owner branch</th><th align="left">Receiving branch</th><th align="left">Data</th><th align="left">Record</th><th align="left">User</th><th align="left">Access</th><th align="left">Action</th></tr></thead>
+            <thead><tr><th align="left">Owner branch</th><th align="left">Receiving branch</th><th align="left">Data</th><th align="left">Record</th><th align="left">User</th><th align="left">Access</th><th align="left">Customer accounts</th><th align="left">Action</th></tr></thead>
             <tbody>
               {shares.map((share) => (
                 <tr key={share.id}>
@@ -148,6 +159,7 @@ export function BranchSharingPage() {
                   <td>{share.resourceId || "All records"}</td>
                   <td>{share.user?.fullName ?? "All branch users"}</td>
                   <td>{share.accessLevel === "EDIT" ? "Read and edit" : "Read only"}</td>
+                  <td>{share.resourceType === "CUSTOMERS" && !share.resourceId && !share.userId ? (share.customerAccountMode === "SEPARATE" ? "Separate per branch" : "Shared balance/history") : "—"}</td>
                   <td>{canManage && <button type="button" disabled={deleteMutation.isPending} onClick={() => {
                     if (window.confirm("Remove this branch sharing rule?")) deleteMutation.mutate(share.id);
                   }}>Remove</button>}</td>
