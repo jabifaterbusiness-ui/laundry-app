@@ -6,6 +6,7 @@ import { useAuthStore } from "../../../src/state/auth-store.js";
 
 const apiMocks = vi.hoisted(() => ({
   listServices: vi.fn(),
+  listPricingRules: vi.fn(),
   createService: vi.fn(),
   updateService: vi.fn(),
   setServiceActive: vi.fn(),
@@ -35,6 +36,16 @@ describe("ServicesPage", () => {
     useAuthStore.setState({
       accessToken: "test-token",
       activeBranchId: "branch-1",
+    });
+
+    apiMocks.listPricingRules.mockResolvedValue({
+      adjustments: [],
+      taxes: [],
+      pagination: {
+        pageSize: 50,
+        adjustments: { page: 1, total: 0, totalPages: 1 },
+        taxes: { page: 1, total: 0, totalPages: 1 },
+      },
     });
 
     apiMocks.listServices.mockResolvedValue({
