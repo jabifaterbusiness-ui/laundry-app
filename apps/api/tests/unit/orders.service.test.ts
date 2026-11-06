@@ -411,8 +411,8 @@ describe("createOrder", () => {
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 
-    vi.mocked(prisma.branchResourceShare.findMany).mockImplementation(async ({ where }: never) =>
-      (where as { resourceType?: string }).resourceType === "CUSTOMER_PRICING"
+    vi.mocked(prisma.branchResourceShare.findMany).mockImplementation(async (args) =>
+      (args.where as { resourceType?: string }).resourceType === "CUSTOMER_PRICING"
         ? [{ ownerBranchId: BRANCH_B, resourceId: null, accessLevel: "READ" }] as never
         : [],
     );
