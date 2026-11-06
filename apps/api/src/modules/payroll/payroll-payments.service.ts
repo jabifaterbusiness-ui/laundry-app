@@ -266,7 +266,7 @@ export async function voidPayrollPayment(
 ) {
   const reason = requireReason(rawReason);
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await runSerializableTransaction(async (tx) => {
     const payment = await tx.payrollPayment.findFirst({
       where: {
         id,
