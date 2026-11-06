@@ -1,4 +1,4 @@
-import { PayrollApprovalStatus, PayrollDeductionType } from "@prisma/client";
+import { PayrollApprovalStatus, PayrollDeductionType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -73,7 +73,7 @@ export async function updatePayrollEarnings(
     });
 
     return { before: record, after: updated };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   await recordAuditEvent({
     businessId: args.businessId,
@@ -142,7 +142,7 @@ export async function createOtherPayrollDeduction(
     });
 
     return { deduction, record: updated };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   await recordAuditEvent({
     businessId: args.businessId,
