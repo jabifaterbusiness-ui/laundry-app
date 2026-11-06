@@ -11,6 +11,8 @@ const { prismaMock } = vi.hoisted(() => ({
       update: vi.fn(),
     },
     refreshToken: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
       updateMany: vi.fn(),
     },
     $transaction: vi.fn(),
@@ -25,9 +27,75 @@ import {
   createPasswordResetToken,
   hashPassword,
   invalidatePasswordResetToken,
+  issueTokenPair,
+  rotateRefreshToken,
   resetPassword,
   verifyPassword,
 } from "../../src/modules/auth/auth.service.js";
+
+describe("refresh token rotation", () => {
+  const user = {
+    id: "user-1",
+    email: "owner@example.com",
+    securityRole: "BUSINESS_OWNER",
+    businessId: "business-1",
+    isActive: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) =>
+      callback(prismaMock),
+    );
+    prismaMock.refreshToken.findUnique.mockResolvedValue({
+      id: "refresh-token-1",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      user,
+    });
+    prismaMock.refreshToken.create.mockResolvedValue({});
+    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("stores only a hash and uses the configured seven-day refresh lifetime", async () => {
+    const before = Date.now();
+    const tokens = await issueTokenPair(user);
+
+    expect(tokens.accessToken).toBeTruthy();
+    expect(tokens.refreshToken).toMatch(/^[a-f0-9]{128}$/);
+    const createCall = prismaMock.refreshToken.create.mock.calls[0]?.[0];
+    expect(createCall.data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(createCall.data.tokenHash).not.toBe(tokens.refreshToken);
+    expect(createCall.data.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60 * 1000);
+    expect(createCall.data.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 7 * 24 * 60 * 60 * 1000 + 1000);
+  });
+
+  it("atomically revokes the old token and issues exactly one replacement", async () => {
+    const tokens = await rotateRefreshToken("raw-refresh-token");
+
+    expect(tokens.accessToken).toBeTruthy();
+    expect(tokens.refreshToken).toMatch(/^[a-f0-9]{128}$/);
+    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "refresh-token-1",
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prismaMock.refreshToken.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a token already claimed by a concurrent refresh request", async () => {
+    prismaMock.refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(rotateRefreshToken("raw-refresh-token")).rejects.toMatchObject({
+      message: "Invalid or expired refresh token",
+      statusCode: 401,
+    });
+    expect(prismaMock.refreshToken.create).not.toHaveBeenCalled();
+  });
+});
 
 describe("auth password reset service", () => {
   beforeEach(() => {
@@ -40,6 +108,8 @@ describe("auth password reset service", () => {
     prismaMock.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.passwordResetToken.create.mockResolvedValue({});
     prismaMock.user.update.mockResolvedValue({});
+    prismaMock.refreshToken.findUnique.mockResolvedValue(null);
+    prismaMock.refreshToken.create.mockResolvedValue({});
     prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 0 });
   });
 
