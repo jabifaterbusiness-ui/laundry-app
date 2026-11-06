@@ -194,6 +194,7 @@ describe("reauthorize", () => {
     expect(res.json).toHaveBeenCalledWith({
       token: "sensitive-token",
       expiresAt: expect.any(Date),
+      inactivityTimeoutMs: 180000,
     });
   });
 
