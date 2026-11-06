@@ -9,14 +9,17 @@ import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as invoicesApi from "../../../src/lib/invoices-api.js";
 import * as businessesApi from "../../../src/lib/businesses-api.js";
 import * as customersApi from "../../../src/lib/customers-api.js";
+import * as servicesApi from "../../../src/lib/services-api.js";
 
 vi.mock("../../../src/lib/invoices-api.js");
 vi.mock("../../../src/lib/businesses-api.js");
 vi.mock("../../../src/lib/customers-api.js");
+vi.mock("../../../src/lib/services-api.js");
 
 const mockedInvoicesApi = vi.mocked(invoicesApi);
 const mockedBusinessesApi = vi.mocked(businessesApi);
 const mockedCustomersApi = vi.mocked(customersApi);
+const mockedServicesApi = vi.mocked(servicesApi);
 
 function renderPage(
   permissions: string[] = [
@@ -122,6 +125,11 @@ beforeEach(() => {
     receiptBackgroundColor: "#ffffff",
     receiptTextColor: "#111111",
     receiptHeaderStyle: "standard",
+  });
+
+  mockedServicesApi.listPricingRules.mockResolvedValue({
+    adjustments: [],
+    taxes: [],
   });
 
   mockedInvoicesApi.listInvoices.mockResolvedValue({
@@ -359,6 +367,80 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(within(paymentHistory).getByText("BANK-REF-1")).toBeInTheDocument();
     expect(within(paymentHistory).getByText("Amount paid")).toBeInTheDocument();
     expect(within(paymentHistory).getByText("Balance due")).toBeInTheDocument();
+  });
+
+  it("shows only manual choices and already-applied automatic discounts during invoice repricing", async () => {
+    mockedInvoicesApi.getInvoice.mockResolvedValue({
+      ...invoice,
+      appliedAdjustments: [{
+        id: "existing-vip",
+        name: "Existing VIP discount",
+        percentage: -10,
+        amount: -1000,
+        scope: "INVOICE",
+      }],
+    });
+    mockedServicesApi.listPricingRules.mockResolvedValue({
+      adjustments: [
+        {
+          id: "existing-vip",
+          name: "Existing VIP discount",
+          percentage: -10,
+          isActive: false,
+          targetScope: "CUSTOMER",
+          customerId: "customer-1",
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+        {
+          id: "unrelated-vip",
+          name: "Another customer's VIP discount",
+          percentage: -15,
+          isActive: true,
+          targetScope: "CUSTOMER",
+          customerId: "customer-2",
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+        {
+          id: "manual-courtesy",
+          name: "Courtesy adjustment",
+          percentage: -5,
+          isActive: true,
+          targetScope: "MANUAL",
+          customerId: null,
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+      ],
+      taxes: [],
+    });
+
+    renderPage();
+    await selectInvoice();
+    fireEvent.click(screen.getByRole("button", { name: "Adjust Discounts & Taxes" }));
+
+    const correction = await screen.findByRole("region", { name: "Adjust invoice discounts and taxes" });
+    expect(within(correction).getByText("Courtesy adjustment")).toBeInTheDocument();
+    expect(within(correction).getByText("Existing VIP discount")).toBeInTheDocument();
+    expect(within(correction).queryByText("Another customer's VIP discount")).not.toBeInTheDocument();
+    expect(within(correction).getByLabelText(/Existing VIP discount/)).toBeChecked();
+    expect(within(correction).getByLabelText(/Courtesy adjustment/)).not.toBeChecked();
   });
 
   it("shows correction controls with invoices.manage permission", async () => {
