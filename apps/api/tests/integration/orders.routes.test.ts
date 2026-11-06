@@ -652,7 +652,7 @@ describe("Orders routes - authorization", () => {
           status: "COMPLETED",
           notificationResults: [
             { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
-            { channel: "EMAIL", status: "FAILED", deliveryId: null },
+            { channel: "EMAIL", status: "FAILED", deliveryId: "delivery-2", error: "Provider temporarily unavailable" },
           ],
           notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
         },
@@ -676,7 +676,7 @@ describe("Orders routes - authorization", () => {
         branchName: "Main Branch",
         notificationResults: [
           { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
-          { channel: "EMAIL", status: "FAILED", deliveryId: null },
+          { channel: "EMAIL", status: "FAILED", deliveryId: "delivery-2", error: "Provider temporarily unavailable" },
         ],
         notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
       },
