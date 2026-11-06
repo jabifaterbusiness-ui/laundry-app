@@ -136,6 +136,7 @@ export function CustomersPage() {
       <TableExportActions title="Complete customer list" filename="laundryangel-customers" loadRows={loadAllCustomersForExport} columns={[
         { header: "Customer name", value: (row) => row.name }, { header: "Phone", value: (row) => row.phone },
         { header: "Email", value: (row) => row.email }, { header: "Address", value: (row) => row.address },
+        { header: "Owning branch", value: (row) => row.ownerBranch?.name ?? (row.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy") },
         { header: "Status", value: (row) => row.lifecycleStatus }, { header: "Created", value: (row) => row.createdAt },
       ]} />
 
@@ -196,6 +197,7 @@ export function CustomersPage() {
               <th>Name</th>
               <th>Phone</th>
               <th>Email</th>
+              <th>Owning branch</th>
               <th>Status</th>
               <th aria-label="Actions" />
             </tr>
@@ -210,6 +212,7 @@ export function CustomersPage() {
                 </td>
                 <td>{customer.phone}</td>
                 <td>{customer.email ?? "-"}</td>
+                <td>{customer.ownerBranch?.name ?? (customer.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy")}</td>
                 <td>{customer.lifecycleStatus}</td>
                 <td>
                   <button
