@@ -47,8 +47,24 @@ beforeEach(() => {
 });
 
 describe("customer-aware pricing rule lists", () => {
-  it("returns manual adjustments without loading unrelated automatic discounts before a customer is selected", async () => {
+  it("preserves all active and inactive rules in the pricing management view", async () => {
     await listPricingRules("business-1", "branch-A", "user-A");
+
+    const query = findPricingRules.mock.calls[0]![0]!;
+    expect(query.where).toMatchObject({
+      businessId: "business-1",
+      OR: [
+        { branchId: null },
+        { branchId: { in: ["branch-A"] } },
+        { id: { in: [] } },
+      ],
+    });
+    expect(query.where).not.toHaveProperty("isActive");
+    expect(query.where).not.toHaveProperty("AND");
+  });
+
+  it("returns manual adjustments without loading unrelated automatic discounts before a customer is selected", async () => {
+    await listPricingRules("business-1", "branch-A", "user-A", undefined, "order");
 
     expect(findPricingRules).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
@@ -69,7 +85,7 @@ describe("customer-aware pricing rule lists", () => {
     findCustomer.mockResolvedValue({ id: "customer-1" } as never);
     findGroupMemberships.mockResolvedValue([{ groupId: "group-1" }] as never);
 
-    await listPricingRules("business-1", "branch-A", "user-A", "customer-1");
+    await listPricingRules("business-1", "branch-A", "user-A", "customer-1", "order");
 
     expect(findCustomer).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
@@ -101,7 +117,7 @@ describe("customer-aware pricing rule lists", () => {
     findCustomer.mockResolvedValue(null);
 
     await expect(
-      listPricingRules("business-1", "branch-A", "user-A", "customer-other"),
+      listPricingRules("business-1", "branch-A", "user-A", "customer-other", "order"),
     ).rejects.toThrow("Customer not found");
 
     expect(findPricingRules).not.toHaveBeenCalled();
