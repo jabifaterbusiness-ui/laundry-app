@@ -76,6 +76,20 @@ describe("compensation service", () => {
     });
 
     expect(result.id).toBe("comp-1");
+    expect(tx.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "employee-1",
+        businessId: "biz-1",
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId: "branch-1" } },
+      },
+      select: { id: true },
+    });
+    expect(mocks.prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: "Serializable" },
+    );
     expect(tx.employeeCompensation.create).toHaveBeenCalled();
     expect(tx.employeeCompensation.findFirst).toHaveBeenNthCalledWith(2, expect.objectContaining({
       where: expect.objectContaining({ businessId: "biz-1", branchId: "branch-1", employeeId: "employee-1" }),
