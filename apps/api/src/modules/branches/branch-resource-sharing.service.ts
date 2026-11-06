@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -133,6 +134,56 @@ export async function listBranchResourceShares(businessId: string) {
   });
 }
 
+async function reconcileCustomerAccountMode(
+  tx: Prisma.TransactionClient,
+  input: { businessId: string; ownerBranchId: string; targetBranchId: string; mode: "SHARED" | "SEPARATE" },
+) {
+  const customers = await tx.customer.findMany({
+    where: { businessId: input.businessId, ownerBranchId: input.ownerBranchId },
+    select: { id: true },
+  });
+  for (const customer of customers) {
+    const branchAccount = await tx.customerAccount.findFirst({
+      where: { businessId: input.businessId, customerId: customer.id, branchId: input.targetBranchId },
+      select: { id: true },
+    });
+    if (input.mode === "SEPARATE") {
+      const sharedAccount = await tx.customerAccount.findFirst({
+        where: { businessId: input.businessId, customerId: customer.id, branchId: null },
+        select: { id: true },
+      });
+      if (!sharedAccount) continue;
+      const branchTransactions = await tx.customerAccountTransaction.findMany({
+        where: { customerAccountId: sharedAccount.id, branchId: input.targetBranchId },
+        select: { id: true },
+      });
+      if (branchTransactions.length === 0) continue;
+      const destination = branchAccount ?? await tx.customerAccount.create({
+        data: { businessId: input.businessId, customerId: customer.id, branchId: input.targetBranchId },
+        select: { id: true },
+      });
+      await tx.customerAccountTransaction.updateMany({
+        where: { customerAccountId: sharedAccount.id, branchId: input.targetBranchId },
+        data: { customerAccountId: destination.id },
+      });
+      continue;
+    }
+    if (!branchAccount) continue;
+    const sharedAccount = await tx.customerAccount.findFirst({
+      where: { businessId: input.businessId, customerId: customer.id, branchId: null },
+      select: { id: true },
+    }) ?? await tx.customerAccount.create({
+      data: { businessId: input.businessId, customerId: customer.id, branchId: null },
+      select: { id: true },
+    });
+    await tx.customerAccountTransaction.updateMany({
+      where: { customerAccountId: branchAccount.id },
+      data: { customerAccountId: sharedAccount.id },
+    });
+    await tx.customerAccount.delete({ where: { id: branchAccount.id } });
+  }
+}
+
 export async function saveBranchResourceShare(input: {
   businessId: string;
   ownerBranchId: string;
@@ -141,8 +192,13 @@ export async function saveBranchResourceShare(input: {
   resourceId?: string | null;
   userId?: string | null;
   accessLevel: "READ" | "EDIT";
+  customerAccountMode?: "SHARED" | "SEPARATE";
   createdByUserId: string;
 }) {
+  const accountMode = input.customerAccountMode ?? "SHARED";
+  if (accountMode === "SEPARATE" && (input.resourceType !== "CUSTOMERS" || input.resourceId || input.userId)) {
+    throw new AppError("Separate customer accounts require an all-customer rule for the whole target branch", 400);
+  }
   if (input.ownerBranchId === input.targetBranchId) {
     throw new AppError("A branch cannot share resources with itself", 400);
   }
@@ -232,7 +288,7 @@ export async function saveBranchResourceShare(input: {
       resourceId,
       userId,
     },
-    select: { id: true },
+    select: { id: true, customerAccountMode: true },
   });
 
   const auditMetadata = {
@@ -242,16 +298,23 @@ export async function saveBranchResourceShare(input: {
     resourceId,
     userId,
     accessLevel: input.accessLevel,
+    customerAccountMode: accountMode,
   };
   if (existing) {
-    const updated = await prisma.branchResourceShare.update({
+    const oldMode = existing.customerAccountMode ?? "SHARED";
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.resourceType === "CUSTOMERS" && !resourceId && !userId && oldMode !== accountMode) {
+        await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
+      }
+      return tx.branchResourceShare.update({
       where: { id: existing.id },
-      data: { accessLevel: input.accessLevel, createdByUserId: input.createdByUserId },
+      data: { accessLevel: input.accessLevel, customerAccountMode: accountMode, createdByUserId: input.createdByUserId },
       include: {
         ownerBranch: { select: { id: true, name: true } },
         targetBranch: { select: { id: true, name: true } },
         user: { select: { id: true, fullName: true, email: true } },
       },
+      });
     });
     await recordAuditEvent({
       action: "branch.resource_share.updated",
@@ -265,7 +328,8 @@ export async function saveBranchResourceShare(input: {
     return updated;
   }
 
-  const created = await prisma.branchResourceShare.create({
+  const created = await prisma.$transaction(async (tx) => {
+    const result = await tx.branchResourceShare.create({
     data: {
       businessId: input.businessId,
       ownerBranchId: input.ownerBranchId,
@@ -274,6 +338,7 @@ export async function saveBranchResourceShare(input: {
       resourceId,
       userId,
       accessLevel: input.accessLevel,
+      customerAccountMode: accountMode,
       createdByUserId: input.createdByUserId,
     },
     include: {
@@ -281,6 +346,11 @@ export async function saveBranchResourceShare(input: {
       targetBranch: { select: { id: true, name: true } },
       user: { select: { id: true, fullName: true, email: true } },
     },
+    });
+    if (input.resourceType === "CUSTOMERS" && !resourceId && !userId) {
+      await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
+    }
+    return result;
   });
   await recordAuditEvent({
     action: "branch.resource_share.created",
@@ -305,11 +375,17 @@ export async function deleteBranchResourceShare(input: { businessId: string; id:
       resourceId: true,
       userId: true,
       accessLevel: true,
+      customerAccountMode: true,
     },
   });
   if (!share) throw new AppError("Branch sharing rule not found", 404);
   await assertCanManageOwnerBranch({ businessId: input.businessId, ownerBranchId: share.ownerBranchId, actorUserId: input.actorUserId });
-  await prisma.branchResourceShare.delete({ where: { id: share.id } });
+  await prisma.$transaction(async (tx) => {
+    if (share.resourceType === "CUSTOMERS" && !share.resourceId && !share.userId && share.customerAccountMode === "SEPARATE") {
+      await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: share.ownerBranchId, targetBranchId: share.targetBranchId, mode: "SHARED" });
+    }
+    await tx.branchResourceShare.delete({ where: { id: share.id } });
+  });
   await recordAuditEvent({
     action: "branch.resource_share.deleted",
     entityType: "BranchResourceShare",
@@ -324,6 +400,7 @@ export async function deleteBranchResourceShare(input: { businessId: string; id:
       resourceId: share.resourceId,
       userId: share.userId,
       accessLevel: share.accessLevel,
+      customerAccountMode: share.customerAccountMode,
     },
   });
 }
