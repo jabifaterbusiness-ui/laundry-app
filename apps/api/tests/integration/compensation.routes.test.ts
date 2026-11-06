@@ -409,7 +409,6 @@ describe("Compensation routes - history and isolation", () => {
           businessId: "biz-B",
           OR: [{ branchId: "branch-B" }, { branchId: null }],
           employee: { is: { branches: { some: { branchId: "branch-B" } } } },
-          employee: { is: { branches: { some: { branchId: "branch-B" } } } },
         },
       }),
     );
