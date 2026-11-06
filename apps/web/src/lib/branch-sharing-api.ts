@@ -11,6 +11,7 @@ export interface BranchResourceShare {
   resourceId: string | null;
   userId: string | null;
   accessLevel: BranchResourceAccessLevel;
+  customerAccountMode: "SHARED" | "SEPARATE";
   ownerBranch: { id: string; name: string };
   targetBranch: { id: string; name: string };
   user: { id: string; fullName: string; email: string } | null;
@@ -23,6 +24,7 @@ export interface SaveBranchResourceShareInput {
   resourceId?: string | null;
   userId?: string | null;
   accessLevel: BranchResourceAccessLevel;
+  customerAccountMode?: "SHARED" | "SEPARATE";
 }
 
 export function listBranchResourceShares(accessToken: string) {
