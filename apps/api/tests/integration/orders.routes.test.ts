@@ -32,6 +32,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     auditLog: {
       findMany: vi.fn(),
     },
+    communicationDelivery: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     branchResourceShare: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(),
@@ -76,6 +79,7 @@ import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
 const auditLogFindMany = vi.mocked(prisma.auditLog.findMany);
+const communicationDeliveryFindMany = vi.mocked(prisma.communicationDelivery.findMany);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderCount = vi.mocked(prisma.order.count);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
@@ -156,6 +160,7 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  communicationDeliveryFindMany.mockResolvedValue([] as never);
 
   transaction.mockImplementation(async (callback) =>
     callback({
@@ -660,6 +665,11 @@ describe("Orders routes - authorization", () => {
       },
     ] as never);
 
+    communicationDeliveryFindMany.mockResolvedValue([
+      { id: "delivery-1", status: "DELIVERED", errorMessage: null },
+      { id: "delivery-2", status: "FAILED", errorMessage: "Provider temporarily unavailable" },
+    ] as never);
+
     const res = await request(app)
       .get(`/api/v1/orders/${ORDER_A}/status-history`)
       .set("Authorization", `Bearer ${OWNER_A}`)
@@ -675,7 +685,7 @@ describe("Orders routes - authorization", () => {
         changedBy: "Branch Manager",
         branchName: "Main Branch",
         notificationResults: [
-          { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
+          { channel: "WHATSAPP", status: "DELIVERED", deliveryId: "delivery-1", error: null },
           { channel: "EMAIL", status: "FAILED", deliveryId: "delivery-2", error: "Provider temporarily unavailable" },
         ],
         notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
