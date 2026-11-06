@@ -7,6 +7,10 @@ const { prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
+    sensitiveAuthorization: {
+      updateMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -19,11 +23,64 @@ import {
   getBusinessBranding,
   setBusinessLogo,
   updateBusinessBranding,
+  getBusinessSecuritySettings,
+  updateBusinessSecuritySettings,
 } from "../../src/modules/businesses/businesses.service.js";
 import { AppError } from "../../src/middleware/error-handler.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("business session security settings", () => {
+  it("loads the configured inactivity timeout for the business", async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      sessionInactivityTimeoutMinutes: 8,
+    });
+
+    await expect(getBusinessSecuritySettings("biz-1")).resolves.toEqual({
+      sessionInactivityTimeoutMinutes: 8,
+    });
+    expect(prismaMock.business.findUnique).toHaveBeenCalledWith({
+      where: { id: "biz-1" },
+      select: { sessionInactivityTimeoutMinutes: true },
+    });
+  });
+
+  it("updates the timeout and revokes active sensitive authorizations immediately", async () => {
+    prismaMock.business.findUnique
+      .mockResolvedValueOnce({ sessionInactivityTimeoutMinutes: 3 })
+      .mockResolvedValueOnce({ sessionInactivityTimeoutMinutes: 6 });
+    prismaMock.business.updateMany.mockReturnValue("business-update" as never);
+    prismaMock.sensitiveAuthorization.updateMany.mockReturnValue("revoke-authorizations" as never);
+    prismaMock.$transaction.mockResolvedValue([{ count: 1 }, { count: 2 }]);
+
+    await expect(updateBusinessSecuritySettings("biz-1", {
+      sessionInactivityTimeoutMinutes: 6,
+    })).resolves.toEqual({ sessionInactivityTimeoutMinutes: 6 });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledWith([
+      "business-update",
+      "revoke-authorizations",
+    ]);
+    expect(prismaMock.sensitiveAuthorization.updateMany).toHaveBeenCalledWith({
+      where: { businessId: "biz-1", revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it("does not revoke active authorizations when the timeout is unchanged", async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      sessionInactivityTimeoutMinutes: 3,
+    });
+
+    await updateBusinessSecuritySettings("biz-1", {
+      sessionInactivityTimeoutMinutes: 3,
+    });
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.sensitiveAuthorization.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("getBusinessBranding", () => {
