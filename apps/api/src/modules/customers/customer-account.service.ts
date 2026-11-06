@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
@@ -228,5 +229,5 @@ export async function fundCustomerAccount(data: {
         }),
       },
     });
-  });
-}
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}}
