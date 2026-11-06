@@ -2,15 +2,21 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { requireSensitiveAuthorizationMock } = vi.hoisted(() => ({
+const { requireSensitiveAuthorizationMock, userFindUniqueMock } = vi.hoisted(() => ({
   requireSensitiveAuthorizationMock: vi.fn(),
+  userFindUniqueMock: vi.fn(),
 }));
 
-vi.mock("../../src/lib/prisma.js", () => ({\n  prisma: { user: { findUnique: userFindUniqueMock } },\n}));\n\nvi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
+vi.mock("../../src/lib/prisma.js", () => ({
+  prisma: { user: { findUnique: userFindUniqueMock } },
+}));
+
+vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
   requireSensitiveAuthorization: requireSensitiveAuthorizationMock,
 }));
 
 import {
+  requireAuth,
   requireSensitiveAuthorization,
 } from "../../src/modules/auth/auth.middleware.js";
 
