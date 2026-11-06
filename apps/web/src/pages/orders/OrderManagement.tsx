@@ -1298,9 +1298,9 @@ function OrderManagementContent({
                   <ol>
                     {statusHistoryQuery.data.map((entry) => (
                       <li key={entry.id}>
-                        <strong>{entry.previousStatus ?? "Created"} → {entry.status}</strong>
+                        <strong>{entry.previousStatus ? entry.previousStatus.replaceAll("_", " ") : "Created"} → {entry.status.replaceAll("_", " ")}</strong>
                         <div>{entry.changedBy} · {formatDate(entry.changedAt)}</div>
-                         <div>Branch: {entry.branchName}</div>
+                        <div>Branch: {entry.branchName}</div>
                         <div>
                           <strong>Notifications:</strong>{" "}
                           {entry.notificationResults?.length
