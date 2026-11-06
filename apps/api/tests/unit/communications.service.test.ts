@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   communicationDeliveryFindFirst: vi.fn(),
+  communicationDeliveryFindMany: vi.fn(),
   communicationDeliveryCreate: vi.fn(),
   communicationDeliveryUpdateMany: vi.fn(),
   customerFindFirst: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     communicationDelivery: {
       findFirst: mocks.communicationDeliveryFindFirst,
+      findMany: mocks.communicationDeliveryFindMany,
       create: mocks.communicationDeliveryCreate,
       updateMany: mocks.communicationDeliveryUpdateMany,
     },
@@ -44,7 +46,7 @@ vi.mock("../../src/modules/whatsapp/whatsapp-templates.service.js", () => ({
   sendAutomatedWhatsAppTemplate: mocks.sendAutomatedWhatsAppTemplate,
 }));
 
-import { retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
+import { listCommunicationDeliveries, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
 
 const DELIVERY_ID = "11111111-1111-4111-8111-111111111111";
 const CUSTOMER_ID = "22222222-2222-4222-8222-222222222222";
@@ -79,6 +81,7 @@ function failedDelivery(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.communicationDeliveryFindFirst.mockResolvedValue(failedDelivery());
+  mocks.communicationDeliveryFindMany.mockResolvedValue([]);
   mocks.communicationDeliveryCreate.mockResolvedValue({ id: "retry-delivery-1" });
   mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
   mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
@@ -86,6 +89,41 @@ beforeEach(() => {
   mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid.template-1" });
   mocks.assertWhatsAppMessagingEnabled.mockResolvedValue(undefined);
   mocks.replayPendingWhatsAppStatusEvents.mockResolvedValue(undefined);
+});
+
+describe("listCommunicationDeliveries", () => {
+  it("marks only retryable failed WhatsApp attempts and does not expose stored message payloads", async () => {
+    mocks.communicationDeliveryFindMany.mockResolvedValue([
+      {
+        ...failedDelivery(),
+        customer: { id: CUSTOMER_ID, name: "Ada" },
+        order: { id: ORDER_ID, orderNumber: "001" },
+        campaign: null,
+      },
+    ]);
+
+    const result = await listCommunicationDeliveries("business-1", "branch-1");
+
+    expect(mocks.communicationDeliveryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "business-1",
+          OR: [
+            { campaignId: { not: null } },
+            { order: { is: { branchId: "branch-1" } } },
+          ],
+        },
+        take: 200,
+      }),
+    );
+    expect(result[0]).toMatchObject({
+      id: DELIVERY_ID,
+      retryAvailable: true,
+      retryAttempt: 0,
+      customer: { name: "Ada" },
+    });
+    expect(result[0]).not.toHaveProperty("retryPayload");
+  });
 });
 
 describe("retryWhatsAppDelivery", () => {
