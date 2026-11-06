@@ -117,6 +117,11 @@ export interface TaxRuleSetting {
 export interface PricingRulesResponse {
   adjustments: PriceAdjustmentRule[];
   taxes: TaxRuleSetting[];
+  pagination?: {
+    pageSize: number;
+    adjustments: { page: number; total: number; totalPages: number };
+    taxes: { page: number; total: number; totalPages: number };
+  };
 }
 export interface CustomerServicePrice {
   id: string;
@@ -131,10 +136,16 @@ export async function listPricingRules(
   auth: { accessToken: string | null },
   customerId?: string,
   purpose: "order" | "management" = "management",
+  pagination: { adjustmentPage?: number; taxPage?: number; pageSize?: number } = {},
 ): Promise<PricingRulesResponse> {
   const query = new URLSearchParams();
   if (customerId) query.set("customerId", customerId);
   if (purpose !== "management") query.set("purpose", purpose);
+  if (purpose === "management") {
+    if (pagination.adjustmentPage) query.set("adjustmentPage", String(pagination.adjustmentPage));
+    if (pagination.taxPage) query.set("taxPage", String(pagination.taxPage));
+    if (pagination.pageSize) query.set("pageSize", String(pagination.pageSize));
+  }
   const suffix = query.toString();
   return apiFetch<PricingRulesResponse>(
     `/services/pricing-rules${suffix ? `?${suffix}` : ""}`,
