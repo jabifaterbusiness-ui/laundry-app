@@ -6,6 +6,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     priceAdjustment: {
       create: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
       deleteMany: vi.fn(),
       updateMany: vi.fn(),
       findFirst: vi.fn(),
@@ -14,7 +15,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerGroup: { findFirst: vi.fn() },
     customerGroupMember: { findMany: vi.fn() },
     service: { findMany: vi.fn() },
-    taxRule: { findMany: vi.fn() },
+    taxRule: { findMany: vi.fn(), count: vi.fn() },
   },
 }));
 
@@ -33,6 +34,9 @@ const updateMany = vi.mocked(prisma.priceAdjustment.updateMany);
 const findAdjustment = vi.mocked(prisma.priceAdjustment.findFirst);
 const findPricingRules = vi.mocked(prisma.priceAdjustment.findMany);
 const findGroupMemberships = vi.mocked(prisma.customerGroupMember.findMany);
+const findTaxes = vi.mocked(prisma.taxRule.findMany);
+const countAdjustments = vi.mocked(prisma.priceAdjustment.count);
+const countTaxes = vi.mocked(prisma.taxRule.count);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,6 +48,9 @@ beforeEach(() => {
   findAdjustment.mockResolvedValue({ id: "discount-1", branchId: "branch-A", isActive: false } as never);
   findPricingRules.mockResolvedValue([] as never);
   findGroupMemberships.mockResolvedValue([] as never);
+  findTaxes.mockResolvedValue([] as never);
+  countAdjustments.mockResolvedValue(0);
+  countTaxes.mockResolvedValue(0);
 });
 
 describe("customer-aware pricing rule lists", () => {
@@ -61,6 +68,36 @@ describe("customer-aware pricing rule lists", () => {
     });
     expect(query.where).not.toHaveProperty("isActive");
     expect(query.where).not.toHaveProperty("AND");
+  });
+
+  it("paginates management lists and reports totals for large pricing catalogs", async () => {
+    countAdjustments.mockResolvedValue(1_234);
+    countTaxes.mockResolvedValue(137);
+
+    const result = await listPricingRules(
+      "business-1",
+      "branch-A",
+      "user-A",
+      undefined,
+      "management",
+      { adjustmentPage: 4, taxPage: 2, pageSize: 50 },
+    );
+
+    expect(findPricingRules).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 150,
+      take: 50,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }));
+    expect(findTaxes).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 50,
+      take: 50,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }));
+    expect(result.pagination).toEqual({
+      pageSize: 50,
+      adjustments: { page: 4, total: 1_234, totalPages: 25 },
+      taxes: { page: 2, total: 137, totalPages: 3 },
+    });
   });
 
   it("returns manual adjustments without loading unrelated automatic discounts before a customer is selected", async () => {
