@@ -210,24 +210,17 @@ describe("retryWhatsAppDelivery", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
-  it("rechecks WhatsApp consent before retrying", async () => {
+  it("rejects a retry when the customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
 
-    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1");
+    await expect(
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+    ).rejects.toMatchObject({
+      message: "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      statusCode: 422,
+    });
 
-    expect(result).toMatchObject({
-      status: "FAILED",
-      retryOfId: DELIVERY_ID,
-      retryAttempt: 1,
-    });
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
-    expect(mocks.communicationDeliveryCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        status: "FAILED",
-        retryOfId: DELIVERY_ID,
-        retryAttempt: 1,
-        errorMessage: expect.stringContaining("not explicitly opted in"),
-      }),
-    });
+    expect(mocks.communicationDeliveryCreate).not.toHaveBeenCalled();
   });
 });
