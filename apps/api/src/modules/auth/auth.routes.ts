@@ -7,6 +7,7 @@ import {
   logout,
   me,
   reauthorize,
+  recordSensitiveActivityController,
   refresh,
   resetPasswordController,
 } from "./auth.controller.js";
@@ -24,3 +25,4 @@ authRouter.get("/me", requireAuth, asyncHandler(me));
 authRouter.patch("/account", requireAuth, asyncHandler(account));
 authRouter.post("/change-password", requireAuth, asyncHandler(changePassword));
 authRouter.post("/reauthorize", requireAuth, asyncHandler(reauthorize));
+authRouter.post("/activity", requireAuth, asyncHandler(recordSensitiveActivityController));
