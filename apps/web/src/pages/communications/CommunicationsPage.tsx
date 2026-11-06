@@ -48,9 +48,9 @@ export function CommunicationsPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const customersQuery = useQuery({
-    queryKey: ["customers", "communications", customerPage],
+    queryKey: ["customers", "communications", activeBranchId, customerPage],
     queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && activeBranchId),
   });
   const connectionQuery = useQuery({
     queryKey: ["whatsapp", "connection"],
