@@ -48,10 +48,21 @@ export async function changePassword(
 export async function reauthorize(
   password: string,
   accessToken: string,
-): Promise<{ token: string; expiresAt: string }> {
-  return apiFetch<{ token: string; expiresAt: string }>("/auth/reauthorize", {
+): Promise<{ token: string; expiresAt: string; inactivityTimeoutMs: number }> {
+  return apiFetch<{ token: string; expiresAt: string; inactivityTimeoutMs: number }>("/auth/reauthorize", {
     method: "POST",
     accessToken,
     body: JSON.stringify({ password }),
+  });
+}
+
+export async function recordSensitiveActivity(
+  token: string,
+  accessToken: string,
+): Promise<{ expiresAt: string; inactivityTimeoutMs: number }> {
+  return apiFetch<{ expiresAt: string; inactivityTimeoutMs: number }>("/auth/activity", {
+    method: "POST",
+    accessToken,
+    sensitiveAuthorization: token,
   });
 }
