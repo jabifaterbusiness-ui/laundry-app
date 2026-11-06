@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const listPricingRulesQuerySchema = z.object({
   customerId: z.string().uuid().optional(),
+  purpose: z.enum(["order", "management"]).default("management"),
 }).strict();
 
 export const createAdjustmentSchema = z.object({
