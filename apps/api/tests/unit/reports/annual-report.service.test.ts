@@ -194,6 +194,7 @@ describe("getAnnualReport", () => {
 
     const report = await getAnnualReport({
       businessId: "business-1",
+      branchId: "branch-1",
       year: 2026,
     });
 
