@@ -83,6 +83,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customer: {
       count: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     inventoryStock: {
       count: vi.fn(),
     },
@@ -229,6 +232,7 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([] as never);
 });
 
 describe("Reports routes - authentication", () => {
@@ -467,6 +471,18 @@ describe("Reports routes - filtering and isolation", () => {
         }),
       }),
     );
+
+    expect(customerCount).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+    });
 
     expect(inventoryMovementCount).toHaveBeenCalledWith({
       where: {
