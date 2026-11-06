@@ -177,6 +177,23 @@ describe("requireAuth middleware account validity", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects a verified JWT without a subject before querying the account", async () => {
+    const tokenWithoutSubject = jwt.sign(
+      { email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
+      process.env.JWT_ACCESS_SECRET as string,
+      { expiresIn: "15m" },
+    );
+    const req = { headers: { authorization: `Bearer ${tokenWithoutSubject}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    }));
+  });
+
   it("rejects an already-issued access token after account deactivation", async () => {
     userFindUniqueMock.mockResolvedValue({ isActive: false, deletedAt: null });
     const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
