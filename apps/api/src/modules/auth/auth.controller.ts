@@ -14,7 +14,7 @@ import {
   rotateRefreshToken,
   verifyPassword,
 } from "./auth.service.js";
-import { issueSensitiveAuthorization, revokeSensitiveAuthorizations } from "./sensitive-authorization.service.js";
+import { issueSensitiveAuthorization, recordSensitiveActivity, revokeSensitiveAuthorizations } from "./sensitive-authorization.service.js";
 
 async function branchMemberships(userId: string) {
   const memberships = await prisma.userBranch.findMany({
@@ -77,6 +77,22 @@ export async function login(req: Request, res: Response) {
 const reauthorizeSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
+
+export async function recordSensitiveActivityController(req: Request, res: Response) {
+  if (!req.user?.id) {
+    throw new AppError("Authentication is required", 401);
+  }
+  const token = req.header("x-sensitive-authorization");
+  if (!token) {
+    throw new AppError("Sensitive authorization is required", 403);
+  }
+  const activity = await recordSensitiveActivity({
+    token,
+    userId: req.user.id,
+    businessId: req.user.businessId,
+  });
+  res.status(200).json(activity);
+}
 
 export async function reauthorize(req: Request, res: Response) {
   if (!req.user?.id) {
