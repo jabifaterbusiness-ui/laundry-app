@@ -112,9 +112,9 @@ export async function rotateRefreshToken(rawToken: string) {
 }
 
 /**
- * Revokes a refresh token and returns the user it belonged to (or null if
- * the token was unknown/already revoked), so the caller can attribute an
- * audit log entry without a second database round trip.
+ * Revokes every refresh token in the supplied session and returns its user
+ * (or null if the token was unknown/already revoked). Access tokens carry
+ * the same session ID, so requireAuth rejects them on the next request.
  */
 export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "id" | "businessId"> | null> {
   const tokenHash = hashToken(rawToken);
