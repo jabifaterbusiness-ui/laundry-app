@@ -144,6 +144,8 @@ export async function updateItem(
     },
   );
 
+  if (!item) throw new AppError("Inventory item not found", 404);
+
   await recordAuditEvent({
     action: "inventory.item_updated",
     entityType: "InventoryItem",
