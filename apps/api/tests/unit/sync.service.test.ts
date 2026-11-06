@@ -1089,8 +1089,8 @@ describe("replaySyncOperation", () => {
       BUSINESS_A,
       BRANCH_A,
       operation.payload.customerId,
-      prismaMock,
       USER_A,
+      prismaMock,
     );
 
     expect(result).toMatchObject({
