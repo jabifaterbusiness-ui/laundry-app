@@ -1382,6 +1382,21 @@ function OrderManagementContent({
                   #{historyOrder.orderNumber} ·{" "}
                   {statusLabel(historyOrder.status)} ·{" "}
                   {formatMoney(historyOrder.orderTotal)}
+                  {historyOrder.items.some((item) => (item.colors ?? []).length > 0) ? (
+                    <small
+                      style={{
+                        display: "block",
+                        marginTop: 5,
+                        color: "var(--text-muted, #64748b)",
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {historyOrder.items
+                        .filter((item) => (item.colors ?? []).length > 0)
+                        .map((item) => `${item.serviceName}: ${item.colors!.join(", ")}`)
+                        .join(" · ")}
+                    </small>
+                  ) : null}
                 </button>
               ))}
             </>
