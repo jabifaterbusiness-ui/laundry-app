@@ -2792,6 +2792,7 @@ model PriceAdjustment {
 
   @@unique([businessId, branchId, name])
   @@index([businessId, branchId, isActive])
+  @@index([businessId, branchId, name, id])
   @@index([businessId, targetScope, startsAt, endsAt])
   @@index([businessId, customerId])
   @@index([businessId, groupId])
@@ -2816,6 +2817,7 @@ model TaxRule {
 
   @@unique([businessId, branchId, name])
   @@index([businessId, branchId, isActive, enabledByDefault])
+  @@index([businessId, branchId, name, id])
   @@map("tax_rules")
 }
 
