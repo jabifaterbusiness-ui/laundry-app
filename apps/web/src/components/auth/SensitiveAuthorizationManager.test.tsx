@@ -2,18 +2,25 @@ import { act, render } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { SensitiveAuthorizationManager } from "./SensitiveAuthorizationManager.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import * as authApi from "../../lib/auth-api.js";
 
 describe("SensitiveAuthorizationManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.spyOn(authApi, "recordSensitiveActivity").mockResolvedValue({
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      inactivityTimeoutMs: 180_000,
+    });
 
     useAuthStore.setState({
       sensitiveAuthorization: "sensitive-token",
       sensitiveAuthorizationExpiresAt: "2099-01-01T00:00:00.000Z",
+      sensitiveAuthorizationInactivityTimeoutMs: 180_000,
     });
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     useAuthStore.getState().clearSensitiveAuthorization();
   });
