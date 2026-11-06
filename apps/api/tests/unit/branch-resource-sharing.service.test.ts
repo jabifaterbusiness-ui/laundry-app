@@ -14,6 +14,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userBranch: { findUnique: vi.fn(), findFirst: vi.fn() },
     branch: { findMany: vi.fn() },
     inventoryItem: { findFirst: vi.fn() },
+    employeeCompensation: { findFirst: vi.fn() },
     branchResourceShare: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -36,6 +37,7 @@ const actorFindFirst = vi.mocked(prisma.user.findFirst);
 const membershipFindUnique = vi.mocked(prisma.userBranch.findUnique);
 const branchFindMany = vi.mocked(prisma.branch.findMany);
 const inventoryItemFindFirst = vi.mocked(prisma.inventoryItem.findFirst);
+const employeeCompensationFindFirst = vi.mocked(prisma.employeeCompensation.findFirst);
 const shareFindFirst = vi.mocked(prisma.branchResourceShare.findFirst);
 const shareCreate = vi.mocked(prisma.branchResourceShare.create);
 const shareDelete = vi.mocked(prisma.branchResourceShare.delete);
@@ -129,6 +131,28 @@ describe("branch resource sharing authorization", () => {
       select: { id: true },
     });
     expect(shareCreate).not.toHaveBeenCalled();
+  });
+
+  it("allows an individual payroll compensation share only for a record owned by the selected branch", async () => {
+    actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
+    employeeCompensationFindFirst.mockResolvedValue({ id: "compensation-1" } as never);
+
+    await saveBranchResourceShare({
+      ...baseInput,
+      resourceType: "PAYROLL_COMPENSATION",
+      resourceId: "11111111-1111-4111-8111-111111111111",
+      accessLevel: "READ",
+    });
+
+    expect(employeeCompensationFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "11111111-1111-4111-8111-111111111111",
+        businessId: "business-a",
+        branchId: "owner-branch",
+      },
+      select: { id: true },
+    });
+    expect(shareCreate).toHaveBeenCalled();
   });
 
   it("prevents a staff member from deleting another branch's sharing rule", async () => {
