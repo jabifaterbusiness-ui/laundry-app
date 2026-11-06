@@ -6,13 +6,15 @@ import {
   getBusinessBranding,
   setBusinessLogo,
   updateBusinessBranding,
+  getBusinessSecuritySettings,
+  updateBusinessSecuritySettings,
 } from "./businesses.service.js";
 import {
   deleteBusinessLogo,
   readBusinessLogo,
   saveBusinessLogo,
 } from "./business-branding.storage.js";
-import { updateBusinessBrandingSchema } from "./businesses.validation.js";
+import { updateBusinessBrandingSchema, updateBusinessSecuritySettingsSchema } from "./businesses.validation.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
@@ -135,4 +137,27 @@ export async function removeLogo(req: Request, res: Response) {
   });
 
   res.status(200).json(branding);
+}
+
+export async function getSecuritySettings(req: Request, res: Response) {
+  const settings = await getBusinessSecuritySettings(requireBusinessId(req));
+  res.status(200).json(settings);
+}
+
+export async function updateSecuritySettings(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const input = updateBusinessSecuritySettingsSchema.parse(req.body);
+  const settings = await updateBusinessSecuritySettings(businessId, input);
+
+  await recordAuditEvent({
+    action: "business.security_settings.updated",
+    entityType: "Business",
+    entityId: businessId,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: input,
+  });
+
+  res.status(200).json(settings);
 }
