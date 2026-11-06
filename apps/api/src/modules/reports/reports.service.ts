@@ -1,8 +1,10 @@
 import { prisma } from "../../lib/prisma.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export interface ReportsScope {
   businessId: string;
   branchId: string;
+  userId: string;
 }
 
 export interface ReportsDateRange {
@@ -56,6 +58,12 @@ export async function getDashboardReport(
 ) {
   const dateWhere = buildDateWhere(range);
   const pickupDateWhere = buildDateWhere(range, "pickedUpAt");
+  const customerScope = await getBranchResourceScope({
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    userId: scope.userId,
+    resourceType: "CUSTOMERS",
+  });
 
   const [
     ordersTotal,
@@ -97,6 +105,11 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
       },
     }),
 
