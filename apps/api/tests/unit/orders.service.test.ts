@@ -1002,7 +1002,7 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
-    "user-A",
+        "user-A",
       );
 
     expect(result).toEqual({
@@ -1067,7 +1067,7 @@ describe("transferOrder", () => {
         "biz-B",
         BRANCH_B,
         CUSTOMER_B,
-      "user-A",
+        "user-A",
       ),
     ).rejects.toThrow("Order not found");
 
@@ -1094,7 +1094,7 @@ describe("transferOrder", () => {
         "biz-A",
         BRANCH_A,
         CUSTOMER_B,
-      "user-A",
+        "user-A",
       ),
     ).rejects.toThrow("Customer not found");
 
@@ -1118,7 +1118,7 @@ describe("transferOrder", () => {
         "biz-A",
         BRANCH_A,
         CUSTOMER_A,
-      "user-A",
+        "user-A",
       ),
     ).rejects.toThrow(
       "Order is already assigned to this customer",
@@ -1155,7 +1155,7 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
-    "user-A",
+        "user-A",
       );
 
     expect(transaction).toHaveBeenCalledTimes(1);
