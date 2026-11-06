@@ -50,7 +50,8 @@ export type BranchResourceType =
   | "CUSTOMER_PRICING"
   | "DISCOUNTS"
   | "TAX_RULES"
-  | "INVENTORY";
+  | "INVENTORY"
+  | "PAYROLL_COMPENSATION";
 
 export interface BranchResourceScope {
   ownerBranchIds: string[];
@@ -269,6 +270,12 @@ export async function saveBranchResourceShare(input: {
       case "INVENTORY":
         resourceBelongsToOwnerBranch = Boolean(await prisma.inventoryItem.findFirst({
           where: { ...resourceWhere, ownerBranchId: input.ownerBranchId },
+          select: { id: true },
+        }));
+        break;
+      case "PAYROLL_COMPENSATION":
+        resourceBelongsToOwnerBranch = Boolean(await prisma.employeeCompensation.findFirst({
+          where: { ...resourceWhere, branchId: input.ownerBranchId },
           select: { id: true },
         }));
         break;
