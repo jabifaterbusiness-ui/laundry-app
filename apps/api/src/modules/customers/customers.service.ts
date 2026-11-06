@@ -418,9 +418,9 @@ export async function transferCustomer(
 }
 
 /**
- * Merges records in the selected branch without rewriting other branches'
- * order or account history. The source customer is deactivated only when it
- * is owned by this branch and no other branch still references or shares it.
+ * Merges order records in the selected branch and combines the customer's
+ * business-wide account ledger. The source customer is deactivated only when
+ * it is owned by this branch and no other branch still references or shares it.
  */
 export async function mergeCustomer(
   customerId: string,
@@ -453,10 +453,10 @@ export async function mergeCustomer(
     }
 
     const sourceAccount = await getEditableCustomerAccountForBranch(
-      tx, customer.id, businessId, branchId, userId,
+      tx, customer.id, businessId,
     );
     const targetAccount = await getEditableCustomerAccountForBranch(
-      tx, targetCustomer.id, businessId, branchId, userId,
+      tx, targetCustomer.id, businessId,
     );
     if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be merged together", 409);

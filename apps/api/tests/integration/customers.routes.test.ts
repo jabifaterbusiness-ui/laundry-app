@@ -538,6 +538,45 @@ describe("Customers routes - customer account / POA", () => {
     expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
+  it("shows the same business-wide account and complete ledger from another branch", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+    } as never);
+    customerAccountFindFirst.mockResolvedValue({
+      id: "account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      branchId: null,
+      transactions: [
+        { id: "tx-main", type: "CREDIT", amount: 10000, branchId: "branch-A" },
+        { id: "tx-second", type: "DEBIT", amount: 2500, branchId: "branch-B" },
+      ],
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B");
+
+    expect(res.status).toBe(200);
+    expect(res.body.balance).toBe(7500);
+    expect(res.body.transactions).toHaveLength(2);
+    expect(customerAccountFindFirst).toHaveBeenCalledWith({
+      where: {
+        customerId: CUSTOMER_ID,
+        businessId: "biz-A",
+        branchId: null,
+      },
+      include: {
+        transactions: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+  });
+
   it("returns a zero balance when the customer has no account yet", async () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
