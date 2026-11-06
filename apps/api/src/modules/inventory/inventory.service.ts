@@ -1094,6 +1094,41 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
     const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId }, include: { lines: true } });
     if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
     if (stocktake.status !== "APPROVED") throw new AppError("Only approved stocktakes can be applied", 422);
+    // Sharing can be revoked after a stocktake is created or approved. Recheck
+    // current edit access at apply time so a stale approval cannot mutate stock.
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const stocktakeItemIds = [...new Set(stocktake.lines.map((line) => line.inventoryItemId))];
+    const accessibleItems = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: stocktakeItemIds },
+        businessId: scope.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (accessibleItems.length !== stocktakeItemIds.length) {
+      throw new AppError("One or more stocktake items are no longer available to this branch", 403);
+    }
+    for (const item of accessibleItems) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     for (const line of stocktake.lines) {
       const stock = await tx.inventoryStock.upsert({
         where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
