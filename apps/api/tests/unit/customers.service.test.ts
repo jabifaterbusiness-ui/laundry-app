@@ -187,6 +187,7 @@ describe("getCustomerForBusiness - tenant isolation", () => {
           { id: { in: [] } },
         ],
       },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
