@@ -19,6 +19,7 @@ export interface CommunicationDelivery {
   id: string; channel: CommunicationChannel; messageType: string; destination: string;
   status: string; providerMessageId: string | null; errorMessage: string | null;
   createdAt: string; sentAt: string | null;
+  retryOfId: string | null; retryAttempt: number; retryAvailable: boolean;
   customer: { id: string; name: string };
   order: { id: string; orderNumber: string } | null;
   campaign: { id: string; title: string } | null;
@@ -102,4 +103,12 @@ export async function completeWhatsAppConnection(input: { code: string; wabaId: 
 }
 export async function disconnectWhatsAppConnection(auth: { accessToken: string | null }) {
   return apiFetch<void>("/whatsapp/connection", { method: "DELETE", accessToken: auth.accessToken });
+}
+
+
+export async function retryCommunicationDelivery(id: string, auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<{ status: string; deliveryId?: string; providerMessageId?: string; retryOfId: string; retryAttempt: number; error?: string }>(
+    `/communications/deliveries/${id}/retry`,
+    { method: "POST", accessToken: auth.accessToken, branchId: auth.branchId },
+  );
 }
