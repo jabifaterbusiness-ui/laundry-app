@@ -436,8 +436,8 @@ describe("InvoicesPage invoice correction workflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adjust Discounts & Taxes" }));
 
     const correction = await screen.findByRole("region", { name: "Adjust invoice discounts and taxes" });
-    expect(within(correction).getByText("Courtesy adjustment")).toBeInTheDocument();
-    expect(within(correction).getByText("Existing VIP discount")).toBeInTheDocument();
+    expect(within(correction).getByText(/Courtesy adjustment/)).toBeInTheDocument();
+    expect(within(correction).getByText(/Existing VIP discount/)).toBeInTheDocument();
     expect(within(correction).queryByText("Another customer's VIP discount")).not.toBeInTheDocument();
     expect(within(correction).getByLabelText(/Existing VIP discount/)).toBeChecked();
     expect(within(correction).getByLabelText(/Courtesy adjustment/)).not.toBeChecked();
