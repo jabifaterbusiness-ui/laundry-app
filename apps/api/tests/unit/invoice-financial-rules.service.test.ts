@@ -8,7 +8,26 @@ vi.mock("../../src/lib/prisma.js", () => ({ prisma: prismaMock }));
 
 import { updateInvoiceFinancialRules } from "../../src/modules/invoices/invoice-financial-rules.service.js";
 
-const baseInvoice = {
+type InvoiceFixture = {
+  id: string;
+  businessId: string;
+  branchId: string;
+  status: string;
+  invoiceNumber: string;
+  subtotal: number;
+  adjustedSubtotal: number;
+  adjustmentTotal: number;
+  additiveTaxTotal: number;
+  withholdingTaxTotal: number;
+  totalAmount: number;
+  appliedAdjustments: Array<Record<string, unknown>>;
+  appliedTaxes: Array<Record<string, unknown>>;
+  items: Array<{ id: string; totalPrice: number; createdAt: Date }>;
+  payments: Array<{ amount: number; type: string }>;
+  order: { id: string };
+};
+
+const baseInvoice: InvoiceFixture = {
   id: "invoice-1",
   businessId: "business-1",
   branchId: "branch-1",
@@ -28,7 +47,7 @@ const baseInvoice = {
 };
 
 function setup(input?: {
-  invoice?: typeof baseInvoice;
+  invoice?: InvoiceFixture;
   adjustments?: Array<Record<string, unknown>>;
   taxes?: Array<Record<string, unknown>>;
 }) {
