@@ -52,6 +52,7 @@ describe("RequireAuth", () => {
       sensitiveAuthorizationExpiresAt: null,
       setUser,
       setSession,
+      setTokens: vi.fn(),
       setActiveBranch,
       setSensitiveAuthorization: vi.fn(),
       clearSensitiveAuthorization: vi.fn(),
