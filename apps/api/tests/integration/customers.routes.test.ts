@@ -735,6 +735,54 @@ describe("Customers routes - customer account / POA", () => {
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 
+  it("uses an independent branch ledger when the customer sharing rule is SEPARATE", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+      ownerBranchId: "branch-A",
+    } as never);
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([{
+      ownerBranchId: "branch-A",
+      resourceId: null,
+      accessLevel: "EDIT",
+    }] as never);
+    vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValue({
+      id: "customer-share-1",
+      accessLevel: "EDIT",
+      customerAccountMode: "SEPARATE",
+    } as never);
+    customerAccountFindFirst.mockResolvedValue(null);
+    customerAccountCreate.mockResolvedValue({
+      id: "branch-account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      branchId: "branch-B",
+      transactions: [],
+    } as never);
+    customerAccountTransactionCreate.mockResolvedValue({
+      id: "tx-branch-1",
+      customerAccountId: "branch-account-1",
+      businessId: "biz-A",
+      branchId: "branch-B",
+      type: "CREDIT",
+      amount: 2500,
+    } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B")
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 2500 });
+
+    expect(res.status).toBe(201);
+    expect(customerAccountCreate).toHaveBeenCalledWith({
+      data: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: "branch-B" },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
+  });
+
   it("funds the customer account with a positive whole-naira CREDIT", async () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
