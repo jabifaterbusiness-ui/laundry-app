@@ -18,6 +18,11 @@ export async function list(req: Request, res: Response) {
     req.user!.id,
     query.customerId,
     query.purpose,
+    {
+      adjustmentPage: query.adjustmentPage,
+      taxPage: query.taxPage,
+      pageSize: query.pageSize,
+    },
   ));
 }
 
