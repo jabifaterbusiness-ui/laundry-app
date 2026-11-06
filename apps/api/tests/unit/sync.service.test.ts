@@ -1019,6 +1019,7 @@ describe("replaySyncOperation", () => {
       {
         businessId: BUSINESS_A,
         branchId: BRANCH_A,
+        actorUserId: USER_A,
         customerId: "550e8400-e29b-41d4-a716-446655440000",
         items: [
           {
@@ -1089,6 +1090,7 @@ describe("replaySyncOperation", () => {
       BRANCH_A,
       operation.payload.customerId,
       prismaMock,
+      USER_A,
     );
 
     expect(result).toMatchObject({
