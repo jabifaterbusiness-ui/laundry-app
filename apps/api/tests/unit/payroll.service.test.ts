@@ -840,5 +840,5 @@ describe("payroll.service", () => {
       expect(tx.txEmployeeCompensationFindFirst).not.toHaveBeenCalled();
       expect(tx.txPayrollRecordCreate).not.toHaveBeenCalled();
     });
-  });;
+  });
 });
