@@ -1321,44 +1321,49 @@ function OrderManagementContent({
               )}
               {canViewInvoices && (
                 <>
-                <h4>Invoice edits</h4>
-                {invoiceHistoryQuery.isLoading ? (
-                  <p>Loading edited history...</p>
-                ) : invoiceHistoryQuery.isError ? (
-                  <p role="alert">Unable to load edited history.</p>
-                ) : invoiceHistoryQuery.data?.length ? (
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {invoiceHistoryQuery.data.map((entry) => (
-                      <div
-                        key={entry.id}
-                        style={{
-                          padding: 12,
-                          border: "1px solid #ddd",
-                          borderRadius: 8,
-                        }}
-                      >
-                        <strong>{entry.action}</strong>
-                        <div>Version: {entry.version}</div>
-                        <div>Reason: {entry.reason}</div>
-                        <div>
-                          Date/Time: {formatDate(entry.createdAt)}
+                  <h4>Invoice edits</h4>
+                  {invoiceHistoryQuery.isLoading ? (
+                    <p>Loading edited history...</p>
+                  ) : invoiceHistoryQuery.isError ? (
+                    <p role="alert">Unable to load edited history.</p>
+                  ) : invoiceHistoryQuery.data?.length ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {invoiceHistoryQuery.data.map((entry) => (
+                        <div
+                          key={entry.id}
+                          style={{
+                            padding: 12,
+                            border: "1px solid #ddd",
+                            borderRadius: 8,
+                          }}
+                        >
+                          <strong>{entry.action}</strong>
+                          <div>Version: {entry.version}</div>
+                          <div>Reason: {entry.reason}</div>
+                          <div>Date/Time: {formatDate(entry.createdAt)}</div>
+                          <div>Authorized by: {entry.actorUserId}</div>
+                          <details>
+                            <summary>View Snapshot — Version {entry.version}</summary>
+                            <pre
+                              style={{
+                                marginTop: 12,
+                                padding: 12,
+                                overflowX: "auto",
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                background: "#f7f7f7",
+                                borderRadius: 6,
+                              }}
+                            >
+                              {JSON.stringify(entry.snapshot, null, 2)}
+                            </pre>
+                          </details>
                         </div>
-                        <div>Authorized by: {entry.actorUserId}</div>                       <details>                         <summary>View Snapshot — Version {entry.version}</summary>                         <pre
-                            style={{
-                              marginTop: 12,
-                              padding: 12,
-                              overflowX: "auto",
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                              background: "#f7f7f7",
-                              borderRadius: 6,
-                            }}                         >
-                            {JSON.stringify(entry.snapshot, null, 2)}                         </pre>                       </details>                     </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p>No edited history is available for this invoice.</p>
-                )}
+                      ))}
+                    </div>
+                  ) : (
+                    <p>No edited history is available for this invoice.</p>
+                  )}
                 </>
               )}
 
