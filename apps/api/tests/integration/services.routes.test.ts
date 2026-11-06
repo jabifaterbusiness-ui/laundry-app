@@ -111,12 +111,12 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
-  branchFindFirst.mockImplementation(async ({ where }: any) => ({ id: where.id, businessId: where.businessId }) as never);
-  userBranchFindUnique.mockImplementation(async ({ where }: any) => {
+  branchFindFirst.mockImplementation((async ({ where }: any) => ({ id: where.id, businessId: where.businessId }) as never) as never);
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
     const { userId, branchId } = where.userId_branchId;
     const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
     return { userId, branchId, branch: { id: branchId, businessId } } as never;
-  });
+  }) as never);
 });
 
 describe("Services routes - authentication", () => {
