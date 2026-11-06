@@ -411,13 +411,11 @@ describe("createOrder", () => {
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 
-    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([
-      {
-        ownerBranchId: BRANCH_B,
-        resourceId: null,
-        accessLevel: "READ",
-      },
-    ] as never);
+    vi.mocked(prisma.branchResourceShare.findMany).mockImplementation(async ({ where }: never) =>
+      (where as { resourceType?: string }).resourceType === "CUSTOMER_PRICING"
+        ? [{ ownerBranchId: BRANCH_B, resourceId: null, accessLevel: "READ" }] as never
+        : [],
+    );
 
     await createOrder({
       businessId: "biz-A",
@@ -433,6 +431,29 @@ describe("createOrder", () => {
       ],
     });
 
+    expect(tx.customer.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_A,
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+      select: { id: true, name: true },
+    });
+    expect(tx.service.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [SERVICE_AGBADA] },
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+    });
     expect(tx.customerServicePrice.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
