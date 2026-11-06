@@ -116,6 +116,9 @@ model Business {
   // own historical snapshot, so later changes do not affect old invoices.
   defaultCustomerAgreement String @default("Customer agrees to the laundry service terms and conditions.")
 
+  // Idle period before sensitive actions require password reauthorization.
+  sessionInactivityTimeoutMinutes Int @default(3)
+
   colors Color[]
 
   // -------------------------------------------------------------------
