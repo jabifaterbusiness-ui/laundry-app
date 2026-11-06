@@ -868,7 +868,7 @@ describe("transferCustomer - full account transfer", () => {
       .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-B" } as never);
     prismaMock.branchResourceShare.findFirst
       .mockReset()
-      .mockImplementation((args: any) => Promise.resolve(
+      .mockImplementation((args) => Promise.resolve(
         args?.select?.customerAccountMode
           ? { customerAccountMode: "SEPARATE" }
           : { id: "edit-share" },
