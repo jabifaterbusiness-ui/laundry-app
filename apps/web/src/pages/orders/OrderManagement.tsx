@@ -133,6 +133,7 @@ function OrderManagementContent({
   const canManagePayments = hasPermission(user, "payments.manage");
   const canViewAccount = hasPermission(user, "customer_accounts.view");
   const canViewInvoices = hasPermission(user, "invoices.view");
+  const canViewOrders = hasPermission(user, "orders.view");
 
   const customerQuery = useQuery({
     queryKey: ["customer", customer.id, "order-management"],
@@ -207,6 +208,7 @@ function OrderManagementContent({
         activeBranchId &&
         mode === "view" &&
         order?.id &&
+        canViewOrders &&
         layer === "invoice-history",
     ),
   });
@@ -1290,69 +1292,76 @@ function OrderManagementContent({
           {layer === "invoice-history" && (
             <>
               <h3>Edited History</h3>
-              <section aria-label="Order status and notification history" style={{ marginBottom: 16 }}>
-                <h4>Order status changes & notification outcomes</h4>
-                {statusHistoryQuery.isLoading ? <p>Loading status history...</p> : null}
-                {statusHistoryQuery.isError ? <p role="alert">Unable to load order status history.</p> : null}
-                {statusHistoryQuery.data?.length ? (
-                  <ol>
-                    {statusHistoryQuery.data.map((entry) => (
-                      <li key={entry.id}>
-                        <strong>{entry.previousStatus ? entry.previousStatus.replaceAll("_", " ") : "Created"} → {entry.status.replaceAll("_", " ")}</strong>
-                        <div>{entry.changedBy} · {formatDate(entry.changedAt)}</div>
-                        <div>Branch: {entry.branchName}</div>
-                        <div>
-                          <strong>Notifications:</strong>{" "}
-                          {entry.notificationResults?.length
-                            ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
-                            : "No notification attempt recorded"}
-                        </div>
-                        {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  !statusHistoryQuery.isLoading && <p>No order status changes have been recorded yet.</p>
-                )}
-              </section>
-              <h4>Invoice edits</h4>
-              {invoiceHistoryQuery.isLoading ? (
-                <p>Loading edited history...</p>
-              ) : invoiceHistoryQuery.isError ? (
-                <p role="alert">Unable to load edited history.</p>
-              ) : invoiceHistoryQuery.data?.length ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {invoiceHistoryQuery.data.map((entry) => (
-                    <div
-                      key={entry.id}
-                      style={{
-                        padding: 12,
-                        border: "1px solid #ddd",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <strong>{entry.action}</strong>
-                      <div>Version: {entry.version}</div>
-                      <div>Reason: {entry.reason}</div>
-                      <div>
-                        Date/Time: {formatDate(entry.createdAt)}
-                      </div>
-                      <div>Authorized by: {entry.actorUserId}</div>                       <details>                         <summary>View Snapshot — Version {entry.version}</summary>                         <pre
-                          style={{
-                            marginTop: 12,
-                            padding: 12,
-                            overflowX: "auto",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            background: "#f7f7f7",
-                            borderRadius: 6,
-                          }}                         >
-                          {JSON.stringify(entry.snapshot, null, 2)}                         </pre>                       </details>                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p>No edited history is available for this invoice.</p>
+              {canViewOrders && (
+                <section aria-label="Order status and notification history" style={{ marginBottom: 16 }}>
+                  <h4>Order status changes & notification outcomes</h4>
+                  {statusHistoryQuery.isLoading ? <p>Loading status history...</p> : null}
+                  {statusHistoryQuery.isError ? <p role="alert">Unable to load order status history.</p> : null}
+                  {statusHistoryQuery.data?.length ? (
+                    <ol>
+                      {statusHistoryQuery.data.map((entry) => (
+                        <li key={entry.id}>
+                          <strong>{entry.previousStatus ? entry.previousStatus.replaceAll("_", " ") : "Created"} → {entry.status.replaceAll("_", " ")}</strong>
+                          <div>{entry.changedBy} · {formatDate(entry.changedAt)}</div>
+                          <div>Branch: {entry.branchName}</div>
+                          <div>
+                            <strong>Notifications:</strong>{" "}
+                            {entry.notificationResults?.length
+                              ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
+                              : "No notification attempt recorded"}
+                          </div>
+                          {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    !statusHistoryQuery.isLoading && <p>No order status changes have been recorded yet.</p>
+                  )}
+                </section>
               )}
+              {canViewInvoices && (
+                <>
+                <h4>Invoice edits</h4>
+                {invoiceHistoryQuery.isLoading ? (
+                  <p>Loading edited history...</p>
+                ) : invoiceHistoryQuery.isError ? (
+                  <p role="alert">Unable to load edited history.</p>
+                ) : invoiceHistoryQuery.data?.length ? (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {invoiceHistoryQuery.data.map((entry) => (
+                      <div
+                        key={entry.id}
+                        style={{
+                          padding: 12,
+                          border: "1px solid #ddd",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <strong>{entry.action}</strong>
+                        <div>Version: {entry.version}</div>
+                        <div>Reason: {entry.reason}</div>
+                        <div>
+                          Date/Time: {formatDate(entry.createdAt)}
+                        </div>
+                        <div>Authorized by: {entry.actorUserId}</div>                       <details>                         <summary>View Snapshot — Version {entry.version}</summary>                         <pre
+                            style={{
+                              marginTop: 12,
+                              padding: 12,
+                              overflowX: "auto",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              background: "#f7f7f7",
+                              borderRadius: 6,
+                            }}                         >
+                            {JSON.stringify(entry.snapshot, null, 2)}                         </pre>                       </details>                     </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No edited history is available for this invoice.</p>
+                )}
+                </>
+              )}
+
             </>
           )}
 
@@ -1717,7 +1726,7 @@ function OrderManagementContent({
 
                   <button
                     type="button"
-                    disabled={!canViewInvoices}
+                    disabled={!(canViewInvoices || canViewOrders)}
                     onClick={() => setLayer("invoice-history")}
                     style={{
                       padding: "10px 14px",
