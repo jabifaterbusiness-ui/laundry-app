@@ -31,6 +31,16 @@ function formatMoney(value: number) {
   return `₦${value.toLocaleString()}`;
 }
 
+function appliedAdjustmentItemIndexes(
+  rule: { itemIndexes?: number[]; itemIds?: string[] },
+  items: Array<{ id: string }>,
+): number[] {
+  if (rule.itemIndexes?.length) return [...rule.itemIndexes];
+  return (rule.itemIds ?? [])
+    .map((itemId) => items.findIndex((item) => item.id === itemId))
+    .filter((index) => index >= 0);
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString();
 }
@@ -229,7 +239,7 @@ export function InvoicesPage() {
       (selectedInvoice.appliedAdjustments ?? []).map((rule) => [rule.id, {
         scope: rule.scope,
         itemIndexes: rule.scope === "ITEMS"
-          ? (rule.itemIndexes ?? [])
+          ? appliedAdjustmentItemIndexes(rule, selectedInvoice.items)
           : [],
       }]),
     ));
@@ -1128,7 +1138,12 @@ export function InvoicesPage() {
                     return <label key={rule.id} style={{ display: "block", padding: "6px 0" }}>
                       <input type="checkbox" checked={Boolean(selection)} onChange={(event) => setFinancialAdjustments((current) => {
                         const next = { ...current };
-                        if (event.target.checked) next[rule.id] = { scope: rule.scope, itemIndexes: rule.scope === "ITEMS" ? [...(rule.itemIndexes ?? [])] : [] };
+                        if (event.target.checked) next[rule.id] = {
+                          scope: rule.scope,
+                          itemIndexes: rule.scope === "ITEMS"
+                            ? appliedAdjustmentItemIndexes(rule, selectedInvoice.items)
+                            : [],
+                        };
                         else delete next[rule.id];
                         return next;
                       })} />
