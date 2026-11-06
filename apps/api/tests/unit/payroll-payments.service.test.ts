@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const { prismaMock, auditMock } = vi.hoisted(() => ({
   prismaMock: {
@@ -116,6 +117,10 @@ describe("payroll-payments.service", () => {
       expect(result.amountPaid).toBe(70000);
       expect(result.balance).toBe(30000);
       expect(result.payrollPeriodStatus).toBe("FINALIZED");
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        { isolationLevel: "Serializable" },
+      );
 
       expect(prismaMock.payrollPayment.create).toHaveBeenCalledWith({
         data: {
@@ -205,6 +210,39 @@ describe("payroll-payments.service", () => {
           status: "PAID",
         },
       });
+    });
+
+    it("retries a serialization conflict and rechecks the latest outstanding balance", async () => {
+      const conflict = new Prisma.PrismaClientKnownRequestError(
+        "Serializable transaction conflict",
+        { code: "P2034", clientVersion: "test" },
+      );
+      prismaMock.$transaction.mockRejectedValueOnce(conflict);
+      prismaMock.payrollRecord.findFirst.mockResolvedValue({
+        id: RECORD_A,
+        businessId: "biz-A",
+        branchId: "branch-A",
+        employeeId: EMPLOYEE_A,
+        netPay: 100000,
+        payrollPeriod: { id: PERIOD_A, status: "FINALIZED" },
+        payments: [{ amount: 100000 }],
+      });
+
+      await expect(createPayrollPayment({
+        businessId: "biz-A",
+        branchId: "branch-A",
+        payrollRecordId: RECORD_A,
+        employeeId: EMPLOYEE_A,
+        amount: 10000,
+        method: "CASH",
+        actorUserId: "user-owner-a",
+      })).rejects.toMatchObject({
+        message: "This payroll record has already been fully paid",
+        statusCode: 422,
+      });
+
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+      expect(prismaMock.payrollPayment.create).not.toHaveBeenCalled();
     });
 
     it("rejects a payroll record outside the authenticated business and branch", async () => {
@@ -488,6 +526,10 @@ describe("payroll-payments.service", () => {
       );
 
       expect(result.payment.status).toBe("VOID");
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        { isolationLevel: "Serializable" },
+      );
 
       expect(prismaMock.payrollPayment.update).toHaveBeenCalledWith({
         where: {
