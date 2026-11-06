@@ -130,14 +130,22 @@ export function InvoicesPage() {
   });
 
   const pricingRulesQuery = useQuery({
-    queryKey: ["pricing-rules"],
+    queryKey: ["pricing-rules", "invoice-correction", activeBranchId],
     queryFn: () => listPricingRules({ accessToken }),
-    enabled: Boolean(accessToken && canManageInvoices),
+    enabled: Boolean(accessToken && activeBranchId && canManageInvoices),
   });
 
   const invoices = invoicesQuery.data?.data ?? [];
   const pagination = invoicesQuery.data?.pagination;
   const selectedInvoice = selectedInvoiceQuery.data;
+  const pricingAdjustments = pricingRulesQuery.data?.adjustments ?? [];
+  const manualPricingAdjustments = pricingAdjustments.filter(
+    (rule) => rule.targetScope === "MANUAL",
+  );
+  const manualPricingAdjustmentIds = new Set(manualPricingAdjustments.map((rule) => rule.id));
+  const existingNonManualAdjustments = (selectedInvoice?.appliedAdjustments ?? []).filter(
+    (rule) => !manualPricingAdjustmentIds.has(rule.id),
+  );
 
   useEffect(() => {
     if (invoiceIdFromUrl && selectedInvoiceId !== invoiceIdFromUrl) {
@@ -1078,16 +1086,25 @@ export function InvoicesPage() {
           {correctionMode === "financial" ? (
             <section aria-label="Adjust invoice discounts and taxes">
               <p>Apply or remove financial rules on this existing invoice. The original invoice state is saved in Edited History. A change that would make the amount paid exceed the new invoice total is blocked.</p>
-              <h4>Discounts and surcharges</h4>
-              {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive).map((rule) => {
+              <h4>Manual adjustments</h4>
+              {manualPricingAdjustments.map((rule) => {
                 const selection = financialAdjustments[rule.id];
                 return <div key={rule.id} style={{ padding: "8px 0", borderBottom: "1px solid #e5e7eb" }}>
-                  <label><input type="checkbox" checked={Boolean(selection)} onChange={(event) => setFinancialAdjustments((current) => {
-                    const next = { ...current };
-                    if (event.target.checked) next[rule.id] = { scope: "INVOICE", itemIndexes: [] };
-                    else delete next[rule.id];
-                    return next;
-                  })} /> {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%)</label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selection)}
+                      disabled={!rule.isActive && !selection}
+                      onChange={(event) => setFinancialAdjustments((current) => {
+                        const next = { ...current };
+                        if (event.target.checked) next[rule.id] = { scope: "INVOICE", itemIndexes: [] };
+                        else delete next[rule.id];
+                        return next;
+                      })}
+                    />
+                    {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%)
+                    {!rule.isActive ? " · Inactive" : ""}
+                  </label>
                   {selection ? <div style={{ marginLeft: 24 }}>
                     <label>Apply to<select value={selection.scope} onChange={(event) => setFinancialAdjustments((current) => ({ ...current, [rule.id]: { scope: event.target.value as "INVOICE" | "ITEMS", itemIndexes: [] } }))}>
                       <option value="INVOICE">Entire invoice</option><option value="ITEMS">Selected items only</option>
@@ -1101,6 +1118,25 @@ export function InvoicesPage() {
                   </div> : null}
                 </div>;
               })}
+              {manualPricingAdjustments.length === 0 && <p>No manual adjustments are available for this branch.</p>}
+              {existingNonManualAdjustments.length > 0 && (
+                <>
+                  <h4>Previously applied customer/group discounts</h4>
+                  <p>These discounts were applied automatically to this invoice. You may keep or remove an existing discount, but new automatic discounts cannot be selected manually.</p>
+                  {existingNonManualAdjustments.map((rule) => {
+                    const selection = financialAdjustments[rule.id];
+                    return <label key={rule.id} style={{ display: "block", padding: "6px 0" }}>
+                      <input type="checkbox" checked={Boolean(selection)} onChange={(event) => setFinancialAdjustments((current) => {
+                        const next = { ...current };
+                        if (event.target.checked) next[rule.id] = { scope: rule.scope, itemIndexes: rule.scope === "ITEMS" ? [...(rule.itemIndexes ?? [])] : [] };
+                        else delete next[rule.id];
+                        return next;
+                      })} />
+                      {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%) · Previously applied
+                    </label>;
+                  })}
+                </>
+              )}
               <h4>Taxes</h4>
               {(pricingRulesQuery.data?.taxes ?? []).filter((rule) => rule.isActive).map((rule) => <label key={rule.id} style={{ display: "block", padding: "4px 0" }}>
                 <input type="checkbox" checked={financialTaxRuleIds.includes(rule.id)} onChange={(event) => setFinancialTaxRuleIds((current) => event.target.checked ? [...current, rule.id] : current.filter((id) => id !== rule.id))} />
