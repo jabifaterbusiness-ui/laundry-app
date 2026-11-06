@@ -83,6 +83,9 @@ function createTransactionClient() {
     invoice: {
       create: vi.fn().mockResolvedValue({ totalAmount: 0 }),
     },
+    auditLog: {
+      create: vi.fn(),
+    },
     business: {
       findUnique: vi.fn().mockResolvedValue({
         id: "biz-A",
@@ -962,6 +965,74 @@ describe("createOrder", () => {
     ).rejects.toThrow("Order not found");
 
     expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it("writes the status transition history in the same serializable transaction", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "RECEIVED",
+    } as never);
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      items: [],
+    } as never);
+    (tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create = vi.fn().mockResolvedValue({ id: "history-1" });
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    const result = await updateOrderStatus(
+      ORDER_A, "biz-A", BRANCH_A, "IN_PROGRESS", prisma,
+      { actorUserId: "user-A", correlationId: "request-1" },
+    );
+
+    expect(result.status).toBe("IN_PROGRESS");
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect((tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "order.status_updated",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-A",
+        correlationId: "request-1",
+        metadata: expect.objectContaining({
+          previousStatus: "RECEIVED",
+          status: "IN_PROGRESS",
+        }),
+      }),
+    });
+  });
+
+  it("does not report a successful status change when its history write fails", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "RECEIVED",
+    } as never);
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      items: [],
+    } as never);
+    (tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create = vi.fn().mockRejectedValue(new Error("audit storage unavailable"));
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await expect(updateOrderStatus(
+      ORDER_A, "biz-A", BRANCH_A, "IN_PROGRESS", prisma,
+      { actorUserId: "user-A" },
+    )).rejects.toThrow("audit storage unavailable");
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
   });
 
 describe("transferOrder", () => {
