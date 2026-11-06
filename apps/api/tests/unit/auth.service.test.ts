@@ -88,6 +88,12 @@ describe("refresh token rotation", () => {
       data: { revokedAt: expect.any(Date) },
     });
     expect(prismaMock.refreshToken.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sessionId: "session-1",
+        userId: "user-1",
+      }),
+    });
   });
 
   it("rejects a token already claimed by a concurrent refresh request", async () => {
