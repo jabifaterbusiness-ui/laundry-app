@@ -2,15 +2,96 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
-export async function listPricingRules(businessId: string, branchId: string, userId: string) {
+export async function listPricingRules(
+  businessId: string,
+  branchId: string,
+  userId: string,
+  customerId?: string,
+) {
   const [discountScope, taxScope] = await Promise.all([
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }),
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" }),
   ]);
+
+  let applicableGroupIds: string[] = [];
+  if (customerId) {
+    const customerScope = await getBranchResourceScope({
+      businessId,
+      branchId,
+      userId,
+      resourceType: "CUSTOMERS",
+    });
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!customer) throw new AppError("Customer not found", 404);
+
+    const memberships = await prisma.customerGroupMember.findMany({
+      where: { businessId, customerId },
+      select: { groupId: true },
+    });
+    applicableGroupIds = memberships.map((membership) => membership.groupId);
+  }
+
+  const now = new Date();
+  const applicableTargets = [
+    { targetScope: "MANUAL" },
+    ...(customerId
+      ? [
+          { targetScope: "CUSTOMER", customerId },
+          ...(applicableGroupIds.length
+            ? [{ targetScope: "GROUP", groupId: { in: applicableGroupIds } }]
+            : []),
+          { targetScope: "ALL_CUSTOMERS" },
+        ]
+      : []),
+  ];
+
   const [adjustments, taxes] = await Promise.all([
-    prisma.priceAdjustment.findMany({ where: { businessId, OR: [{ branchId: null }, { branchId: { in: discountScope.ownerBranchIds } }, { id: { in: discountScope.resourceIds } }] }, include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } }, orderBy: { name: "asc" } }),
-    prisma.taxRule.findMany({ where: { businessId, OR: [{ branchId: null }, { branchId: { in: taxScope.ownerBranchIds } }, { id: { in: taxScope.resourceIds } }] }, orderBy: { name: "asc" } }),
+    prisma.priceAdjustment.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        OR: [
+          { branchId: null },
+          { branchId: { in: discountScope.ownerBranchIds } },
+          { id: { in: discountScope.resourceIds } },
+        ],
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+          { OR: applicableTargets },
+        ],
+      },
+      include: {
+        customer: { select: { id: true, name: true } },
+        group: { select: { id: true, name: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.taxRule.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        OR: [
+          { branchId: null },
+          { branchId: { in: taxScope.ownerBranchIds } },
+          { id: { in: taxScope.resourceIds } },
+        ],
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
   return { adjustments, taxes };
 }
 
