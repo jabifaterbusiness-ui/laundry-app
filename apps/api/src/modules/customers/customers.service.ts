@@ -127,6 +127,7 @@ export async function getCustomerForBusiness(
       businessId,
       OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
     },
+    include: { ownerBranch: { select: { id: true, name: true } } },
   });
 }
 

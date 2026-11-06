@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { hasPermission } from "../../lib/permissions.js";
 import { listBranches, listBranchUsers } from "../../lib/users-api.js";
@@ -15,15 +16,20 @@ const resourceTypes: Array<{ value: BranchResourceType; label: string }> = [
 ];
 
 export function BranchSharingPage() {
+  const [searchParams] = useSearchParams();
+  const requestedResourceType = searchParams.get("resourceType");
+  const initialResourceType = resourceTypes.some((item) => item.value === requestedResourceType)
+    ? requestedResourceType as BranchResourceType
+    : "CUSTOMERS";
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const queryClient = useQueryClient();
   const canManage = hasPermission(user, "branches.update");
-  const [ownerBranchId, setOwnerBranchId] = useState(activeBranchId ?? "");
+  const [ownerBranchId, setOwnerBranchId] = useState(searchParams.get("ownerBranchId") ?? activeBranchId ?? "");
   const [targetBranchId, setTargetBranchId] = useState("");
-  const [resourceType, setResourceType] = useState<BranchResourceType>("CUSTOMERS");
-  const [resourceId, setResourceId] = useState("");
+  const [resourceType, setResourceType] = useState<BranchResourceType>(initialResourceType);
+  const [resourceId, setResourceId] = useState(searchParams.get("resourceId") ?? "");
   const [userId, setUserId] = useState("");
   const [accessLevel, setAccessLevel] = useState<"READ" | "EDIT">("READ");
   const [message, setMessage] = useState("");

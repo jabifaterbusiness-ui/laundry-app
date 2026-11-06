@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 
@@ -234,8 +235,16 @@ export async function saveBranchResourceShare(input: {
     select: { id: true },
   });
 
+  const auditMetadata = {
+    ownerBranchId: input.ownerBranchId,
+    targetBranchId: input.targetBranchId,
+    resourceType: input.resourceType,
+    resourceId,
+    userId,
+    accessLevel: input.accessLevel,
+  };
   if (existing) {
-    return prisma.branchResourceShare.update({
+    const updated = await prisma.branchResourceShare.update({
       where: { id: existing.id },
       data: { accessLevel: input.accessLevel, createdByUserId: input.createdByUserId },
       include: {
@@ -244,9 +253,19 @@ export async function saveBranchResourceShare(input: {
         user: { select: { id: true, fullName: true, email: true } },
       },
     });
+    await recordAuditEvent({
+      action: "branch.resource_share.updated",
+      entityType: "BranchResourceShare",
+      entityId: updated.id,
+      businessId: input.businessId,
+      branchId: input.ownerBranchId,
+      actorUserId: input.createdByUserId,
+      metadata: auditMetadata,
+    });
+    return updated;
   }
 
-  return prisma.branchResourceShare.create({
+  const created = await prisma.branchResourceShare.create({
     data: {
       businessId: input.businessId,
       ownerBranchId: input.ownerBranchId,
@@ -263,14 +282,48 @@ export async function saveBranchResourceShare(input: {
       user: { select: { id: true, fullName: true, email: true } },
     },
   });
+  await recordAuditEvent({
+    action: "branch.resource_share.created",
+    entityType: "BranchResourceShare",
+    entityId: created.id,
+    businessId: input.businessId,
+    branchId: input.ownerBranchId,
+    actorUserId: input.createdByUserId,
+    metadata: auditMetadata,
+  });
+  return created;
 }
 
 export async function deleteBranchResourceShare(input: { businessId: string; id: string; actorUserId: string }) {
   const share = await prisma.branchResourceShare.findFirst({
     where: { id: input.id, businessId: input.businessId },
-    select: { id: true, ownerBranchId: true },
+    select: {
+      id: true,
+      ownerBranchId: true,
+      targetBranchId: true,
+      resourceType: true,
+      resourceId: true,
+      userId: true,
+      accessLevel: true,
+    },
   });
   if (!share) throw new AppError("Branch sharing rule not found", 404);
   await assertCanManageOwnerBranch({ businessId: input.businessId, ownerBranchId: share.ownerBranchId, actorUserId: input.actorUserId });
   await prisma.branchResourceShare.delete({ where: { id: share.id } });
+  await recordAuditEvent({
+    action: "branch.resource_share.deleted",
+    entityType: "BranchResourceShare",
+    entityId: share.id,
+    businessId: input.businessId,
+    branchId: share.ownerBranchId,
+    actorUserId: input.actorUserId,
+    metadata: {
+      ownerBranchId: share.ownerBranchId,
+      targetBranchId: share.targetBranchId,
+      resourceType: share.resourceType,
+      resourceId: share.resourceId,
+      userId: share.userId,
+      accessLevel: share.accessLevel,
+    },
+  });
 }

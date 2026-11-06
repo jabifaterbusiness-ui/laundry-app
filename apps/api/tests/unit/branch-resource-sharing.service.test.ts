@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/lib/audit.js", () => ({
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     user: { findFirst: vi.fn() },
@@ -17,6 +21,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
+import { recordAuditEvent } from "../../src/lib/audit.js";
 import { AppError } from "../../src/middleware/error-handler.js";
 import {
   deleteBranchResourceShare,
@@ -56,6 +61,12 @@ describe("branch resource sharing authorization", () => {
 
     await saveBranchResourceShare(baseInput);
 
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "branch.resource_share.created",
+      entityType: "BranchResourceShare",
+      businessId: "business-a",
+      branchId: "owner-branch",
+    }));
     expect(shareCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         businessId: "business-a",
@@ -146,5 +157,12 @@ describe("branch resource sharing authorization", () => {
     });
 
     expect(shareDelete).toHaveBeenCalledWith({ where: { id: "share-1" } });
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "branch.resource_share.deleted",
+      entityType: "BranchResourceShare",
+      entityId: "share-1",
+      businessId: "business-a",
+      branchId: "owner-branch",
+    }));
   });
 });
