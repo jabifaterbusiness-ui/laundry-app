@@ -598,6 +598,7 @@ async function applySyncOperation(
             context.branchId,
             input.customerId,
             tx,
+            context.actorUserId,
           );
         } else {
           result = await updateOrderStatus(
