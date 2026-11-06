@@ -522,6 +522,7 @@ async function applySyncOperation(
             input.data.phone,
             input.customerId,
             tx,
+            context.actorUserId,
           );
 
           if (duplicates.length > 0) {
@@ -559,6 +560,7 @@ async function applySyncOperation(
           {
             businessId: context.businessId,
             branchId: context.branchId,
+            actorUserId: context.actorUserId,
             customerId: input.customerId,
             items: input.items,
             ...(input.expectedReadyAt !== undefined && {
