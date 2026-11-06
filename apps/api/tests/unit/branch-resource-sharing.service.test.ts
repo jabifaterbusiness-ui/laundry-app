@@ -152,9 +152,10 @@ describe("branch resource sharing authorization", () => {
   it("moves only the receiving branch's existing customer transactions into its separate account", async () => {
     actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
     vi.mocked(prisma.customer.findMany).mockResolvedValue([{ id: "customer-1" }] as never);
-    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(async ({ where }: any) => {
-      return where.branchId === "target-branch" ? null : { id: "shared-account" } as never;
-    });
+    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(((args: any) => {
+      const result = args.where.branchId === "target-branch" ? null : { id: "shared-account" };
+      return Promise.resolve(result);
+    }) as never);
     vi.mocked(prisma.customerAccountTransaction.findMany).mockResolvedValue([{ id: "target-tx" }] as never);
     vi.mocked(prisma.customerAccount.create).mockResolvedValue({ id: "target-account" } as never);
 
@@ -178,9 +179,12 @@ describe("branch resource sharing authorization", () => {
     actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
     shareFindFirst.mockResolvedValue({ id: "share-1", customerAccountMode: "SEPARATE" } as never);
     vi.mocked(prisma.customer.findMany).mockResolvedValue([{ id: "customer-1" }] as never);
-    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(async ({ where }: any) => {
-      return where.branchId === "target-branch" ? { id: "target-account" } as never : { id: "shared-account" } as never;
-    });
+    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(((args: any) => {
+      const result = args.where.branchId === "target-branch"
+        ? { id: "target-account" }
+        : { id: "shared-account" };
+      return Promise.resolve(result);
+    }) as never);
     vi.mocked(prisma.branchResourceShare.update).mockResolvedValue({ id: "share-1", customerAccountMode: "SHARED" } as never);
 
     await saveBranchResourceShare({
