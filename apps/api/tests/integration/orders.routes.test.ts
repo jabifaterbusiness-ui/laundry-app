@@ -624,7 +624,7 @@ describe("Orders routes - authorization", () => {
           previousStatus: "RECEIVED",
           status: "IN_PROGRESS",
           notificationResults: [],
-          notificationError: null,
+          notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
         }),
       }),
     );
