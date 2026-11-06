@@ -46,7 +46,7 @@ export function CustomerDetailsPage() {
   const customerQuery = useQuery({
     queryKey: ["customer", activeBranchId, id],
     queryFn: () => getCustomer(id!, { accessToken }),
-    enabled: Boolean(id && activeBranchId),
+    enabled: Boolean(accessToken && id && activeBranchId),
   });
 
   const branchSharesQuery = useQuery({
@@ -64,12 +64,12 @@ export function CustomerDetailsPage() {
   const servicesQuery = useQuery({
     queryKey: ["services", "active", activeBranchId],
     queryFn: () => listServices({ status: "active" }, { accessToken }),
-    enabled: Boolean(activeBranchId && canManageServicePrices),
+    enabled: Boolean(accessToken && activeBranchId && canManageServicePrices),
   });
   const customerPricesQuery = useQuery({
     queryKey: ["customer-service-prices", activeBranchId, id],
     queryFn: () => listCustomerServicePrices(id!, { accessToken }),
-    enabled: Boolean(id && activeBranchId && canManageServicePrices),
+    enabled: Boolean(accessToken && id && activeBranchId && canManageServicePrices),
   });
   const savePriceMutation = useMutation({
     mutationFn: async (input: { serviceId: string; unitPrice: number }) =>
@@ -84,7 +84,7 @@ export function CustomerDetailsPage() {
   const accountQuery = useQuery({
     queryKey: ["customer-account", activeBranchId, id],
     queryFn: () => getCustomerAccount(id!, { accessToken }),
-    enabled: Boolean(id && activeBranchId && canViewAccount),
+    enabled: Boolean(accessToken && id && activeBranchId && canViewAccount),
   });
 
   const fundMutation = useMutation({
