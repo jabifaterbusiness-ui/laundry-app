@@ -86,6 +86,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     employeeCompensation: {
       findFirst: vi.fn(),
     },
