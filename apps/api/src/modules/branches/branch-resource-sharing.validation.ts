@@ -21,6 +21,9 @@ export const createBranchResourceShareSchema = z.object({
 }).refine((value) => value.customerAccountMode !== "SEPARATE" || (value.resourceType === "CUSTOMERS" && value.resourceId == null && value.userId == null), {
   message: "Separate customer accounts can only be configured for all customers shared with the whole target branch",
   path: ["customerAccountMode"],
+}).refine((value) => value.resourceType !== "PAYROLL_COMPENSATION" || value.accessLevel === "READ", {
+  message: "Payroll compensation can only be shared read-only; salary changes must be made in the owning branch",
+  path: ["accessLevel"],
 }).refine((value) => value.ownerBranchId !== value.targetBranchId, {
   message: "Choose two different branches",
   path: ["targetBranchId"],
