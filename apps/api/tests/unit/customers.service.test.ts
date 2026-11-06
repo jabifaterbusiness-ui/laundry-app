@@ -411,6 +411,7 @@ describe("setCustomerLifecycleStatus", () => {
       "user-1",
     );
 
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
     expect(prismaMock.customer.update).toHaveBeenCalledWith({
       where: { id: "cust-1" },
       data: {
@@ -483,6 +484,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     );
 
     expect(transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
 
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
@@ -790,6 +792,7 @@ describe("transferCustomer - full account transfer", () => {
     );
 
     expect(transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
 
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
