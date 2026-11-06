@@ -445,10 +445,11 @@ export async function transferOrder(
   branchId: string,
   newCustomerId: string,
   db: OrderDb = prisma,
+  userId?: string,
 ) {
   if (db === prisma) {
     return prisma.$transaction(async (tx) =>
-      transferOrderWithTx(tx, id, businessId, branchId, newCustomerId),
+      transferOrderWithTx(tx, id, businessId, branchId, newCustomerId, userId),
     );
   }
 
@@ -458,6 +459,7 @@ export async function transferOrder(
     businessId,
     branchId,
     newCustomerId,
+    userId,
   );
 }
 
@@ -467,6 +469,7 @@ async function transferOrderWithTx(
   businessId: string,
   branchId: string,
   newCustomerId: string,
+  userId?: string,
 ) {
   const order = await tx.order.findFirst({
     where: {
@@ -492,10 +495,27 @@ async function transferOrderWithTx(
     );
   }
 
+  const customerScope = userId
+    ? await getBranchResourceScope({
+        businessId,
+        branchId,
+        userId,
+        resourceType: "CUSTOMERS",
+      }, tx)
+    : null;
   const customer = await tx.customer.findFirst({
     where: {
       id: newCustomerId,
       businessId,
+      ...(customerScope
+        ? {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: customerScope.ownerBranchIds } },
+              { id: { in: customerScope.resourceIds } },
+            ],
+          }
+        : {}),
     },
     select: {
       id: true,
