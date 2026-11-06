@@ -326,12 +326,23 @@ export async function editOrderWithCorrection(params: {
       ),
     ];
 
+    const serviceScope = await getBranchResourceScope({
+      businessId: params.businessId,
+      branchId: params.branchId,
+      userId: params.actorUserId,
+      resourceType: "SERVICES",
+    }, tx);
     const services = await tx.service.findMany({
       where: {
         id: {
           in: serviceIds,
         },
         businessId: params.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+          { id: { in: serviceScope.resourceIds } },
+        ],
       },
       select: {
         id: true,
