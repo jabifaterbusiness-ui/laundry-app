@@ -7,6 +7,7 @@ export async function listPricingRules(
   branchId: string,
   userId: string,
   customerId?: string,
+  purpose: "order" | "management" = "management",
 ) {
   const [discountScope, taxScope] = await Promise.all([
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }),
@@ -60,17 +61,21 @@ export async function listPricingRules(
     prisma.priceAdjustment.findMany({
       where: {
         businessId,
-        isActive: true,
+        ...(purpose === "order" ? { isActive: true } : {}),
         OR: [
           { branchId: null },
           { branchId: { in: discountScope.ownerBranchIds } },
           { id: { in: discountScope.resourceIds } },
         ],
-        AND: [
-          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-          { OR: applicableTargets },
-        ],
+        ...(purpose === "order"
+          ? {
+              AND: [
+                { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+                { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+                { OR: applicableTargets },
+              ],
+            }
+          : {}),
       },
       include: {
         customer: { select: { id: true, name: true } },
@@ -81,7 +86,7 @@ export async function listPricingRules(
     prisma.taxRule.findMany({
       where: {
         businessId,
-        isActive: true,
+        ...(purpose === "order" ? { isActive: true } : {}),
         OR: [
           { branchId: null },
           { branchId: { in: taxScope.ownerBranchIds } },
