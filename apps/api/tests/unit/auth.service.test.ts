@@ -29,6 +29,7 @@ import {
   hashPassword,
   invalidatePasswordResetToken,
   issueTokenPair,
+  revokeRefreshToken,
   rotateRefreshToken,
   resetPassword,
   verifyPassword,
@@ -95,6 +96,45 @@ describe("refresh token rotation", () => {
       statusCode: 401,
     });
     expect(prismaMock.refreshToken.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("refresh token revocation", () => {
+  const owner = { id: "user-1", businessId: "business-1" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) =>
+      callback(prismaMock),
+    );
+    prismaMock.refreshToken.findUnique.mockResolvedValue({
+      id: "refresh-token-1",
+      revokedAt: null,
+      user: owner,
+    });
+    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("conditionally revokes a refresh token and returns its owner", async () => {
+    await expect(revokeRefreshToken("raw-refresh-token")).resolves.toEqual(owner);
+
+    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { id: "refresh-token-1", revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it("does not report success when another request already revoked the token", async () => {
+    prismaMock.refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(revokeRefreshToken("raw-refresh-token")).resolves.toBeNull();
+  });
+
+  it("propagates database errors rather than silently leaving a session active", async () => {
+    const databaseError = new Error("database unavailable");
+    prismaMock.refreshToken.updateMany.mockRejectedValueOnce(databaseError);
+
+    await expect(revokeRefreshToken("raw-refresh-token")).rejects.toBe(databaseError);
   });
 });
 
