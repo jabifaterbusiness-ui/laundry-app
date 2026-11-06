@@ -9,7 +9,7 @@ import { getApprovedWhatsAppTemplates } from "../../lib/whatsapp-inbox-api.js";
 import {
   createAnnouncement, deleteStatusRule, getReminderConfig, listCustomerGroups,
   listCommunicationDeliveries, listStatusRules, listUnpickedOrders, getWhatsAppConnection,
-  saveReminderConfig, saveStatusRule, sendUnpickedReminders,
+  saveReminderConfig, saveStatusRule, sendUnpickedReminders, retryCommunicationDelivery,
   type CommunicationChannel,
 } from "../../lib/communications-api.js";
 
@@ -167,6 +167,18 @@ export function CommunicationsPage() {
       await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
       await queryClient.invalidateQueries({ queryKey: ["communications", "unpicked-orders"] });
     },
+  });
+  const retryDeliveryMutation = useMutation({
+    mutationFn: (id: string) => retryCommunicationDelivery(id, { accessToken, branchId: activeBranchId }),
+    onSuccess: async (result) => {
+      setFeedback(result.status === "SENT"
+        ? "WhatsApp retry submitted successfully."
+        : result.status === "FAILED"
+          ? "WhatsApp retry failed. Check the delivery error details."
+          : "This WhatsApp delivery already has a retry attempt.");
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to retry this WhatsApp delivery."),
   });
   const reminderMutation = useMutation({
     mutationFn: () => sendUnpickedReminders({ orderIds: selectedOrderIds, channels: reminderChannels, message: reminderMessage.trim() }, { accessToken, branchId: activeBranchId }),
@@ -344,7 +356,13 @@ export function CommunicationsPage() {
           <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
           <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
           <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
+          {delivery.retryAttempt > 0 && <small style={{ gridColumn: "1 / -1", color: "#64748b" }}>Retry attempt {delivery.retryAttempt}</small>}
           {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
+          {delivery.retryAvailable && <span style={{ gridColumn: "1 / -1" }}>
+            <button type="button" disabled={retryDeliveryMutation.isPending} onClick={() => retryDeliveryMutation.mutate(delivery.id)}>
+              {retryDeliveryMutation.isPending ? "Retrying..." : "Retry WhatsApp delivery"}
+            </button>
+          </span>}
         </div>)}
       </section>
     </main>
