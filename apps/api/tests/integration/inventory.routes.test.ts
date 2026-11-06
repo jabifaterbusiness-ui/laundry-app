@@ -157,11 +157,11 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
-  userBranchFindUnique.mockImplementation(async ({ where }: any) => {
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
     const { userId, branchId } = where.userId_branchId;
     const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
     return { userId, branchId, branch: { id: branchId, businessId, name: "Main Branch" } } as never;
-  });
+  }) as never);
 
   vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
     const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
