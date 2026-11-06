@@ -489,6 +489,15 @@ describe("Reports routes - filtering and isolation", () => {
       where: {
         businessId: "biz-A",
         branchId: BRANCH_A,
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
