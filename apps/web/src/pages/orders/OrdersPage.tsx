@@ -286,6 +286,7 @@ export function OrdersPage() {
     queryFn: () => listPricingRules(
       { accessToken },
       activeWorkspace?.draft.customerId || undefined,
+      "order",
     ),
     enabled: Boolean(accessToken && activeBranchId),
   });
