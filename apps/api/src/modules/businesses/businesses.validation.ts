@@ -46,3 +46,7 @@ export const updateBusinessBrandingSchema = z
       .optional(),
   })
   .strict();
+
+export const updateBusinessSecuritySettingsSchema = z.object({
+  sessionInactivityTimeoutMinutes: z.number().int().min(1).max(60),
+}).strict();
