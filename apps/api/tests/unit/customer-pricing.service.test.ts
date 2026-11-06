@@ -125,7 +125,10 @@ describe("customer-specific service pricing branch scope", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-A",
-          branchId: undefined,
+          ownerBranchId: "branch-B",
+          targetBranchId: "branch-A",
+          resourceType: "CUSTOMER_PRICING",
+          accessLevel: "EDIT",
         }),
       }),
     );
