@@ -26,6 +26,10 @@ describe("SensitiveAuthorizationProvider", () => {
       token: "new-sensitive-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
+    vi.spyOn(authApi, "recordSensitiveActivity").mockResolvedValue({
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      inactivityTimeoutMs: 180_000,
+    });
 
     useAuthStore.setState({
       accessToken: "access-token",
@@ -44,6 +48,7 @@ describe("SensitiveAuthorizationProvider", () => {
     useAuthStore.setState({
       sensitiveAuthorization: "existing-token",
       sensitiveAuthorizationExpiresAt: "2099-01-01T00:00:00.000Z",
+      sensitiveAuthorizationInactivityTimeoutMs: 180_000,
     });
 
     render(
