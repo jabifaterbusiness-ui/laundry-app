@@ -25,7 +25,8 @@ export function SensitiveAuthorizationManager() {
   const heartbeatInFlight = useRef(false);
 
   useEffect(() => {
-    if (!sensitiveAuthorization) return;
+    const authorizationToken = sensitiveAuthorization;
+    if (!authorizationToken) return;
 
     let inactivityTimer: number | null = null;
     const timeoutMs = inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
@@ -41,17 +42,18 @@ export function SensitiveAuthorizationManager() {
         inactivityTimer = null;
       }, timeoutMs);
 
-      if (!accessToken || heartbeatInFlight.current) return;
+      const currentAccessToken = accessToken;
+      if (!currentAccessToken || heartbeatInFlight.current) return;
       const now = Date.now();
       if (now - lastHeartbeatAt.current < ACTIVITY_HEARTBEAT_THROTTLE_MS) return;
 
       lastHeartbeatAt.current = now;
       heartbeatInFlight.current = true;
-      void recordSensitiveActivity(sensitiveAuthorization, accessToken)
+      void recordSensitiveActivity(authorizationToken, currentAccessToken)
         .then((activity) => {
-          if (useAuthStore.getState().sensitiveAuthorization !== sensitiveAuthorization) return;
+          if (useAuthStore.getState().sensitiveAuthorization !== authorizationToken) return;
           setSensitiveAuthorization({
-            token: sensitiveAuthorization,
+            token: authorizationToken,
             expiresAt: activity.expiresAt,
             inactivityTimeoutMs: activity.inactivityTimeoutMs,
           });
