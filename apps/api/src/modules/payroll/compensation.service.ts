@@ -148,7 +148,7 @@ export async function getCompensation({
     where: {
       id,
       businessId,
-      OR: [{ branchId }, { branchId: null }],
+      branchId,
       employee: { is: { branches: { some: { branchId } } } },
     },
     include: {
@@ -218,12 +218,14 @@ export async function getCurrentCompensation({
     effectiveFrom: { lte: effectiveDate },
     OR: [{ effectiveTo: null }, { effectiveTo: { gt: effectiveDate } }],
   };
-  const branchCompensation = await prisma.employeeCompensation.findFirst({
-    where: { businessId, branchId, employeeId, employee: { is: { branches: { some: { branchId } } } }, ...effectiveWindow },
-    orderBy: { effectiveFrom: "desc" },
-  });
-  const compensation = branchCompensation ?? await prisma.employeeCompensation.findFirst({
-    where: { businessId, branchId: null, employeeId, employee: { is: { branches: { some: { branchId } } } }, ...effectiveWindow },
+  const compensation = await prisma.employeeCompensation.findFirst({
+    where: {
+      businessId,
+      branchId,
+      employeeId,
+      employee: { is: { branches: { some: { branchId } } } },
+      ...effectiveWindow,
+    },
     orderBy: { effectiveFrom: "desc" },
   });
 

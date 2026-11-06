@@ -613,6 +613,7 @@ describe("payroll.service", () => {
         actorUserId: "user-1",
       });
 
+      expect(employeeCompensationFindFirst).toHaveBeenCalledTimes(1);
       expect(employeeCompensationFindFirst).toHaveBeenCalledWith({
         where: {
           businessId: "business-1",

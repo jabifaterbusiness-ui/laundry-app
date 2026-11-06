@@ -363,7 +363,7 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
-          OR: [{ branchId: "branch-A" }, { branchId: null }],
+          branchId: "branch-A",
           employee: { is: { branches: { some: { branchId: "branch-A" } } } },
         },
       }),
@@ -407,7 +407,7 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           id: COMPENSATION_A,
           businessId: "biz-B",
-          OR: [{ branchId: "branch-B" }, { branchId: null }],
+          branchId: "branch-B",
           employee: { is: { branches: { some: { branchId: "branch-B" } } } },
         },
       }),

@@ -202,7 +202,7 @@ describe("compensation service", () => {
         where: {
           id: "comp-1",
           businessId: "biz-1",
-          OR: [{ branchId: "branch-1" }, { branchId: null }],
+          branchId: "branch-1",
           employee: { is: { branches: { some: { branchId: "branch-1" } } } },
         },
       }),
@@ -237,7 +237,7 @@ describe("compensation service", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-1",
-          OR: [{ branchId: "branch-1" }, { branchId: null }],
+          branchId: "branch-1",
           employee: { is: { branches: { some: { branchId: "branch-1" } } } },
           employeeId: "employee-1",
         },
@@ -259,5 +259,38 @@ describe("compensation service", () => {
     });
 
     expect(result.basicSalary).toBe(100000);
+    expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledTimes(1);
+    expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-1",
+          branchId: "branch-1",
+          employeeId: "employee-1",
+        }),
+      }),
+    );
+  });
+
+  it("does not treat an unassigned legacy compensation record as branch-owned", async () => {
+    mocks.prisma.employeeCompensation.findFirst.mockResolvedValue(null);
+
+    await expect(
+      getCurrentCompensation({
+        businessId: "biz-1",
+        branchId: "branch-1",
+        employeeId: "employee-1",
+        effectiveDate: new Date("2026-08-15"),
+      }),
+    ).rejects.toMatchObject({
+      message: "No compensation record found for employee",
+      statusCode: 404,
+    });
+
+    expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledTimes(1);
+    expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ businessId: "biz-1", branchId: "branch-1" }),
+      }),
+    );
   });
 });

@@ -1750,8 +1750,9 @@ model EmployeeCompensation {
   employeeId String
   employee   User   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
-  // New compensation records are branch-owned. Null preserves legacy
-  // business-wide compensation until an owner explicitly scopes it.
+  // Null identifies an unassigned legacy record. Branch-scoped payroll
+  // workflows must never treat it as business-wide or expose it to branches;
+  // an owner must explicitly create or assign branch-specific compensation.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
