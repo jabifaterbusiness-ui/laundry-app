@@ -819,9 +819,16 @@ describe("InvoicesPage digital receipt shortcut", () => {
         },
       ],
       totalAmount: 5000,
-      totalPaid: 0,
-      balanceDue: 5000,
-      payments: [],
+      totalPaid: 2500,
+      balanceDue: 2500,
+      payments: [{
+        id: "payment-1",
+        amount: 2500,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        reference: "BANK-REF-1",
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }],
       garmentNote: "Handle with care",
       customerAgreement: "Customer agreement",
     });
@@ -854,6 +861,11 @@ describe("InvoicesPage digital receipt shortcut", () => {
     expect(customerReceipt).toHaveTextContent("AMOUNT");
     expect(customerReceipt).toHaveTextContent("TOTAL PCS");
     expect(customerReceipt).toHaveTextContent("TOTAL AMOUNT");
+    expect(customerReceipt).toHaveTextContent("PAYMENT HISTORY");
+    expect(customerReceipt).toHaveTextContent("Bank transfer");
+    expect(customerReceipt).toHaveTextContent("BANK-REF-1");
+    expect(customerReceipt).toHaveTextContent("AMOUNT PAID");
+    expect(customerReceipt).toHaveTextContent("BALANCE DUE");
     expect(customerReceipt).toHaveTextContent("₦2,500");
     expect(customerReceipt).toHaveTextContent("₦5,000");
     expect(customerReceipt).not.toHaveTextContent("UNIT PRICE");
