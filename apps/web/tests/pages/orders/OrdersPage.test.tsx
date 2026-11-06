@@ -1105,7 +1105,7 @@ describe("OrdersPage customer-specific discounts", () => {
     expect(within(automaticSection).getByText("Jane's discount")).toBeInTheDocument();
     expect(within(automaticSection).getByText(/applied automatically/i)).toBeInTheDocument();
     expect(within(automaticSection).queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(within(manualSection).getByText("Courtesy adjustment")).toBeInTheDocument();
+    expect(within(manualSection).getByText(/Courtesy adjustment/)).toBeInTheDocument();
     expect(within(manualSection).getByRole("checkbox")).toBeInTheDocument();
 
     await waitFor(() => {
