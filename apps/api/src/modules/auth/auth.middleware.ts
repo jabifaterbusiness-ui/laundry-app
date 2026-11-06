@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../../config/index.js";
 import { prisma } from "../../lib/prisma.js";
+import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { requireSensitiveAuthorization as requireSensitiveAuthorizationToken } from "./sensitive-authorization.service.js";
 import type { Role } from "@prisma/client";
@@ -25,6 +26,15 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
   try {
     const payload = jwt.verify(token, config.auth.accessTokenSecret) as AccessTokenPayload;
+    const account = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { isActive: true, deletedAt: true },
+    });
+
+    if (!account || !account.isActive || account.deletedAt) {
+      throw new AppError("Invalid or expired access token", 401);
+    }
+
     // No branchId here by design - see AccessTokenPayload / auth.service.ts.
     req.user = {
       id: payload.sub,
