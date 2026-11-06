@@ -115,7 +115,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [],
       }),
     ).rejects.toThrow("An order must contain at least one item");
@@ -134,7 +135,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-B",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -172,7 +174,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-B",
         branchId: BRANCH_B,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -215,7 +218,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -262,7 +266,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -304,7 +309,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -346,7 +352,8 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
-        customerId: CUSTOMER_A,
+        actorUserId: "user-A",
+      customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -573,6 +580,7 @@ describe("createOrder", () => {
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
@@ -672,6 +680,7 @@ describe("createOrder", () => {
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
