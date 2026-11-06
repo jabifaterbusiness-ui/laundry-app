@@ -13,6 +13,7 @@ const resourceTypes: Array<{ value: BranchResourceType; label: string }> = [
   { value: "DISCOUNTS", label: "Discounts and promotions" },
   { value: "TAX_RULES", label: "Tax rules" },
   { value: "INVENTORY", label: "Inventory" },
+  { value: "PAYROLL_COMPENSATION", label: "Payroll compensation (read-only)" },
 ];
 
 export function BranchSharingPage() {
@@ -26,6 +27,9 @@ export function BranchSharingPage() {
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const queryClient = useQueryClient();
   const canManage = hasPermission(user, "branches.update");
+  const canManagePayrollSharing =
+    hasPermission(user, "compensation.view") &&
+    hasPermission(user, "compensation.manage");
   const [ownerBranchId, setOwnerBranchId] = useState(searchParams.get("ownerBranchId") ?? activeBranchId ?? "");
   const [targetBranchId, setTargetBranchId] = useState("");
   const [resourceType, setResourceType] = useState<BranchResourceType>(initialResourceType);
@@ -109,8 +113,15 @@ export function BranchSharingPage() {
               </select>
             </label>
             <label>Data category
-              <select value={resourceType} onChange={(event) => { setResourceType(event.target.value as BranchResourceType); setResourceId(""); }}>
-                {resourceTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              <select value={resourceType} onChange={(event) => {
+                const nextType = event.target.value as BranchResourceType;
+                setResourceType(nextType);
+                setResourceId("");
+                if (nextType === "PAYROLL_COMPENSATION") setAccessLevel("READ");
+              }}>
+                {resourceTypes
+                  .filter((item) => item.value !== "PAYROLL_COMPENSATION" || canManagePayrollSharing)
+                  .map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>
             <label>Specific record ID (optional)
@@ -125,9 +136,12 @@ export function BranchSharingPage() {
             <label>Access level
               <select value={accessLevel} onChange={(event) => setAccessLevel(event.target.value as "READ" | "EDIT")}>
                 <option value="READ">Read only</option>
-                <option value="EDIT">Read and edit</option>
+                {resourceType !== "PAYROLL_COMPENSATION" && <option value="EDIT">Read and edit</option>}
               </select>
             </label>
+            {resourceType === "PAYROLL_COMPENSATION" && (
+              <p role="note">Salary sharing is read-only. Salary changes must be made in the owning branch by an authorized compensation manager.</p>
+            )}
             {resourceType === "CUSTOMERS" && !resourceId.trim() && !userId ? (
               <label>Customer account handling
                 <select value={customerAccountMode} onChange={(event) => setCustomerAccountMode(event.target.value as "SHARED" | "SEPARATE")}>
