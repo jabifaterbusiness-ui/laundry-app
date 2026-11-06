@@ -49,11 +49,11 @@ export function SensitiveAuthorizationManager() {
 
       lastHeartbeatAt.current = now;
       heartbeatInFlight.current = true;
-      void recordSensitiveActivity(authorizationToken, currentAccessToken)
+      void recordSensitiveActivity(authorizationToken!, currentAccessToken!)
         .then((activity) => {
           if (useAuthStore.getState().sensitiveAuthorization !== authorizationToken) return;
           setSensitiveAuthorization({
-            token: authorizationToken,
+            token: authorizationToken!,
             expiresAt: activity.expiresAt,
             inactivityTimeoutMs: activity.inactivityTimeoutMs,
           });
