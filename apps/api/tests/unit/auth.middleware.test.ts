@@ -212,4 +212,53 @@ describe("requireAuth middleware account validity", () => {
       message: "Invalid or expired access token",
     }));
   });
+
+  it("rejects missing and malformed bearer headers without querying the account", async () => {
+    for (const authorization of [undefined, "Basic credentials", "Bearer"]) {
+      const req = {
+        headers: authorization === undefined ? {} : { authorization },
+      } as unknown as Request;
+
+      await requireAuth(req, {} as Response, next);
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 401,
+        message: "Missing or malformed Authorization header",
+      }));
+    }
+
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects invalid and expired JWTs without querying the account", async () => {
+    const expiredToken = jwt.sign(
+      { sub: "user-1", email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
+      process.env.JWT_ACCESS_SECRET as string,
+      { expiresIn: -1 },
+    );
+
+    for (const candidate of ["not-a-jwt", expiredToken]) {
+      const req = { headers: { authorization: `Bearer ${candidate}` } } as unknown as Request;
+      await requireAuth(req, {} as Response, next);
+    }
+
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    }));
+  });
+
+  it("forwards account lookup failures instead of treating them as invalid credentials", async () => {
+    const databaseError = new Error("database unavailable");
+    userFindUniqueMock.mockRejectedValue(databaseError);
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(databaseError);
+  });
+
 });
