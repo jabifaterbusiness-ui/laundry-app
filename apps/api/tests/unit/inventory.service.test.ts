@@ -14,6 +14,10 @@ const { prismaMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
     },
+    inventoryStocktake: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
     inventoryStock: {
       upsert: vi.fn(),
       update: vi.fn(),
@@ -41,6 +45,7 @@ import {
   updateInventoryItem,
   createInventoryMovement,
   adjustInventoryStock,
+  applyInventoryStocktake,
   listInventoryItems,
   listInventoryStock,
   type CreateInventoryMovementInput,
@@ -68,6 +73,30 @@ beforeEach(() => {
   prismaMock.inventoryStock.findUniqueOrThrow.mockImplementation(async () => {
     const latestUpsert = prismaMock.inventoryStock.upsert.mock.results.at(-1)?.value;
     return latestUpsert ? await latestUpsert : null;
+  });
+});
+
+describe("applyInventoryStocktake branch sharing", () => {
+  it("rechecks current EDIT access and refuses to apply after inventory sharing is revoked", async () => {
+    prismaMock.inventoryStocktake.findFirst.mockResolvedValue({
+      id: "stocktake-1",
+      status: "APPROVED",
+      lines: [{ inventoryItemId: "item-owned-by-another-branch", countedQuantity: 8, expectedQuantity: 5 }],
+    } as never);
+    // No current share means the item is no longer visible to this branch.
+    prismaMock.inventoryItem.findMany.mockResolvedValue([] as never);
+
+    await expect(applyInventoryStocktake({
+      businessId: "biz-A",
+      branchId: "branch-B",
+      userId: "user-B",
+    }, {
+      stocktakeId: "stocktake-1",
+      appliedById: "user-B",
+    })).rejects.toThrow("One or more stocktake items are no longer available to this branch");
+
+    expect(prismaMock.inventoryStock.update).not.toHaveBeenCalled();
+    expect(prismaMock.inventoryStocktake.update).not.toHaveBeenCalled();
   });
 });
 
