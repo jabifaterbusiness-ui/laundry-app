@@ -116,7 +116,6 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [],
       }),
@@ -137,7 +136,6 @@ describe("createOrder", () => {
         businessId: "biz-B",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -182,7 +180,6 @@ describe("createOrder", () => {
         businessId: "biz-B",
         branchId: BRANCH_B,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -227,7 +224,6 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -281,7 +277,6 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -325,7 +320,6 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -369,7 +363,6 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-
         customerId: CUSTOMER_A,
         items: [
           {
@@ -449,7 +442,6 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
-
       customerId: CUSTOMER_A,
       items: [
         {
@@ -599,7 +591,6 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
-
       customerId: CUSTOMER_A,
       items: [
         {
@@ -700,7 +691,6 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
-
       customerId: CUSTOMER_A,
       items: [
         {
