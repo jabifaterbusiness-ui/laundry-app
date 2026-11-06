@@ -245,6 +245,25 @@ export async function statusHistory(req: Request, res: Response) {
     orderBy: { timestamp: "desc" },
     take: 100,
   });
+  const deliveryIds = [...new Set(entries.flatMap((entry) => {
+    const metadata = entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata)
+      ? entry.metadata as Record<string, unknown>
+      : {};
+    return Array.isArray(metadata.notificationResults)
+      ? metadata.notificationResults.flatMap((value) => {
+          if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+          const deliveryId = (value as Record<string, unknown>).deliveryId;
+          return typeof deliveryId === "string" ? [deliveryId] : [];
+        })
+      : [];
+  }))];
+  const deliveryRows = deliveryIds.length
+    ? await prisma.communicationDelivery.findMany({
+        where: { businessId, orderId: id, id: { in: deliveryIds } },
+        select: { id: true, status: true, errorMessage: true },
+      })
+    : [];
+  const deliveryById = new Map(deliveryRows.map((delivery) => [delivery.id, delivery]));
 
   res.status(200).json(entries.map((entry) => {
     const metadata = entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata)
@@ -255,11 +274,13 @@ export async function statusHistory(req: Request, res: Response) {
           if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
           const result = value as Record<string, unknown>;
           if (typeof result.channel !== "string" || typeof result.status !== "string") return [];
+          const deliveryId = typeof result.deliveryId === "string" ? result.deliveryId : null;
+          const latestDelivery = deliveryId ? deliveryById.get(deliveryId) : undefined;
           return [{
             channel: result.channel,
-            status: result.status,
-            deliveryId: typeof result.deliveryId === "string" ? result.deliveryId : null,
-            error: typeof result.error === "string" ? result.error : null,
+            status: latestDelivery?.status ?? result.status,
+            deliveryId,
+            error: latestDelivery?.errorMessage ?? (typeof result.error === "string" ? result.error : null),
           }];
         })
       : [];
