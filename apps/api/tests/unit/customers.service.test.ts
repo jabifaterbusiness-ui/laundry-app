@@ -863,15 +863,19 @@ describe("transferCustomer - full account transfer", () => {
 
   it("uses only the selected branch's separate customer ledgers during transfer", async () => {
     findFirst
+      .mockReset()
       .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
       .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-B" } as never);
     prismaMock.branchResourceShare.findFirst
-      .mockResolvedValueOnce({ id: "source-edit-share" } as never)
-      .mockResolvedValueOnce({ customerAccountMode: "SEPARATE" } as never)
-      .mockResolvedValueOnce({ id: "target-edit-share" } as never)
-      .mockResolvedValueOnce({ customerAccountMode: "SEPARATE" } as never);
+      .mockReset()
+      .mockImplementation((args: any) => Promise.resolve(
+        args?.select?.customerAccountMode
+          ? { customerAccountMode: "SEPARATE" }
+          : { id: "edit-share" },
+      ) as never);
     orderFindMany.mockResolvedValue([]);
     customerAccountFindFirst
+      .mockReset()
       .mockResolvedValueOnce({ id: "source-branch-account", branchId: "branch-A" } as never)
       .mockResolvedValueOnce({ id: "target-branch-account", branchId: "branch-A" } as never);
     customerAccountTransactionUpdateMany.mockResolvedValue({ count: 2 });
