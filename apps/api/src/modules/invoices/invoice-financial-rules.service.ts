@@ -165,10 +165,12 @@ export async function updateInvoiceFinancialRules(input: {
         throw new AppError("One or more selected taxes are unavailable", 422);
       }
 
-      const name = rule?.name ?? snapshot?.name;
-      const kind = rule?.kind ?? snapshot?.kind;
-      const value = rule?.value ?? snapshot?.value;
-      const treatment = rule?.treatment ?? snapshot?.treatment;
+      // Keep the immutable invoice snapshot for rules already applied to
+      // this invoice; only newly selected rules use their current definition.
+      const name = snapshot?.name ?? rule?.name;
+      const kind = snapshot?.kind ?? rule?.kind;
+      const value = snapshot?.value ?? rule?.value;
+      const treatment = snapshot?.treatment ?? rule?.treatment;
       if (
         typeof name !== "string" ||
         (kind !== "PERCENTAGE" && kind !== "FIXED") ||
@@ -178,16 +180,18 @@ export async function updateInvoiceFinancialRules(input: {
         throw new AppError("An existing tax snapshot is incomplete and cannot be recalculated", 422);
       }
 
+      const normalizedKind = kind as "PERCENTAGE" | "FIXED";
+      const normalizedTreatment = treatment as "ADDITIVE" | "WITHHOLDING";
       return {
         id,
         name,
-        kind,
+        kind: normalizedKind,
         value,
-        treatment,
+        treatment: normalizedTreatment,
         enabled: true,
         // A previously applied tax combination was already accepted. Its
         // immutable invoice snapshot remains valid if the rule was retired.
-        allowWithOtherTaxes: rule?.allowWithOtherTaxes ?? true,
+        allowWithOtherTaxes: existingTaxIds.has(id) ? true : rule?.allowWithOtherTaxes ?? true,
       };
     });
 
