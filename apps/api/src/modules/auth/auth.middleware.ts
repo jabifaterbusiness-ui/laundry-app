@@ -8,6 +8,7 @@ import type { Role } from "@prisma/client";
 
 interface AccessTokenPayload {
   sub: string;
+  sid: string;
   email: string;
   username?: string | null;
   securityRole: Role;
@@ -30,7 +31,12 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     return next(new AppError("Invalid or expired access token", 401));
   }
 
-  if (typeof payload.sub !== "string" || !payload.sub.trim()) {
+  if (
+    typeof payload.sub !== "string" ||
+    !payload.sub.trim() ||
+    typeof payload.sid !== "string" ||
+    !payload.sid.trim()
+  ) {
     return next(new AppError("Invalid or expired access token", 401));
   }
 
@@ -46,6 +52,24 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   }
 
   if (!account || !account.isActive || account.deletedAt) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  let activeSession: { id: string } | null;
+  try {
+    activeSession = await prisma.refreshToken.findFirst({
+      where: {
+        sessionId: payload.sid,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    return next(error);
+  }
+
+  if (!activeSession) {
     return next(new AppError("Invalid or expired access token", 401));
   }
 
