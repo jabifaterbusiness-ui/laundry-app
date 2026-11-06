@@ -127,8 +127,16 @@ export interface CustomerServicePrice {
   unitPrice: number;
   service: Pick<Service, "id" | "name" | "pieces" | "unitPrice" | "isActive">;
 }
-export async function listPricingRules(auth: { accessToken: string | null }): Promise<PricingRulesResponse> {
-  return apiFetch<PricingRulesResponse>("/services/pricing-rules", { accessToken: auth.accessToken });
+export async function listPricingRules(
+  auth: { accessToken: string | null },
+  customerId?: string,
+): Promise<PricingRulesResponse> {
+  const query = customerId
+    ? `?customerId=${encodeURIComponent(customerId)}`
+    : "";
+  return apiFetch<PricingRulesResponse>(`/services/pricing-rules${query}`, {
+    accessToken: auth.accessToken,
+  });
 }
 export async function createPriceAdjustment(input: {
   name: string;
