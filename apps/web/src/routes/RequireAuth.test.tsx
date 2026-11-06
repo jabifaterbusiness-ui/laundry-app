@@ -50,6 +50,7 @@ describe("RequireAuth", () => {
       activeBranchId: null,
       sensitiveAuthorization: null,
       sensitiveAuthorizationExpiresAt: null,
+      sensitiveAuthorizationInactivityTimeoutMs: null,
       setUser,
       setSession,
       setTokens: vi.fn(),
