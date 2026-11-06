@@ -445,9 +445,15 @@ export async function sendUnpickedReminders(input: {
 }
 
 
-export async function listCommunicationDeliveries(businessId: string) {
+export async function listCommunicationDeliveries(businessId: string, branchId: string) {
   return prisma.communicationDelivery.findMany({
-    where: { businessId },
+    where: {
+      businessId,
+      OR: [
+        { campaignId: { not: null } },
+        { order: { is: { branchId } } },
+      ],
+    },
     include: {
       customer: { select: { id: true, name: true } },
       order: { select: { id: true, orderNumber: true } },
