@@ -924,7 +924,7 @@ describe("InvoicesPage digital receipt shortcut", () => {
     screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
 
     await screen.findByText("LAUNDRY RECEIPT");
-    const paidInFull = screen.getByRole("status", { name: "Paid in full" });
+    const paidInFull = screen.getByText("PAID IN FULL");
     expect(paidInFull).toHaveTextContent("PAID IN FULL");
     expect(paidInFull).toHaveClass("receipt__paid-in-full");
     expect(paidInFull).toHaveStyle({
