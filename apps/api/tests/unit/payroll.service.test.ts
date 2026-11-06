@@ -33,6 +33,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     employeeCompensation: {
       findFirst: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -60,6 +63,8 @@ const payrollRecordFindMany =
   prisma.payrollRecord.findMany as unknown as MockFn;
 const employeeCompensationFindFirst =
   prisma.employeeCompensation.findFirst as unknown as MockFn;
+const branchResourceShareFindMany =
+  prisma.branchResourceShare.findMany as unknown as MockFn;
 const transaction = prisma.$transaction as unknown as MockFn;
 
 describe("payroll.service", () => {
@@ -74,6 +79,8 @@ describe("payroll.service", () => {
     userFindMany.mockReset();
     payrollRecordFindMany.mockReset();
     employeeCompensationFindFirst.mockReset();
+    branchResourceShareFindMany.mockReset();
+    branchResourceShareFindMany.mockResolvedValue([] as never);
     transaction.mockReset();
   });
 
@@ -606,6 +613,10 @@ describe("payroll.service", () => {
         } as never),
       );
 
+      branchResourceShareFindMany.mockResolvedValue([
+        { ownerBranchId: "branch-owner", resourceId: null, accessLevel: "READ" },
+      ] as never);
+
       const result = await generatePayroll({
         businessId: "business-1",
         branchId: "branch-1",
@@ -617,8 +628,11 @@ describe("payroll.service", () => {
       expect(employeeCompensationFindFirst).toHaveBeenCalledWith({
         where: {
           businessId: "business-1",
-          branchId: "branch-1",
           employeeId: "employee-1",
+          OR: [
+            { branchId: { in: ["branch-1", "branch-owner"] } },
+            { id: { in: [] } },
+          ],
           effectiveFrom: {
             lte: period.periodEnd,
           },
