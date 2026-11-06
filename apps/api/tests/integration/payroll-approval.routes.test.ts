@@ -12,6 +12,7 @@ vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "platform-config",
