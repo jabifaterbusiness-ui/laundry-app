@@ -3,6 +3,7 @@ import { PayrollApprovalStatus, PayrollPeriodStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type CreatePayrollPeriodArgs = {
   businessId: string;
@@ -685,6 +686,13 @@ export async function generatePayroll({
     existingRecords.map((record) => record.employeeId),
   );
 
+  const compensationScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId: actorUserId,
+    resourceType: "PAYROLL_COMPENSATION",
+  });
+
   const recordsToCreate: Array<{
     businessId: string;
     branchId: string;
@@ -708,7 +716,15 @@ export async function generatePayroll({
       OR: [{ effectiveTo: null }, { effectiveTo: { gt: period.periodEnd } }],
     };
     const compensation = await prisma.employeeCompensation.findFirst({
-      where: { businessId, branchId, employeeId: employee.id, ...effectiveWindow },
+      where: {
+        businessId,
+        employeeId: employee.id,
+        OR: [
+          { branchId: { in: compensationScope.ownerBranchIds } },
+          { id: { in: compensationScope.resourceIds } },
+        ],
+        ...effectiveWindow,
+      },
       orderBy: { effectiveFrom: "desc" },
     });
 
