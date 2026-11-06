@@ -24,13 +24,14 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
 // change during a session.
 type TokenSubject = Pick<User, "id" | "email" | "securityRole" | "businessId">;
 
-function signAccessToken(user: TokenSubject): string {
+function signAccessToken(user: TokenSubject, sessionId: string): string {
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
       securityRole: user.securityRole,
       businessId: user.businessId,
+      sid: sessionId,
     },
     config.auth.accessTokenSecret,
     { expiresIn: config.auth.accessTokenExpiresIn as `${number}${"s" | "m" | "h" | "d"}` },
@@ -64,14 +65,14 @@ function hashToken(token: string): string {
  * hash of the refresh token so it can be looked up / revoked later.
  * Raw refresh tokens are never stored.
  */
-export async function issueTokenPair(user: TokenSubject, db: TokenDb = prisma) {
-  const accessToken = signAccessToken(user);
+export async function issueTokenPair(user: TokenSubject, db: TokenDb = prisma, sessionId = crypto.randomUUID()) {
+  const accessToken = signAccessToken(user, sessionId);
   const refreshToken = crypto.randomBytes(64).toString("hex");
   const refreshTokenHash = hashToken(refreshToken);
   const expiresAt = new Date(Date.now() + parseTokenLifetime(config.auth.refreshTokenExpiresIn));
 
   await db.refreshToken.create({
-    data: { tokenHash: refreshTokenHash, userId: user.id, expiresAt },
+    data: { tokenHash: refreshTokenHash, sessionId, userId: user.id, expiresAt },
   });
 
   return { accessToken, refreshToken };
@@ -106,7 +107,7 @@ export async function rotateRefreshToken(rawToken: string) {
       throw new AppError("Invalid or expired refresh token", 401);
     }
 
-    return issueTokenPair(existing.user, tx);
+    return issueTokenPair(existing.user, tx, existing.sessionId);
   });
 }
 
@@ -121,7 +122,7 @@ export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "
   return prisma.$transaction(async (tx) => {
     const existing = await tx.refreshToken.findUnique({
       where: { tokenHash },
-      select: { id: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
+      select: { id: true, sessionId: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
     });
 
     if (!existing || existing.revokedAt) {
@@ -132,11 +133,11 @@ export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "
     // both report success for the same refresh token. Database errors must
     // propagate; silently swallowing one would leave the session active.
     const revoked = await tx.refreshToken.updateMany({
-      where: { id: existing.id, revokedAt: null },
+      where: { sessionId: existing.sessionId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
 
-    return revoked.count === 1 ? existing.user : null;
+    return revoked.count > 0 ? existing.user : null;
   });
 }
 
