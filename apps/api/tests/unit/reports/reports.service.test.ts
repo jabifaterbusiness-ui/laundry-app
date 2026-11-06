@@ -204,6 +204,7 @@ describe("reports.service", () => {
       {
         businessId: "business-2",
         branchId: "branch-9",
+        userId: "user-9",
       },
       {},
     );
