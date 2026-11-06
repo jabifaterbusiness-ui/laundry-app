@@ -209,9 +209,20 @@ describe("compensation service", () => {
         where: {
           id: "comp-1",
           businessId: "biz-1",
-          OR: [
-            { branchId: { in: ["branch-1"] } },
-            { id: { in: [] } },
+          AND: [
+            {
+              OR: [
+                { branchId: { in: ["branch-1"] } },
+                { id: { in: [] } },
+              ],
+            },
+            {
+              effectiveFrom: { lte: new Date("2026-08-15") },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gt: new Date("2026-08-15") } },
+              ],
+            },
           ],
           employee: { is: { branches: { some: { branchId: "branch-1" } } } },
         },
@@ -311,7 +322,21 @@ describe("compensation service", () => {
     expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledTimes(1);
     expect(mocks.prisma.employeeCompensation.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ businessId: "biz-1", branchId: "branch-1" }),
+        where: expect.objectContaining({
+          businessId: "biz-1",
+          employeeId: "employee-1",
+          AND: [
+            {
+              OR: [
+                { branchId: { in: ["branch-1"] } },
+                { id: { in: [] } },
+              ],
+            },
+            expect.objectContaining({
+              effectiveFrom: { lte: new Date("2026-08-15") },
+            }),
+          ],
+        }),
       }),
     );
   });
