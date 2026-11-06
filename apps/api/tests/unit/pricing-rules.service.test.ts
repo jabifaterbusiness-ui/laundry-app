@@ -12,6 +12,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: { findFirst: vi.fn() },
     customerGroup: { findFirst: vi.fn() },
+    customerGroupMember: { findMany: vi.fn() },
     service: { findMany: vi.fn() },
     taxRule: { findMany: vi.fn() },
   },
@@ -20,6 +21,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 import { prisma } from "../../src/lib/prisma.js";
 import {
   createPriceAdjustment,
+  listPricingRules,
   setPriceAdjustmentActive,
 } from "../../src/modules/services/pricing-rules.service.js";
 
@@ -29,6 +31,8 @@ const findGroup = vi.mocked(prisma.customerGroup.findFirst);
 const findServices = vi.mocked(prisma.service.findMany);
 const updateMany = vi.mocked(prisma.priceAdjustment.updateMany);
 const findAdjustment = vi.mocked(prisma.priceAdjustment.findFirst);
+const findPricingRules = vi.mocked(prisma.priceAdjustment.findMany);
+const findGroupMemberships = vi.mocked(prisma.customerGroupMember.findMany);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -38,6 +42,70 @@ beforeEach(() => {
   create.mockResolvedValue({ id: "discount-1" } as never);
   updateMany.mockResolvedValue({ count: 1 } as never);
   findAdjustment.mockResolvedValue({ id: "discount-1", branchId: "branch-A", isActive: false } as never);
+  findPricingRules.mockResolvedValue([] as never);
+  findGroupMemberships.mockResolvedValue([] as never);
+});
+
+describe("customer-aware pricing rule lists", () => {
+  it("returns manual adjustments without loading unrelated automatic discounts before a customer is selected", async () => {
+    await listPricingRules("business-1", "branch-A", "user-A");
+
+    expect(findPricingRules).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: "business-1",
+        isActive: true,
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            OR: [{ targetScope: "MANUAL" }],
+          }),
+        ]),
+      }),
+    }));
+    expect(findCustomer).not.toHaveBeenCalled();
+    expect(findGroupMemberships).not.toHaveBeenCalled();
+  });
+
+  it("filters automatic discounts to the selected customer, their groups and active promotions", async () => {
+    findCustomer.mockResolvedValue({ id: "customer-1" } as never);
+    findGroupMemberships.mockResolvedValue([{ groupId: "group-1" }] as never);
+
+    await listPricingRules("business-1", "branch-A", "user-A", "customer-1");
+
+    expect(findCustomer).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "customer-1",
+        businessId: "business-1",
+      }),
+    }));
+    expect(findGroupMemberships).toHaveBeenCalledWith({
+      where: { businessId: "business-1", customerId: "customer-1" },
+      select: { groupId: true },
+    });
+    expect(findPricingRules).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { targetScope: "MANUAL" },
+              { targetScope: "CUSTOMER", customerId: "customer-1" },
+              { targetScope: "GROUP", groupId: { in: ["group-1"] } },
+              { targetScope: "ALL_CUSTOMERS" },
+            ],
+          }),
+        ]),
+      }),
+    }));
+  });
+
+  it("rejects a customer outside the current branch/business scope", async () => {
+    findCustomer.mockResolvedValue(null);
+
+    await expect(
+      listPricingRules("business-1", "branch-A", "user-A", "customer-other"),
+    ).rejects.toThrow("Customer not found");
+
+    expect(findPricingRules).not.toHaveBeenCalled();
+  });
 });
 
 describe("automatic price adjustments", () => {
