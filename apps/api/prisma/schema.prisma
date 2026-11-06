@@ -64,6 +64,11 @@ enum SubscriptionStatus {
   CANCELLED
 }
 
+enum CustomerAccountSharingMode {
+  SHARED
+  SEPARATE
+}
+
 // A tenant. Every business-scoped record in the system will eventually
 // carry a businessId pointing here.
 model Business {
@@ -258,6 +263,7 @@ model BranchResourceShare {
   userId String?
   user User? @relation("BranchResourceShareUser", fields: [userId], references: [id], onDelete: Cascade)
   accessLevel String @default("READ")
+  customerAccountMode CustomerAccountSharingMode @default(SHARED)
   createdByUserId String?
   createdBy User? @relation("BranchResourceShareCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
