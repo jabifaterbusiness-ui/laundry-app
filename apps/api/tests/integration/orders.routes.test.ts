@@ -612,6 +612,22 @@ describe("Orders routes - authorization", () => {
       .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "order.status_updated",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-mgr-a",
+        metadata: expect.objectContaining({
+          previousStatus: "RECEIVED",
+          status: "IN_PROGRESS",
+          notificationResults: [],
+          notificationError: null,
+        }),
+      }),
+    );
   });
 
   it("does not create a status-history event when the status is unchanged", async () => {
