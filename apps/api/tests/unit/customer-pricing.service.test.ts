@@ -108,6 +108,30 @@ describe("customer-specific service pricing branch scope", () => {
     );
   });
 
+  it("rejects deleting a customer-specific price through a read-only pricing share", async () => {
+    prismaMock.branchResourceShare.findMany.mockResolvedValue([
+      { ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ" },
+    ] as never);
+    prismaMock.customerServicePrice.findFirst.mockResolvedValue({
+      id: "price-1",
+      branchId: "branch-B",
+    } as never);
+
+    await expect(
+      removeCustomerServicePrice("price-1", "biz-A", "branch-A", "user-A"),
+    ).rejects.toBeInstanceOf(AppError);
+
+    expect(prismaMock.branchResourceShare.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: undefined,
+        }),
+      }),
+    );
+    expect(prismaMock.customerServicePrice.deleteMany).not.toHaveBeenCalled();
+  });
+
   it("rejects writing a customer-specific price through a read-only customer share", async () => {
     prismaMock.branchResourceShare.findMany.mockImplementation(async ({ where }: any) =>
       where.resourceType === "CUSTOMERS"
