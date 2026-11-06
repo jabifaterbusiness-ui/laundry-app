@@ -47,6 +47,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     user: {
       findFirst: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
     },
     userBranch: {
       findUnique: vi.fn().mockImplementation(async ({ where }: { where: { userId_branchId: { userId: string; branchId: string } } }) => {
