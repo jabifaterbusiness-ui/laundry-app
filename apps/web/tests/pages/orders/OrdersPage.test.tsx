@@ -1112,6 +1112,7 @@ describe("OrdersPage customer-specific discounts", () => {
       expect(listPricingRules).toHaveBeenCalledWith(
         { accessToken: "test-token" },
         customerA.id,
+        "order",
       );
     });
   });
