@@ -334,6 +334,38 @@ describe("updateCustomer - tenant isolation", () => {
   });
 });
 
+
+  it("rejects customer edits through a read-only branch share", async () => {
+    prismaMock.branchResourceShare.findMany.mockResolvedValue([
+      { ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ" },
+    ] as never);
+    findFirst.mockResolvedValue({
+      id: "customer-1",
+      businessId: "biz-A",
+      ownerBranchId: "branch-B",
+      whatsappOptIn: false,
+    } as never);
+
+    await expect(
+      updateCustomer("customer-1", "biz-A", "branch-A", "user-A", {
+        name: "Unauthorized edit",
+      }),
+    ).rejects.toThrow(AppError);
+
+    expect(prismaMock.branchResourceShare.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          ownerBranchId: "branch-B",
+          targetBranchId: "branch-A",
+          resourceType: "CUSTOMERS",
+          accessLevel: "EDIT",
+        }),
+      }),
+    );
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
 describe("setCustomerLifecycleStatus", () => {
   it("throws 404 when the customer isn't in the caller's business", async () => {
     findFirst.mockResolvedValue(null);
