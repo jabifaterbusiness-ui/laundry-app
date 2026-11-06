@@ -600,6 +600,32 @@ describe("Orders routes - authorization", () => {
     expect(res.status).toBe(200);
   });
 
+  it("does not create a status-history event when the status is unchanged", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "RECEIVED",
+    } as never);
+    orderUpdate.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "RECEIVED",
+      items: [],
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/status`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ status: "RECEIVED" });
+
+    expect(res.status).toBe(200);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
   it("returns order status history scoped to the active business and branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
     orderFindFirst.mockResolvedValue({
