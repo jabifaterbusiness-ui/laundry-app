@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    $transaction: vi.fn(),
     branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     priceAdjustment: {
       create: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerGroup: { findFirst: vi.fn() },
     customerGroupMember: { findMany: vi.fn() },
     service: { findMany: vi.fn() },
-    taxRule: { findMany: vi.fn(), count: vi.fn() },
+    taxRule: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
   },
 }));
 
@@ -40,6 +41,7 @@ const countTaxes = vi.mocked(prisma.taxRule.count);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma)) as never);
   findCustomer.mockResolvedValue({ id: "customer-1" } as never);
   findGroup.mockResolvedValue({ id: "group-1" } as never);
   findServices.mockResolvedValue([{ id: "service-1" }] as never);
@@ -267,6 +269,22 @@ describe("automatic price adjustments", () => {
     })).rejects.toThrow("end date must be after");
 
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rechecks shared discount EDIT access inside a serializable transaction", async () => {
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValueOnce([{
+      ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ",
+    }] as never);
+    findAdjustment.mockResolvedValueOnce({ id: "discount-1", branchId: "branch-B" } as never);
+    vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValueOnce(null);
+
+    await expect(setPriceAdjustmentActive("discount-1", "business-1", "branch-A", "user-A", false))
+      .rejects.toThrow("not shared with edit access");
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("supports pausing and resuming an existing discount within the business", async () => {
