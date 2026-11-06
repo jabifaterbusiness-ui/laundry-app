@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { hasPermission } from "../permissions/permissions.service.js";
 import {
   branchResourceShareIdSchema,
   createBranchResourceShareSchema,
@@ -17,12 +18,33 @@ function requireBusinessId(req: Request): string {
 }
 
 export async function listBranchResourceSharesController(req: Request, res: Response) {
-  res.status(200).json(await listBranchResourceShares(requireBusinessId(req)));
+  const businessId = requireBusinessId(req);
+  const shares = await listBranchResourceShares(businessId);
+  const canViewPayroll = await hasPermission(
+    req.user!.id,
+    businessId,
+    req.user!.securityRole,
+    "compensation.view",
+  );
+  res.status(200).json(
+    canViewPayroll
+      ? shares
+      : shares.filter((share) => share.resourceType !== "PAYROLL_COMPENSATION"),
+  );
 }
 
 export async function createBranchResourceShareController(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const input = createBranchResourceShareSchema.parse(req.body);
+  if (input.resourceType === "PAYROLL_COMPENSATION") {
+    const canManagePayroll = await hasPermission(
+      req.user!.id,
+      businessId,
+      req.user!.securityRole,
+      "compensation.manage",
+    );
+    if (!canManagePayroll) throw new AppError("Compensation management permission is required to share salary data", 403);
+  }
   const share = await saveBranchResourceShare({
     businessId,
     ownerBranchId: input.ownerBranchId,
@@ -55,6 +77,16 @@ export async function createBranchResourceShareController(req: Request, res: Res
 export async function deleteBranchResourceShareController(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id } = branchResourceShareIdSchema.parse(req.params);
+  const existingShare = (await listBranchResourceShares(businessId)).find((share) => share.id === id);
+  if (existingShare?.resourceType === "PAYROLL_COMPENSATION") {
+    const canManagePayroll = await hasPermission(
+      req.user!.id,
+      businessId,
+      req.user!.securityRole,
+      "compensation.manage",
+    );
+    if (!canManagePayroll) throw new AppError("Compensation management permission is required to change salary sharing", 403);
+  }
   await deleteBranchResourceShare({ businessId, id, actorUserId: req.user!.id });
   await recordAuditEvent({
     action: "branch.resource_share.deleted",
