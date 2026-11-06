@@ -58,6 +58,7 @@ export async function create(req: Request, res: Response) {
     branchId,
     orderId: input.orderId,
     customerAgreement: input.customerAgreement,
+    actorUserId: req.user!.id,
   });
 
   await recordAuditEvent({
