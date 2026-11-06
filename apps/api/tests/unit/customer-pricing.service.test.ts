@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   branchResourceShare: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
@@ -26,6 +27,7 @@ import { AppError } from "../../src/middleware/error-handler.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock));
   prismaMock.branchResourceShare.findMany.mockResolvedValue([]);
   prismaMock.branchResourceShare.findFirst.mockResolvedValue(null);
 });
@@ -88,6 +90,7 @@ describe("customer-specific service pricing branch scope", () => {
       unitPrice: 1200,
     });
 
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
     expect(prismaMock.customerServicePrice.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
