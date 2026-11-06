@@ -178,6 +178,7 @@ describe("Compensation routes - authorization", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -209,6 +210,7 @@ describe("Compensation routes - authorization", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -307,6 +309,7 @@ describe("Compensation routes - creation validation", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -331,10 +334,13 @@ describe("Compensation routes - creation validation", () => {
 
     expect(res.status).toBe(201);
 
-    expect(userFindFirst).toHaveBeenCalledWith(
+    expect(tx.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-A",
+          isActive: true,
+          deletedAt: null,
+          branches: { some: { branchId: "branch-A" } },
         }),
       }),
     );
@@ -518,6 +524,7 @@ describe("Compensation routes - salary history", () => {
     };
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi
           .fn()
