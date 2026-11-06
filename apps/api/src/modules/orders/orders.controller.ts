@@ -193,13 +193,14 @@ export async function updateStatus(req: Request, res: Response) {
 
   if (previousOrder.status !== order.status) {
     const statusUpdate = order as typeof order & {
-      notificationResults?: Array<{ channel: string; status: string; deliveryId?: string | null }>;
+      notificationResults?: Array<{ channel: string; status: string; deliveryId?: string | null; error?: string }>;
       notificationError?: string | null;
     };
     const notificationResults = (statusUpdate.notificationResults ?? []).map((result) => ({
       channel: result.channel,
       status: result.status,
       deliveryId: result.deliveryId ?? null,
+      error: result.error ?? null,
     }));
     const notificationError = statusUpdate.notificationError
       ? "One or more status notifications could not be processed. See Communications delivery history."
