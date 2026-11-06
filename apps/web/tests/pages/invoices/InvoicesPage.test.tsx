@@ -883,6 +883,56 @@ describe("InvoicesPage digital receipt shortcut", () => {
     });
   });
 
+  it("clearly marks a fully paid customer receipt in deep green", async () => {
+    mockedInvoicesApi.getCustomerReceipt.mockResolvedValue({
+      receiptType: "CUSTOMER",
+      invoiceNumber: "INV-00001",
+      orderNumber: "00001",
+      companyName: "Test Laundry",
+      companyPhone: "08000000000",
+      companyEmail: "test@laundry.com",
+      companyWebsite: "https://laundry.test",
+      companyAddress: "Test Address",
+      customerName: "John Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-09-01T10:00:00.000Z",
+      items: [],
+      subtotal: 5000,
+      adjustedSubtotal: 5000,
+      adjustmentTotal: 0,
+      additiveTaxTotal: 0,
+      withholdingTaxTotal: 0,
+      appliedAdjustments: [],
+      appliedTaxes: [],
+      totalAmount: 5000,
+      totalPaid: 5000,
+      balanceDue: 0,
+      payments: [{
+        id: "payment-paid",
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        reference: null,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }],
+      garmentNote: null,
+      customerAgreement: "Customer agreement",
+    });
+
+    renderPage();
+    await selectInvoice();
+    screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
+
+    await screen.findByText("LAUNDRY RECEIPT");
+    const paidInFull = screen.getByRole("status", { name: "Paid in full" });
+    expect(paidInFull).toHaveTextContent("PAID IN FULL");
+    expect(paidInFull).toHaveClass("receipt__paid-in-full");
+    expect(paidInFull).toHaveStyle({
+      color: "#064e3b",
+      backgroundColor: "#ecfdf5",
+    });
+  });
+
   it("renders the company receipt with the internal note and without customer contact details", async () => {
     mockedInvoicesApi.getCompanyReceipt.mockResolvedValue({
       receiptType: "COMPANY",
