@@ -52,17 +52,29 @@ export async function listServices(params: ListServicesParams) {
   });
 }
 
+type ServiceDb = typeof prisma | Prisma.TransactionClient;
+
+async function getServiceForBusinessWithDb(
+  id: string,
+  businessId: string,
+  branchId: string,
+  userId: string,
+  db: ServiceDb,
+) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "SERVICES" }, db);
+  return db.service.findFirst({
+    where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+    include: { ownerBranch: { select: { id: true, name: true } } },
+  });
+}
+
 export async function getServiceForBusiness(
   id: string,
   businessId: string,
   branchId: string,
   userId: string,
 ) {
-  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "SERVICES" });
-  return prisma.service.findFirst({
-    where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
-    include: { ownerBranch: { select: { id: true, name: true } } },
-  });
+  return getServiceForBusinessWithDb(id, businessId, branchId, userId, prisma);
 }
 
 export async function createService(data: CreateServiceData) {
@@ -85,37 +97,25 @@ export async function updateService(
   userId: string,
   data: UpdateServiceData,
 ) {
-  const existing = await getServiceForBusiness(id, businessId, branchId, userId);
-  if (!existing) throw new AppError("Service not found", 404);
-  await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "SERVICES", ownerBranchId: existing.ownerBranchId, resourceId: id });
-  const patch: Prisma.ServiceUpdateManyMutationInput = {};
+  return prisma.$transaction(async (tx) => {
+    const existing = await getServiceForBusinessWithDb(id, businessId, branchId, userId, tx);
+    if (!existing) throw new AppError("Service not found", 404);
+    await assertBranchResourceWriteAccess({
+      businessId, branchId, userId, resourceType: "SERVICES",
+      ownerBranchId: existing.ownerBranchId, resourceId: id,
+    }, tx);
+    const patch: Prisma.ServiceUpdateManyMutationInput = {};
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.pieces !== undefined) patch.pieces = data.pieces;
+    if (data.unitPrice !== undefined) patch.unitPrice = data.unitPrice;
 
-  if (data.name !== undefined) {
-    patch.name = data.name;
-  }
-
-  if (data.pieces !== undefined) {
-    patch.pieces = data.pieces;
-  }
-
-  if (data.unitPrice !== undefined) {
-    patch.unitPrice = data.unitPrice;
-  }
-
-  const result = await prisma.service.updateMany({
-    where: {
-      id,
-      businessId,
-      ownerBranchId: existing.ownerBranchId,
-    },
-    data: patch,
-  });
-
-  if (result.count === 0) {
-    throw new AppError("Service not found", 404);
-  }
-
-  return getServiceForBusiness(id, businessId, branchId, userId);
+    const result = await tx.service.updateMany({
+      where: { id, businessId, ownerBranchId: existing.ownerBranchId },
+      data: patch,
+    });
+    if (result.count === 0) throw new AppError("Service not found", 404);
+    return getServiceForBusinessWithDb(id, businessId, branchId, userId, tx);
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function setServiceActiveStatus(
@@ -125,30 +125,20 @@ export async function setServiceActiveStatus(
   userId: string,
   isActive: boolean,
 ) {
-  const existing = await getServiceForBusiness(id, businessId, branchId, userId);
-  if (!existing) throw new AppError("Service not found", 404);
+  return prisma.$transaction(async (tx) => {
+    const existing = await getServiceForBusinessWithDb(id, businessId, branchId, userId, tx);
+    if (!existing) throw new AppError("Service not found", 404);
 
-  await assertBranchResourceWriteAccess({
-    businessId,
-    branchId,
-    userId,
-    resourceType: "SERVICES",
-    ownerBranchId: existing.ownerBranchId,
-    resourceId: id,
-  });
+    await assertBranchResourceWriteAccess({
+      businessId, branchId, userId, resourceType: "SERVICES",
+      ownerBranchId: existing.ownerBranchId, resourceId: id,
+    }, tx);
 
-  const result = await prisma.service.updateMany({
-    where: {
-      id,
-      businessId,
-      ownerBranchId: existing.ownerBranchId,
-    },
-    data: { isActive },
-  });
-
-  if (result.count === 0) {
-    throw new AppError("Service not found", 404);
-  }
-
-  return getServiceForBusiness(id, businessId, branchId, userId);
+    const result = await tx.service.updateMany({
+      where: { id, businessId, ownerBranchId: existing.ownerBranchId },
+      data: { isActive },
+    });
+    if (result.count === 0) throw new AppError("Service not found", 404);
+    return getServiceForBusinessWithDb(id, businessId, branchId, userId, tx);
+  }, { isolationLevel: "Serializable" });
 }
