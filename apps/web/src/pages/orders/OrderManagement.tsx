@@ -1318,7 +1318,7 @@ function OrderManagementContent({
                       <div>
                         <strong>Notifications:</strong>{" "}
                         {entry.notificationResults?.length
-                          ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}`).join(" · ")
+                          ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
                           : "No notification attempt recorded"}
                       </div>
                       {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
@@ -1348,7 +1348,7 @@ function OrderManagementContent({
                         <div>
                           <strong>Notifications:</strong>{" "}
                           {entry.notificationResults?.length
-                            ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}`).join(" · ")
+                            ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
                             : "No notification attempt recorded"}
                         </div>
                         {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
