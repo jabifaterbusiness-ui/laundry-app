@@ -70,7 +70,7 @@ async function createOrderWithTx(
           branchId: data.branchId,
           userId: data.actorUserId,
           resourceType: "CUSTOMERS",
-        })
+        }, tx)
       : null;
     const serviceScope = data.actorUserId
       ? await getBranchResourceScope({
@@ -78,7 +78,7 @@ async function createOrderWithTx(
           branchId: data.branchId,
           userId: data.actorUserId,
           resourceType: "SERVICES",
-        })
+        }, tx)
       : null;
 
     // A customer must be visible to this branch, not merely belong to the
@@ -161,7 +161,7 @@ async function createOrderWithTx(
           branchId: data.branchId,
           userId: data.actorUserId,
           resourceType: "CUSTOMER_PRICING",
-        })
+        }, tx)
       : {
           ownerBranchIds: [data.branchId],
           resourceIds: [] as string[],
