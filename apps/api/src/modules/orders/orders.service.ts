@@ -15,7 +15,7 @@ export interface CreateOrderItemData {
 export interface CreateOrderData {
   businessId: string;
   branchId: string;
-  actorUserId?: string;
+  actorUserId: string;
   customerId: string;
   items: CreateOrderItemData[];
   garmentNote?: string;
@@ -64,22 +64,18 @@ async function createOrderWithTx(
   tx: Prisma.TransactionClient,
   data: CreateOrderData,
 ) {
-    const customerScope = data.actorUserId
-      ? await getBranchResourceScope({
-          businessId: data.businessId,
-          branchId: data.branchId,
-          userId: data.actorUserId,
-          resourceType: "CUSTOMERS",
-        }, tx)
-      : null;
-    const serviceScope = data.actorUserId
-      ? await getBranchResourceScope({
-          businessId: data.businessId,
-          branchId: data.branchId,
-          userId: data.actorUserId,
-          resourceType: "SERVICES",
-        }, tx)
-      : null;
+    const customerScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "CUSTOMERS",
+    }, tx);
+    const serviceScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "SERVICES",
+    }, tx);
 
     // A customer must be visible to this branch, not merely belong to the
     // same business. Legacy business-wide customers remain visible.
@@ -87,15 +83,11 @@ async function createOrderWithTx(
       where: {
         id: data.customerId,
         businessId: data.businessId,
-        ...(customerScope
-          ? {
-              OR: [
-                { ownerBranchId: null },
-                { ownerBranchId: { in: customerScope.ownerBranchIds } },
-                { id: { in: customerScope.resourceIds } },
-              ],
-            }
-          : {}),
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
       },
       select: {
         id: true,
@@ -129,15 +121,11 @@ async function createOrderWithTx(
       where: {
         id: { in: serviceIds },
         businessId: data.businessId,
-        ...(serviceScope
-          ? {
-              OR: [
-                { ownerBranchId: null },
-                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
-                { id: { in: serviceScope.resourceIds } },
-              ],
-            }
-          : {}),
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+          { id: { in: serviceScope.resourceIds } },
+        ],
       },
     });
 
@@ -155,19 +143,12 @@ async function createOrderWithTx(
     // Customer-specific prices must follow the active branch's sharing
     // permissions. A price owned by another branch is usable only when
     // that price (or its owning branch's pricing category) is shared.
-    const pricingScope = data.actorUserId
-      ? await getBranchResourceScope({
-          businessId: data.businessId,
-          branchId: data.branchId,
-          userId: data.actorUserId,
-          resourceType: "CUSTOMER_PRICING",
-        }, tx)
-      : {
-          ownerBranchIds: [data.branchId],
-          resourceIds: [] as string[],
-          editableOwnerBranchIds: [data.branchId],
-          editableResourceIds: [] as string[],
-        };
+    const pricingScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "CUSTOMER_PRICING",
+    }, tx);
     const customerPrices = await tx.customerServicePrice.findMany({
       where: {
         businessId: data.businessId,
