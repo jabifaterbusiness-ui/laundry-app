@@ -78,7 +78,7 @@ export function CustomerDetailsPage() {
   });
   const removePriceMutation = useMutation({
     mutationFn: (priceId: string) => deleteCustomerServicePrice(priceId, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", activeBranchId, id] }),
   });
 
   const accountQuery = useQuery({
