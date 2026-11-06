@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
 import { createInvoiceFromOrderWithTx } from "../invoices/invoices.service.js";
 import { notifyOrderStatus } from "../communications/communications.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export interface CreateOrderItemData {
   serviceId: string;
@@ -115,13 +116,32 @@ async function createOrderWithTx(
       services.map((service) => [service.id, service]),
     );
 
-    // Customer-specific prices are read only for this business/customer.
-    // The selected price is copied into OrderItem, preserving history.
+    // Customer-specific prices must follow the active branch's sharing
+    // permissions. A price owned by another branch is usable only when
+    // that price (or its owning branch's pricing category) is shared.
+    const pricingScope = data.actorUserId
+      ? await getBranchResourceScope({
+          businessId: data.businessId,
+          branchId: data.branchId,
+          userId: data.actorUserId,
+          resourceType: "CUSTOMER_PRICING",
+        })
+      : {
+          ownerBranchIds: [data.branchId],
+          resourceIds: [] as string[],
+          editableOwnerBranchIds: [data.branchId],
+          editableResourceIds: [] as string[],
+        };
     const customerPrices = await tx.customerServicePrice.findMany({
       where: {
         businessId: data.businessId,
         customerId: data.customerId,
         serviceId: { in: serviceIds },
+        OR: [
+          { branchId: null },
+          { branchId: { in: pricingScope.ownerBranchIds } },
+          { id: { in: pricingScope.resourceIds } },
+        ],
       },
       select: { serviceId: true, unitPrice: true },
     });
