@@ -8,6 +8,11 @@ export async function listPricingRules(
   userId: string,
   customerId?: string,
   purpose: "order" | "management" = "management",
+  pagination: {
+    adjustmentPage?: number;
+    taxPage?: number;
+    pageSize?: number;
+  } = {},
 ) {
   const [discountScope, taxScope] = await Promise.all([
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }),
@@ -57,47 +62,93 @@ export async function listPricingRules(
       : []),
   ];
 
-  const [adjustments, taxes] = await Promise.all([
+  const pageSize = Math.min(Math.max(pagination.pageSize ?? 50, 1), 100);
+  const adjustmentPage = Math.max(pagination.adjustmentPage ?? 1, 1);
+  const taxPage = Math.max(pagination.taxPage ?? 1, 1);
+  const adjustmentWhere = {
+    businessId,
+    ...(purpose === "order" ? { isActive: true } : {}),
+    OR: [
+      { branchId: null },
+      { branchId: { in: discountScope.ownerBranchIds } },
+      { id: { in: discountScope.resourceIds } },
+    ],
+    ...(purpose === "order"
+      ? {
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            { OR: applicableTargets },
+          ],
+        }
+      : {}),
+  };
+  const taxWhere = {
+    businessId,
+    ...(purpose === "order" ? { isActive: true } : {}),
+    OR: [
+      { branchId: null },
+      { branchId: { in: taxScope.ownerBranchIds } },
+      { id: { in: taxScope.resourceIds } },
+    ],
+  };
+
+  if (purpose === "order") {
+    const [adjustments, taxes] = await Promise.all([
+      prisma.priceAdjustment.findMany({
+        where: adjustmentWhere,
+        include: {
+          customer: { select: { id: true, name: true } },
+          group: { select: { id: true, name: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.taxRule.findMany({
+        where: taxWhere,
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    return { adjustments, taxes };
+  }
+
+  const [adjustments, taxes, totalAdjustments, totalTaxes] = await Promise.all([
     prisma.priceAdjustment.findMany({
-      where: {
-        businessId,
-        ...(purpose === "order" ? { isActive: true } : {}),
-        OR: [
-          { branchId: null },
-          { branchId: { in: discountScope.ownerBranchIds } },
-          { id: { in: discountScope.resourceIds } },
-        ],
-        ...(purpose === "order"
-          ? {
-              AND: [
-                { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-                { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-                { OR: applicableTargets },
-              ],
-            }
-          : {}),
-      },
+      where: adjustmentWhere,
       include: {
         customer: { select: { id: true, name: true } },
         group: { select: { id: true, name: true } },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (adjustmentPage - 1) * pageSize,
+      take: pageSize,
     }),
     prisma.taxRule.findMany({
-      where: {
-        businessId,
-        ...(purpose === "order" ? { isActive: true } : {}),
-        OR: [
-          { branchId: null },
-          { branchId: { in: taxScope.ownerBranchIds } },
-          { id: { in: taxScope.resourceIds } },
-        ],
-      },
-      orderBy: { name: "asc" },
+      where: taxWhere,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (taxPage - 1) * pageSize,
+      take: pageSize,
     }),
+    prisma.priceAdjustment.count({ where: adjustmentWhere }),
+    prisma.taxRule.count({ where: taxWhere }),
   ]);
 
-  return { adjustments, taxes };
+  return {
+    adjustments,
+    taxes,
+    pagination: {
+      pageSize,
+      adjustments: {
+        page: adjustmentPage,
+        total: totalAdjustments,
+        totalPages: Math.max(1, Math.ceil(totalAdjustments / pageSize)),
+      },
+      taxes: {
+        page: taxPage,
+        total: totalTaxes,
+        totalPages: Math.max(1, Math.ceil(totalTaxes / pageSize)),
+      },
+    },
+  };
 }
 
 export async function createPriceAdjustment(input: {
