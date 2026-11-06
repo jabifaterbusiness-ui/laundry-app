@@ -25,7 +25,12 @@ export async function createBranchResourceShareController(req: Request, res: Res
   const input = createBranchResourceShareSchema.parse(req.body);
   const share = await saveBranchResourceShare({
     businessId,
-    ...input,
+    ownerBranchId: input.ownerBranchId,
+    targetBranchId: input.targetBranchId,
+    resourceType: input.resourceType,
+    ...(input.resourceId !== undefined ? { resourceId: input.resourceId } : {}),
+    ...(input.userId !== undefined ? { userId: input.userId } : {}),
+    accessLevel: input.accessLevel,
     createdByUserId: req.user!.id,
   });
   await recordAuditEvent({
