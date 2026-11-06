@@ -62,18 +62,19 @@ export function ServicesPage() {
   const [taxAllowCombination, setTaxAllowCombination] = useState(true);
 
   const pricingRulesQuery = useQuery({
-    queryKey: ["pricing-rules"],
+    queryKey: ["pricing-rules", "management", activeBranchId],
     queryFn: () => listPricingRules({ accessToken }),
+    enabled: Boolean(accessToken && activeBranchId),
   });
   const discountCustomersQuery = useQuery({
-    queryKey: ["discount-target-customers", adjustmentCustomerSearch],
+    queryKey: ["discount-target-customers", activeBranchId, adjustmentCustomerSearch],
     queryFn: () => listCustomers({
       page: 1,
       pageSize: 25,
       search: adjustmentCustomerSearch || undefined,
       status: "active",
     }, { accessToken }),
-    enabled: Boolean(accessToken && adjustmentTargetScope === "CUSTOMER"),
+    enabled: Boolean(accessToken && activeBranchId && adjustmentTargetScope === "CUSTOMER"),
   });
   const discountGroupsQuery = useQuery({
     queryKey: ["discount-target-groups"],
