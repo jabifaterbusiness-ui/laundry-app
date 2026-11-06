@@ -253,12 +253,16 @@ export async function getCurrentCompensation({
     where: {
       businessId,
       employeeId,
-      OR: [
-        { branchId: { in: scope.ownerBranchIds } },
-        { id: { in: scope.resourceIds } },
+      AND: [
+        {
+          OR: [
+            { branchId: { in: scope.ownerBranchIds } },
+            { id: { in: scope.resourceIds } },
+          ],
+        },
+        effectiveWindow,
       ],
       employee: { is: { branches: { some: { branchId } } } },
-      ...effectiveWindow,
     },
     orderBy: { effectiveFrom: "desc" },
   });
