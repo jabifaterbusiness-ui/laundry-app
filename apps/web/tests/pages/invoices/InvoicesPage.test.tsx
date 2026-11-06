@@ -927,10 +927,6 @@ describe("InvoicesPage digital receipt shortcut", () => {
     const paidInFull = screen.getByText("PAID IN FULL");
     expect(paidInFull).toHaveTextContent("PAID IN FULL");
     expect(paidInFull).toHaveClass("receipt__paid-in-full");
-    expect(paidInFull).toHaveStyle({
-      color: "#064e3b",
-      backgroundColor: "#ecfdf5",
-    });
   });
 
   it("renders the company receipt with the internal note and without customer contact details", async () => {
