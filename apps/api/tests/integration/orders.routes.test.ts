@@ -633,6 +633,7 @@ describe("Orders routes - authorization", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       status: "COMPLETED",
+      branch: { id: BRANCH_A, name: "Main Branch" },
     } as never);
     auditLogFindMany.mockResolvedValue([
       {
@@ -664,6 +665,7 @@ describe("Orders routes - authorization", () => {
         status: "COMPLETED",
         changedAt: "2026-11-05T12:00:00.000Z",
         changedBy: "Branch Manager",
+        branchName: "Main Branch",
         notificationResults: [
           { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
           { channel: "EMAIL", status: "FAILED", deliveryId: null },
