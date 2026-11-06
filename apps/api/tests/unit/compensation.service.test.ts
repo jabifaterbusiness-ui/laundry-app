@@ -300,6 +300,7 @@ describe("compensation service", () => {
         businessId: "biz-1",
         branchId: "branch-1",
         employeeId: "employee-1",
+        userId: "user-1",
         effectiveDate: new Date("2026-08-15"),
       }),
     ).rejects.toMatchObject({
