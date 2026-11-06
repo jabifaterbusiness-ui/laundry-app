@@ -251,7 +251,7 @@ async function createOrderWithTx(
       {
         adjustments: data.adjustments ?? [],
         taxRuleIds: data.taxRuleIds ?? [],
-        ...(data.actorUserId ? { actorUserId: data.actorUserId } : {}),
+        ...(typeof data.actorUserId === "string" ? { actorUserId: data.actorUserId } : {}),
       },
     );
 
