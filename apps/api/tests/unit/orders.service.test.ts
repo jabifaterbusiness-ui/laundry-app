@@ -102,6 +102,7 @@ function createTransactionClient() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([] as never);
 });
 
 describe("createOrder", () => {
