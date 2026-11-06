@@ -31,6 +31,7 @@ export async function createBranchResourceShareController(req: Request, res: Res
     ...(input.resourceId !== undefined ? { resourceId: input.resourceId } : {}),
     ...(input.userId !== undefined ? { userId: input.userId } : {}),
     accessLevel: input.accessLevel,
+    ...(input.customerAccountMode !== undefined ? { customerAccountMode: input.customerAccountMode } : {}),
     createdByUserId: req.user!.id,
   });
   await recordAuditEvent({
