@@ -32,6 +32,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     $transaction: vi.fn(),
     auditLog: {
       findMany: vi.fn(),
+      create: vi.fn().mockResolvedValue({ id: "status-event-1" }),
     },
     communicationDelivery: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -80,6 +81,7 @@ import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
 const auditLogFindMany = vi.mocked(prisma.auditLog.findMany);
+const auditLogCreate = vi.mocked(prisma.auditLog.create);
 const communicationDeliveryFindMany = vi.mocked(prisma.communicationDelivery.findMany);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderCount = vi.mocked(prisma.order.count);
@@ -168,6 +170,9 @@ beforeEach(() => {
       order: {
         findFirst: orderFindFirst,
         update: orderUpdate,
+      },
+      auditLog: {
+        create: auditLogCreate,
       },
       branchResourceShare: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -612,22 +617,17 @@ describe("Orders routes - authorization", () => {
       .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
-    expect(recordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(auditLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
         action: "order.status_updated",
         entityType: "Order",
         entityId: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-mgr-a",
-        metadata: expect.objectContaining({
-          previousStatus: "RECEIVED",
-          status: "IN_PROGRESS",
-          notificationResults: [],
-          notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
-        }),
+        metadata: expect.objectContaining({ previousStatus: "RECEIVED", status: "IN_PROGRESS" }),
       }),
-    );
+    });
   });
 
   it("does not create a status-history event when the status is unchanged", async () => {
@@ -653,7 +653,7 @@ describe("Orders routes - authorization", () => {
       .send({ status: "RECEIVED" });
 
     expect(res.status).toBe(200);
-    expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(auditLogCreate).not.toHaveBeenCalled();
   });
 
   it("returns order status history scoped to the active business and branch", async () => {
