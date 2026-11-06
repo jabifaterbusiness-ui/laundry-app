@@ -719,11 +719,15 @@ export async function generatePayroll({
       where: {
         businessId,
         employeeId: employee.id,
-        OR: [
-          { branchId: { in: compensationScope.ownerBranchIds } },
-          { id: { in: compensationScope.resourceIds } },
+        AND: [
+          {
+            OR: [
+              { branchId: { in: compensationScope.ownerBranchIds } },
+              { id: { in: compensationScope.resourceIds } },
+            ],
+          },
+          effectiveWindow,
         ],
-        ...effectiveWindow,
       },
       orderBy: { effectiveFrom: "desc" },
     });
