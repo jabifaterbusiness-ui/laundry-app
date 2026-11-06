@@ -141,7 +141,7 @@ beforeEach(() => {
   );
 
   userCount.mockResolvedValue(2);
-  userFindUnique.mockImplementation((async (args) => args.where.id
+  userFindUnique.mockImplementation((async (args: { where: { id?: string } }) => args.where.id
     ? ({ id: args.where.id, isActive: true, deletedAt: null } as never)
     : null) as never);
   branchFindMany.mockResolvedValue([]);
