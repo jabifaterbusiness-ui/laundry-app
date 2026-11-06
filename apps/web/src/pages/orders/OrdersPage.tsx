@@ -307,6 +307,15 @@ export function OrdersPage() {
         ? current
         : next;
     });
+    const allowedTaxIds = new Set(
+      pricingRulesQuery.data.taxes
+        .filter((rule) => rule.isActive && !rule.enabledByDefault)
+        .map((rule) => rule.id),
+    );
+    setSelectedTaxRuleIds((current) => {
+      const next = current.filter((id) => allowedTaxIds.has(id));
+      return next.length === current.length ? current : next;
+    });
   }, [pricingRulesQuery.data, pricingRulesQuery.isSuccess]);
 
   const colorsQuery = useQuery({
