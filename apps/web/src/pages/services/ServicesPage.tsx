@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
@@ -62,6 +62,11 @@ export function ServicesPage() {
   const [taxTreatment, setTaxTreatment] = useState<"ADDITIVE" | "WITHHOLDING">("ADDITIVE");
   const [taxEnabledByDefault, setTaxEnabledByDefault] = useState(false);
   const [taxAllowCombination, setTaxAllowCombination] = useState(true);
+
+  useEffect(() => {
+    setAdjustmentPage(1);
+    setTaxPage(1);
+  }, [activeBranchId]);
 
   const pricingRulesQuery = useQuery({
     queryKey: ["pricing-rules", "management", activeBranchId, adjustmentPage, taxPage],
