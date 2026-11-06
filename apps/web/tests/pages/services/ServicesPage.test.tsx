@@ -34,6 +34,7 @@ describe("ServicesPage", () => {
 
     useAuthStore.setState({
       accessToken: "test-token",
+      activeBranchId: "branch-1",
     });
 
     apiMocks.listServices.mockResolvedValue({
@@ -120,7 +121,7 @@ describe("ServicesPage", () => {
           pieces: 1,
           unitPrice: 1500,
         },
-        { accessToken: "test-token" },
+        { accessToken: "test-token", branchId: "branch-1" },
       );
     });
   });
