@@ -1682,6 +1682,39 @@ describe("updateInventoryItem", () => {
     });
   });
 
+    it("maps a duplicate SKU constraint to a conflict when updating an inventory item", async () => {
+      prismaMock.inventoryItem.findFirst.mockResolvedValueOnce({
+        id: "item-1",
+        businessId: "biz-A",
+        ownerBranchId: "branch-A",
+        name: "Laundry Detergent",
+        sku: "OLD-SKU",
+      } as never);
+      prismaMock.inventoryItem.updateMany.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+          code: "P2002",
+          clientVersion: "6.0.0",
+          meta: { target: ["businessId", "ownerBranchId", "sku"] },
+        }),
+      );
+
+      await expect(
+        updateInventoryItem({
+          businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
+        }, "item-1", { sku: " EXISTING-SKU " }),
+      ).rejects.toMatchObject({
+        message: "An inventory item with this SKU already exists",
+        statusCode: 409,
+      });
+
+      expect(prismaMock.inventoryItem.updateMany).toHaveBeenCalledWith({
+        where: { id: "item-1", businessId: "biz-A", ownerBranchId: "branch-A" },
+        data: { sku: "EXISTING-SKU" },
+      });
+    });
+
     it("rejects updating an inventory item outside the authenticated business", async () => {
       prismaMock.inventoryItem.findFirst.mockResolvedValue(null);
 
