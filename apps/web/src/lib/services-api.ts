@@ -130,13 +130,16 @@ export interface CustomerServicePrice {
 export async function listPricingRules(
   auth: { accessToken: string | null },
   customerId?: string,
+  purpose: "order" | "management" = "management",
 ): Promise<PricingRulesResponse> {
-  const query = customerId
-    ? `?customerId=${encodeURIComponent(customerId)}`
-    : "";
-  return apiFetch<PricingRulesResponse>(`/services/pricing-rules${query}`, {
-    accessToken: auth.accessToken,
-  });
+  const query = new URLSearchParams();
+  if (customerId) query.set("customerId", customerId);
+  if (purpose !== "management") query.set("purpose", purpose);
+  const suffix = query.toString();
+  return apiFetch<PricingRulesResponse>(
+    `/services/pricing-rules${suffix ? `?${suffix}` : ""}`,
+    { accessToken: auth.accessToken },
+  );
 }
 export async function createPriceAdjustment(input: {
   name: string;
