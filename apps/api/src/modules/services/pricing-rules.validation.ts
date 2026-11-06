@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const listPricingRulesQuerySchema = z.object({
+  customerId: z.string().uuid().optional(),
+}).strict();
+
 export const createAdjustmentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   percentage: z.number().finite().min(-100).max(1000),
