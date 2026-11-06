@@ -60,6 +60,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
         };
       }),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     employeeCompensation: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
