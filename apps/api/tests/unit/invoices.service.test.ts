@@ -347,12 +347,21 @@ describe("invoices.service", () => {
         startsAt: null,
         endsAt: null,
       };
+      const branchShareFindMany = vi.fn().mockResolvedValue([{
+        ownerBranchId: "branch-2",
+        resourceId: null,
+        accessLevel: "VIEW",
+      }]);
+      const priceAdjustmentFindMany = vi.fn().mockResolvedValue([automaticDiscount]);
       const tx = {
+        branchResourceShare: {
+          findMany: branchShareFindMany,
+        },
         customerGroupMember: {
           findMany: vi.fn().mockResolvedValue([]),
         },
         priceAdjustment: {
-          findMany: vi.fn().mockResolvedValue([automaticDiscount]),
+          findMany: priceAdjustmentFindMany,
         },
         taxRule: {
           findMany: vi.fn().mockResolvedValue([]),
@@ -402,9 +411,29 @@ describe("invoices.service", () => {
           receiptHeaderStyle: null,
         },
         "Customer agreement",
+        { actorUserId: "staff-1" },
       );
 
       expect(result).toBe(invoice);
+      expect(branchShareFindMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "business-1",
+          targetBranchId: "branch-1",
+          resourceType: "DISCOUNTS",
+          AND: [{ OR: [{ userId: null }, { userId: "staff-1" }] }],
+        }),
+      }));
+      expect(priceAdjustmentFindMany.mock.calls[0]![0]!.where).toMatchObject({
+        AND: expect.arrayContaining([
+          {
+            OR: [
+              { branchId: null },
+              { branchId: { in: ["branch-1", "branch-2"] } },
+              { id: { in: [] } },
+            ],
+          },
+        ]),
+      });
       expect(tx.invoice.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
