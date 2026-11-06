@@ -5,7 +5,7 @@ import { requirePermission } from "../../middleware/permissions.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
 import {
   createCustomerGroup, deleteStatusRule, getCustomerGroups, getDeliveries, getReminderConfig, getUnpickedOrders, listStatusRules, removeCustomerGroup, updateCustomerGroupMembers,
-  saveReminderConfig, saveStatusRule, sendAnnouncement, sendReminders,
+  saveReminderConfig, saveStatusRule, sendAnnouncement, sendReminders, retryWhatsAppDeliveryController,
 } from "./communications.controller.js";
 
 export const communicationsRouter = Router();
@@ -17,6 +17,7 @@ communicationsRouter.put("/customer-groups/:id", requirePermission("customers.up
 communicationsRouter.delete("/customer-groups/:id", requirePermission("customers.update"), asyncHandler(removeCustomerGroup));
 communicationsRouter.post("/announcements", requirePermission("customers.update"), asyncHandler(sendAnnouncement));
 communicationsRouter.get("/deliveries", requirePermission("customers.view"), asyncHandler(requireBranchContext), asyncHandler(getDeliveries));
+communicationsRouter.post("/deliveries/:id/retry", requirePermission("customers.update"), asyncHandler(requireBranchContext), asyncHandler(retryWhatsAppDeliveryController));
 communicationsRouter.get("/status-rules", requirePermission("orders.view"), asyncHandler(listStatusRules));
 communicationsRouter.put("/status-rules", requirePermission("orders.change_status"), asyncHandler(saveStatusRule));
 communicationsRouter.delete("/status-rules/:id", requirePermission("orders.change_status"), asyncHandler(deleteStatusRule));
