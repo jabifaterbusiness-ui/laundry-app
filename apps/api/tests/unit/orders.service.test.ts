@@ -415,8 +415,8 @@ describe("createOrder", () => {
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 
-    tx.branchResourceShare.findMany.mockImplementation(async (args: { where: { resourceType?: string } }) =>
-      args.where.resourceType === "CUSTOMER_PRICING"
+    tx.branchResourceShare.findMany.mockImplementation(async (args) =>
+      (args as unknown as { where: { resourceType?: string } }).where.resourceType === "CUSTOMER_PRICING"
         ? [{ ownerBranchId: BRANCH_B, resourceId: null, accessLevel: "READ" }] as never
         : [],
     );
