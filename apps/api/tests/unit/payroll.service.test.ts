@@ -629,21 +629,21 @@ describe("payroll.service", () => {
         where: {
           businessId: "business-1",
           employeeId: "employee-1",
-          OR: [
-            { branchId: { in: ["branch-1", "branch-owner"] } },
-            { id: { in: [] } },
-          ],
-          effectiveFrom: {
-            lte: period.periodEnd,
-          },
-          OR: [
+          AND: [
             {
-              effectiveTo: null,
+              OR: [
+                { branchId: { in: ["branch-1", "branch-owner"] } },
+                { id: { in: [] } },
+              ],
             },
             {
-              effectiveTo: {
-                gt: period.periodEnd,
+              effectiveFrom: {
+                lte: period.periodEnd,
               },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gt: period.periodEnd } },
+              ],
             },
           ],
         },
