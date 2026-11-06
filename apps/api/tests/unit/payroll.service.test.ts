@@ -21,20 +21,6 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
-      update: vi.fn(),
-      updateMany: vi.fn(),
-    },
-    user: {
-      findMany: vi.fn(),
-    },
-    payrollRecord: {
-      findMany: vi.fn(),
-    },
-    employeeCompensation: {
-      findFirst: vi.fn(),
-    },
-    branchResourceShare: {
-      findMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -44,7 +30,6 @@ vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent: vi.fn(),
 }));
 
-const mockedPrisma = vi.mocked(prisma);
 const mockedRecordAuditEvent = vi.mocked(recordAuditEvent);
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -58,13 +43,6 @@ const payrollPeriodCreate =
   prisma.payrollPeriod.create as unknown as MockFn;
 const payrollPeriodUpdate =
   prisma.payrollPeriod.update as unknown as MockFn;
-const userFindMany = prisma.user.findMany as unknown as MockFn;
-const payrollRecordFindMany =
-  prisma.payrollRecord.findMany as unknown as MockFn;
-const employeeCompensationFindFirst =
-  prisma.employeeCompensation.findFirst as unknown as MockFn;
-const branchResourceShareFindMany =
-  prisma.branchResourceShare.findMany as unknown as MockFn;
 const transaction = prisma.$transaction as unknown as MockFn;
 
 describe("payroll.service", () => {
@@ -74,13 +52,6 @@ describe("payroll.service", () => {
     payrollPeriodFindFirst.mockReset();
     payrollPeriodFindMany.mockReset();
     payrollPeriodCreate.mockReset();
-    payrollPeriodUpdate.mockReset();
-    (prisma.payrollPeriod.updateMany as unknown as MockFn).mockReset();
-    userFindMany.mockReset();
-    payrollRecordFindMany.mockReset();
-    employeeCompensationFindFirst.mockReset();
-    branchResourceShareFindMany.mockReset();
-    branchResourceShareFindMany.mockResolvedValue([] as never);
     transaction.mockReset();
   });
 
@@ -726,7 +697,7 @@ describe("payroll.service", () => {
         orderBy: { effectiveFrom: "desc" },
       });
       expect(tx.txPayrollRecordCreate).toHaveBeenCalledWith({
-        data: createdRecord && {
+        data: {
           businessId: "business-1",
           branchId: "branch-1",
           payrollPeriodId: "period-1",
