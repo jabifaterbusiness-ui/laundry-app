@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -316,7 +316,7 @@ export async function saveBranchResourceShare(input: {
         user: { select: { id: true, fullName: true, email: true } },
       },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: "Serializable" });
     await recordAuditEvent({
       action: "branch.resource_share.updated",
       entityType: "BranchResourceShare",
@@ -352,7 +352,7 @@ export async function saveBranchResourceShare(input: {
       await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
     }
     return result;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: "Serializable" });
   await recordAuditEvent({
     action: "branch.resource_share.created",
     entityType: "BranchResourceShare",
@@ -386,7 +386,7 @@ export async function deleteBranchResourceShare(input: { businessId: string; id:
       await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: share.ownerBranchId, targetBranchId: share.targetBranchId, mode: "SHARED" });
     }
     await tx.branchResourceShare.delete({ where: { id: share.id } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: "Serializable" });
   await recordAuditEvent({
     action: "branch.resource_share.deleted",
     entityType: "BranchResourceShare",
