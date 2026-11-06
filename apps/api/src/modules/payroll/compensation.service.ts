@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 import type { CreateCompensationInput } from "./compensation.validation.js";
 
@@ -13,6 +14,7 @@ type CreateCompensationArgs = CreateCompensationInput & {
 type ListCompensationArgs = {
   businessId: string;
   branchId: string;
+  userId: string;
   employeeId?: string;
 };
 
@@ -139,16 +141,27 @@ export async function getCompensation({
   businessId,
   branchId,
   id,
+  userId,
 }: {
   businessId: string;
   branchId: string;
   id: string;
+  userId: string;
 }) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "PAYROLL_COMPENSATION",
+  });
   const compensation = await prisma.employeeCompensation.findFirst({
     where: {
       id,
       businessId,
-      branchId,
+      OR: [
+        { branchId: { in: scope.ownerBranchIds } },
+        { id: { in: scope.resourceIds } },
+      ],
       employee: { is: { branches: { some: { branchId } } } },
     },
     include: {
@@ -173,12 +186,22 @@ export async function getCompensation({
 export async function listCompensation({
   businessId,
   branchId,
+  userId,
   employeeId,
 }: ListCompensationArgs) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "PAYROLL_COMPENSATION",
+  });
   return prisma.employeeCompensation.findMany({
     where: {
       businessId,
-      branchId,
+      OR: [
+        { branchId: { in: scope.ownerBranchIds } },
+        { id: { in: scope.resourceIds } },
+      ],
       employee: { is: { branches: { some: { branchId } } } },
       ...(employeeId ? { employeeId } : {}),
     },
@@ -207,13 +230,21 @@ export async function getCurrentCompensation({
   businessId,
   branchId,
   employeeId,
+  userId,
   effectiveDate = new Date(),
 }: {
   businessId: string;
   branchId: string;
   employeeId: string;
+  userId: string;
   effectiveDate?: Date;
 }) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "PAYROLL_COMPENSATION",
+  });
   const effectiveWindow = {
     effectiveFrom: { lte: effectiveDate },
     OR: [{ effectiveTo: null }, { effectiveTo: { gt: effectiveDate } }],
@@ -221,8 +252,11 @@ export async function getCurrentCompensation({
   const compensation = await prisma.employeeCompensation.findFirst({
     where: {
       businessId,
-      branchId,
       employeeId,
+      OR: [
+        { branchId: { in: scope.ownerBranchIds } },
+        { id: { in: scope.resourceIds } },
+      ],
       employee: { is: { branches: { some: { branchId } } } },
       ...effectiveWindow,
     },
