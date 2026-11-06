@@ -38,7 +38,7 @@ function signAccessToken(user: TokenSubject): string {
 }
 
 function parseTokenLifetime(value: string): number {
-  const match = /^(\\d+)([smhd])$/.exec(value);
+  const match = /^(\d+)([smhd])$/.exec(value);
   if (!match) throw new Error("JWT_REFRESH_EXPIRES_IN must use a duration such as 7d, 12h, 30m or 60s");
   const amount = Number(match[1]);
   if (!Number.isSafeInteger(amount) || amount <= 0) {
