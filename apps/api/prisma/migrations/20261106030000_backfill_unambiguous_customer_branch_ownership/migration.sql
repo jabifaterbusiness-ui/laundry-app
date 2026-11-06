@@ -1,7 +1,8 @@
 -- Backfill legacy customer ownership only when every retained order for that
--- customer belongs to exactly one branch in the same business. Customers with
--- no order history or orders across multiple branches remain NULL and are
--- intentionally displayed as business-wide legacy records.
+-- customer belongs to exactly one branch in the same business, and every
+-- retained order has a non-null branch ID. Customers with no order history,
+-- any unassigned order history, or orders across multiple branches remain NULL
+-- and are intentionally displayed as business-wide legacy records.
 WITH unambiguous_customer_owners AS (
   SELECT
     c."id" AS "customerId",
@@ -14,6 +15,7 @@ WITH unambiguous_customer_owners AS (
   WHERE c."ownerBranchId" IS NULL
   GROUP BY c."id", c."businessId"
   HAVING COUNT(DISTINCT o."branchId") = 1
+     AND COUNT(o."branchId") = COUNT(*)
 )
 UPDATE "customers" c
 SET "ownerBranchId" = candidate."ownerBranchId"
