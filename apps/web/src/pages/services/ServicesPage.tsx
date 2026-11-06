@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -30,7 +30,6 @@ const EMPTY_FORM: CreateServiceInput = {
 };
 
 export function ServicesPage() {
-  const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const user = useAuthStore((s) => s.user);
@@ -444,12 +443,12 @@ export function ServicesPage() {
                 <td>{service.isActive ? "Active" : "Inactive"}</td>
                 <td>
                   {canManageBranchSharing && service.ownerBranchId && (user?.securityRole === "BUSINESS_OWNER" || service.ownerBranchId === activeBranchId) && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(service.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(service.id)}`)}
+                    <a
+                      href={`/branches/sharing?ownerBranchId=${encodeURIComponent(service.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(service.id)}`}
+                      style={{ display: "inline-flex", alignItems: "center", padding: "0.45rem 0.7rem", borderRadius: 8, border: "1px solid var(--border, #cbd5e1)", textDecoration: "none" }}
                     >
                       Manage sharing
-                    </button>
+                    </a>
                   )}
                   <button
                     type="button"
@@ -479,12 +478,12 @@ export function ServicesPage() {
               <div style={{ marginBottom: 12 }}>
                 <p><strong>Owning branch:</strong> {editingService.ownerBranch?.name ?? (editingService.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy")}</p>
                 {canManageBranchSharing && editingService.ownerBranchId && (user?.securityRole === "BUSINESS_OWNER" || editingService.ownerBranchId === activeBranchId) && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(editingService.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(editingService.id)}`)}
+                  <a
+                    href={`/branches/sharing?ownerBranchId=${encodeURIComponent(editingService.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(editingService.id)}`}
+                    style={{ display: "inline-flex", alignItems: "center", padding: "0.45rem 0.7rem", borderRadius: 8, border: "1px solid var(--border, #cbd5e1)", textDecoration: "none" }}
                   >
                     Manage branch sharing
-                  </button>
+                  </a>
                 )}
               </div>
             ) : (
