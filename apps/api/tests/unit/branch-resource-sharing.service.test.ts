@@ -232,6 +232,21 @@ describe("branch resource sharing authorization", () => {
       data: { customerAccountId: "shared-account" },
     });
     expect(prisma.customerAccount.delete).toHaveBeenCalledWith({ where: { id: "target-account" } });
+    expect(shareFindFirst).toHaveBeenCalledWith({
+      where: {
+        businessId: "business-a",
+        ownerBranchId: "owner-branch",
+        targetBranchId: "target-branch",
+        resourceType: "CUSTOMERS",
+        resourceId: null,
+        userId: null,
+      },
+      select: { id: true, customerAccountMode: true },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "branch.resource_share.updated",
+      metadata: expect.objectContaining({ customerAccountMode: "SHARED" }),
+    }));
   });
 
   it("allows a business owner to delete a sharing rule in their business", async () => {
