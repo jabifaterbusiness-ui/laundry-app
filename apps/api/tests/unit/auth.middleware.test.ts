@@ -1,11 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { requireSensitiveAuthorizationMock } = vi.hoisted(() => ({
   requireSensitiveAuthorizationMock: vi.fn(),
 }));
 
-vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
+vi.mock("../../src/lib/prisma.js", () => ({\n  prisma: { user: { findUnique: userFindUniqueMock } },\n}));\n\nvi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
   requireSensitiveAuthorization: requireSensitiveAuthorizationMock,
 }));
 
@@ -139,6 +140,67 @@ describe("requireSensitiveAuthorization middleware", () => {
       requireSensitiveAuthorization(req, {} as Response, next),
     ).rejects.toThrow("Sensitive authorization is missing or expired");
 
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("requireAuth middleware account validity", () => {
+  const next = vi.fn() as unknown as NextFunction;
+  const token = jwt.sign(
+    { sub: "user-1", email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
+    process.env.JWT_ACCESS_SECRET as string,
+    { expiresIn: "15m" },
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: null });
+  });
+
+  it("accepts a valid access token only when its account is active", async () => {
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(userFindUniqueMock).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: { isActive: true, deletedAt: true },
+    });
+    expect(req.user).toMatchObject({ id: "user-1", businessId: "business-1" });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an already-issued access token after account deactivation", async () => {
+    userFindUniqueMock.mockResolvedValue({ isActive: false, deletedAt: null });
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects an already-issued access token after account deletion", async () => {
+    userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: new Date() });
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects a token for an account that no longer exists", async () => {
+    userFindUniqueMock.mockResolvedValue(null);
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });
