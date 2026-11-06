@@ -116,7 +116,8 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [],
       }),
     ).rejects.toThrow("An order must contain at least one item");
@@ -136,7 +137,8 @@ describe("createOrder", () => {
         businessId: "biz-B",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -150,6 +152,11 @@ describe("createOrder", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-B",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
       select: {
         id: true,
@@ -175,7 +182,8 @@ describe("createOrder", () => {
         businessId: "biz-B",
         branchId: BRANCH_B,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -219,7 +227,8 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -233,6 +242,11 @@ describe("createOrder", () => {
       where: {
         id: { in: [SERVICE_SHIRT] },
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -267,7 +281,8 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -310,7 +325,8 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -353,7 +369,8 @@ describe("createOrder", () => {
         businessId: "biz-A",
         branchId: BRANCH_A,
         actorUserId: "user-A",
-      customerId: CUSTOMER_A,
+
+        customerId: CUSTOMER_A,
         items: [
           {
             serviceId: SERVICE_SHIRT,
@@ -432,6 +449,7 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
+
       customerId: CUSTOMER_A,
       items: [
         {
@@ -581,6 +599,7 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
+
       customerId: CUSTOMER_A,
       items: [
         {
@@ -681,6 +700,7 @@ describe("createOrder", () => {
       businessId: "biz-A",
       branchId: BRANCH_A,
       actorUserId: "user-A",
+
       customerId: CUSTOMER_A,
       items: [
         {
