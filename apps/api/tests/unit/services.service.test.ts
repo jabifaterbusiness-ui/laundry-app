@@ -212,6 +212,40 @@ describe("updateService", () => {
     });
   });
 
+  it("rejects updates through a read-only service share", async () => {
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([
+      { ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ" },
+    ] as never);
+    findFirst.mockResolvedValue({
+      id: "service-1",
+      businessId: "biz-1",
+      ownerBranchId: "branch-B",
+    } as never);
+
+    await expect(
+      updateService(
+        "service-1",
+        "biz-1",
+        "branch-A",
+        "user-A",
+        { name: "Unauthorized change" },
+      ),
+    ).rejects.toThrow(AppError);
+
+    expect(prisma.branchResourceShare.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-1",
+          ownerBranchId: "branch-B",
+          targetBranchId: "branch-A",
+          resourceType: "SERVICES",
+          accessLevel: "EDIT",
+        }),
+      }),
+    );
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it("throws 404 when the service is not found", async () => {
     updateMany.mockResolvedValue({ count: 0 });
 
