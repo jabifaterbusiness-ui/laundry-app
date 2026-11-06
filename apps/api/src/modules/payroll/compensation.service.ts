@@ -26,25 +26,25 @@ export async function createCompensation({
   effectiveFrom,
   actorUserId,
 }: CreateCompensationArgs) {
-  const employee = await prisma.user.findFirst({
-    where: {
-      id: employeeId,
-      businessId,
-      isActive: true,
-      branches: { some: { branchId } },
-    },
-    select: {
-      id: true,
-      fullName: true,
-      role: true,
-    },
-  });
-
-  if (!employee) {
-    throw new AppError("Employee not found in this business", 404);
-  }
-
   const compensation = await prisma.$transaction(async (tx) => {
+    // Revalidate the employee's active business and branch membership inside
+    // the same serializable transaction as the compensation write. This
+    // prevents a stale pre-transaction membership check from authorizing it.
+    const employee = await tx.user.findFirst({
+      where: {
+        id: employeeId,
+        businessId,
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId } },
+      },
+      select: { id: true },
+    });
+
+    if (!employee) {
+      throw new AppError("Employee not found in this business", 404);
+    }
+
     const current = await tx.employeeCompensation.findFirst({
       where: {
         businessId,
@@ -118,7 +118,7 @@ export async function createCompensation({
         effectiveTo: future?.effectiveFrom ?? null,
       },
     });
-  });
+  }, { isolationLevel: "Serializable" });
 
   await recordAuditEvent({
     businessId,
