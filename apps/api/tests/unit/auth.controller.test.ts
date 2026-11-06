@@ -290,6 +290,7 @@ beforeEach(() => {
   issueSensitiveAuthorizationMock.mockResolvedValue({
     token: "sensitive-token",
     expiresAt: new Date(Date.now() + 300000),
+    inactivityTimeoutMs: 180000,
   });
 });
 
