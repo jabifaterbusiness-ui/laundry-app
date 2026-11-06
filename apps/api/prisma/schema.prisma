@@ -426,6 +426,7 @@ model Subscription {
 model RefreshToken {
   id        String    @id @default(uuid())
   tokenHash String    @unique
+  sessionId String    @default(uuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
@@ -433,6 +434,7 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([sessionId, revokedAt, expiresAt])
   @@map("refresh_tokens")
 }
 
