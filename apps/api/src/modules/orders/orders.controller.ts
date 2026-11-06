@@ -181,48 +181,17 @@ export async function updateStatus(req: Request, res: Response) {
   const { id } = orderIdParamSchema.parse(req.params);
   const input = updateOrderStatusSchema.parse(req.body);
 
-  const previousOrder = await getOrderForBusiness(id, businessId, branchId);
-  if (!previousOrder) throw new AppError("Order not found", 404);
-
   const order = await updateOrderStatus(
     id,
     businessId,
     branchId,
     input.status,
-  );
-
-  if (previousOrder.status !== order.status) {
-    const statusUpdate = order as typeof order & {
-      notificationResults?: Array<{ channel: string; status: string; deliveryId?: string | null; error?: string }>;
-      notificationError?: string | null;
-    };
-    const notificationResults = (statusUpdate.notificationResults ?? []).map((result) => ({
-      channel: result.channel,
-      status: result.status,
-      deliveryId: result.deliveryId ?? null,
-      error: result.error ?? null,
-    }));
-    const notificationError = statusUpdate.notificationError
-      ? "One or more status notifications could not be processed. See Communications delivery history."
-      : null;
-
-    await recordAuditEvent({
-      action: "order.status_updated",
-      entityType: "Order",
-      entityId: order.id,
-      businessId,
-      branchId,
+    prisma,
+    {
       actorUserId: req.user!.id,
       correlationId: req.correlationId ?? null,
-      metadata: {
-        orderNumber: order.orderNumber,
-        previousStatus: previousOrder.status,
-        status: order.status,
-        notificationResults,
-        notificationError,
-      },
-    });
-  }
+    },
+  );
 
   res.status(200).json(order);
 }
