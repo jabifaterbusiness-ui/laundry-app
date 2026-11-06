@@ -118,20 +118,26 @@ export async function rotateRefreshToken(rawToken: string) {
 export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "id" | "businessId"> | null> {
   const tokenHash = hashToken(rawToken);
 
-  const existing = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: { id: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.refreshToken.findUnique({
+      where: { tokenHash },
+      select: { id: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
+    });
+
+    if (!existing || existing.revokedAt) {
+      return null;
+    }
+
+    // Claim revocation conditionally so concurrent logout requests cannot
+    // both report success for the same refresh token. Database errors must
+    // propagate; silently swallowing one would leave the session active.
+    const revoked = await tx.refreshToken.updateMany({
+      where: { id: existing.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    return revoked.count === 1 ? existing.user : null;
   });
-
-  if (!existing || existing.revokedAt) {
-    return null;
-  }
-
-  await prisma.refreshToken
-    .update({ where: { id: existing.id }, data: { revokedAt: new Date() } })
-    .catch(() => undefined);
-
-  return existing.user;
 }
 
 export type { Role };
