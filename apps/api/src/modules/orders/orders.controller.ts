@@ -259,6 +259,7 @@ export async function statusHistory(req: Request, res: Response) {
             channel: result.channel,
             status: result.status,
             deliveryId: typeof result.deliveryId === "string" ? result.deliveryId : null,
+            error: typeof result.error === "string" ? result.error : null,
           }];
         })
       : [];
