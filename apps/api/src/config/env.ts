@@ -11,7 +11,7 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(16, "JWT_ACCESS_SECRET must be set and non-trivial"),
   JWT_REFRESH_SECRET: z.string().min(16, "JWT_REFRESH_SECRET must be set and non-trivial"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
-  JWT_REFRESH_EXPIRES_IN: z.string().regex(/^\\d+[smhd]$/, "JWT_REFRESH_EXPIRES_IN must be a duration such as 7d, 12h, 30m or 60s").default("7d"),
+  JWT_REFRESH_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/, "JWT_REFRESH_EXPIRES_IN must be a duration such as 7d, 12h, 30m or 60s").default("7d"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   MIGRATION_STORAGE_DIR: z.string().default("./data/migrations"),
