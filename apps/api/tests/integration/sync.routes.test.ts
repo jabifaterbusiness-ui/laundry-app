@@ -54,6 +54,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     user: {
       findFirst: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -202,6 +203,7 @@ const operationFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, deletedAt: null } as never);
   mockTransaction();
 
   vi.mocked(prisma.userBranch.findUnique).mockResolvedValue({
