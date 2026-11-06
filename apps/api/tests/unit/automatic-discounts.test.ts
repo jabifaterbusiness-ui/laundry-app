@@ -134,6 +134,8 @@ describe("resolveAutomaticDiscountSelections", () => {
       resolveAutomaticDiscountSelections(
         tx,
         "business-1",
+        "branch-1",
+        "user-1",
         "customer-1",
         [{ serviceId: "service-1" }],
         [{ adjustmentId: "customer-discount", scope: "INVOICE" }],
