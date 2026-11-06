@@ -64,11 +64,38 @@ async function createOrderWithTx(
   tx: Prisma.TransactionClient,
   data: CreateOrderData,
 ) {
-    // Customer must belong to the authenticated business.
+    const customerScope = data.actorUserId
+      ? await getBranchResourceScope({
+          businessId: data.businessId,
+          branchId: data.branchId,
+          userId: data.actorUserId,
+          resourceType: "CUSTOMERS",
+        })
+      : null;
+    const serviceScope = data.actorUserId
+      ? await getBranchResourceScope({
+          businessId: data.businessId,
+          branchId: data.branchId,
+          userId: data.actorUserId,
+          resourceType: "SERVICES",
+        })
+      : null;
+
+    // A customer must be visible to this branch, not merely belong to the
+    // same business. Legacy business-wide customers remain visible.
     const customer = await tx.customer.findFirst({
       where: {
         id: data.customerId,
         businessId: data.businessId,
+        ...(customerScope
+          ? {
+              OR: [
+                { ownerBranchId: null },
+                { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                { id: { in: customerScope.resourceIds } },
+              ],
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -102,6 +129,15 @@ async function createOrderWithTx(
       where: {
         id: { in: serviceIds },
         businessId: data.businessId,
+        ...(serviceScope
+          ? {
+              OR: [
+                { ownerBranchId: null },
+                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+                { id: { in: serviceScope.resourceIds } },
+              ],
+            }
+          : {}),
       },
     });
 
