@@ -861,6 +861,38 @@ describe("transferCustomer - full account transfer", () => {
     expect(orderUpdateMany).not.toHaveBeenCalled();
   });
 
+  it("uses only the selected branch's separate customer ledgers during transfer", async () => {
+    findFirst
+      .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
+      .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-B" } as never);
+    prismaMock.branchResourceShare.findFirst
+      .mockResolvedValueOnce({ id: "source-edit-share" } as never)
+      .mockResolvedValueOnce({ customerAccountMode: "SEPARATE" } as never)
+      .mockResolvedValueOnce({ id: "target-edit-share" } as never)
+      .mockResolvedValueOnce({ customerAccountMode: "SEPARATE" } as never);
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-branch-account", branchId: "branch-A" } as never)
+      .mockResolvedValueOnce({ id: "target-branch-account", branchId: "branch-A" } as never);
+    customerAccountTransactionUpdateMany.mockResolvedValue({ count: 2 });
+    customerAccountDelete.mockResolvedValue({ id: "source-branch-account" } as never);
+
+    await transferCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id);
+
+    expect(customerAccountFindFirst).toHaveBeenNthCalledWith(1, {
+      where: { customerId: sourceCustomer.id, businessId: "biz-A", branchId: "branch-A" },
+      select: { id: true, branchId: true },
+    });
+    expect(customerAccountFindFirst).toHaveBeenNthCalledWith(2, {
+      where: { customerId: targetCustomer.id, businessId: "biz-A", branchId: "branch-A" },
+      select: { id: true, branchId: true },
+    });
+    expect(customerAccountTransactionUpdateMany).toHaveBeenCalledWith({
+      where: { businessId: "biz-A", customerAccountId: "source-branch-account" },
+      data: { customerAccountId: "target-branch-account" },
+    });
+  });
+
   it("moves source account transactions onto an existing target account", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
