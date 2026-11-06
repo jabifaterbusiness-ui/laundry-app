@@ -175,32 +175,35 @@ describe("requireAuth middleware account validity", () => {
     userFindUniqueMock.mockResolvedValue({ isActive: false, deletedAt: null });
     const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
 
-    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+    await requireAuth(req, {} as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
       statusCode: 401,
       message: "Invalid or expired access token",
-    });
-    expect(next).not.toHaveBeenCalled();
+    }));
   });
 
   it("rejects an already-issued access token after account deletion", async () => {
     userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: new Date() });
     const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
 
-    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+    await requireAuth(req, {} as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
       statusCode: 401,
       message: "Invalid or expired access token",
-    });
-    expect(next).not.toHaveBeenCalled();
+    }));
   });
 
   it("rejects a token for an account that no longer exists", async () => {
     userFindUniqueMock.mockResolvedValue(null);
     const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
 
-    await expect(requireAuth(req, {} as Response, next)).rejects.toMatchObject({
+    await requireAuth(req, {} as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
       statusCode: 401,
       message: "Invalid or expired access token",
-    });
-    expect(next).not.toHaveBeenCalled();
+    }));
   });
 });
