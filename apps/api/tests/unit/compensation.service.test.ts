@@ -38,6 +38,7 @@ import {
 
 describe("compensation service", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.prisma.branchResourceShare.findMany.mockResolvedValue([] as never);
   });
   it("creates a compensation record for an employee in the business", async () => {
