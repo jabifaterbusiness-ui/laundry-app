@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 export type BranchResourceType =
-  | "CUSTOMERS" | "SERVICES" | "CUSTOMER_PRICING" | "CUSTOMER_ACCOUNTS"
+  | "CUSTOMERS" | "SERVICES" | "CUSTOMER_PRICING"
   | "DISCOUNTS" | "TAX_RULES" | "INVENTORY";
 
 export interface BranchResourceScope {

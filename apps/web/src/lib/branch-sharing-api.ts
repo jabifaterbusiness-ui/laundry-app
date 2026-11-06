@@ -1,6 +1,6 @@
 import { apiFetch } from "./api-client.js";
 
-export type BranchResourceType = "CUSTOMERS" | "SERVICES" | "CUSTOMER_PRICING" | "CUSTOMER_ACCOUNTS" | "DISCOUNTS" | "TAX_RULES" | "INVENTORY";
+export type BranchResourceType = "CUSTOMERS" | "SERVICES" | "CUSTOMER_PRICING" | "DISCOUNTS" | "TAX_RULES" | "INVENTORY";
 export type BranchResourceAccessLevel = "READ" | "EDIT";
 
 export interface BranchResourceShare {

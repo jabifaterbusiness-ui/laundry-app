@@ -9,7 +9,6 @@ const resourceTypes: Array<{ value: BranchResourceType; label: string }> = [
   { value: "CUSTOMERS", label: "Customers" },
   { value: "SERVICES", label: "Services" },
   { value: "CUSTOMER_PRICING", label: "Customer-specific prices" },
-  { value: "CUSTOMER_ACCOUNTS", label: "Customer accounts" },
   { value: "DISCOUNTS", label: "Discounts and promotions" },
   { value: "TAX_RULES", label: "Tax rules" },
   { value: "INVENTORY", label: "Inventory" },

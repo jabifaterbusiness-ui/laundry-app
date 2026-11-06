@@ -342,38 +342,13 @@ async function getEditableCustomerAccountForBranch(
   tx: CustomerDb,
   customerId: string,
   businessId: string,
-  branchId: string,
-  userId: string,
 ) {
-  const scope = await getBranchResourceScope({
-    businessId,
-    branchId,
-    userId,
-    resourceType: "CUSTOMER_ACCOUNTS",
-  }, tx);
-  const account = await tx.customerAccount.findFirst({
-    where: {
-      customerId,
-      businessId,
-      OR: [
-        { branchId: null },
-        { branchId: { in: scope.ownerBranchIds } },
-        { id: { in: scope.resourceIds } },
-      ],
-    },
+  // Customer account balances and ledgers are shared business-wide. The
+  // branch ID belongs to each ledger transaction, not to the account.
+  return tx.customerAccount.findFirst({
+    where: { customerId, businessId, branchId: null },
     select: { id: true, branchId: true },
   });
-  if (account) {
-    await assertBranchResourceWriteAccess({
-      businessId,
-      branchId,
-      userId,
-      resourceType: "CUSTOMER_ACCOUNTS",
-      ownerBranchId: account.branchId,
-      resourceId: account.id,
-    }, tx);
-  }
-  return account;
 }
 
 /**
@@ -412,10 +387,10 @@ export async function transferCustomer(
     }
 
     const sourceAccount = await getEditableCustomerAccountForBranch(
-      tx, customer.id, businessId, branchId, userId,
+      tx, customer.id, businessId,
     );
     const targetAccount = await getEditableCustomerAccountForBranch(
-      tx, targetCustomer.id, businessId, branchId, userId,
+      tx, targetCustomer.id, businessId,
     );
     if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be transferred together", 409);
@@ -523,8 +498,7 @@ export async function mergeCustomer(
     ]);
 
     const sourceDeactivated = customer.ownerBranchId === branchId &&
-      !otherBranchOrder && !otherBranchAccount && !externalShare &&
-      sourceAccount?.branchId !== null;
+      !otherBranchOrder && !otherBranchAccount && !externalShare;
 
     if (sourceDeactivated) {
       await tx.customer.updateMany({

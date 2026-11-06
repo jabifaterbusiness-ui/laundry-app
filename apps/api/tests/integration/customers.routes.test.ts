@@ -525,14 +525,8 @@ describe("Customers routes - customer account / POA", () => {
       where: {
         customerId: CUSTOMER_ID,
         businessId: "biz-A",
-        OR: [
-          { branchId: "branch-A" },
-          { branchId: null },
-          { branchId: { in: ["branch-A"] } },
-          { id: { in: [] } },
-        ],
+        branchId: null,
       },
-      orderBy: { branchId: "desc" },
       include: {
         transactions: {
           orderBy: {
@@ -563,7 +557,7 @@ describe("Customers routes - customer account / POA", () => {
       id: null,
       customerId: CUSTOMER_ID,
       businessId: "biz-A",
-      branchId: "branch-A",
+      branchId: null,
       balance: 0,
       transactions: [],
     });

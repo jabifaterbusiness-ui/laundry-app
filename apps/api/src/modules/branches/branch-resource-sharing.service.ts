@@ -46,7 +46,6 @@ export type BranchResourceType =
   | "CUSTOMERS"
   | "SERVICES"
   | "CUSTOMER_PRICING"
-  | "CUSTOMER_ACCOUNTS"
   | "DISCOUNTS"
   | "TAX_RULES"
   | "INVENTORY";
@@ -194,12 +193,6 @@ export async function saveBranchResourceShare(input: {
         break;
       case "CUSTOMER_PRICING":
         resourceBelongsToOwnerBranch = Boolean(await prisma.customerServicePrice.findFirst({
-          where: { ...resourceWhere, branchId: input.ownerBranchId },
-          select: { id: true },
-        }));
-        break;
-      case "CUSTOMER_ACCOUNTS":
-        resourceBelongsToOwnerBranch = Boolean(await prisma.customerAccount.findFirst({
           where: { ...resourceWhere, branchId: input.ownerBranchId },
           select: { id: true },
         }));

@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type CustomerAccountDb = typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -24,6 +24,11 @@ function calculateBalance(
   }, 0);
 }
 
+/**
+ * Customer accounts are business-wide by design. Every branch sees the
+ * same balance and complete ledger; the branchId on each transaction records
+ * where that transaction originated, not ownership of a separate account.
+ */
 export async function getOrCreateCustomerAccount(
   customerId: string,
   businessId: string,
@@ -31,48 +36,40 @@ export async function getOrCreateCustomerAccount(
   userId: string,
   db: CustomerAccountDb = prisma,
 ) {
-  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, db);
+  const customerScope = await getBranchResourceScope(
+    { businessId, branchId, userId, resourceType: "CUSTOMERS" },
+    db,
+  );
   const customer = await db.customer.findFirst({
     where: {
       id: customerId,
       businessId,
-      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }],
+      OR: [
+        { ownerBranchId: null },
+        { ownerBranchId: { in: customerScope.ownerBranchIds } },
+        { id: { in: customerScope.resourceIds } },
+      ],
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
   });
 
   if (!customer) {
     throw new AppError("Customer not found", 404);
   }
 
-  const accountScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_ACCOUNTS" }, db);
-  const include = { transactions: { orderBy: { createdAt: "asc" as const } } };
-  const localAccount = await db.customerAccount.findFirst({
-    where: { businessId, customerId, branchId },
-    include,
-  });
-  if (localAccount) return localAccount;
-
-  const sharedOrEditableAccount = await db.customerAccount.findFirst({
+  return db.customerAccount.upsert({
     where: {
+      customerId_branchId: { customerId, branchId: null },
+    },
+    create: {
       businessId,
       customerId,
-      OR: [
-        { branchId: null },
-        { branchId: { in: accountScope.editableOwnerBranchIds.filter((id) => id !== branchId) } },
-        { id: { in: accountScope.editableResourceIds } },
-      ],
+      branchId: null,
     },
-    include,
-  });
-  if (sharedOrEditableAccount) return sharedOrEditableAccount;
-  return db.customerAccount.upsert({
-    where: { customerId_branchId: { customerId, branchId } },
-    create: { businessId, customerId, branchId },
     update: {},
-    include: { transactions: { orderBy: { createdAt: "asc" } } },
+    include: {
+      transactions: { orderBy: { createdAt: "asc" } },
+    },
   });
 }
 
@@ -82,12 +79,21 @@ export async function getCustomerAccount(
   branchId: string,
   userId: string,
 ) {
-  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  });
   const customer = await prisma.customer.findFirst({
     where: {
       id: customerId,
       businessId,
-      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }],
+      OR: [
+        { ownerBranchId: null },
+        { ownerBranchId: { in: customerScope.ownerBranchIds } },
+        { id: { in: customerScope.resourceIds } },
+      ],
     },
     select: { id: true },
   });
@@ -96,19 +102,15 @@ export async function getCustomerAccount(
     throw new AppError("Customer not found", 404);
   }
 
-  const accountScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_ACCOUNTS" });
   const account = await prisma.customerAccount.findFirst({
     where: {
       customerId,
       businessId,
-      OR: [{ branchId }, { branchId: null }, { branchId: { in: accountScope.ownerBranchIds } }, { id: { in: accountScope.resourceIds } }],
+      branchId: null,
     },
-    orderBy: { branchId: "desc" },
     include: {
       transactions: {
-        orderBy: {
-          createdAt: "asc",
-        },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
@@ -118,7 +120,7 @@ export async function getCustomerAccount(
       id: null,
       customerId,
       businessId,
-      branchId,
+      branchId: null,
       balance: 0,
       transactions: [],
     };
@@ -154,9 +156,7 @@ export async function fundCustomerAccount(data: {
       tx,
     );
 
-    await assertBranchResourceWriteAccess({ businessId: data.businessId, branchId: data.branchId, userId: data.userId, resourceType: "CUSTOMER_ACCOUNTS", ownerBranchId: account.branchId, resourceId: account.id }, tx);
-
-    const transaction = await tx.customerAccountTransaction.create({
+    return tx.customerAccountTransaction.create({
       data: {
         businessId: data.businessId,
         branchId: data.branchId,
@@ -168,7 +168,5 @@ export async function fundCustomerAccount(data: {
         }),
       },
     });
-
-    return transaction;
   });
 }

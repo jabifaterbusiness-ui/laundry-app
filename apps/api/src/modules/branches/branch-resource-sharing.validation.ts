@@ -4,7 +4,6 @@ export const branchResourceTypeSchema = z.enum([
   "CUSTOMERS",
   "SERVICES",
   "CUSTOMER_PRICING",
-  "CUSTOMER_ACCOUNTS",
   "DISCOUNTS",
   "TAX_RULES",
   "INVENTORY",
