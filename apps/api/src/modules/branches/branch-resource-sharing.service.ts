@@ -4,12 +4,15 @@ import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 
-async function assertCanManageOwnerBranch(input: {
-  businessId: string;
-  ownerBranchId: string;
-  actorUserId: string;
-}) {
-  const actor = await prisma.user.findFirst({
+async function assertCanManageOwnerBranch(
+  input: {
+    businessId: string;
+    ownerBranchId: string;
+    actorUserId: string;
+  },
+  db: typeof prisma | Prisma.TransactionClient = prisma,
+) {
+  const actor = await db.user.findFirst({
     where: {
       id: input.actorUserId,
       businessId: input.businessId,
@@ -29,7 +32,7 @@ async function assertCanManageOwnerBranch(input: {
     return;
   }
 
-  const membership = await prisma.userBranch.findUnique({
+  const membership = await db.userBranch.findUnique({
     where: {
       userId_branchId: {
         userId: input.actorUserId,
@@ -373,27 +376,47 @@ export async function saveBranchResourceShare(input: {
 }
 
 export async function deleteBranchResourceShare(input: { businessId: string; id: string; actorUserId: string }) {
-  const share = await prisma.branchResourceShare.findFirst({
-    where: { id: input.id, businessId: input.businessId },
-    select: {
-      id: true,
-      ownerBranchId: true,
-      targetBranchId: true,
-      resourceType: true,
-      resourceId: true,
-      userId: true,
-      accessLevel: true,
-      customerAccountMode: true,
-    },
-  });
-  if (!share) throw new AppError("Branch sharing rule not found", 404);
-  await assertCanManageOwnerBranch({ businessId: input.businessId, ownerBranchId: share.ownerBranchId, actorUserId: input.actorUserId });
-  await prisma.$transaction(async (tx) => {
-    if (share.resourceType === "CUSTOMERS" && !share.resourceId && !share.userId && share.customerAccountMode === "SEPARATE") {
-      await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: share.ownerBranchId, targetBranchId: share.targetBranchId, mode: "SHARED" });
+  const share = await prisma.$transaction(async (tx) => {
+    const currentShare = await tx.branchResourceShare.findFirst({
+      where: { id: input.id, businessId: input.businessId },
+      select: {
+        id: true,
+        ownerBranchId: true,
+        targetBranchId: true,
+        resourceType: true,
+        resourceId: true,
+        userId: true,
+        accessLevel: true,
+        customerAccountMode: true,
+      },
+    });
+    if (!currentShare) throw new AppError("Branch sharing rule not found", 404);
+
+    // Recheck the actor's active account and owner-branch membership in the
+    // same serializable transaction that removes the share.
+    await assertCanManageOwnerBranch({
+      businessId: input.businessId,
+      ownerBranchId: currentShare.ownerBranchId,
+      actorUserId: input.actorUserId,
+    }, tx);
+
+    if (
+      currentShare.resourceType === "CUSTOMERS" &&
+      !currentShare.resourceId &&
+      !currentShare.userId &&
+      currentShare.customerAccountMode === "SEPARATE"
+    ) {
+      await reconcileCustomerAccountMode(tx, {
+        businessId: input.businessId,
+        ownerBranchId: currentShare.ownerBranchId,
+        targetBranchId: currentShare.targetBranchId,
+        mode: "SHARED",
+      });
     }
-    await tx.branchResourceShare.delete({ where: { id: share.id } });
+    await tx.branchResourceShare.delete({ where: { id: currentShare.id } });
+    return currentShare;
   }, { isolationLevel: "Serializable" });
+
   await recordAuditEvent({
     action: "branch.resource_share.deleted",
     entityType: "BranchResourceShare",
