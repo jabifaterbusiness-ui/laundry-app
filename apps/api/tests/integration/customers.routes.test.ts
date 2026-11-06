@@ -55,6 +55,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customerAccount: {
       findFirst: vi.fn(),
+      create: vi.fn(),
       upsert: vi.fn(),
     },
     customerAccountTransaction: {
@@ -88,6 +89,7 @@ const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
+const customerAccountCreate = vi.mocked(prisma.customerAccount.create);
 const customerAccountUpsert = vi.mocked(prisma.customerAccount.upsert);
 const customerAccountTransactionCreate = vi.mocked(
   prisma.customerAccountTransaction.create,
@@ -638,7 +640,7 @@ describe("Customers routes - customer account / POA", () => {
 
     expect(res.status).toBe(403);
     expect(userBranchFindUnique).toHaveBeenCalled();
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 
@@ -653,7 +655,7 @@ describe("Customers routes - customer account / POA", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain("Missing X-Branch-Id");
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("requires sensitive authorization before funding an account", async () => {
@@ -667,7 +669,7 @@ describe("Customers routes - customer account / POA", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error.message).toContain("Sensitive authorization is required");
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("rejects funding when the selected branch is not accessible", async () => {
@@ -682,7 +684,7 @@ describe("Customers routes - customer account / POA", () => {
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("rejects funding through a branch belonging to another business", async () => {
@@ -705,7 +707,33 @@ describe("Customers routes - customer account / POA", () => {
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
+  });
+
+  it("allows a shared customer account to be viewed but blocks funding through a READ-only customer share", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+      ownerBranchId: "branch-A",
+    } as never);
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([{
+      ownerBranchId: "branch-A",
+      resourceId: CUSTOMER_ID,
+      accessLevel: "READ",
+    }] as never);
+    vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B")
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(customerAccountCreate).not.toHaveBeenCalled();
+    expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 
   it("funds the customer account with a positive whole-naira CREDIT", async () => {
@@ -716,10 +744,12 @@ describe("Customers routes - customer account / POA", () => {
       businessId: "biz-A",
     } as never);
 
-    customerAccountUpsert.mockResolvedValue({
+    customerAccountFindFirst.mockResolvedValue(null);
+    customerAccountCreate.mockResolvedValue({
       id: "account-1",
       customerId: CUSTOMER_ID,
       businessId: "biz-A",
+      branchId: null,
       transactions: [],
     } as never);
 
@@ -754,6 +784,14 @@ describe("Customers routes - customer account / POA", () => {
       note: "Customer POA",
     });
 
+    expect(customerAccountFindFirst).toHaveBeenCalledWith({
+      where: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: null },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
+    expect(customerAccountCreate).toHaveBeenCalledWith({
+      data: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: null },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
     expect(customerAccountTransactionCreate).toHaveBeenCalledWith({
       data: {
         businessId: "biz-A",
@@ -802,7 +840,7 @@ describe("Customers routes - customer account / POA", () => {
       expect(res.status).toBe(422);
     }
 
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 });

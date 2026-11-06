@@ -352,9 +352,9 @@ async function getEditableCustomerAccountForBranch(
 }
 
 /**
- * Transfers the selected branch's orders and customer-account history only.
- * Customer visibility and edit access are checked for both records first;
- * records belonging to other branches remain untouched.
+ * Transfers the selected branch's orders and the customer's business-wide
+ * account ledger. Customer visibility and edit access are checked for both
+ * customer records before the transfer begins.
  */
 export async function transferCustomer(
   customerId: string,

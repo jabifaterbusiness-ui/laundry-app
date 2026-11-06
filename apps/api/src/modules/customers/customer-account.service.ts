@@ -50,27 +50,53 @@ export async function getOrCreateCustomerAccount(
         { id: { in: customerScope.resourceIds } },
       ],
     },
-    select: { id: true },
+    select: { id: true, ownerBranchId: true },
   });
 
   if (!customer) {
     throw new AppError("Customer not found", 404);
   }
 
-  return db.customerAccount.upsert({
-    where: {
-      customerId_branchId: { customerId, branchId: null },
-    },
-    create: {
-      businessId,
-      customerId,
-      branchId: null,
-    },
-    update: {},
-    include: {
-      transactions: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  // Account balances are shared business-wide, but a READ-only customer
+  // share must not allow this branch to create or fund the shared account.
+  await assertBranchResourceWriteAccess({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+    ownerBranchId: customer.ownerBranchId,
+    resourceId: customer.id,
+  }, db);
+
+  const where = { businessId, customerId, branchId: null };
+  const include = {
+    transactions: { orderBy: { createdAt: "asc" as const } },
+  };
+  const existing = await db.customerAccount.findFirst({ where, include });
+  if (existing) return existing;
+
+  try {
+    return await db.customerAccount.create({
+      data: { businessId, customerId, branchId: null },
+      include,
+    });
+  } catch (error) {
+    // The partial unique index for the single shared account per customer
+    // protects concurrent first-use requests. Re-read after a uniqueness race.
+    const isUniqueConflict =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2002";
+    if (!isUniqueConflict) throw error;
+
+    const createdByAnotherRequest = await db.customerAccount.findFirst({
+      where,
+      include,
+    });
+    if (createdByAnotherRequest) return createdByAnotherRequest;
+    throw error;
+  }
 }
 
 export async function getCustomerAccount(
