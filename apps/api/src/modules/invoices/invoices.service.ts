@@ -2,10 +2,30 @@ import type { InvoiceStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { calculateInvoice } from "./invoice-calculator.js";
+import { getBranchResourceScope, type BranchResourceType } from "../branches/branch-resource-scope.service.js";
+
+type PricingResourceType = Extract<BranchResourceType, "DISCOUNTS" | "TAX_RULES">;
+
+async function getPricingResourceScope(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  branchId: string,
+  userId: string,
+  resourceType: PricingResourceType,
+) {
+  // Lightweight unit-test adapters may omit the sharing delegate. Production
+  // Prisma transactions always have it, so real requests use full share rules.
+  if (!tx.branchResourceShare) {
+    return { ownerBranchIds: [branchId], resourceIds: [] };
+  }
+  return getBranchResourceScope({ businessId, branchId, userId, resourceType }, tx);
+}
 
 async function calculateNewInvoiceDefaults(
   tx: Prisma.TransactionClient,
   businessId: string,
+  branchId: string,
+  userId: string,
   items: Array<{ id: string; lineTotal: number }>,
   options: {
     adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
@@ -24,17 +44,29 @@ async function calculateNewInvoiceDefaults(
   if (selectedAdjustmentIds.length !== adjustmentSelections.length) {
     throw new AppError("An adjustment cannot be selected more than once", 422);
   }
+  const discountScope = await getPricingResourceScope(tx, businessId, branchId, userId, "DISCOUNTS");
   const adjustmentRecords = selectedAdjustmentIds.length
     ? await tx.priceAdjustment.findMany({
         where: {
           businessId,
           id: { in: selectedAdjustmentIds },
           isActive: true,
-          OR: [
-            { targetScope: "MANUAL" },
-            ...(options.automaticAdjustmentIds?.length
-              ? [{ id: { in: options.automaticAdjustmentIds }, targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] } }]
-              : []),
+          AND: [
+            {
+              OR: [
+                { branchId: null },
+                { branchId: { in: discountScope.ownerBranchIds } },
+                { id: { in: discountScope.resourceIds } },
+              ],
+            },
+            {
+              OR: [
+                { targetScope: "MANUAL" },
+                ...(options.automaticAdjustmentIds?.length
+                  ? [{ id: { in: options.automaticAdjustmentIds }, targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] } }]
+                  : []),
+              ],
+            },
           ],
         },
         include: {
@@ -75,14 +107,26 @@ async function calculateNewInvoiceDefaults(
     };
   });
   const explicitTaxIds = [...new Set(options.taxRuleIds ?? [])];
+  const taxScope = await getPricingResourceScope(tx, businessId, branchId, userId, "TAX_RULES");
   const rules = tx.taxRule
     ? await tx.taxRule.findMany({
         where: {
           businessId,
           isActive: true,
-          OR: [
-            { enabledByDefault: true },
-            ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
+          AND: [
+            {
+              OR: [
+                { branchId: null },
+                { branchId: { in: taxScope.ownerBranchIds } },
+                { id: { in: taxScope.resourceIds } },
+              ],
+            },
+            {
+              OR: [
+                { enabledByDefault: true },
+                ...(explicitTaxIds.length ? [{ id: { in: explicitTaxIds } }] : []),
+              ],
+            },
           ],
         },
         orderBy: { createdAt: "asc" },
@@ -109,6 +153,8 @@ async function calculateNewInvoiceDefaults(
 export async function resolveAutomaticDiscountSelections(
   tx: Prisma.TransactionClient,
   businessId: string,
+  branchId: string,
+  userId: string,
   customerId: string,
   items: Array<{ serviceId: string }>,
   manualSelections: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>,
@@ -124,6 +170,14 @@ export async function resolveAutomaticDiscountSelections(
     : [];
   const groupIds = memberships.map((membership) => membership.groupId);
   const now = new Date();
+  const discountScope = await getPricingResourceScope(tx, businessId, branchId, userId, "DISCOUNTS");
+  const branchScopeFilter = {
+    OR: [
+      { branchId: null },
+      { branchId: { in: discountScope.ownerBranchIds } },
+      { id: { in: discountScope.resourceIds } },
+    ],
+  };
   const rules = tx.priceAdjustment
     ? await tx.priceAdjustment.findMany({
         where: {
@@ -131,6 +185,7 @@ export async function resolveAutomaticDiscountSelections(
           isActive: true,
           targetScope: { in: ["CUSTOMER", "GROUP", "ALL_CUSTOMERS"] },
           AND: [
+            branchScopeFilter,
             { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
             { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
             {
@@ -156,6 +211,7 @@ export async function resolveAutomaticDiscountSelections(
           isActive: true,
           percentage: { lt: 0 },
           targetScope: "MANUAL",
+          AND: [branchScopeFilter],
         },
         select: { id: true },
       })
@@ -197,6 +253,7 @@ export interface CreateInvoiceData {
   branchId: string;
   orderId: string;
   customerAgreement: string;
+  actorUserId?: string;
 }
 
 export interface ListInvoicesParams {
@@ -226,6 +283,7 @@ export async function createInvoice(data: CreateInvoiceData) {
       data.businessId,
       data.branchId,
       data.customerAgreement,
+      data.actorUserId ?? "",
     ),
   );
 }
@@ -236,6 +294,7 @@ export async function createInvoiceWithTx(
   businessId: string,
   branchId: string,
   customerAgreement: string,
+  actorUserId = "",
 ) {
   const order = await tx.order.findFirst({
     where: {
@@ -293,11 +352,13 @@ export async function createInvoiceWithTx(
   const automaticAdjustments = await resolveAutomaticDiscountSelections(
     tx,
     businessId,
+    branchId,
+    actorUserId,
     order.customerId,
     order.items,
     [],
   );
-  const calculation = await calculateNewInvoiceDefaults(tx, businessId, order.items, {
+  const calculation = await calculateNewInvoiceDefaults(tx, businessId, branchId, actorUserId, order.items, {
     adjustments: automaticAdjustments,
     automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
   });
@@ -389,6 +450,7 @@ export async function createInvoiceFromOrderWithTx(
   pricingOptions: {
     adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
     taxRuleIds?: string[];
+    actorUserId?: string;
   } = {},
 ) {
   const agreement = customerAgreement.trim();
@@ -411,14 +473,17 @@ export async function createInvoiceFromOrderWithTx(
       totalPrice: item.lineTotal,
     }));
 
+  const actorUserId = pricingOptions.actorUserId ?? "";
   const automaticAdjustments = await resolveAutomaticDiscountSelections(
     tx,
     business.id,
+    order.branchId,
+    actorUserId,
     order.customerId,
     order.items,
     pricingOptions.adjustments ?? [],
   );
-  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.items, {
+  const calculation = await calculateNewInvoiceDefaults(tx, business.id, order.branchId, actorUserId, order.items, {
     ...pricingOptions,
     adjustments: [...(pricingOptions.adjustments ?? []), ...automaticAdjustments],
     automaticAdjustmentIds: automaticAdjustments.map((selection) => selection.adjustmentId),
