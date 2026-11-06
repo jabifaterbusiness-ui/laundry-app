@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { prisma } from "../../lib/prisma.js";
 import { requireReason } from "../../lib/reason.js";
 import { hasPermission } from "../permissions/permissions.service.js";
 import {
@@ -166,6 +167,8 @@ export async function executeQuickOperation(
         context.businessId,
         context.branchId,
         parsed.customerId,
+        prisma,
+        context.userId,
       );
 
       await recordAuditEvent({
