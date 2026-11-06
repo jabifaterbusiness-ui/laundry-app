@@ -25,10 +25,30 @@ function calculateBalance(
 }
 
 /**
- * Customer accounts are business-wide by design. Every branch sees the
- * same balance and complete ledger; the branchId on each transaction records
- * where that transaction originated, not ownership of a separate account.
+ * A branch-level customer sharing rule can partition a customer's ledger.
+ * Existing and unconfigured rules remain SHARED for backward compatibility.
  */
+async function resolveCustomerAccountBranchId(input: {
+  businessId: string;
+  customerId: string;
+  ownerBranchId: string | null;
+  branchId: string;
+  db: CustomerAccountDb;
+}) {
+  if (!input.ownerBranchId || input.ownerBranchId === input.branchId) return null;
+  const share = await input.db.branchResourceShare.findFirst({
+    where: {
+      businessId: input.businessId,
+      ownerBranchId: input.ownerBranchId,
+      targetBranchId: input.branchId,
+      resourceType: "CUSTOMERS",
+      resourceId: null,
+      userId: null,
+    },
+    select: { customerAccountMode: true },
+  });
+  return share?.customerAccountMode === "SEPARATE" ? input.branchId : null;
+}
 export async function getOrCreateCustomerAccount(
   customerId: string,
   businessId: string,
@@ -68,7 +88,14 @@ export async function getOrCreateCustomerAccount(
     resourceId: customer.id,
   }, db);
 
-  const where = { businessId, customerId, branchId: null };
+  const accountBranchId = await resolveCustomerAccountBranchId({
+    businessId,
+    customerId,
+    ownerBranchId: customer.ownerBranchId,
+    branchId,
+    db,
+  });
+  const where = { businessId, customerId, branchId: accountBranchId };
   const include = {
     transactions: { orderBy: { createdAt: "asc" as const } },
   };
@@ -77,7 +104,7 @@ export async function getOrCreateCustomerAccount(
 
   try {
     return await db.customerAccount.create({
-      data: { businessId, customerId, branchId: null },
+      data: { businessId, customerId, branchId: accountBranchId },
       include,
     });
   } catch (error) {
@@ -121,18 +148,25 @@ export async function getCustomerAccount(
         { id: { in: customerScope.resourceIds } },
       ],
     },
-    select: { id: true },
+    select: { id: true, ownerBranchId: true },
   });
 
   if (!customer) {
     throw new AppError("Customer not found", 404);
   }
 
+  const accountBranchId = await resolveCustomerAccountBranchId({
+    businessId,
+    customerId,
+    ownerBranchId: customer.ownerBranchId,
+    branchId,
+    db: prisma,
+  });
   const account = await prisma.customerAccount.findFirst({
     where: {
       customerId,
       businessId,
-      branchId: null,
+      branchId: accountBranchId,
     },
     include: {
       transactions: {
@@ -146,7 +180,7 @@ export async function getCustomerAccount(
       id: null,
       customerId,
       businessId,
-      branchId: null,
+      branchId: accountBranchId,
       balance: 0,
       transactions: [],
     };
