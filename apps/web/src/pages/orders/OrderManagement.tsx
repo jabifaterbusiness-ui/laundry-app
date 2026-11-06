@@ -1314,6 +1314,7 @@ function OrderManagementContent({
                       </strong>
                       <div>Date/Time: {formatDate(entry.changedAt)}</div>
                       <div>Changed by: {entry.changedBy}</div>
+                       <div>Branch: {entry.branchName}</div>
                       <div>
                         <strong>Notifications:</strong>{" "}
                         {entry.notificationResults?.length
@@ -1343,6 +1344,7 @@ function OrderManagementContent({
                       <li key={entry.id}>
                         <strong>{entry.previousStatus ?? "Created"} → {entry.status}</strong>
                         <div>{entry.changedBy} · {formatDate(entry.changedAt)}</div>
+                         <div>Branch: {entry.branchName}</div>
                         <div>
                           <strong>Notifications:</strong>{" "}
                           {entry.notificationResults?.length
