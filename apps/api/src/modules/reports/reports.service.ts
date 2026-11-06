@@ -58,12 +58,27 @@ export async function getDashboardReport(
 ) {
   const dateWhere = buildDateWhere(range);
   const pickupDateWhere = buildDateWhere(range, "pickedUpAt");
-  const customerScope = await getBranchResourceScope({
-    businessId: scope.businessId,
-    branchId: scope.branchId,
-    userId: scope.userId,
-    resourceType: "CUSTOMERS",
-  });
+  const [customerScope, inventoryScope] = await Promise.all([
+    getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "CUSTOMERS",
+    }),
+    getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }),
+  ]);
+  const inventoryItemVisibility = {
+    OR: [
+      { ownerBranchId: null },
+      { ownerBranchId: { in: inventoryScope.ownerBranchIds } },
+      { id: { in: inventoryScope.resourceIds } },
+    ],
+  };
 
   const [
     ordersTotal,
@@ -117,6 +132,7 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         branchId: scope.branchId,
+        inventoryItem: { is: inventoryItemVisibility },
       },
     }),
 
@@ -124,6 +140,7 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         branchId: scope.branchId,
+        inventoryItem: { is: inventoryItemVisibility },
         ...dateWhere,
       },
     }),
