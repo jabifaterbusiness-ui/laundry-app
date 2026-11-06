@@ -370,8 +370,8 @@ async function getEditableCustomerAccountForBranch(
 }
 
 /**
- * Transfers the selected branch's orders and the customer's business-wide
- * account ledger. Customer visibility and edit access are checked for both
+ * Transfers the selected branch's orders and that branch's configured
+ * customer account ledger. Customer visibility and edit access are checked for both
  * customer records before the transfer begins.
  */
 export async function transferCustomer(
@@ -436,8 +436,8 @@ export async function transferCustomer(
 }
 
 /**
- * Merges order records in the selected branch and combines the customer's
- * business-wide account ledger. The source customer is deactivated only when
+ * Merges order records in the selected branch and combines only the
+ * customer account ledger configured for that branch. The source customer is deactivated only when
  * it is owned by this branch and no other branch still references or shares it.
  */
 export async function mergeCustomer(
