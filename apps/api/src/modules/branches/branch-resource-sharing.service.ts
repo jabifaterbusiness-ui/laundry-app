@@ -349,92 +349,101 @@ export async function saveBranchResourceShare(input: {
     }
   }
   const userId = input.userId ?? null;
-  const existing = await prisma.branchResourceShare.findFirst({
-    where: {
-      businessId: input.businessId,
-      ownerBranchId: input.ownerBranchId,
-      targetBranchId: input.targetBranchId,
-      resourceType: input.resourceType,
-      resourceId,
-      userId,
-    },
-    select: { id: true, customerAccountMode: true },
-  });
+  const userId = input.userId ?? null;
+  const result = await prisma.$transaction(async (tx) => {
+    await assertConfigurationInsideTransaction(tx);
 
-  const accountMode = requestedAccountMode ?? existing?.customerAccountMode ?? "SHARED";
-  const auditMetadata = {
-    ownerBranchId: input.ownerBranchId,
-    targetBranchId: input.targetBranchId,
-    resourceType: input.resourceType,
-    resourceId,
-    userId,
-    accessLevel: input.accessLevel,
-    customerAccountMode: accountMode,
-  };
-  if (existing) {
-    const oldMode = existing.customerAccountMode ?? "SHARED";
-    const updated = await prisma.$transaction(async (tx) => {
-      await assertConfigurationInsideTransaction(tx);
-      if (input.resourceType === "CUSTOMERS" && !resourceId && !userId && oldMode !== accountMode) {
-        await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
+    // Read the current rule inside the same Serializable transaction that
+    // chooses its account mode, reconciles ledgers, and writes the rule.
+    const existing = await tx.branchResourceShare.findFirst({
+      where: {
+        businessId: input.businessId,
+        ownerBranchId: input.ownerBranchId,
+        targetBranchId: input.targetBranchId,
+        resourceType: input.resourceType,
+        resourceId,
+        userId,
+      },
+      select: { id: true, customerAccountMode: true },
+    });
+
+    const accountMode = requestedAccountMode ?? existing?.customerAccountMode ?? "SHARED";
+    const oldMode = existing?.customerAccountMode ?? "SHARED";
+    const isBroadCustomerRule = input.resourceType === "CUSTOMERS" && !resourceId && !userId;
+
+    if (existing) {
+      if (isBroadCustomerRule && oldMode !== accountMode) {
+        await reconcileCustomerAccountMode(tx, {
+          businessId: input.businessId,
+          ownerBranchId: input.ownerBranchId,
+          targetBranchId: input.targetBranchId,
+          mode: accountMode,
+        });
       }
-      return tx.branchResourceShare.update({
-      where: { id: existing.id },
-      data: { accessLevel: input.accessLevel, customerAccountMode: accountMode, createdByUserId: input.createdByUserId },
+
+      const share = await tx.branchResourceShare.update({
+        where: { id: existing.id },
+        data: {
+          accessLevel: input.accessLevel,
+          customerAccountMode: accountMode,
+          createdByUserId: input.createdByUserId,
+        },
+        include: {
+          ownerBranch: { select: { id: true, name: true } },
+          targetBranch: { select: { id: true, name: true } },
+          user: { select: { id: true, fullName: true, email: true } },
+        },
+      });
+      return { share, accountMode, action: "branch.resource_share.updated" as const };
+    }
+
+    const share = await tx.branchResourceShare.create({
+      data: {
+        businessId: input.businessId,
+        ownerBranchId: input.ownerBranchId,
+        targetBranchId: input.targetBranchId,
+        resourceType: input.resourceType,
+        resourceId,
+        userId,
+        accessLevel: input.accessLevel,
+        customerAccountMode: accountMode,
+        createdByUserId: input.createdByUserId,
+      },
       include: {
         ownerBranch: { select: { id: true, name: true } },
         targetBranch: { select: { id: true, name: true } },
         user: { select: { id: true, fullName: true, email: true } },
       },
-      });
-    }, { isolationLevel: "Serializable" });
-    await recordAuditEvent({
-      action: "branch.resource_share.updated",
-      entityType: "BranchResourceShare",
-      entityId: updated.id,
-      businessId: input.businessId,
-      branchId: input.ownerBranchId,
-      actorUserId: input.createdByUserId,
-      metadata: auditMetadata,
     });
-    return updated;
-  }
+    if (isBroadCustomerRule) {
+      await reconcileCustomerAccountMode(tx, {
+        businessId: input.businessId,
+        ownerBranchId: input.ownerBranchId,
+        targetBranchId: input.targetBranchId,
+        mode: accountMode,
+      });
+    }
+    return { share, accountMode, action: "branch.resource_share.created" as const };
+  }, { isolationLevel: "Serializable" });
 
-  const created = await prisma.$transaction(async (tx) => {
-    await assertConfigurationInsideTransaction(tx);
-    const result = await tx.branchResourceShare.create({
-    data: {
-      businessId: input.businessId,
+  await recordAuditEvent({
+    action: result.action,
+    entityType: "BranchResourceShare",
+    entityId: result.share.id,
+    businessId: input.businessId,
+    branchId: input.ownerBranchId,
+    actorUserId: input.createdByUserId,
+    metadata: {
       ownerBranchId: input.ownerBranchId,
       targetBranchId: input.targetBranchId,
       resourceType: input.resourceType,
       resourceId,
       userId,
       accessLevel: input.accessLevel,
-      customerAccountMode: accountMode,
-      createdByUserId: input.createdByUserId,
+      customerAccountMode: result.accountMode,
     },
-    include: {
-      ownerBranch: { select: { id: true, name: true } },
-      targetBranch: { select: { id: true, name: true } },
-      user: { select: { id: true, fullName: true, email: true } },
-    },
-    });
-    if (input.resourceType === "CUSTOMERS" && !resourceId && !userId) {
-      await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
-    }
-    return result;
-  }, { isolationLevel: "Serializable" });
-  await recordAuditEvent({
-    action: "branch.resource_share.created",
-    entityType: "BranchResourceShare",
-    entityId: created.id,
-    businessId: input.businessId,
-    branchId: input.ownerBranchId,
-    actorUserId: input.createdByUserId,
-    metadata: auditMetadata,
   });
-  return created;
+  return result.share;
 }
 
 export async function deleteBranchResourceShare(input: { businessId: string; id: string; actorUserId: string }) {
