@@ -188,20 +188,22 @@ export async function updateStatus(req: Request, res: Response) {
     input.status,
   );
 
-  await recordAuditEvent({
-    action: "order.status_updated",
-    entityType: "Order",
-    entityId: order.id,
-    businessId,
-    branchId,
-    actorUserId: req.user!.id,
-    correlationId: req.correlationId ?? null,
-    metadata: {
-      orderNumber: order.orderNumber,
-      previousStatus: previousOrder.status,
-      status: order.status,
-    },
-  });
+  if (previousOrder.status !== order.status) {
+    await recordAuditEvent({
+      action: "order.status_updated",
+      entityType: "Order",
+      entityId: order.id,
+      businessId,
+      branchId,
+      actorUserId: req.user!.id,
+      correlationId: req.correlationId ?? null,
+      metadata: {
+        orderNumber: order.orderNumber,
+        previousStatus: previousOrder.status,
+        status: order.status,
+      },
+    });
+  }
 
   res.status(200).json(order);
 }
