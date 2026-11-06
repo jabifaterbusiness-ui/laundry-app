@@ -106,6 +106,46 @@ describe("ServicesPage", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
+  it("paginates large discount and tax rule lists independently", async () => {
+    apiMocks.listPricingRules.mockImplementation(async (
+      _auth,
+      _customerId,
+      _purpose,
+      pagination,
+    ) => ({
+      adjustments: [],
+      taxes: [],
+      pagination: {
+        pageSize: 50,
+        adjustments: {
+          page: pagination?.adjustmentPage ?? 1,
+          total: 75,
+          totalPages: 2,
+        },
+        taxes: {
+          page: pagination?.taxPage ?? 1,
+          total: 0,
+          totalPages: 1,
+        },
+      },
+    }));
+
+    renderPage();
+
+    expect(await screen.findByText(/Page 1 of 2/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Next" })[0]!);
+
+    await waitFor(() => {
+      expect(apiMocks.listPricingRules).toHaveBeenLastCalledWith(
+        { accessToken: "test-token" },
+        undefined,
+        "management",
+        { adjustmentPage: 2, taxPage: 1, pageSize: 50 },
+      );
+    });
+    expect(await screen.findByText(/Page 2 of 2/)).toBeInTheDocument();
+  });
+
   it("creates a new service", async () => {
     renderPage();
 
