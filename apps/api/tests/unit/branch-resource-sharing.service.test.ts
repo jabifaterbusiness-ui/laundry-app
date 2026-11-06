@@ -233,6 +233,22 @@ describe("branch resource sharing authorization", () => {
       actorUserId: "actor-1",
     });
 
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(shareFindFirst).toHaveBeenCalledWith({
+      where: { id: "share-1", businessId: "business-a" },
+      select: {
+        id: true,
+        ownerBranchId: true,
+        targetBranchId: true,
+        resourceType: true,
+        resourceId: true,
+        userId: true,
+        accessLevel: true,
+        customerAccountMode: true,
+      },
+    });
     expect(shareDelete).toHaveBeenCalledWith({ where: { id: "share-1" } });
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
       action: "branch.resource_share.deleted",
