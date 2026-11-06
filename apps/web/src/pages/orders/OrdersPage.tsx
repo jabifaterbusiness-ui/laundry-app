@@ -266,7 +266,7 @@ export function OrdersPage() {
     queryKey: ["customer", activeBranchId, customerIdFromUrl],
     queryFn: () =>
       getCustomer(customerIdFromUrl!, { accessToken }),
-    enabled: Boolean(accessToken && customerIdFromUrl),
+    enabled: Boolean(accessToken && activeBranchId && customerIdFromUrl),
   });
 
   const servicesQuery = useQuery({
@@ -278,7 +278,7 @@ export function OrdersPage() {
         },
         { accessToken },
       ),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && activeBranchId),
   });
 
   const pricingRulesQuery = useQuery({
@@ -615,7 +615,7 @@ export function OrdersPage() {
   const customerPricesQuery = useQuery({
     queryKey: ["customer-service-prices", activeBranchId, formCustomerId, "order-form"],
     queryFn: () => listCustomerServicePrices(formCustomerId, { accessToken }),
-    enabled: Boolean(accessToken && formCustomerId && activeWorkspace?.mode !== "edit"),
+    enabled: Boolean(accessToken && activeBranchId && formCustomerId && activeWorkspace?.mode !== "edit"),
   });
   const customerPriceMap = useMemo(
     () => new Map((customerPricesQuery.data?.data ?? []).map((entry) => [entry.serviceId, entry.unitPrice])),
@@ -1492,7 +1492,7 @@ export function OrdersPage() {
                   <div aria-label="Automatic customer discounts" style={{ display: "grid", gap: 6, marginBottom: 12 }}>
                     <h4 style={{ margin: 0 }}>Automatic customer discounts</h4>
                     <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>
-                      Eligible customer, group and promotion discounts are applied automatically. Staff do not need to select them.
+                      Eligible customer, group and promotion discounts are applied automatically when their service conditions match. Staff do not need to select them.
                     </p>
                     {automaticDiscountRules.map((rule) => (
                       <div key={rule.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
