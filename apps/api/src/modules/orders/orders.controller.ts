@@ -49,6 +49,7 @@ export async function create(req: Request, res: Response) {
   const order = await createOrder({
     businessId,
     branchId,
+    actorUserId: req.user!.id,
     customerId: input.customerId,
     items: input.items,
     ...(input.adjustments !== undefined ? {
