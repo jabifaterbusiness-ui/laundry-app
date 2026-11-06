@@ -14,6 +14,7 @@ export interface CreateOrderItemData {
 export interface CreateOrderData {
   businessId: string;
   branchId: string;
+  actorUserId?: string;
   customerId: string;
   items: CreateOrderItemData[];
   garmentNote?: string;
@@ -247,7 +248,11 @@ async function createOrderWithTx(
       order,
       business,
       business.defaultCustomerAgreement,
-      { adjustments: data.adjustments ?? [], taxRuleIds: data.taxRuleIds ?? [] },
+      {
+        adjustments: data.adjustments ?? [],
+        taxRuleIds: data.taxRuleIds ?? [],
+        actorUserId: data.actorUserId,
+      },
     );
 
     // Keep the order's displayed total aligned with the issued invoice total
