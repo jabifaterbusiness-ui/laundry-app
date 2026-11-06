@@ -8,7 +8,7 @@ import {
 import {
   createAnnouncement, deleteCustomerGroup, getUnpickedOrderReminderConfig, listCommunicationDeliveries, listCustomerGroups, listOrderStatusRules,
   listUnpickedOrders, removeOrderStatusRule, saveOrderStatusRule,
-  saveUnpickedOrderReminderConfig, saveCustomerGroup, updateCustomerGroup, sendUnpickedReminders,
+  saveUnpickedOrderReminderConfig, saveCustomerGroup, updateCustomerGroup, sendUnpickedReminders, retryWhatsAppDelivery,
 } from "./communications.service.js";
 function requireBranchId(req: Request): string {
   if (!req.branchId) throw new AppError("This action requires an active branch", 403);
@@ -106,4 +106,27 @@ export async function getDeliveries(req: Request, res: Response) {
   res.status(200).json({
     data: await listCommunicationDeliveries(requireBusinessId(req), requireBranchId(req)),
   });
+}
+
+
+export async function retryWhatsAppDeliveryController(req: Request, res: Response) {
+  const { id } = statusRuleIdSchema.parse(req.params);
+  const business = requireBusinessId(req);
+  const branch = requireBranchId(req);
+  const result = await retryWhatsAppDelivery(id, business, branch);
+  await recordAuditEvent({
+    action: "communications.whatsapp_delivery_retried",
+    entityType: "CommunicationDelivery",
+    entityId: result.deliveryId ?? id,
+    businessId: business,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      sourceDeliveryId: id,
+      retryDeliveryId: result.deliveryId ?? null,
+      retryAttempt: result.retryAttempt ?? null,
+      status: result.status,
+    },
+  });
+  res.status(200).json(result);
 }
