@@ -28,6 +28,15 @@ vi.mock("../../../src/lib/prisma.js", () => ({
   },
 }));
 
+vi.mock("../../../src/modules/branches/branch-resource-scope.service.js", () => ({
+  getBranchResourceScope: vi.fn(async ({ branchId }: { branchId: string }) => ({
+    ownerBranchIds: [branchId],
+    resourceIds: [],
+    editableOwnerBranchIds: [branchId],
+    editableResourceIds: [],
+  })),
+}));
+
 import { getDashboardReport } from "../../../src/modules/reports/reports.service.js";
 
 describe("reports.service", () => {
