@@ -152,6 +152,8 @@ export async function transfer(req: Request, res: Response) {
     businessId,
     branchId,
     input.customerId,
+    prisma,
+    req.user!.id,
   );
 
   await recordAuditEvent({
