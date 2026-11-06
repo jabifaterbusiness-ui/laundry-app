@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
-import { calculateInvoice } from "./invoice-calculator.js";
+import { calculateInvoice, type TaxRule } from "./invoice-calculator.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -155,7 +155,7 @@ export async function updateInvoiceFinancialRules(input: {
     });
 
     const taxRuleMap = new Map(taxRules.map((rule) => [rule.id, rule]));
-    const calculationTaxes = taxIds.map((id) => {
+    const calculationTaxes: TaxRule[] = taxIds.map((id) => {
       const rule = taxRuleMap.get(id);
       const snapshot = existingTaxSnapshots.get(id);
       if (!rule && !snapshot) {
