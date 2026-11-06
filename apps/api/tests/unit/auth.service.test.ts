@@ -52,6 +52,7 @@ describe("refresh token rotation", () => {
     prismaMock.refreshToken.findUnique.mockResolvedValue({
       id: "refresh-token-1",
       revokedAt: null,
+      sessionId: "session-1",
       expiresAt: new Date(Date.now() + 60_000),
       user,
     });
@@ -68,6 +69,7 @@ describe("refresh token rotation", () => {
     const createCall = prismaMock.refreshToken.create.mock.calls[0]?.[0];
     expect(createCall.data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(createCall.data.tokenHash).not.toBe(tokens.refreshToken);
+    expect(createCall.data.sessionId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(createCall.data.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60 * 1000);
     expect(createCall.data.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 7 * 24 * 60 * 60 * 1000 + 1000);
   });
@@ -109,6 +111,7 @@ describe("refresh token revocation", () => {
     );
     prismaMock.refreshToken.findUnique.mockResolvedValue({
       id: "refresh-token-1",
+      sessionId: "session-1",
       revokedAt: null,
       user: owner,
     });
@@ -119,7 +122,7 @@ describe("refresh token revocation", () => {
     await expect(revokeRefreshToken("raw-refresh-token")).resolves.toEqual(owner);
 
     expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { id: "refresh-token-1", revokedAt: null },
+      where: { sessionId: "session-1", revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
   });
