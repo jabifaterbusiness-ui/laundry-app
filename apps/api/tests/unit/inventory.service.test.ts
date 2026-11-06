@@ -1682,6 +1682,25 @@ describe("updateInventoryItem", () => {
     });
   });
 
+    it("rechecks shared inventory EDIT access inside a serializable update transaction", async () => {
+      prismaMock.branchResourceShare.findMany.mockResolvedValueOnce([{
+        ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ",
+      }] as never);
+      prismaMock.inventoryItem.findFirst.mockResolvedValueOnce({
+        id: "item-shared", businessId: "biz-A", ownerBranchId: "branch-B", name: "Detergent",
+      } as never);
+      prismaMock.branchResourceShare.findFirst.mockResolvedValueOnce(null);
+
+      await expect(updateInventoryItem({
+        businessId: "biz-A", branchId: "branch-A", userId: "user-A",
+      }, "item-shared", { name: "Changed detergent" })).rejects.toThrow("not shared with edit access");
+
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: "Serializable",
+      });
+      expect(prismaMock.inventoryItem.updateMany).not.toHaveBeenCalled();
+    });
+
     it("maps a duplicate SKU constraint to a conflict when updating an inventory item", async () => {
       prismaMock.inventoryItem.findFirst.mockResolvedValueOnce({
         id: "item-1",
