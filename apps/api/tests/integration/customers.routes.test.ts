@@ -139,11 +139,11 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
 
-  userBranchFindUnique.mockImplementation(async ({ where }: any) => {
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
     const { userId, branchId } = where.userId_branchId;
     const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
     return { userId, branchId, branch: { id: branchId, businessId } } as never;
-  });
+  }) as never);
 
   sensitiveAuthorizationFindUnique.mockResolvedValue({
     id: "sensitive-auth-1",
