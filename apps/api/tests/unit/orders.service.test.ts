@@ -415,6 +415,7 @@ describe("createOrder", () => {
         {
           serviceId: SERVICE_AGBADA,
           quantity: 2,
+          colors: ["White", "Blue"],
         },
       ],
     });
@@ -432,6 +433,7 @@ describe("createOrder", () => {
                 totalPieces: 6,
                 unitPrice: 4500,
                 lineTotal: 9000,
+                colors: ["White", "Blue"],
               }),
             ],
           },
