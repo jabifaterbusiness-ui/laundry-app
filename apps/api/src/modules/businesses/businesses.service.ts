@@ -138,10 +138,18 @@ export async function updateBusinessSecuritySettings(
   businessId: string,
   data: { sessionInactivityTimeoutMinutes: number },
 ) {
-  const result = await prisma.business.updateMany({
-    where: { id: businessId },
-    data: { sessionInactivityTimeoutMinutes: data.sessionInactivityTimeoutMinutes },
-  });
-  if (result.count === 0) throw new AppError("Business not found", 404);
+  const current = await getBusinessSecuritySettings(businessId);
+  if (current.sessionInactivityTimeoutMinutes !== data.sessionInactivityTimeoutMinutes) {
+    await prisma.$transaction([
+      prisma.business.updateMany({
+        where: { id: businessId },
+        data: { sessionInactivityTimeoutMinutes: data.sessionInactivityTimeoutMinutes },
+      }),
+      prisma.sensitiveAuthorization.updateMany({
+        where: { businessId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
   return getBusinessSecuritySettings(businessId);
 }
