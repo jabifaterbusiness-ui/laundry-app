@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type CustomerAccountDb = typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 

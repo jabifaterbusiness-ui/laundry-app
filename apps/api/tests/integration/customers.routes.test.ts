@@ -56,7 +56,6 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerAccount: {
       findFirst: vi.fn(),
       create: vi.fn(),
-      upsert: vi.fn(),
     },
     customerAccountTransaction: {
       create: vi.fn(),
@@ -90,7 +89,6 @@ const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
 const customerAccountCreate = vi.mocked(prisma.customerAccount.create);
-const customerAccountUpsert = vi.mocked(prisma.customerAccount.upsert);
 const customerAccountTransactionCreate = vi.mocked(
   prisma.customerAccountTransaction.create,
 );
