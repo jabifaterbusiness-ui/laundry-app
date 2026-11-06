@@ -42,6 +42,8 @@ describe("resolveAutomaticDiscountSelections", () => {
     const result = await resolveAutomaticDiscountSelections(
       tx,
       "business-1",
+      "branch-1",
+      "user-1",
       "customer-1",
       [{ serviceId: "service-1" }, { serviceId: "service-2" }],
       [],
@@ -79,6 +81,8 @@ describe("resolveAutomaticDiscountSelections", () => {
     const result = await resolveAutomaticDiscountSelections(
       tx,
       "business-1",
+      "branch-1",
+      "user-1",
       "customer-1",
       [{ serviceId: "service-1" }],
       [],
@@ -101,6 +105,8 @@ describe("resolveAutomaticDiscountSelections", () => {
     const result = await resolveAutomaticDiscountSelections(
       tx,
       "business-1",
+      "branch-1",
+      "user-1",
       "customer-1",
       [{ serviceId: "service-1" }],
       [{ adjustmentId: "manual-adjustment", scope: "INVOICE" }],
@@ -152,6 +158,8 @@ describe("resolveAutomaticDiscountSelections", () => {
     const result = await resolveAutomaticDiscountSelections(
       tx,
       "business-1",
+      "branch-1",
+      "user-1",
       "customer-1",
       [{ serviceId: "service-1" }],
       [{ adjustmentId: "manual-surcharge", scope: "INVOICE" }],
@@ -174,6 +182,8 @@ describe("resolveAutomaticDiscountSelections", () => {
     const result = await resolveAutomaticDiscountSelections(
       tx,
       "business-1",
+      "branch-1",
+      "user-1",
       "customer-1",
       [{ serviceId: "service-1" }],
       [],
