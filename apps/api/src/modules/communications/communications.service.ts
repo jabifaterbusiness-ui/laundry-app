@@ -8,6 +8,32 @@ import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.
 import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
+type WhatsAppRetryPayload = {
+  subject: string;
+  body: string;
+  whatsappTemplateName: string | null;
+  whatsappTemplateLanguage: string | null;
+  whatsappTemplateVariables: string[];
+  whatsappTemplateCategory: "UTILITY" | "MARKETING" | null;
+};
+
+function getWhatsAppRetryPayload(input: {
+  subject: string;
+  body: string;
+  whatsappTemplateName?: string | null;
+  whatsappTemplateLanguage?: string | null;
+  whatsappTemplateVariables?: string[];
+  whatsappTemplateCategory?: "UTILITY" | "MARKETING";
+}): WhatsAppRetryPayload {
+  return {
+    subject: input.subject,
+    body: input.body,
+    whatsappTemplateName: input.whatsappTemplateName ?? null,
+    whatsappTemplateLanguage: input.whatsappTemplateLanguage ?? null,
+    whatsappTemplateVariables: input.whatsappTemplateVariables ?? [],
+    whatsappTemplateCategory: input.whatsappTemplateCategory ?? null,
+  };
+}
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
 
 async function ensureDefaultReadyRule(businessId: string) {
@@ -31,6 +57,7 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 async function recordMissingDestination(input: {
   businessId: string; customerId: string; orderId?: string; campaignId?: string;
   channel: Channel; messageType: string; dedupeKey: string; reason: string;
+  retryOfId?: string; retryAttempt?: number; retryPayload?: WhatsAppRetryPayload;
 }) {
   try {
     const delivery = await prisma.communicationDelivery.create({
@@ -40,6 +67,9 @@ async function recordMissingDestination(input: {
         channel: input.channel, messageType: input.messageType,
         destination: "", status: "FAILED", errorMessage: input.reason,
         dedupeKey: input.dedupeKey,
+        ...(input.retryOfId ? { retryOfId: input.retryOfId } : {}),
+        ...(input.retryAttempt !== undefined ? { retryAttempt: input.retryAttempt } : {}),
+        ...(input.retryPayload ? { retryPayload: input.retryPayload } : {}),
       },
     });
     return { status: "FAILED" as const, deliveryId: delivery.id, error: input.reason };
@@ -55,6 +85,7 @@ async function deliverMessage(input: {
   body: string; dedupeKey: string;
   whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
   whatsappTemplateVariables?: string[]; whatsappTemplateCategory?: "UTILITY" | "MARKETING";
+  retryOfId?: string; retryAttempt?: number;
 }) {
   if (input.channel === "WHATSAPP") {
     const customer = await prisma.customer.findFirst({
@@ -67,6 +98,9 @@ async function deliverMessage(input: {
         ...(input.orderId ? { orderId: input.orderId } : {}),
         ...(input.campaignId ? { campaignId: input.campaignId } : {}),
         channel: input.channel, messageType: input.messageType, dedupeKey: input.dedupeKey,
+        ...(input.retryOfId ? { retryOfId: input.retryOfId } : {}),
+        ...(input.retryAttempt !== undefined ? { retryAttempt: input.retryAttempt } : {}),
+        retryPayload: getWhatsAppRetryPayload(input),
         reason: "Customer has not explicitly opted in to WhatsApp messages. Record consent before sending business-initiated messages.",
       });
     }
@@ -80,6 +114,9 @@ async function deliverMessage(input: {
         channel: input.channel, messageType: input.messageType,
         destination: input.destination, dedupeKey: input.dedupeKey,
         status: "PENDING",
+        ...(input.retryOfId ? { retryOfId: input.retryOfId } : {}),
+        ...(input.retryAttempt !== undefined ? { retryAttempt: input.retryAttempt } : {}),
+        ...(input.channel === "WHATSAPP" ? { retryPayload: getWhatsAppRetryPayload(input) } : {}),
       },
     });
   } catch (error) {
