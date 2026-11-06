@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    $transaction: vi.fn(),
     branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     service: {
       findMany: vi.fn(),
@@ -29,6 +30,9 @@ const updateMany = vi.mocked(prisma.service.updateMany);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.$transaction).mockImplementation(
+    async (callback) => callback(prisma as never) as never,
+  );
 });
 
 describe("listServices", () => {
@@ -200,6 +204,7 @@ describe("updateService", () => {
       { name: "Premium Shirt" },
     );
 
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
     expect(updateMany).toHaveBeenCalledWith({
       where: {
         id: "service-1",
@@ -310,6 +315,7 @@ describe("setServiceActiveStatus", () => {
       false,
     );
 
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
     expect(updateMany).toHaveBeenCalledWith({
       where: {
         id: "service-1",
