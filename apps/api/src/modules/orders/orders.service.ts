@@ -522,20 +522,71 @@ async function transferOrderWithTx(
 }
 
 
+export interface OrderStatusHistoryContext {
+  actorUserId: string;
+  correlationId?: string | null;
+}
+
 export async function updateOrderStatus(
   id: string,
   businessId: string,
   branchId: string,
   status: OrderStatus,
   db: OrderDb = prisma,
+  history?: OrderStatusHistoryContext,
 ) {
-  return updateOrderStatusWithDb(
-    db,
-    id,
-    businessId,
-    branchId,
-    status,
-  );
+  if (db === prisma && history) {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findFirst({
+        where: { id, businessId, branchId },
+        select: { id: true, status: true },
+      });
+      if (!existing) throw new AppError("Order not found", 404);
+
+      const updated = await updateOrderStatusWithDb(
+        tx, id, businessId, branchId, status,
+      );
+
+      if (existing.status !== status) {
+        await tx.auditLog.create({
+          data: {
+            action: "order.status_updated",
+            entityType: "Order",
+            entityId: updated.id,
+            businessId,
+            branchId,
+            actorUserId: history.actorUserId,
+            correlationId: history.correlationId ?? null,
+            metadata: {
+              orderNumber: updated.orderNumber,
+              previousStatus: existing.status,
+              status: updated.status,
+            },
+          },
+        });
+      }
+      return { updated, changed: existing.status !== status };
+    }, { isolationLevel: "Serializable" });
+
+    if (!result.changed) return result.updated;
+
+    let notificationResults: Awaited<ReturnType<typeof notifyOrderStatus>> = [];
+    let notificationError: string | undefined;
+    try {
+      notificationResults = await notifyOrderStatus({
+        orderId: id, businessId, branchId, status,
+      });
+    } catch {
+      notificationError = "Notification processing failed. Check Delivery History for details.";
+    }
+    return {
+      ...result.updated,
+      notificationResults,
+      ...(notificationError ? { notificationError } : {}),
+    };
+  }
+
+  return updateOrderStatusWithDb(db, id, businessId, branchId, status);
 }
 
 async function updateOrderStatusWithDb(
