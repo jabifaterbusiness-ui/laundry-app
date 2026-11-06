@@ -342,13 +342,29 @@ async function getEditableCustomerForBranch(
 
 async function getEditableCustomerAccountForBranch(
   tx: CustomerDb,
-  customerId: string,
+  customer: { id: string; ownerBranchId: string | null },
   businessId: string,
+  branchId: string,
 ) {
-  // Customer account balances and ledgers are shared business-wide. The
-  // branch ID belongs to each ledger transaction, not to the account.
+  // Separate-account mode is configured by an all-customer share from the
+  // owning branch to this branch. Individual customer shares and legacy
+  // business-wide customers continue to use the shared ledger.
+  const sharingRule = customer.ownerBranchId && customer.ownerBranchId !== branchId
+    ? await tx.branchResourceShare.findFirst({
+        where: {
+          businessId,
+          ownerBranchId: customer.ownerBranchId,
+          targetBranchId: branchId,
+          resourceType: "CUSTOMERS",
+          resourceId: null,
+          userId: null,
+        },
+        select: { customerAccountMode: true },
+      })
+    : null;
+  const accountBranchId = sharingRule?.customerAccountMode === "SEPARATE" ? branchId : null;
   return tx.customerAccount.findFirst({
-    where: { customerId, businessId, branchId: null },
+    where: { customerId: customer.id, businessId, branchId: accountBranchId },
     select: { id: true, branchId: true },
   });
 }
@@ -389,10 +405,10 @@ export async function transferCustomer(
     }
 
     const sourceAccount = await getEditableCustomerAccountForBranch(
-      tx, customer.id, businessId,
+      tx, customer, businessId, branchId,
     );
     const targetAccount = await getEditableCustomerAccountForBranch(
-      tx, targetCustomer.id, businessId,
+      tx, targetCustomer, businessId, branchId,
     );
     if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be transferred together", 409);
@@ -455,10 +471,10 @@ export async function mergeCustomer(
     }
 
     const sourceAccount = await getEditableCustomerAccountForBranch(
-      tx, customer.id, businessId,
+      tx, customer, businessId, branchId,
     );
     const targetAccount = await getEditableCustomerAccountForBranch(
-      tx, targetCustomer.id, businessId,
+      tx, targetCustomer, businessId, branchId,
     );
     if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be merged together", 409);
