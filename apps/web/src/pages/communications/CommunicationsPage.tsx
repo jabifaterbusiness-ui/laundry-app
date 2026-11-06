@@ -71,8 +71,9 @@ export function CommunicationsPage() {
     queryFn: () => listStatusRules({ accessToken }),
   });
   const deliveriesQuery = useQuery({
-    queryKey: ["communications", "deliveries"],
-    queryFn: () => listCommunicationDeliveries({ accessToken }),
+    queryKey: ["communications", "deliveries", activeBranchId],
+    queryFn: () => listCommunicationDeliveries({ accessToken, branchId: activeBranchId }),
+    enabled: Boolean(accessToken && activeBranchId),
   });
   useEffect(() => {
     const rule = rulesQuery.data?.data.find((item) => item.status === status);
@@ -336,7 +337,8 @@ export function CommunicationsPage() {
 
       <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16 }}>
         <h2>Delivery history</h2>
-        <p>Most recent 200 communication attempts across announcements, order updates and pickup reminders.</p>
+        <p>Most recent 200 communication attempts for the selected branch. Business-wide announcement deliveries remain visible across branches.</p>
+        {!activeBranchId && <p role="status">Select an active branch to view delivery history.</p>}
         {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
         {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
           <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
