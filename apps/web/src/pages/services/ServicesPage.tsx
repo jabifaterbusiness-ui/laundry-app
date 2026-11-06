@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -16,6 +17,8 @@ import {
   type Service,
 } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { hasPermission } from "../../lib/permissions.js";
+import { listBranches } from "../../lib/users-api.js";
 import { listCustomers } from "../../lib/customers-api.js";
 import { listCustomerGroups } from "../../lib/communications-api.js";
 import { TableExportActions } from "../../components/exports/TableExportActions.js";
@@ -27,12 +30,18 @@ const EMPTY_FORM: CreateServiceInput = {
 };
 
 export function ServicesPage() {
+  const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const activeBranchId = useAuthStore((s) => s.activeBranchId);
+  const user = useAuthStore((s) => s.user);
+  const setActiveBranch = useAuthStore((s) => s.setActiveBranch);
+  const canManageBranchSharing = hasPermission(user, "branches.update");
   const queryClient = useQueryClient();
 
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
   const [search, setSearch] = useState("");
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editorBranchId, setEditorBranchId] = useState(activeBranchId ?? "");
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CreateServiceInput>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
@@ -126,8 +135,14 @@ export function ServicesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
   });
 
+  const branchesQuery = useQuery({
+    queryKey: ["branches", "service-owner-options"],
+    queryFn: () => listBranches(accessToken!),
+    enabled: Boolean(accessToken && canManageBranchSharing),
+  });
+
   const servicesQuery = useQuery({
-    queryKey: ["services", { status, search }],
+    queryKey: ["services", activeBranchId, { status, search }],
     queryFn: () =>
       listServices(
         {
@@ -144,9 +159,12 @@ export function ServicesPage() {
         return updateService(editingService.id, input, { accessToken });
       }
 
-      return createService(input, { accessToken });
+      return createService(input, { accessToken, branchId: editorBranchId });
     },
     onSuccess: () => {
+      if (!editingService && editorBranchId && editorBranchId !== activeBranchId) {
+        setActiveBranch(editorBranchId);
+      }
       queryClient.invalidateQueries({ queryKey: ["services"] });
       closeForm();
     },
@@ -176,6 +194,7 @@ export function ServicesPage() {
 
   function openCreate() {
     setEditingService(null);
+    setEditorBranchId(activeBranchId ?? "");
     setForm(EMPTY_FORM);
     setFormError(null);
     setFormOpen(true);
@@ -183,6 +202,7 @@ export function ServicesPage() {
 
   function openEdit(service: Service) {
     setEditingService(service);
+    setEditorBranchId(service.ownerBranchId ?? activeBranchId ?? "");
     setForm({
       name: service.name,
       pieces: service.pieces,
@@ -208,6 +228,10 @@ export function ServicesPage() {
 
     if (!Number.isInteger(form.unitPrice) || form.unitPrice < 0) {
       setFormError("Unit price must be zero or greater.");
+      return;
+    }
+    if (!editingService && !editorBranchId) {
+      setFormError("Select the branch that will own this service.");
       return;
     }
 
@@ -397,6 +421,7 @@ export function ServicesPage() {
               <th>Item</th>
               <th>PCS</th>
               <th>Unit Price</th>
+              <th>Owning Branch</th>
               <th>Status</th>
               <th aria-label="Actions" />
             </tr>
@@ -415,8 +440,17 @@ export function ServicesPage() {
                 </td>
                 <td>{service.pieces}</td>
                 <td>₦{service.unitPrice.toLocaleString()}</td>
+                <td>{service.ownerBranch?.name ?? (service.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy")}</td>
                 <td>{service.isActive ? "Active" : "Inactive"}</td>
                 <td>
+                  {canManageBranchSharing && service.ownerBranchId && (user?.securityRole === "BUSINESS_OWNER" || service.ownerBranchId === activeBranchId) && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(service.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(service.id)}`)}
+                    >
+                      Manage sharing
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={statusMutation.isPending}
@@ -441,6 +475,30 @@ export function ServicesPage() {
           <h2>{editingService ? "Edit service" : "New service"}</h2>
 
           <form onSubmit={handleSubmit}>
+            {editingService ? (
+              <div style={{ marginBottom: 12 }}>
+                <p><strong>Owning branch:</strong> {editingService.ownerBranch?.name ?? (editingService.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy")}</p>
+                {canManageBranchSharing && editingService.ownerBranchId && (user?.securityRole === "BUSINESS_OWNER" || editingService.ownerBranchId === activeBranchId) && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(editingService.ownerBranchId!)}&resourceType=SERVICES&resourceId=${encodeURIComponent(editingService.id)}`)}
+                  >
+                    Manage branch sharing
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label>
+                  Owning branch
+                  <select value={editorBranchId} onChange={(event) => setEditorBranchId(event.target.value)} disabled={branchesQuery.isLoading}>
+                    {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                    {!(branchesQuery.data ?? []).length && activeBranchId && <option value={activeBranchId}>Current branch</option>}
+                  </select>
+                </label>
+                <p><small>New services belong to this branch. Share access is configured separately.</small></p>
+              </div>
+            )}
             <div>
               <label>
                 Item

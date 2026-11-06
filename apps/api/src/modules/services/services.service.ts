@@ -48,6 +48,7 @@ export async function listServices(params: ListServicesParams) {
   return prisma.service.findMany({
     where,
     orderBy: { name: "asc" },
+    include: { ownerBranch: { select: { id: true, name: true } } },
   });
 }
 
@@ -60,6 +61,7 @@ export async function getServiceForBusiness(
   const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "SERVICES" });
   return prisma.service.findFirst({
     where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+    include: { ownerBranch: { select: { id: true, name: true } } },
   });
 }
 
@@ -72,6 +74,7 @@ export async function createService(data: CreateServiceData) {
       pieces: data.pieces,
       unitPrice: data.unitPrice,
     },
+    include: { ownerBranch: { select: { id: true, name: true } } },
   });
 }
 

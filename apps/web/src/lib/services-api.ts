@@ -3,6 +3,8 @@ import { apiFetch } from "./api-client.js";
 export interface Service {
   id: string;
   businessId: string;
+  ownerBranchId?: string | null;
+  ownerBranch?: { id: string; name: string } | null;
   name: string;
   pieces: number;
   unitPrice: number;
@@ -55,11 +57,12 @@ export async function getService(
 
 export async function createService(
   input: CreateServiceInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
 ): Promise<Service> {
   return apiFetch<Service>("/services", {
     method: "POST",
     accessToken: auth.accessToken,
+    branchId: auth.branchId,
     body: JSON.stringify(input),
   });
 }
@@ -116,7 +119,12 @@ export interface PricingRulesResponse {
   taxes: TaxRuleSetting[];
 }
 export interface CustomerServicePrice {
-  id: string; customerId: string; serviceId: string; unitPrice: number;
+  id: string;
+  customerId: string;
+  serviceId: string;
+  branchId?: string | null;
+  branch?: { id: string; name: string } | null;
+  unitPrice: number;
   service: Pick<Service, "id" | "name" | "pieces" | "unitPrice" | "isActive">;
 }
 export async function listPricingRules(auth: { accessToken: string | null }): Promise<PricingRulesResponse> {

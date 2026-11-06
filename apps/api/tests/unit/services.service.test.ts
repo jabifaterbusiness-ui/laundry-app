@@ -49,6 +49,7 @@ describe("listServices", () => {
         isActive: true,
       },
       orderBy: { name: "asc" },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -69,6 +70,7 @@ describe("listServices", () => {
         isActive: false,
       },
       orderBy: { name: "asc" },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -88,6 +90,7 @@ describe("listServices", () => {
         OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       orderBy: { name: "asc" },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -113,6 +116,7 @@ describe("listServices", () => {
         },
       },
       orderBy: { name: "asc" },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 });
@@ -129,6 +133,7 @@ describe("getServiceForBusiness", () => {
         businessId: "biz-1",
         OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -173,6 +178,7 @@ describe("createService", () => {
         pieces: 1,
         unitPrice: 500,
       },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 });

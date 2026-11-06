@@ -22,7 +22,10 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
   if (!customer) throw new AppError("Customer not found", 404);
   return prisma.customerServicePrice.findMany({
     where: { businessId, customerId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
-    include: { service: { select: { id: true, name: true, pieces: true, unitPrice: true, isActive: true } } },
+    include: {
+      service: { select: { id: true, name: true, pieces: true, unitPrice: true, isActive: true } },
+      branch: { select: { id: true, name: true } },
+    },
     orderBy: { service: { name: "asc" } },
   });
 }
@@ -87,7 +90,10 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
       unitPrice: input.unitPrice,
     },
     update: { unitPrice: input.unitPrice },
-    include: { service: { select: { id: true, name: true, pieces: true, unitPrice: true } } },
+    include: {
+      service: { select: { id: true, name: true, pieces: true, unitPrice: true } },
+      branch: { select: { id: true, name: true } },
+    },
   });
 }
 
