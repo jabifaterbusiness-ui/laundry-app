@@ -23,6 +23,8 @@ export interface OrderStatusHistoryEntry {
   status: string;
   changedAt: string;
   changedBy: string;
+  notificationResults?: Array<{ channel: string; status: string; deliveryId: string | null }>;
+  notificationError?: string | null;
 }
 
 export interface EditOrderInput {

@@ -50,9 +50,9 @@ export function CustomerDetailsPage() {
   });
 
   const branchSharesQuery = useQuery({
-    queryKey: ["branch-resource-shares", "customer", id],
+    queryKey: ["branch-resource-shares", "customer", id, activeBranchId],
     queryFn: () => listBranchResourceShares(accessToken!),
-    enabled: Boolean(accessToken && id && canViewBranchSharing),
+    enabled: Boolean(accessToken && id && canViewBranchSharing && customerQuery.data?.ownerBranchId),
   });
 
   const groupsQuery = useQuery({
@@ -386,6 +386,7 @@ export function CustomerDetailsPage() {
                     <div style={{ flex: "1 1 180px" }}>
                       <strong>{service.name}</strong>
                       <div><small>Standard: {formatMoney(service.unitPrice)}{override ? " · Special price active" : ""}</small></div>
+                      {override && <div><small>Special price owner: {override.branch?.name ?? (override.branchId ? "Branch details unavailable" : "Business-wide legacy")}</small></div>}
                     </div>
                     <label>Customer price (₦)
                       <input type="number" min="0" step="1" value={value} onChange={(event) => setPriceDrafts((current) => ({ ...current, [service.id]: event.target.value }))} />
@@ -395,6 +396,14 @@ export function CustomerDetailsPage() {
                       if (Number.isSafeInteger(amount) && amount >= 0) savePriceMutation.mutate({ serviceId: service.id, unitPrice: amount });
                     }}>Save price</button>
                     {override && <button type="button" disabled={removePriceMutation.isPending} onClick={() => removePriceMutation.mutate(override.id)}>Use standard price</button>}
+                    {override?.branchId && canManageBranchSharing && (user?.securityRole === "BUSINESS_OWNER" || override.branchId === activeBranchId) && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(override.branchId!)}&resourceType=CUSTOMER_PRICING&resourceId=${encodeURIComponent(override.id)}`)}
+                      >
+                        Manage price sharing
+                      </button>
+                    )}
                   </div>
                 );
               })}

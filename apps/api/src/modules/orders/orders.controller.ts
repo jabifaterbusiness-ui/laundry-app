@@ -189,6 +189,19 @@ export async function updateStatus(req: Request, res: Response) {
   );
 
   if (previousOrder.status !== order.status) {
+    const statusUpdate = order as typeof order & {
+      notificationResults?: Array<{ channel: string; status: string; deliveryId?: string | null }>;
+      notificationError?: string | null;
+    };
+    const notificationResults = (statusUpdate.notificationResults ?? []).map((result) => ({
+      channel: result.channel,
+      status: result.status,
+      deliveryId: result.deliveryId ?? null,
+    }));
+    const notificationError = statusUpdate.notificationError
+      ? "One or more status notifications could not be processed. See Communications delivery history."
+      : null;
+
     await recordAuditEvent({
       action: "order.status_updated",
       entityType: "Order",
@@ -201,6 +214,8 @@ export async function updateStatus(req: Request, res: Response) {
         orderNumber: order.orderNumber,
         previousStatus: previousOrder.status,
         status: order.status,
+        notificationResults,
+        notificationError,
       },
     });
   }
@@ -232,12 +247,26 @@ export async function statusHistory(req: Request, res: Response) {
     const metadata = entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata)
       ? entry.metadata as Record<string, unknown>
       : {};
+    const notificationResults = Array.isArray(metadata.notificationResults)
+      ? metadata.notificationResults.flatMap((value) => {
+          if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+          const result = value as Record<string, unknown>;
+          if (typeof result.channel !== "string" || typeof result.status !== "string") return [];
+          return [{
+            channel: result.channel,
+            status: result.status,
+            deliveryId: typeof result.deliveryId === "string" ? result.deliveryId : null,
+          }];
+        })
+      : [];
     return {
       id: entry.id,
       previousStatus: typeof metadata.previousStatus === "string" ? metadata.previousStatus : null,
       status: typeof metadata.status === "string" ? metadata.status : "UNKNOWN",
       changedAt: entry.timestamp,
       changedBy: entry.actor?.fullName ?? "Unknown user",
+      notificationResults,
+      notificationError: typeof metadata.notificationError === "string" ? metadata.notificationError : null,
     };
   }));
 }

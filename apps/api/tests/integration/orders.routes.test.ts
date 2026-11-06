@@ -638,7 +638,15 @@ describe("Orders routes - authorization", () => {
       {
         id: "status-event-1",
         timestamp: new Date("2026-11-05T12:00:00.000Z"),
-        metadata: { previousStatus: "IN_PROGRESS", status: "COMPLETED" },
+        metadata: {
+          previousStatus: "IN_PROGRESS",
+          status: "COMPLETED",
+          notificationResults: [
+            { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
+            { channel: "EMAIL", status: "FAILED", deliveryId: null },
+          ],
+          notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
+        },
         actor: { fullName: "Branch Manager" },
       },
     ] as never);
@@ -656,6 +664,11 @@ describe("Orders routes - authorization", () => {
         status: "COMPLETED",
         changedAt: "2026-11-05T12:00:00.000Z",
         changedBy: "Branch Manager",
+        notificationResults: [
+          { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
+          { channel: "EMAIL", status: "FAILED", deliveryId: null },
+        ],
+        notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
       },
     ]);
     expect(auditLogFindMany).toHaveBeenCalledWith(expect.objectContaining({
