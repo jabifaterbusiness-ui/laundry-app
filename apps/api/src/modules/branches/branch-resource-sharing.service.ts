@@ -235,6 +235,66 @@ export async function saveBranchResourceShare(input: {
   }
 
   const resourceId = input.resourceId ?? null;
+  const assertConfigurationInsideTransaction = async (tx: Prisma.TransactionClient) => {
+    await assertCanManageOwnerBranch({
+      businessId: input.businessId,
+      ownerBranchId: input.ownerBranchId,
+      actorUserId: input.createdByUserId,
+    }, tx);
+
+    const currentBranches = await tx.branch.findMany({
+      where: { businessId: input.businessId, id: { in: [input.ownerBranchId, input.targetBranchId] } },
+      select: { id: true },
+    });
+    if (currentBranches.length !== 2) {
+      throw new AppError("Both branches must belong to this business", 404);
+    }
+
+    if (userId) {
+      const currentUser = await tx.user.findFirst({
+        where: { id: userId, businessId: input.businessId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!currentUser) throw new AppError("The selected user is not active in this business", 400);
+      const currentMembership = await tx.userBranch.findFirst({
+        where: { userId, branchId: input.targetBranchId },
+        select: { id: true },
+      });
+      if (!currentMembership) throw new AppError("The selected user is not assigned to the target branch", 400);
+    }
+
+    if (resourceId) {
+      const where = { id: resourceId, businessId: input.businessId };
+      let owned = false;
+      switch (input.resourceType) {
+        case "CUSTOMERS":
+          owned = Boolean(await tx.customer.findFirst({ where: { ...where, ownerBranchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "SERVICES":
+          owned = Boolean(await tx.service.findFirst({ where: { ...where, ownerBranchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "CUSTOMER_PRICING":
+          owned = Boolean(await tx.customerServicePrice.findFirst({ where: { ...where, branchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "DISCOUNTS":
+          owned = Boolean(await tx.priceAdjustment.findFirst({ where: { ...where, branchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "TAX_RULES":
+          owned = Boolean(await tx.taxRule.findFirst({ where: { ...where, branchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "INVENTORY":
+          owned = Boolean(await tx.inventoryItem.findFirst({ where: { ...where, ownerBranchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+        case "PAYROLL_COMPENSATION":
+          owned = Boolean(await tx.employeeCompensation.findFirst({ where: { ...where, branchId: input.ownerBranchId }, select: { id: true } }));
+          break;
+      }
+      if (!owned) {
+        throw new AppError("The selected record does not belong to the chosen owner branch or cannot be shared individually", 404);
+      }
+    }
+  };
+
   if (resourceId) {
     let resourceBelongsToOwnerBranch = false;
     const resourceWhere = { id: resourceId, businessId: input.businessId };
@@ -314,6 +374,7 @@ export async function saveBranchResourceShare(input: {
   if (existing) {
     const oldMode = existing.customerAccountMode ?? "SHARED";
     const updated = await prisma.$transaction(async (tx) => {
+      await assertConfigurationInsideTransaction(tx);
       if (input.resourceType === "CUSTOMERS" && !resourceId && !userId && oldMode !== accountMode) {
         await reconcileCustomerAccountMode(tx, { businessId: input.businessId, ownerBranchId: input.ownerBranchId, targetBranchId: input.targetBranchId, mode: accountMode });
       }
@@ -340,6 +401,7 @@ export async function saveBranchResourceShare(input: {
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    await assertConfigurationInsideTransaction(tx);
     const result = await tx.branchResourceShare.create({
     data: {
       businessId: input.businessId,
