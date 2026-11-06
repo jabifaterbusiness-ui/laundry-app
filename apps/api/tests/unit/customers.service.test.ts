@@ -313,6 +313,7 @@ describe("updateCustomer - tenant isolation", () => {
 
     await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", { name: "New Name" });
 
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { name: "New Name" } });
   });
 
