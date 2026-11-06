@@ -38,7 +38,7 @@ export function CustomersPage() {
   const [statusReason, setStatusReason] = useState("");
 
   const listQuery = useQuery({
-    queryKey: ["customers", { page, search, status }],
+    queryKey: ["customers", activeBranchId, { page, search, status }],
     queryFn: () => listCustomers({ page, pageSize: PAGE_SIZE, search: search || undefined, status }, { accessToken }),
   });
 
