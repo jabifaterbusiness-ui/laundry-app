@@ -291,6 +291,24 @@ export function OrdersPage() {
     enabled: Boolean(accessToken && activeBranchId),
   });
 
+  useEffect(() => {
+    if (!pricingRulesQuery.isSuccess) return;
+    const allowedManualIds = new Set(
+      pricingRulesQuery.data.adjustments
+        .filter((rule) => rule.targetScope === "MANUAL")
+        .map((rule) => rule.id),
+    );
+    setAdjustmentSelections((current) => {
+      const next: typeof current = {};
+      for (const id of Object.keys(current)) {
+        if (allowedManualIds.has(id)) next[id] = current[id]!;
+      }
+      return Object.keys(next).length === Object.keys(current).length
+        ? current
+        : next;
+    });
+  }, [pricingRulesQuery.data, pricingRulesQuery.isSuccess]);
+
   const colorsQuery = useQuery({
     queryKey: ["colors", "order-selector"],
     queryFn: () =>
