@@ -11,6 +11,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -407,9 +410,18 @@ describe("createOrder", () => {
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([
+      {
+        ownerBranchId: BRANCH_B,
+        resourceId: null,
+        accessLevel: "READ",
+      },
+    ] as never);
+
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
@@ -418,6 +430,20 @@ describe("createOrder", () => {
           colors: ["White", "Blue"],
         },
       ],
+    });
+
+    expect(tx.customerServicePrice.findMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+        serviceId: { in: [SERVICE_AGBADA] },
+        OR: [
+          { branchId: null },
+          { branchId: { in: [BRANCH_A, BRANCH_B] } },
+          { id: { in: [] } },
+        ],
+      },
+      select: { serviceId: true, unitPrice: true },
     });
 
     expect(tx.order.create).toHaveBeenCalledWith(
