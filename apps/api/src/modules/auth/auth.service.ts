@@ -46,7 +46,11 @@ function parseTokenLifetime(value: string): number {
   }
   const unit = match[2];
   const multiplier = unit === "s" ? 1_000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
-  return amount * multiplier;
+  const durationMs = amount * multiplier;
+  if (!Number.isSafeInteger(durationMs) || durationMs > 8_640_000_000_000_000) {
+    throw new Error("JWT_REFRESH_EXPIRES_IN exceeds the supported date range");
+  }
+  return durationMs;
 }
 
 type TokenDb = typeof prisma | Prisma.TransactionClient;
