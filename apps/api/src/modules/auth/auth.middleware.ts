@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../../config/index.js";
+import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { requireSensitiveAuthorization as requireSensitiveAuthorizationToken } from "./sensitive-authorization.service.js";
 import type { Role } from "@prisma/client";
@@ -13,7 +14,7 @@ interface AccessTokenPayload {
   businessId: string | null;
 }
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
 
   if (!header?.startsWith("Bearer ")) {
