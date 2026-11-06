@@ -73,12 +73,12 @@ describe("BusinessSettingsPage", () => {
   });
 
   it("saves the business inactivity timeout", async () => {
-    mockedApiFetch.mockImplementation(async (path: string) => {
+    mockedApiFetch.mockImplementation(((path: string) => {
       if (path === "/businesses/security-settings") {
-        return { sessionInactivityTimeoutMinutes: 7 } as never;
+        return Promise.resolve({ sessionInactivityTimeoutMinutes: 7 });
       }
-      return branding as never;
-    });
+      return Promise.resolve(branding);
+    }) as never);
 
     render(<BusinessSettingsPage />);
     const timeoutInput = await screen.findByLabelText("Inactivity timeout (minutes)");
