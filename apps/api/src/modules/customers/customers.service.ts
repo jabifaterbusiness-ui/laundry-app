@@ -322,7 +322,7 @@ export async function setCustomerLifecycleStatus(
       customer: updated,
       previousStatus: customer.lifecycleStatus,
     };
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 /**
@@ -450,7 +450,7 @@ export async function transferCustomer(
       transferredOrderCount: orders.length,
       transferredOrders: orders,
     };
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 /**
@@ -550,5 +550,5 @@ export async function mergeCustomer(
       mergedOrders: orders,
       sourceDeactivated,
     };
-  });
+  }, { isolationLevel: "Serializable" });
 }
