@@ -349,7 +349,6 @@ export async function saveBranchResourceShare(input: {
     }
   }
   const userId = input.userId ?? null;
-  const userId = input.userId ?? null;
   const result = await prisma.$transaction(async (tx) => {
     await assertConfigurationInsideTransaction(tx);
 
