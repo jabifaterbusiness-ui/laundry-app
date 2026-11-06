@@ -247,10 +247,29 @@ describe("reports.service", () => {
       },
     });
 
+    const visibleInventoryItemFilter = {
+      is: {
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-9"] } },
+          { id: { in: [] } },
+        ],
+      },
+    };
+
     expect(mocks.inventoryStockCount).toHaveBeenCalledWith({
       where: {
         businessId: "business-2",
         branchId: "branch-9",
+        inventoryItem: visibleInventoryItemFilter,
+      },
+    });
+
+    expect(mocks.inventoryMovementCount).toHaveBeenCalledWith({
+      where: {
+        businessId: "business-2",
+        branchId: "branch-9",
+        inventoryItem: visibleInventoryItemFilter,
       },
     });
   });
