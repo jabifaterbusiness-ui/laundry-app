@@ -366,7 +366,10 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
-          branchId: "branch-A",
+          OR: [
+            { branchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
           employee: { is: { branches: { some: { branchId: "branch-A" } } } },
         },
       }),
@@ -387,7 +390,10 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
-          branchId: "branch-A",
+          OR: [
+            { branchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
           employee: { is: { branches: { some: { branchId: "branch-A" } } } },
           employeeId: EMPLOYEE_A,
         },
@@ -410,7 +416,10 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           id: COMPENSATION_A,
           businessId: "biz-B",
-          branchId: "branch-B",
+          OR: [
+            { branchId: { in: ["branch-B"] } },
+            { id: { in: [] } },
+          ],
           employee: { is: { branches: { some: { branchId: "branch-B" } } } },
         },
       }),
@@ -451,8 +460,22 @@ describe("Compensation routes - effective salary lookup", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-A",
-          branchId: "branch-A",
           employeeId: EMPLOYEE_A,
+          AND: [
+            {
+              OR: [
+                { branchId: { in: ["branch-A"] } },
+                { id: { in: [] } },
+              ],
+            },
+            {
+              effectiveFrom: { lte: new Date("2026-09-15T00:00:00.000Z") },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gt: new Date("2026-09-15T00:00:00.000Z") } },
+              ],
+            },
+          ],
         }),
       }),
     );
