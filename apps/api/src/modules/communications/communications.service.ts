@@ -518,6 +518,17 @@ export async function retryWhatsAppDelivery(
     throw new AppError("This delivery has no valid WhatsApp destination and cannot be retried", 422);
   }
 
+  const customer = await prisma.customer.findFirst({
+    where: { id: source.customerId, businessId },
+    select: { whatsappOptIn: true },
+  });
+  if (!customer?.whatsappOptIn) {
+    throw new AppError(
+      "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      422,
+    );
+  }
+
   const value = source.retryPayload;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new AppError("The original WhatsApp message payload is unavailable for retry", 422);
