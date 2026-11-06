@@ -221,6 +221,24 @@ export async function updateCustomer(
   data: UpdateCustomerData,
   db: CustomerDb = prisma,
 ) {
+  if (db === prisma) {
+    return prisma.$transaction(
+      (tx) => updateCustomerWithDb(id, businessId, branchId, userId, data, tx),
+      { isolationLevel: "Serializable" },
+    );
+  }
+
+  return updateCustomerWithDb(id, businessId, branchId, userId, data, db);
+}
+
+async function updateCustomerWithDb(
+  id: string,
+  businessId: string,
+  branchId: string,
+  userId: string,
+  data: UpdateCustomerData,
+  db: CustomerDb,
+) {
   const existing = await getCustomerForBusiness(id, businessId, branchId, userId, db);
   if (!existing) throw new AppError("Customer not found", 404);
   await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "CUSTOMERS", ownerBranchId: existing.ownerBranchId, resourceId: id }, db);
