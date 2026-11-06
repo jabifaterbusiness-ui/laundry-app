@@ -2,13 +2,17 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { requireSensitiveAuthorizationMock, userFindUniqueMock } = vi.hoisted(() => ({
+const { requireSensitiveAuthorizationMock, userFindUniqueMock, refreshTokenFindFirstMock } = vi.hoisted(() => ({
   requireSensitiveAuthorizationMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
+  refreshTokenFindFirstMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
-  prisma: { user: { findUnique: userFindUniqueMock } },
+  prisma: {
+    user: { findUnique: userFindUniqueMock },
+    refreshToken: { findFirst: refreshTokenFindFirstMock },
+  },
 }));
 
 vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
@@ -154,7 +158,7 @@ describe("requireSensitiveAuthorization middleware", () => {
 describe("requireAuth middleware account validity", () => {
   const next = vi.fn() as unknown as NextFunction;
   const token = jwt.sign(
-    { sub: "user-1", email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
+    { sub: "user-1", sid: "session-1", email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -162,6 +166,7 @@ describe("requireAuth middleware account validity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: null });
+    refreshTokenFindFirstMock.mockResolvedValue({ id: "refresh-session-1" });
   });
 
   it("accepts a valid access token only when its account is active", async () => {
@@ -172,6 +177,14 @@ describe("requireAuth middleware account validity", () => {
     expect(userFindUniqueMock).toHaveBeenCalledWith({
       where: { id: "user-1" },
       select: { isActive: true, deletedAt: true },
+    });
+    expect(refreshTokenFindFirstMock).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
+      select: { id: true },
     });
     expect(req.user).toMatchObject({ id: "user-1", businessId: "business-1" });
     expect(next).toHaveBeenCalledTimes(1);
@@ -188,6 +201,44 @@ describe("requireAuth middleware account validity", () => {
     await requireAuth(req, {} as Response, next);
 
     expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    }));
+  });
+
+  it("rejects a verified access token without a session identifier", async () => {
+    const tokenWithoutSession = jwt.sign(
+      { sub: "user-1", email: "user@example.com", securityRole: "STAFF", businessId: "business-1" },
+      process.env.JWT_ACCESS_SECRET as string,
+      { expiresIn: "15m" },
+    );
+    const req = { headers: { authorization: `Bearer ${tokenWithoutSession}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(userFindUniqueMock).not.toHaveBeenCalled();
+    expect(refreshTokenFindFirstMock).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 401,
+      message: "Invalid or expired access token",
+    }));
+  });
+
+  it("rejects an already-issued access token after its session is revoked or expired", async () => {
+    refreshTokenFindFirstMock.mockResolvedValue(null);
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(refreshTokenFindFirstMock).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        revokedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
+      select: { id: true },
+    });
     expect(next).toHaveBeenCalledWith(expect.objectContaining({
       statusCode: 401,
       message: "Invalid or expired access token",
