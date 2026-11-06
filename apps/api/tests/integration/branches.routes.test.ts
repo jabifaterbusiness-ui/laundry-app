@@ -50,6 +50,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       deleteMany: vi.fn(),
     },
     user: {
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
       findFirst: vi.fn(),
     },
   },
