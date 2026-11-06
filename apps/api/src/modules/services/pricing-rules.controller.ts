@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { createAdjustmentSchema, createTaxRuleSchema, pricingRuleIdSchema, updateAdjustmentStatusSchema } from "./pricing-rules.validation.js";
+import { createAdjustmentSchema, createTaxRuleSchema, listPricingRulesQuerySchema, pricingRuleIdSchema, updateAdjustmentStatusSchema } from "./pricing-rules.validation.js";
 import { createPriceAdjustment, createTaxRule, deletePriceAdjustment, deleteTaxRule, listPricingRules, setPriceAdjustmentActive } from "./pricing-rules.service.js";
 
 function branchId(req: Request): string { if (!req.branchId) throw new AppError("A valid branch context is required", 400); return req.branchId; }
@@ -11,7 +11,13 @@ function businessId(req: Request): string {
 }
 
 export async function list(req: Request, res: Response) {
-  res.status(200).json(await listPricingRules(businessId(req), branchId(req), req.user!.id));
+  const query = listPricingRulesQuerySchema.parse(req.query);
+  res.status(200).json(await listPricingRules(
+    businessId(req),
+    branchId(req),
+    req.user!.id,
+    query.customerId,
+  ));
 }
 
 export async function createAdjustment(req: Request, res: Response) {
