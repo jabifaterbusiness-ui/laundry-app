@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   paymentFindMany: vi.fn(),
   paymentAggregate: vi.fn(),
   customerCount: vi.fn(),
+  branchResourceShareFindMany: vi.fn(),
   inventoryStockCount: vi.fn(),
   inventoryMovementCount: vi.fn(),
   garmentFindMany: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("../../../src/lib/prisma.js", () => ({
       aggregate: mocks.paymentAggregate,
     },
     customer: { count: mocks.customerCount },
+    branchResourceShare: { findMany: mocks.branchResourceShareFindMany },
     inventoryStock: { count: mocks.inventoryStockCount },
     inventoryMovement: { count: mocks.inventoryMovementCount },
     garment: { findMany: mocks.garmentFindMany },
@@ -42,6 +44,7 @@ describe("reports.service", () => {
       _sum: { amount: null },
     });
     mocks.customerCount.mockResolvedValue(40);
+    mocks.branchResourceShareFindMany.mockResolvedValue([]);
     mocks.inventoryStockCount.mockResolvedValue(8);
     mocks.inventoryMovementCount.mockResolvedValue(20);
     mocks.garmentFindMany.mockResolvedValue([]);
@@ -110,6 +113,7 @@ describe("reports.service", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       { from, to },
     );
@@ -173,6 +177,7 @@ describe("reports.service", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       { from, to },
     );
@@ -250,6 +255,7 @@ describe("reports.service", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       { from, to },
     );
