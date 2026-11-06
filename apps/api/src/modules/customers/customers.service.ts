@@ -86,6 +86,7 @@ export async function listCustomers(params: ListParams) {
   const [data, total] = await Promise.all([
     prisma.customer.findMany({
       where,
+      include: { ownerBranch: { select: { id: true, name: true } } },
       orderBy: { name: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
