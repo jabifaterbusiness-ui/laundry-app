@@ -167,8 +167,8 @@ export async function executeQuickOperation(
         context.businessId,
         context.branchId,
         parsed.customerId,
-        prisma,
         context.userId,
+        prisma,
       );
 
       await recordAuditEvent({
