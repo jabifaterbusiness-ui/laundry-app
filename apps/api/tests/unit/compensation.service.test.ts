@@ -48,6 +48,7 @@ describe("compensation service", () => {
     });
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({
@@ -89,7 +90,9 @@ describe("compensation service", () => {
   });
 
   it("rejects an employee outside the authenticated business", async () => {
-    mocks.prisma.user.findFirst.mockResolvedValue(null);
+    mocks.prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback({ user: { findFirst: vi.fn().mockResolvedValue(null) } }),
+    );
 
     await expect(
       createCompensation({
@@ -114,6 +117,7 @@ describe("compensation service", () => {
     });
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue({
           id: "comp-old",
@@ -152,6 +156,7 @@ describe("compensation service", () => {
     });
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
       employeeCompensation: {
         findFirst: vi
           .fn()
