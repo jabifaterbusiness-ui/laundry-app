@@ -268,6 +268,7 @@ export async function statusHistory(req: Request, res: Response) {
       status: typeof metadata.status === "string" ? metadata.status : "UNKNOWN",
       changedAt: entry.timestamp,
       changedBy: entry.actor?.fullName ?? "Unknown user",
+      branchName: order.branch.name,
       notificationResults,
       notificationError: typeof metadata.notificationError === "string" ? metadata.notificationError : null,
     };
