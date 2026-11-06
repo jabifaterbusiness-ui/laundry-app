@@ -1002,8 +1002,8 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
-        "user-A",
-      );
+      "user-A",
+    );
 
     expect(result).toEqual({
       id: ORDER_A,
@@ -1155,8 +1155,8 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
-        "user-A",
-      );
+      "user-A",
+    );
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(tx.order.findFirst).toHaveBeenCalledTimes(1);
