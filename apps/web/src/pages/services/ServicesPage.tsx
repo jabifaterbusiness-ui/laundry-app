@@ -54,6 +54,8 @@ export function ServicesPage() {
   const [adjustmentEndsAt, setAdjustmentEndsAt] = useState("");
   const [adjustmentAllowStacking, setAdjustmentAllowStacking] = useState(false);
   const [adjustmentExcludedServices, setAdjustmentExcludedServices] = useState<string[]>([]);
+  const [adjustmentPage, setAdjustmentPage] = useState(1);
+  const [taxPage, setTaxPage] = useState(1);
   const [taxName, setTaxName] = useState("");
   const [taxValue, setTaxValue] = useState(7.5);
   const [taxKind, setTaxKind] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
@@ -62,8 +64,13 @@ export function ServicesPage() {
   const [taxAllowCombination, setTaxAllowCombination] = useState(true);
 
   const pricingRulesQuery = useQuery({
-    queryKey: ["pricing-rules", "management", activeBranchId],
-    queryFn: () => listPricingRules({ accessToken }),
+    queryKey: ["pricing-rules", "management", activeBranchId, adjustmentPage, taxPage],
+    queryFn: () => listPricingRules(
+      { accessToken },
+      undefined,
+      "management",
+      { adjustmentPage, taxPage, pageSize: 50 },
+    ),
     enabled: Boolean(accessToken && activeBranchId),
   });
   const discountCustomersQuery = useQuery({
@@ -119,13 +126,18 @@ export function ServicesPage() {
       setAdjustmentCustomerSearch(""); setAdjustmentCustomerId(""); setAdjustmentGroupId("");
       setAdjustmentStartsAt(""); setAdjustmentEndsAt("");
       setAdjustmentAllowStacking(false); setAdjustmentExcludedServices([]);
+      setAdjustmentPage(1); setTaxPage(1);
       queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
     },
   });
   const adjustmentStatusMutation = useMutation({
     mutationFn: (input: { id: string; isActive: boolean }) =>
       setPriceAdjustmentActive(input.id, input.isActive, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
+    onSuccess: () => {
+      setAdjustmentPage(1);
+      setTaxPage(1);
+      queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
+    },
   });
   const deletePricingRuleMutation = useMutation({
     mutationFn: async (input: { id: string; kind: "adjustment" | "tax" }) =>
@@ -344,6 +356,28 @@ export function ServicesPage() {
                 </li>;
               })}
             </ul>
+            {pricingRulesQuery.data?.pagination?.adjustments ? (
+              <nav aria-label="Discount and adjustment pages">
+                <span>
+                  Page {pricingRulesQuery.data.pagination.adjustments.page} of {pricingRulesQuery.data.pagination.adjustments.totalPages}
+                  {" · "}{pricingRulesQuery.data.pagination.adjustments.total} rules
+                </span>
+                <button
+                  type="button"
+                  disabled={pricingRulesQuery.data.pagination.adjustments.page <= 1}
+                  onClick={() => setAdjustmentPage((page) => Math.max(1, page - 1))}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={pricingRulesQuery.data.pagination.adjustments.page >= pricingRulesQuery.data.pagination.adjustments.totalPages}
+                  onClick={() => setAdjustmentPage((page) => page + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            ) : null}
           </div>
           <div>
             <h3>Tax rules</h3>
@@ -362,6 +396,28 @@ export function ServicesPage() {
                 <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "tax" })}>Remove</button>
               </li>)}
             </ul>
+            {pricingRulesQuery.data?.pagination?.taxes ? (
+              <nav aria-label="Tax rule pages">
+                <span>
+                  Page {pricingRulesQuery.data.pagination.taxes.page} of {pricingRulesQuery.data.pagination.taxes.totalPages}
+                  {" · "}{pricingRulesQuery.data.pagination.taxes.total} rules
+                </span>
+                <button
+                  type="button"
+                  disabled={pricingRulesQuery.data.pagination.taxes.page <= 1}
+                  onClick={() => setTaxPage((page) => Math.max(1, page - 1))}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={pricingRulesQuery.data.pagination.taxes.page >= pricingRulesQuery.data.pagination.taxes.totalPages}
+                  onClick={() => setTaxPage((page) => page + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            ) : null}
           </div>
         </div>
         {pricingRulesMutation.isError && <p role="alert">Unable to save this pricing rule. Check its name and value, then try again.</p>}
