@@ -16,7 +16,7 @@ communicationsRouter.post("/customer-groups", requirePermission("customers.updat
 communicationsRouter.put("/customer-groups/:id", requirePermission("customers.update"), asyncHandler(updateCustomerGroupMembers));
 communicationsRouter.delete("/customer-groups/:id", requirePermission("customers.update"), asyncHandler(removeCustomerGroup));
 communicationsRouter.post("/announcements", requirePermission("customers.update"), asyncHandler(sendAnnouncement));
-communicationsRouter.get("/deliveries", requirePermission("customers.view"), asyncHandler(getDeliveries));
+communicationsRouter.get("/deliveries", requirePermission("customers.view"), asyncHandler(requireBranchContext), asyncHandler(getDeliveries));
 communicationsRouter.get("/status-rules", requirePermission("orders.view"), asyncHandler(listStatusRules));
 communicationsRouter.put("/status-rules", requirePermission("orders.change_status"), asyncHandler(saveStatusRule));
 communicationsRouter.delete("/status-rules/:id", requirePermission("orders.change_status"), asyncHandler(deleteStatusRule));
