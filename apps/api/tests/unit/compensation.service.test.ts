@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../../src/middleware/error-handler.js";
 
@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
       update: vi.fn(),
       create: vi.fn(),
+    },
+    branchResourceShare: {
+      findMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -34,6 +37,9 @@ import {
 } from "../../src/modules/payroll/compensation.service.js";
 
 describe("compensation service", () => {
+  beforeEach(() => {
+    mocks.prisma.branchResourceShare.findMany.mockResolvedValue([] as never);
+  });
   it("creates a compensation record for an employee in the business", async () => {
     mocks.prisma.user.findFirst.mockResolvedValue({
       id: "employee-1",
@@ -194,6 +200,7 @@ describe("compensation service", () => {
       businessId: "biz-1",
       branchId: "branch-1",
       id: "comp-1",
+      userId: "user-1",
     });
 
     expect(result.id).toBe("comp-1");
@@ -202,7 +209,10 @@ describe("compensation service", () => {
         where: {
           id: "comp-1",
           businessId: "biz-1",
-          branchId: "branch-1",
+          OR: [
+            { branchId: { in: ["branch-1"] } },
+            { id: { in: [] } },
+          ],
           employee: { is: { branches: { some: { branchId: "branch-1" } } } },
         },
       }),
@@ -217,6 +227,7 @@ describe("compensation service", () => {
         businessId: "biz-1",
         branchId: "branch-1",
         id: "comp-other",
+        userId: "user-1",
       }),
     ).rejects.toMatchObject({
       message: "Compensation record not found",
@@ -231,13 +242,17 @@ describe("compensation service", () => {
       businessId: "biz-1",
       branchId: "branch-1",
       employeeId: "employee-1",
+      userId: "user-1",
     });
 
     expect(mocks.prisma.employeeCompensation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           businessId: "biz-1",
-          branchId: "branch-1",
+          OR: [
+            { branchId: { in: ["branch-1"] } },
+            { id: { in: [] } },
+          ],
           employee: { is: { branches: { some: { branchId: "branch-1" } } } },
           employeeId: "employee-1",
         },
@@ -256,6 +271,7 @@ describe("compensation service", () => {
       businessId: "biz-1",
       branchId: "branch-1",
       employeeId: "employee-1",
+      userId: "user-1",
       effectiveDate: new Date("2026-08-15"),
     });
 
@@ -265,8 +281,11 @@ describe("compensation service", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-1",
-          branchId: "branch-1",
           employeeId: "employee-1",
+          OR: [
+            { branchId: { in: ["branch-1"] } },
+            { id: { in: [] } },
+          ],
         }),
       }),
     );
