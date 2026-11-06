@@ -47,9 +47,6 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customer: {
       findFirst: vi.fn(),
     },
-    branchResourceShare: {
-      findMany: vi.fn().mockResolvedValue([]),
-    },
     branch: {
       findFirst: vi.fn(),
     },
@@ -172,9 +169,6 @@ beforeEach(() => {
       },
       customer: {
         findFirst: customerFindFirst,
-      },
-      branchResourceShare: {
-        findMany: vi.fn().mockResolvedValue([]),
       },
     } as never),
   );
