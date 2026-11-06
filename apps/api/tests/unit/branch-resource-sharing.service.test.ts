@@ -63,6 +63,20 @@ beforeEach(() => {
 });
 
 describe("branch resource sharing authorization", () => {
+  it("rechecks the actor inside the transaction before creating a sharing rule", async () => {
+    actorFindFirst
+      .mockResolvedValueOnce({ securityRole: "BUSINESS_OWNER" } as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(saveBranchResourceShare(baseInput)).rejects.toBeInstanceOf(AppError);
+
+    expect(actorFindFirst).toHaveBeenCalledTimes(2);
+    expect(shareCreate).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+  });
+
   it("allows a business owner to create a cross-branch sharing rule", async () => {
     actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
 
