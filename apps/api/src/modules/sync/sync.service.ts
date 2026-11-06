@@ -522,7 +522,6 @@ async function applySyncOperation(
             input.data.phone,
             input.customerId,
             tx,
-            context.actorUserId,
           );
 
           if (duplicates.length > 0) {
