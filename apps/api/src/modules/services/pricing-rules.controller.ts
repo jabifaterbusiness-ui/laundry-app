@@ -17,6 +17,7 @@ export async function list(req: Request, res: Response) {
     branchId(req),
     req.user!.id,
     query.customerId,
+    query.purpose,
   ));
 }
 
