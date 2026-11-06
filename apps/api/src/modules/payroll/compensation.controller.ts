@@ -56,6 +56,7 @@ export async function listCompensationController(req: Request, res: Response) {
   const result = await listCompensation({
     businessId: businessId(req),
     branchId: branchId(req),
+    userId: req.user!.id,
     ...(employeeId !== undefined ? { employeeId } : {}),
   });
 
@@ -67,6 +68,7 @@ export async function getCompensationController(req: Request, res: Response) {
     businessId: businessId(req),
     branchId: branchId(req),
     id: req.params.id!,
+    userId: req.user!.id,
   });
 
   res.json(result);
@@ -89,6 +91,7 @@ export async function getCurrentCompensationController(
     businessId: businessId(req),
     branchId: branchId(req),
     employeeId: req.params.employeeId!,
+    userId: req.user!.id,
     effectiveDate,
   });
 
