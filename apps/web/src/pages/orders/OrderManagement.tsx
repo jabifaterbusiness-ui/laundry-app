@@ -1393,7 +1393,7 @@ function OrderManagementContent({
                     >
                       {historyOrder.items
                         .filter((item) => (item.colors ?? []).length > 0)
-                        .map((item) => `${item.serviceName}: ${item.colors!.join(", ")}`)
+                        .map((item) => `${item.serviceName}: ${(item.colors ?? []).join(", ")}`)
                         .join(" · ")}
                     </small>
                   ) : null}
