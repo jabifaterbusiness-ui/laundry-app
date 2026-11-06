@@ -16,6 +16,10 @@ export const createBranchResourceShareSchema = z.object({
   resourceId: z.string().uuid().nullable().optional(),
   userId: z.string().uuid().nullable().optional(),
   accessLevel: z.enum(["READ", "EDIT"]),
+  customerAccountMode: z.enum(["SHARED", "SEPARATE"]).optional(),
+}).refine((value) => value.customerAccountMode !== "SEPARATE" || (value.resourceType === "CUSTOMERS" && value.resourceId == null && value.userId == null), {
+  message: "Separate customer accounts can only be configured for all customers shared with the whole target branch",
+  path: ["customerAccountMode"],
 }).refine((value) => value.ownerBranchId !== value.targetBranchId, {
   message: "Choose two different branches",
   path: ["targetBranchId"],
