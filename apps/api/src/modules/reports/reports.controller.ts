@@ -37,6 +37,7 @@ export async function dashboard(req: Request, res: Response) {
     {
       businessId,
       branchId,
+      userId: req.user!.id,
     },
     {
       ...(range.from !== undefined ? { from: range.from } : {}),
@@ -54,7 +55,7 @@ export async function collectionStatement(req: Request, res: Response) {
   const range = reportDateRangeSchema.parse(req.query);
 
   const report = await getDashboardReport(
-    { businessId, branchId },
+    { businessId, branchId, userId: req.user!.id },
     {
       ...(range.from !== undefined ? { from: range.from } : {}),
       ...(range.to !== undefined ? { to: range.to } : {}),
