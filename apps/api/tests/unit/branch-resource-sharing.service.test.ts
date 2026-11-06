@@ -6,6 +6,10 @@ vi.mock("../../src/lib/audit.js", () => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    $transaction: vi.fn(),
+    customer: { findMany: vi.fn() },
+    customerAccount: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    customerAccountTransaction: { findMany: vi.fn(), updateMany: vi.fn() },
     user: { findFirst: vi.fn() },
     userBranch: { findUnique: vi.fn(), findFirst: vi.fn() },
     branch: { findMany: vi.fn() },
@@ -47,6 +51,7 @@ const baseInput = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => callback(prisma) as never);
   branchFindMany.mockResolvedValue([
     { id: "owner-branch" },
     { id: "target-branch" },
@@ -141,6 +146,54 @@ describe("branch resource sharing authorization", () => {
     })).rejects.toBeInstanceOf(AppError);
 
     expect(shareDelete).not.toHaveBeenCalled();
+  });
+
+
+  it("moves only the receiving branch's existing customer transactions into its separate account", async () => {
+    actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
+    vi.mocked(prisma.customer.findMany).mockResolvedValue([{ id: "customer-1" }] as never);
+    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(async ({ where }: any) => {
+      return where.branchId === "target-branch" ? null : { id: "shared-account" } as never;
+    });
+    vi.mocked(prisma.customerAccountTransaction.findMany).mockResolvedValue([{ id: "target-tx" }] as never);
+    vi.mocked(prisma.customerAccount.create).mockResolvedValue({ id: "target-account" } as never);
+
+    await saveBranchResourceShare({
+      ...baseInput,
+      resourceType: "CUSTOMERS",
+      customerAccountMode: "SEPARATE",
+    });
+
+    expect(prisma.customerAccountTransaction.updateMany).toHaveBeenCalledWith({
+      where: { customerAccountId: "shared-account", branchId: "target-branch" },
+      data: { customerAccountId: "target-account" },
+    });
+    expect(prisma.customerAccount.create).toHaveBeenCalledWith({
+      data: { businessId: "business-a", customerId: "customer-1", branchId: "target-branch" },
+      select: { id: true },
+    });
+  });
+
+  it("merges a branch account back into the shared ledger when the mode changes to SHARED", async () => {
+    actorFindFirst.mockResolvedValue({ securityRole: "BUSINESS_OWNER" } as never);
+    shareFindFirst.mockResolvedValue({ id: "share-1", customerAccountMode: "SEPARATE" } as never);
+    vi.mocked(prisma.customer.findMany).mockResolvedValue([{ id: "customer-1" }] as never);
+    vi.mocked(prisma.customerAccount.findFirst).mockImplementation(async ({ where }: any) => {
+      return where.branchId === "target-branch" ? { id: "target-account" } as never : { id: "shared-account" } as never;
+    });
+    vi.mocked(prisma.branchResourceShare.update).mockResolvedValue({ id: "share-1", customerAccountMode: "SHARED" } as never);
+
+    await saveBranchResourceShare({
+      ...baseInput,
+      resourceType: "CUSTOMERS",
+      customerAccountMode: "SHARED",
+    });
+
+    expect(prisma.customerAccountTransaction.updateMany).toHaveBeenCalledWith({
+      where: { customerAccountId: "target-account" },
+      data: { customerAccountId: "shared-account" },
+    });
+    expect(prisma.customerAccount.delete).toHaveBeenCalledWith({ where: { id: "target-account" } });
   });
 
   it("allows a business owner to delete a sharing rule in their business", async () => {
