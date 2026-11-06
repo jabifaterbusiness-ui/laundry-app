@@ -2929,13 +2929,19 @@ model CommunicationDelivery {
   providerMessageId String?
   errorMessage      String?
   dedupeKey         String   @unique
+  retryPayload      Json?
+  retryOfId         String?
+  retryAttempt      Int      @default(0)
   sentAt            DateTime?
   createdAt         DateTime @default(now())
   business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
   campaign          AnnouncementCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  retryOf           CommunicationDelivery?  @relation("CommunicationDeliveryRetries", fields: [retryOfId], references: [id], onDelete: SetNull)
+  retries           CommunicationDelivery[] @relation("CommunicationDeliveryRetries")
 
+  @@index([retryOfId, retryAttempt])
   @@index([businessId, status, createdAt])
   @@index([customerId, createdAt])
   @@index([orderId, messageType])
