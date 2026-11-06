@@ -625,164 +625,181 @@ export async function generatePayroll({
   payrollPeriodId,
   actorUserId,
 }: GeneratePayrollArgs) {
-  const period = await prisma.payrollPeriod.findFirst({
-    where: {
-      id: payrollPeriodId,
-      businessId,
-      branchId,
-    },
-  });
-
-  if (!period) {
-    throw new AppError("Payroll period not found", 404);
-  }
-
-  if (period.status !== PayrollPeriodStatus.OPEN) {
-    throw new AppError(
-      "Payroll can only be generated for an open payroll period",
-      400,
-    );
-  }
-
-  const employees = await prisma.user.findMany({
-    where: {
-      businessId,
-      isActive: true,
-      branches: {
-        some: {
-          branchId,
-        },
-      },
-    },
-    select: {
-      id: true,
-      fullName: true,
-      role: true,
-    },
-    orderBy: {
-      id: "asc",
-    },
-  });
-
-  if (employees.length === 0) {
-    throw new AppError(
-      "No active employees are assigned to this branch",
-      400,
-    );
-  }
-
-  const existingRecords = await prisma.payrollRecord.findMany({
-    where: {
-      businessId,
-      branchId,
-      payrollPeriodId,
-    },
-    select: {
-      employeeId: true,
-    },
-  });
-
-  const existingEmployeeIds = new Set(
-    existingRecords.map((record) => record.employeeId),
-  );
-
-  const compensationScope = await getBranchResourceScope({
-    businessId,
-    branchId,
-    userId: actorUserId,
-    resourceType: "PAYROLL_COMPENSATION",
-  });
-
-  const recordsToCreate: Array<{
-    businessId: string;
-    branchId: string;
-    payrollPeriodId: string;
-    employeeId: string;
-    basicSalary: number;
-    allowances: number;
-    bonuses: number;
-    grossPay: number;
-    totalDeductions: number;
-    netPay: number;
-  }> = [];
-
-  for (const employee of employees) {
-    if (existingEmployeeIds.has(employee.id)) {
-      continue;
-    }
-
-    const effectiveWindow = {
-      effectiveFrom: { lte: period.periodEnd },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gt: period.periodEnd } }],
-    };
-    const compensation = await prisma.employeeCompensation.findFirst({
+  const result = await prisma.$transaction(async (tx) => {
+    const period = await tx.payrollPeriod.findFirst({
       where: {
+        id: payrollPeriodId,
         businessId,
-        employeeId: employee.id,
-        AND: [
-          {
-            OR: [
-              { branchId: { in: compensationScope.ownerBranchIds } },
-              { id: { in: compensationScope.resourceIds } },
-            ],
-          },
-          effectiveWindow,
-        ],
+        branchId,
       },
-      orderBy: { effectiveFrom: "desc" },
     });
 
-    if (!compensation) {
+    if (!period) {
+      throw new AppError("Payroll period not found", 404);
+    }
+
+    if (period.status !== PayrollPeriodStatus.OPEN) {
       throw new AppError(
-        `No compensation record found for employee ${employee.fullName} as of the payroll period end`,
+        "Payroll can only be generated for an open payroll period",
         400,
       );
     }
 
-    const grossPay = compensation.basicSalary;
-
-    recordsToCreate.push({
-      businessId,
-      branchId,
-      payrollPeriodId,
-      employeeId: employee.id,
-      basicSalary: compensation.basicSalary,
-      allowances: 0,
-      bonuses: 0,
-      grossPay,
-      totalDeductions: 0,
-      netPay: grossPay,
-    });
-  }
-
-  if (recordsToCreate.length === 0) {
-    throw new AppError(
-      "Payroll records have already been generated for this period",
-      409,
-    );
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.payrollPeriod.update({
+    // Claim the period before reading the payroll inputs. The conditional
+    // update prevents concurrent requests from both generating the same run.
+    const claimedPeriod = await tx.payrollPeriod.updateMany({
       where: {
         id: period.id,
+        businessId,
+        branchId,
+        status: PayrollPeriodStatus.OPEN,
       },
       data: {
         status: PayrollPeriodStatus.PROCESSING,
       },
     });
 
-    const createdRecords = [];
+    if (claimedPeriod.count !== 1) {
+      throw new AppError(
+        "Payroll generation could not be completed because the period state changed",
+        409,
+      );
+    }
 
-    for (const data of recordsToCreate) {
-      const record = await tx.payrollRecord.create({
-        data,
+    const employees = await tx.user.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        branches: {
+          some: {
+            branchId,
+          },
+        },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+      },
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    if (employees.length === 0) {
+      throw new AppError(
+        "No active employees are assigned to this branch",
+        400,
+      );
+    }
+
+    const compensationScope = await getBranchResourceScope(
+      {
+        businessId,
+        branchId,
+        userId: actorUserId,
+        resourceType: "PAYROLL_COMPENSATION",
+      },
+      tx,
+    );
+
+    const existingRecords = await tx.payrollRecord.findMany({
+      where: {
+        businessId,
+        branchId,
+        payrollPeriodId,
+      },
+      select: {
+        employeeId: true,
+      },
+    });
+
+    const existingEmployeeIds = new Set(
+      existingRecords.map((record) => record.employeeId),
+    );
+
+    const recordsToCreate: Array<{
+      businessId: string;
+      branchId: string;
+      payrollPeriodId: string;
+      employeeId: string;
+      basicSalary: number;
+      allowances: number;
+      bonuses: number;
+      grossPay: number;
+      totalDeductions: number;
+      netPay: number;
+    }> = [];
+
+    const effectiveWindow = {
+      effectiveFrom: { lte: period.periodEnd },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: period.periodEnd } }],
+    };
+
+    for (const employee of employees) {
+      if (existingEmployeeIds.has(employee.id)) {
+        continue;
+      }
+
+      const compensation = await tx.employeeCompensation.findFirst({
+        where: {
+          businessId,
+          employeeId: employee.id,
+          AND: [
+            {
+              OR: [
+                { branchId: { in: compensationScope.ownerBranchIds } },
+                { id: { in: compensationScope.resourceIds } },
+              ],
+            },
+            effectiveWindow,
+          ],
+        },
+        orderBy: { effectiveFrom: "desc" },
       });
 
+      if (!compensation) {
+        throw new AppError(
+          `No compensation record found for employee ${employee.fullName} as of the payroll period end`,
+          400,
+        );
+      }
+
+      const grossPay = compensation.basicSalary;
+
+      recordsToCreate.push({
+        businessId,
+        branchId,
+        payrollPeriodId,
+        employeeId: employee.id,
+        basicSalary: compensation.basicSalary,
+        allowances: 0,
+        bonuses: 0,
+        grossPay,
+        totalDeductions: 0,
+        netPay: grossPay,
+      });
+    }
+
+    if (recordsToCreate.length === 0) {
+      throw new AppError(
+        "Payroll records have already been generated for this period",
+        409,
+      );
+    }
+
+    const createdRecords = [];
+    for (const data of recordsToCreate) {
+      const record = await tx.payrollRecord.create({ data });
       createdRecords.push(record);
     }
 
-    return createdRecords;
+    return {
+      period,
+      records: createdRecords,
+    };
+  }, {
+    isolationLevel: "Serializable",
   });
 
   await recordAuditEvent({
@@ -791,16 +808,16 @@ export async function generatePayroll({
     actorUserId,
     action: "payroll_records.generated",
     entityType: "PAYROLL_PERIOD",
-    entityId: period.id,
+    entityId: result.period.id,
     metadata: {
-      recordCount: result.length,
-      payrollPeriodId: period.id,
+      recordCount: result.records.length,
+      payrollPeriodId: result.period.id,
     },
   });
 
   return {
-    payrollPeriodId: period.id,
+    payrollPeriodId: result.period.id,
     status: PayrollPeriodStatus.PROCESSING,
-    records: result,
+    records: result.records,
   };
 }
