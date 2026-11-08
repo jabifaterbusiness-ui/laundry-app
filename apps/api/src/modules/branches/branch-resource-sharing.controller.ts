@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
-import { recordAuditEvent } from "../../lib/audit.js";
 import { hasPermission } from "../permissions/permissions.service.js";
 import {
   branchResourceShareIdSchema,
@@ -56,21 +55,6 @@ export async function createBranchResourceShareController(req: Request, res: Res
     ...(input.customerAccountMode !== undefined ? { customerAccountMode: input.customerAccountMode } : {}),
     createdByUserId: req.user!.id,
   });
-  await recordAuditEvent({
-    action: "branch.resource_share.created",
-    entityType: "BranchResourceShare",
-    entityId: share.id,
-    businessId,
-    actorUserId: req.user!.id,
-    metadata: {
-      ownerBranchId: share.ownerBranchId,
-      targetBranchId: share.targetBranchId,
-      resourceType: share.resourceType,
-      resourceId: share.resourceId,
-      userId: share.userId,
-      accessLevel: share.accessLevel,
-    },
-  });
   res.status(201).json(share);
 }
 
@@ -88,12 +72,5 @@ export async function deleteBranchResourceShareController(req: Request, res: Res
     if (!canManagePayroll) throw new AppError("Compensation management permission is required to change salary sharing", 403);
   }
   await deleteBranchResourceShare({ businessId, id, actorUserId: req.user!.id });
-  await recordAuditEvent({
-    action: "branch.resource_share.deleted",
-    entityType: "BranchResourceShare",
-    entityId: id,
-    businessId,
-    actorUserId: req.user!.id,
-  });
   res.status(204).send();
 }
