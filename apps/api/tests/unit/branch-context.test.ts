@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 describe("requireBranchContext", () => {
-  it("sets req.branchId for an authorized branch access", async () => {
+  it("sets req.branchId for an authorized active branch", async () => {
     findUnique.mockResolvedValue({
       id: "ub-1",
       userId: "user-1",
@@ -47,6 +47,25 @@ describe("requireBranchContext", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
+  it("denies access to an inactive branch even when the user remains a member", async () => {
+    findUnique.mockResolvedValue({
+      id: "ub-1",
+      userId: "user-1",
+      branchId: "branch-1",
+      createdAt: new Date(),
+      branch: { id: "branch-1", businessId: "biz-1", name: "Closed", address: null, isActive: false, createdAt: new Date(), updatedAt: new Date() },
+    } as never);
+
+    const req = makeReq({ headers: { "x-branch-id": "branch-1" } });
+
+    await expect(requireBranchContext(req, res, next)).rejects.toMatchObject({
+      statusCode: 403,
+      message: "You do not have access to this branch",
+    });
+    expect(req.branchId).toBeUndefined();
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("denies unauthorized branch access (no membership row)", async () => {
     findUnique.mockResolvedValue(null);
 
@@ -58,8 +77,6 @@ describe("requireBranchContext", () => {
   });
 
   it("denies cross-business branch access even with a membership row", async () => {
-    // Defense-in-depth case: a UserBranch row exists but the branch it
-    // points to belongs to a different business than the caller.
     findUnique.mockResolvedValue({
       id: "ub-1",
       userId: "user-1",
