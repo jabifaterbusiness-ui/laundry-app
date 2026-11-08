@@ -77,14 +77,15 @@ const allowedPreviousStatuses: Record<string, string[]> = {
 };
 
 async function resolveWebhookConnection(context: { wabaId?: string; phoneNumberId?: string }) {
-  if (!context.phoneNumberId) return null;
+  // Both provider identifiers are required. A signed payload with only a
+  // phone number ID must never be enough to select a tenant connection.
+  if (!context.phoneNumberId || !context.wabaId) return null;
   const connection = await prisma.whatsAppBusinessConnection.findUnique({
     where: { phoneNumberId: context.phoneNumberId },
     select: { id: true, businessId: true, wabaId: true },
   });
-  // A signed webhook must still identify the same WABA/phone pair that this
-  // tenant connected. Never route a callback to a tenant on phone ID alone.
-  if (context.wabaId && connection?.wabaId !== context.wabaId) return null;
+  // The callback must identify the same WABA/phone pair that this tenant connected.
+  if (connection?.wabaId !== context.wabaId) return null;
   return connection;
 }
 
