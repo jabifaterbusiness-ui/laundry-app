@@ -65,7 +65,7 @@ function hashToken(token: string): string {
  * hash of the refresh token so it can be looked up / revoked later.
  * Raw refresh tokens are never stored.
  */
-export async function issueTokenPair(user: TokenSubject, db: TokenDb = prisma, sessionId = crypto.randomUUID()) {
+export async function issueTokenPair(user: TokenSubject, db: TokenDb = prisma, sessionId: string = crypto.randomUUID()) {
   const accessToken = signAccessToken(user, sessionId);
   const refreshToken = crypto.randomBytes(64).toString("hex");
   const refreshTokenHash = hashToken(refreshToken);
