@@ -82,9 +82,9 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     // Authorization scope and role are read from the current account record,
     // not stale JWT claims, so role/business changes take effect immediately.
     securityRole: account.securityRole ?? payload.securityRole,
-    // Prisma always returns this selected field in production (including
-    // null for platform accounts); retain the signed claim only if a test
-    // double or legacy projection omitted the property entirely.
+    // A real database row returns this selected field even when it is null
+    // for a platform account. Retain the signed claim only if the property
+    // is absent from a partial account projection.
     businessId: account.businessId === undefined ? payload.businessId : account.businessId,
   };
   return next();
