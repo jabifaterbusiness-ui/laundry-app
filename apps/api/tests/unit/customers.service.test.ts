@@ -328,6 +328,67 @@ describe("updateCustomer - tenant isolation", () => {
     });
   });
 
+  it("invalidates old WhatsApp consent when the customer's phone number changes", async () => {
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-1",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348011111111",
+        whatsappOptIn: true,
+        whatsappOptInAt: new Date("2026-09-01T00:00:00.000Z"),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      } as never)
+      .mockResolvedValueOnce({ id: "cust-1", phone: "2348022222222", whatsappOptIn: false } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", {
+      phone: "2348022222222",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-1", businessId: "biz-1" },
+      data: {
+        phone: "2348022222222",
+        whatsappOptIn: false,
+        whatsappOptInAt: null,
+        whatsappOptInSource: null,
+        whatsappOptOutAt: null,
+      },
+    });
+  });
+
+  it("records fresh WhatsApp consent when the new phone opts in during the same update", async () => {
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-1",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348011111111",
+        whatsappOptIn: true,
+      } as never)
+      .mockResolvedValueOnce({ id: "cust-1", phone: "2348022222222", whatsappOptIn: true } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", {
+      phone: "2348022222222",
+      whatsappOptIn: true,
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-1", businessId: "biz-1" },
+      data: expect.objectContaining({
+        phone: "2348022222222",
+        whatsappOptIn: true,
+        whatsappOptInAt: expect.any(Date),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      }),
+    });
+  });
+
   it("throws 404 (not a silent no-op) when nothing matched, e.g. cross-business", async () => {
     updateMany.mockResolvedValue({ count: 0 });
 
