@@ -1141,9 +1141,12 @@ describe("Payroll generation routes", () => {
     expect(res.body.status).toBe("PROCESSING");
     expect(res.body.records).toHaveLength(1);
 
-    expect(tx.payrollPeriod.update).toHaveBeenCalledWith({
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalledWith({
       where: {
         id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        status: "OPEN",
       },
       data: {
         status: "PROCESSING",
