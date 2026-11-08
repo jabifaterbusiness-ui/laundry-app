@@ -600,7 +600,7 @@ describe("Payroll deduction routes", () => {
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "test-sensitive-token");
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.payrollPeriodId).toBe(PERIOD_A);
     expect(res.body.records).toHaveLength(1);
 
@@ -1071,6 +1071,15 @@ describe("Payroll generation routes", () => {
           status: "PROCESSING",
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      user: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: EMPLOYEE_A,
+            fullName: "John Employee",
+            role: "Accountant",
+          },
+        ]),
       },
       payrollRecord: {
         create: vi.fn().mockResolvedValue(createdRecord),
@@ -1713,7 +1722,7 @@ describe("Payroll status routes", () => {
       },
     ],
   };  it("returns payroll payment status for a finance user", async () => {
-    payrollPeriodFindFirst.mockResolvedValue({
+    payrollPeriodFindFirst.mockReset().mockResolvedValue({
       ...statusPeriodFixture,
       payrollRecords: [statusRecordFixture],
     } as never);
@@ -1789,7 +1798,7 @@ describe("Payroll status routes", () => {
       },
     } as never);
 
-    payrollPeriodFindFirst.mockResolvedValue(null);
+    payrollPeriodFindFirst.mockReset().mockResolvedValue(null);
 
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
