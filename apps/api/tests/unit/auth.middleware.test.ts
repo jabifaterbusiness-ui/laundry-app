@@ -181,6 +181,7 @@ describe("requireAuth middleware account validity", () => {
     expect(refreshTokenFindFirstMock).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
+        userId: "user-1",
         revokedAt: null,
         expiresAt: { gt: expect.any(Date) },
       },
@@ -234,6 +235,7 @@ describe("requireAuth middleware account validity", () => {
     expect(refreshTokenFindFirstMock).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
+        userId: "user-1",
         revokedAt: null,
         expiresAt: { gt: expect.any(Date) },
       },
