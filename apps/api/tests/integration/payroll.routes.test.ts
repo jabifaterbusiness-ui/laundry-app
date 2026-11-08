@@ -1062,10 +1062,7 @@ describe("Payroll generation routes", () => {
 
     const tx = {
       payrollPeriod: {
-        findFirst: vi.fn().mockResolvedValue({
-          ...periodFixture,
-          status: "PROCESSING",
-        }),
+        findFirst: vi.fn().mockResolvedValue(periodFixture),
         update: vi.fn().mockResolvedValue({
           ...periodFixture,
           status: "PROCESSING",
@@ -1083,7 +1080,13 @@ describe("Payroll generation routes", () => {
       },
       payrollRecord: {
         create: vi.fn().mockResolvedValue(createdRecord),
-        findMany: vi.fn().mockResolvedValue([]),
+        findMany: vi.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([createdRecord]),
+        update: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          ...createdRecord,
+          ...data,
+        })),
       },
       branchResourceShare: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -1722,10 +1725,10 @@ describe("Payroll status routes", () => {
       },
     ],
   };  it("returns payroll payment status for a finance user", async () => {
-    payrollPeriodFindFirst.mockReset().mockResolvedValue({
+    payrollPeriodFindFirst.mockReset().mockImplementation(async () => ({
       ...statusPeriodFixture,
       payrollRecords: [statusRecordFixture],
-    } as never);
+    }) as never);
 
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
