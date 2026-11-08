@@ -40,12 +40,12 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     return next(new AppError("Invalid or expired access token", 401));
   }
 
-  let account: { isActive: boolean; deletedAt: Date | null } | null;
+  let account: { isActive: boolean; deletedAt: Date | null; businessId: string | null; securityRole: Role } | null;
 
   try {
     account = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isActive: true, deletedAt: true },
+      select: { isActive: true, deletedAt: true, businessId: true, securityRole: true },
     });
   } catch (error) {
     return next(error);
@@ -79,8 +79,10 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     id: payload.sub,
     email: payload.email,
     role: "",
-    securityRole: payload.securityRole,
-    businessId: payload.businessId,
+    // Authorization scope and role are read from the current account record,
+    // not stale JWT claims, so role/business changes take effect immediately.
+    securityRole: account.securityRole,
+    businessId: account.businessId,
   };
   return next();
 }
