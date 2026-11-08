@@ -391,10 +391,11 @@ async function getEditableCustomerAccountForBranch(
       })
     : null;
   const accountBranchId = sharingRule?.customerAccountMode === "SEPARATE" ? branchId : null;
-  return tx.customerAccount.findFirst({
+  const account = await tx.customerAccount.findFirst({
     where: { customerId: customer.id, businessId, branchId: accountBranchId },
     select: { id: true, branchId: true },
   });
+  return { account, accountBranchId };
 }
 
 /**
@@ -438,18 +439,18 @@ export async function transferCustomer(
     const targetAccount = await getEditableCustomerAccountForBranch(
       tx, targetCustomer, businessId, branchId,
     );
-    if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
+    if (sourceAccount.account && sourceAccount.accountBranchId !== targetAccount.accountBranchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be transferred together", 409);
     }
-    if (sourceAccount && targetAccount) {
+    if (sourceAccount.account && targetAccount.account) {
       await tx.customerAccountTransaction.updateMany({
-        where: { businessId, customerAccountId: sourceAccount.id },
-        data: { customerAccountId: targetAccount.id },
+        where: { businessId, customerAccountId: sourceAccount.account.id },
+        data: { customerAccountId: targetAccount.account.id },
       });
-      await tx.customerAccount.delete({ where: { id: sourceAccount.id } });
-    } else if (sourceAccount && !targetAccount) {
+      await tx.customerAccount.delete({ where: { id: sourceAccount.account.id } });
+    } else if (sourceAccount.account && !targetAccount.account) {
       await tx.customerAccount.update({
-        where: { id: sourceAccount.id },
+        where: { id: sourceAccount.account.id },
         data: { customerId: targetCustomer.id },
       });
     }
@@ -504,18 +505,18 @@ export async function mergeCustomer(
     const targetAccount = await getEditableCustomerAccountForBranch(
       tx, targetCustomer, businessId, branchId,
     );
-    if (sourceAccount && targetAccount && sourceAccount.branchId !== targetAccount.branchId) {
+    if (sourceAccount.account && sourceAccount.accountBranchId !== targetAccount.accountBranchId) {
       throw new AppError("Customer accounts belong to different branches and cannot be merged together", 409);
     }
-    if (sourceAccount && targetAccount) {
+    if (sourceAccount.account && targetAccount.account) {
       await tx.customerAccountTransaction.updateMany({
-        where: { businessId, customerAccountId: sourceAccount.id },
-        data: { customerAccountId: targetAccount.id },
+        where: { businessId, customerAccountId: sourceAccount.account.id },
+        data: { customerAccountId: targetAccount.account.id },
       });
-      await tx.customerAccount.delete({ where: { id: sourceAccount.id } });
-    } else if (sourceAccount && !targetAccount) {
+      await tx.customerAccount.delete({ where: { id: sourceAccount.account.id } });
+    } else if (sourceAccount.account && !targetAccount.account) {
       await tx.customerAccount.update({
-        where: { id: sourceAccount.id },
+        where: { id: sourceAccount.account.id },
         data: { customerId: targetCustomer.id },
       });
     }
