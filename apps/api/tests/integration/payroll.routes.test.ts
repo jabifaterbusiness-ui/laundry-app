@@ -659,7 +659,12 @@ describe("Payroll deduction routes", () => {
 
     const tx = {
       payrollPeriod: {
-        findFirst: vi.fn().mockResolvedValue(periodFixture),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(periodFixture)
+          .mockResolvedValue({
+            ...periodFixture,
+            status: "PROCESSING",
+          }),
       },
     };
     vi.mocked(prisma.$transaction).mockImplementation(
