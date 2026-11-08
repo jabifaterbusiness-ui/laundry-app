@@ -63,13 +63,16 @@ export interface BranchResourceScope {
   editableResourceIds: string[];
 }
 
-export async function getBranchResourceScope(input: {
-  businessId: string;
-  branchId: string;
-  userId: string;
-  resourceType: BranchResourceType;
-}): Promise<BranchResourceScope> {
-  const shares = await prisma.branchResourceShare.findMany({
+export async function getBranchResourceScope(
+  input: {
+    businessId: string;
+    branchId: string;
+    userId: string;
+    resourceType: BranchResourceType;
+  },
+  db: typeof prisma | Prisma.TransactionClient = prisma,
+): Promise<BranchResourceScope> {
+  const shares = await db.branchResourceShare.findMany({
     where: {
       businessId: input.businessId,
       targetBranchId: input.branchId,
@@ -96,17 +99,20 @@ export async function getBranchResourceScope(input: {
   };
 }
 
-export async function assertBranchResourceWriteAccess(input: {
-  businessId: string;
-  branchId: string;
-  userId: string;
-  resourceType: BranchResourceType;
-  ownerBranchId: string | null;
-  resourceId: string;
-}) {
+export async function assertBranchResourceWriteAccess(
+  input: {
+    businessId: string;
+    branchId: string;
+    userId: string;
+    resourceType: BranchResourceType;
+    ownerBranchId: string | null;
+    resourceId: string;
+  },
+  db: typeof prisma | Prisma.TransactionClient = prisma,
+) {
   if (!input.ownerBranchId || input.ownerBranchId === input.branchId) return;
 
-  const share = await prisma.branchResourceShare.findFirst({
+  const share = await db.branchResourceShare.findFirst({
     where: {
       businessId: input.businessId,
       ownerBranchId: input.ownerBranchId,
