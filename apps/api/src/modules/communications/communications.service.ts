@@ -611,7 +611,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
       retryOfId: true,
       retryAttempt: true,
       retryPayload: true,
-      customer: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true, phone: true, whatsappOptIn: true } },
       order: { select: { id: true, orderNumber: true } },
       campaign: { select: { id: true, title: true } },
       retries: { select: { id: true }, take: 1 },
@@ -620,12 +620,18 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
     take: 200,
   });
 
-  return deliveries.map(({ retryPayload, retries, ...delivery }) => ({
-    ...delivery,
-    retryAvailable:
-      delivery.channel === "WHATSAPP" &&
-      delivery.status === "FAILED" &&
-      retryPayload !== null &&
-      retries.length === 0,
-  }));
+  return deliveries.map(({ retryPayload, retries, ...delivery }) => {
+    const { phone, whatsappOptIn, ...customer } = delivery.customer;
+    return {
+      ...delivery,
+      customer,
+      retryAvailable:
+        delivery.channel === "WHATSAPP" &&
+        delivery.status === "FAILED" &&
+        retryPayload !== null &&
+        retries.length === 0 &&
+        whatsappOptIn &&
+        phone === delivery.destination,
+    };
+  });
 }
