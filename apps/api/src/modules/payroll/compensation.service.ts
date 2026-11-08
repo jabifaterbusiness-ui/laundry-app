@@ -239,6 +239,8 @@ export async function listUnassignedLegacyCompensation({
           fullName: true,
           email: true,
           role: true,
+          isActive: true,
+          deletedAt: true,
           branches: {
             where: { branch: { businessId } },
             select: {
