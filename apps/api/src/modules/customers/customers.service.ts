@@ -548,10 +548,33 @@ export async function mergeCustomer(
       !otherBranchOrder && !otherBranchAccount && !externalShare;
 
     if (sourceDeactivated) {
+      const previousStatus = customer.lifecycleStatus;
+      const shouldMoveToDormant = previousStatus === "ACTIVE";
+      const statusChangedAt = new Date();
       await tx.customer.updateMany({
         where: { id: customer.id, businessId, ownerBranchId: branchId },
-        data: { isActive: false },
+        data: {
+          isActive: false,
+          ...(shouldMoveToDormant ? {
+            lifecycleStatus: "DORMANT",
+            statusReason: "Merged into another customer",
+            statusChangedAt,
+            statusChangedById: userId,
+          } : {}),
+        },
       });
+      if (shouldMoveToDormant) {
+        await tx.customerStatusHistory.create({
+          data: {
+            customerId: customer.id,
+            businessId,
+            previousStatus,
+            newStatus: "DORMANT",
+            reason: "Merged into another customer",
+            changedById: userId,
+          },
+        });
+      }
     }
 
     return {
