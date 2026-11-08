@@ -520,11 +520,17 @@ export async function retryWhatsAppDelivery(
 
   const customer = await prisma.customer.findFirst({
     where: { id: source.customerId, businessId },
-    select: { whatsappOptIn: true },
+    select: { whatsappOptIn: true, phone: true },
   });
   if (!customer?.whatsappOptIn) {
     throw new AppError(
       "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      422,
+    );
+  }
+  if (customer.phone !== source.destination) {
+    throw new AppError(
+      "Customer phone number has changed since this message was created. Confirm consent for the current number before retrying.",
       422,
     );
   }
