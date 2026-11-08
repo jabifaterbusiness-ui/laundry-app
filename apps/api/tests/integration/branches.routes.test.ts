@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -79,7 +80,8 @@ const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
+    { sub: userId,
+    sid: "session-test", email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
