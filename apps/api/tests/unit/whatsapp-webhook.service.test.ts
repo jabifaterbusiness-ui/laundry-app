@@ -85,6 +85,7 @@ describe("processWhatsAppWebhook", () => {
     const payload = {
       object: "whatsapp_business_account",
       entry: [{
+        id: "waba-12345",
         changes: [{
           value: {
             metadata: { phone_number_id: "phone-12345" },
@@ -109,7 +110,7 @@ describe("processWhatsAppWebhook", () => {
     mocks.updateMany.mockResolvedValue({ count: 0 });
     const payload = {
       object: "whatsapp_business_account",
-      entry: [{ changes: [{ value: { metadata: { phone_number_id: "phone-12345" }, statuses: [{ id: "wamid-race", status: "delivered" }] } }] }],
+      entry: [{ id: "waba-12345", changes: [{ value: { metadata: { phone_number_id: "phone-12345" }, statuses: [{ id: "wamid-race", status: "delivered" }] } }] }],
     };
     const body = Buffer.from(JSON.stringify(payload));
     const result = await processWhatsAppWebhook(body, makeSignature(body));
@@ -190,6 +191,24 @@ describe("processWhatsAppWebhook", () => {
     await processWhatsAppWebhook(body, makeSignature(body));
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ businessId: null, connectionId: null, eventType: "MESSAGE_RECEIVED" }),
+    }));
+  });
+
+  it("does not route status callbacks by phone number when the WABA ID is missing", async () => {
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{ value: {
+        metadata: { phone_number_id: "phone-12345" },
+        statuses: [{ id: "wamid-no-waba", status: "delivered" }],
+      } }] }],
+    };
+    const body = Buffer.from(JSON.stringify(payload));
+    await processWhatsAppWebhook(body, makeSignature(body));
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ businessId: null, connectionId: null }),
+    }));
+    expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ businessId: "__unmatched_whatsapp_business__" }),
     }));
   });
 
