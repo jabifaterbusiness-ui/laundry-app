@@ -182,6 +182,11 @@ export async function updateInvoiceFinancialRules(input: {
 
       const normalizedKind = kind as "PERCENTAGE" | "FIXED";
       const normalizedTreatment = treatment as "ADDITIVE" | "WITHHOLDING";
+      const allowWithOtherTaxes =
+        typeof snapshot?.allowWithOtherTaxes === "boolean"
+          ? snapshot.allowWithOtherTaxes
+          : rule?.allowWithOtherTaxes ?? (existingTaxIds.size > 1);
+
       return {
         id,
         name,
@@ -189,9 +194,11 @@ export async function updateInvoiceFinancialRules(input: {
         value,
         treatment: normalizedTreatment,
         enabled: true,
-        // A previously applied tax combination was already accepted. Its
-        // immutable invoice snapshot remains valid if the rule was retired.
-        allowWithOtherTaxes: existingTaxIds.has(id) ? true : rule?.allowWithOtherTaxes ?? true,
+        // Preserve the original stacking policy when it was snapshotted.
+        // For older invoices, use the current rule; if that rule was retired,
+        // only infer permission when the invoice already had multiple taxes
+        // (which could only have been saved after passing the stacking check).
+        allowWithOtherTaxes,
       };
     });
 
