@@ -1738,10 +1738,10 @@ describe("Payroll status routes", () => {
       },
     ],
   };  it("returns payroll payment status for a finance user", async () => {
-    payrollPeriodFindFirst.mockReset().mockImplementation(async () => ({
+    payrollPeriodFindFirst.mockReset().mockResolvedValue({
       ...statusPeriodFixture,
       payrollRecords: [statusRecordFixture],
-    }) as never);
+    } as never);
 
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
