@@ -652,6 +652,7 @@ describe("payroll.service", () => {
         where: {
           businessId: "business-1",
           isActive: true,
+          deletedAt: null,
           branches: { some: { branchId: "branch-1" } },
         },
         select: { id: true, fullName: true, role: true },
