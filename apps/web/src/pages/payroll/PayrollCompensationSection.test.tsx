@@ -185,6 +185,8 @@ describe("PayrollCompensationSection", () => {
         branchId: null,
         employee: {
           ...compensation[0]!.employee,
+          isActive: true,
+          deletedAt: null,
           branches: [
             { branch: { id: "branch-1", name: "1st Avenue", isActive: true } },
             { branch: { id: "branch-2", name: "mainbranch", isActive: true } },
