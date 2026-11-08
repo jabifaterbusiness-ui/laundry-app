@@ -187,4 +187,89 @@ describe("updateInvoiceFinancialRules branch and discount scope", () => {
     expect(result.after.totalAmount).toBe(950);
     expect(tx.invoice.update).toHaveBeenCalled();
   });
+  it("preserves the original no-stacking policy when an existing tax is retained", async () => {
+    const invoice = {
+      ...baseInvoice,
+      appliedTaxes: [{
+        id: "exclusive-tax",
+        name: "Exclusive levy",
+        kind: "PERCENTAGE",
+        value: 5,
+        treatment: "ADDITIVE",
+        amount: 50,
+        allowWithOtherTaxes: false,
+      }],
+    };
+    setup({
+      invoice,
+      taxes: [
+        {
+          id: "exclusive-tax",
+          name: "Exclusive levy",
+          kind: "PERCENTAGE",
+          value: 5,
+          treatment: "ADDITIVE",
+          allowWithOtherTaxes: true,
+          isActive: true,
+        },
+        {
+          id: "new-tax",
+          name: "New tax",
+          kind: "PERCENTAGE",
+          value: 2,
+          treatment: "ADDITIVE",
+          allowWithOtherTaxes: true,
+          isActive: true,
+        },
+      ],
+    });
+
+    await expect(updateInvoiceFinancialRules({
+      ...baseInput,
+      taxRuleIds: ["exclusive-tax", "new-tax"],
+    })).rejects.toThrow("One or more selected taxes cannot be combined with other taxes");
+  });
+
+  it("uses the current rule policy for a legacy tax snapshot without stacking metadata", async () => {
+    const invoice = {
+      ...baseInvoice,
+      appliedTaxes: [{
+        id: "legacy-exclusive-tax",
+        name: "Legacy exclusive levy",
+        kind: "PERCENTAGE",
+        value: 5,
+        treatment: "ADDITIVE",
+        amount: 50,
+      }],
+    };
+    setup({
+      invoice,
+      taxes: [
+        {
+          id: "legacy-exclusive-tax",
+          name: "Legacy exclusive levy",
+          kind: "PERCENTAGE",
+          value: 5,
+          treatment: "ADDITIVE",
+          allowWithOtherTaxes: false,
+          isActive: true,
+        },
+        {
+          id: "new-tax",
+          name: "New tax",
+          kind: "PERCENTAGE",
+          value: 2,
+          treatment: "ADDITIVE",
+          allowWithOtherTaxes: true,
+          isActive: true,
+        },
+      ],
+    });
+
+    await expect(updateInvoiceFinancialRules({
+      ...baseInput,
+      taxRuleIds: ["legacy-exclusive-tax", "new-tax"],
+    })).rejects.toThrow("One or more selected taxes cannot be combined with other taxes");
+  });
+
 });
