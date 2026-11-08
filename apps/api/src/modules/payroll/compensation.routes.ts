@@ -6,10 +6,12 @@ import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import {
+  assignLegacyCompensationController,
   createCompensationController,
   getCompensationController,
   getCurrentCompensationController,
   listCompensationController,
+  listUnassignedLegacyCompensationController,
 } from "./compensation.controller.js";
 
 const router = Router();
@@ -17,6 +19,18 @@ const router = Router();
 router.use(asyncHandler(requireAuth));
 router.use(asyncHandler(requireBusinessContext));
 router.use(asyncHandler(requireBranchContext));
+
+router.get(
+  "/unassigned-legacy",
+  asyncHandler(requirePermission("compensation.manage")),
+  asyncHandler(listUnassignedLegacyCompensationController),
+);
+
+router.patch(
+  "/:id/assign-legacy-to-current-branch",
+  asyncHandler(requirePermission("compensation.manage")),
+  asyncHandler(assignLegacyCompensationController),
+);
 
 router.post(
   "/",
