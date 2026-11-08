@@ -442,7 +442,8 @@ export function PayrollCompensationSection({
                 </thead>
                 <tbody>
                   {(unassignedLegacyQuery.data ?? []).map((item: UnassignedLegacyCompensation) => {
-                    const eligibleHere = item.employee.branches.some(
+                    const employeeActive = item.employee.isActive && !item.employee.deletedAt;
+                    const eligibleHere = employeeActive && item.employee.branches.some(
                       (membership) => membership.branch.id === branchId && membership.branch.isActive,
                     );
                     const eligibleBranches = item.employee.branches
@@ -464,7 +465,9 @@ export function PayrollCompensationSection({
                           {eligibleBranches.length ? eligibleBranches.join(", ") : "No active branch memberships"}
                         </td>
                         <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3" }}>
-                          {!eligibleHere ? (
+                          {!employeeActive ? (
+                            <span style={{ color: "#92400e", fontSize: 12 }}>Employee inactive or deleted</span>
+                          ) : !eligibleHere ? (
                             <span style={{ color: "#92400e", fontSize: 12 }}>Switch to an eligible branch</span>
                           ) : confirming ? (
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
