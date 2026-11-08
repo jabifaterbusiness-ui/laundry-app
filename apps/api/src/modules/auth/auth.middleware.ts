@@ -60,6 +60,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     activeSession = await prisma.refreshToken.findFirst({
       where: {
         sessionId: payload.sid,
+        userId: payload.sub,
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
