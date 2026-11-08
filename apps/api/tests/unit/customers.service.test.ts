@@ -722,6 +722,32 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
+  it("rejects merging ledgers when the target customer's account mode differs", async () => {
+    findFirst
+      .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
+      .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-A" } as never);
+    prismaMock.branchResourceShare.findFirst.mockImplementation((args) => Promise.resolve(
+      args?.select?.customerAccountMode
+        ? { customerAccountMode: "SEPARATE" }
+        : { id: "edit-share", accessLevel: "EDIT" },
+    ) as never);
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account", branchId: "branch-A" } as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
+    ).rejects.toMatchObject({
+      message: "Customer accounts belong to different branches and cannot be merged together",
+      statusCode: 409,
+    });
+
+    expect(customerAccountUpdate).not.toHaveBeenCalled();
+    expect(customerAccountTransactionUpdateMany).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it("moves source account transactions onto an existing target account and removes only the empty source account", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
@@ -1012,6 +1038,31 @@ describe("transferCustomer - full account transfer", () => {
       where: { businessId: "biz-A", customerAccountId: "source-branch-account" },
       data: { customerAccountId: "target-branch-account" },
     });
+  });
+
+  it("rejects transferring a source ledger into a target with a different account mode", async () => {
+    findFirst
+      .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
+      .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-A" } as never);
+    prismaMock.branchResourceShare.findFirst.mockImplementation((args) => Promise.resolve(
+      args?.select?.customerAccountMode
+        ? { customerAccountMode: "SEPARATE" }
+        : { id: "edit-share", accessLevel: "EDIT" },
+    ) as never);
+    orderFindMany.mockResolvedValue([]);
+    customerAccountFindFirst
+      .mockResolvedValueOnce({ id: "source-account", branchId: "branch-A" } as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      transferCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
+    ).rejects.toMatchObject({
+      message: "Customer accounts belong to different branches and cannot be transferred together",
+      statusCode: 409,
+    });
+
+    expect(customerAccountUpdate).not.toHaveBeenCalled();
+    expect(customerAccountTransactionUpdateMany).not.toHaveBeenCalled();
   });
 
   it("moves source account transactions onto an existing target account", async () => {
