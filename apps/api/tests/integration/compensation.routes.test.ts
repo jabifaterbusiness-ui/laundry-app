@@ -584,6 +584,7 @@ describe("Compensation routes - legacy assignment", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.branchId).toBe("branch-A");
+    expect(compensationUpdateMany).not.toHaveBeenCalled();
     expect(tx.user.findFirst).toHaveBeenCalledWith({
       where: {
         id: EMPLOYEE_A,
