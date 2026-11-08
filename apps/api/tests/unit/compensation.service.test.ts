@@ -32,8 +32,10 @@ vi.mock("../../src/lib/audit.js", () => ({
 import {
   createCompensation,
   getCompensation,
+  assignLegacyCompensationToBranch,
   getCurrentCompensation,
   listCompensation,
+  listUnassignedLegacyCompensation,
 } from "../../src/modules/payroll/compensation.service.js";
 
 describe("compensation service", () => {
@@ -434,4 +436,177 @@ describe("compensation service", () => {
     });
     expect(tx.employeeCompensation.update).not.toHaveBeenCalled();
   });
+
+  it("lists unassigned legacy compensation only for the requested business", async () => {
+    mocks.prisma.employeeCompensation.findMany.mockResolvedValue([]);
+
+    await listUnassignedLegacyCompensation({ businessId: "biz-1" });
+
+    expect(mocks.prisma.employeeCompensation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-1", branchId: null },
+      }),
+    );
+  });
+
+  it("assigns an unassigned legacy record to an active employee branch and audits it", async () => {
+    const effectiveFrom = new Date("2026-08-01");
+    const assigned = {
+      id: "comp-legacy",
+      businessId: "biz-1",
+      branchId: "branch-1",
+      employeeId: "employee-1",
+      effectiveFrom,
+      effectiveTo: null,
+    };
+    const tx = {
+      user: {
+        findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }),
+      },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({
+            id: "comp-legacy",
+            employeeId: "employee-1",
+            effectiveFrom,
+            effectiveTo: null,
+          })
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(assigned),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    const result = await assignLegacyCompensationToBranch({
+      businessId: "biz-1",
+      branchId: "branch-1",
+      id: "comp-legacy",
+      actorUserId: "owner-1",
+    });
+
+    expect(result).toEqual(assigned);
+    expect(tx.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "employee-1",
+        businessId: "biz-1",
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId: "branch-1" } },
+      },
+      select: { id: true },
+    });
+    expect(tx.employeeCompensation.updateMany).toHaveBeenCalledWith({
+      where: { id: "comp-legacy", businessId: "biz-1", branchId: null },
+      data: { branchId: "branch-1" },
+    });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: "biz-1",
+        branchId: "branch-1",
+        actorUserId: "owner-1",
+        action: "employee_compensation.legacy_assigned",
+        entityId: "comp-legacy",
+      }),
+    );
+    expect(mocks.prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: "Serializable" },
+    );
+  });
+
+  it("refuses to assign legacy compensation when the employee is not an active member of the target branch", async () => {
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue(null) },
+      employeeCompensation: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "comp-legacy",
+          employeeId: "employee-1",
+          effectiveFrom: new Date("2026-08-01"),
+          effectiveTo: null,
+        }),
+        updateMany: vi.fn(),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    await expect(assignLegacyCompensationToBranch({
+      businessId: "biz-1",
+      branchId: "branch-2",
+      id: "comp-legacy",
+      actorUserId: "owner-1",
+    })).rejects.toMatchObject({
+      message: "Employee is not an active member of the selected branch",
+      statusCode: 400,
+    });
+
+    expect(tx.employeeCompensation.updateMany).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses assignment when it would overlap another compensation period in that branch", async () => {
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({
+            id: "comp-legacy",
+            employeeId: "employee-1",
+            effectiveFrom: new Date("2026-08-01"),
+            effectiveTo: null,
+          })
+          .mockResolvedValueOnce({ id: "comp-existing" }),
+        updateMany: vi.fn(),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    await expect(assignLegacyCompensationToBranch({
+      businessId: "biz-1",
+      branchId: "branch-1",
+      id: "comp-legacy",
+      actorUserId: "owner-1",
+    })).rejects.toMatchObject({
+      message: "This employee already has compensation covering part of this period in the selected branch",
+      statusCode: 409,
+    });
+
+    expect(tx.employeeCompensation.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite a record that was already assigned by another request", async () => {
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: "employee-1" }) },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({
+            id: "comp-legacy",
+            employeeId: "employee-1",
+            effectiveFrom: new Date("2026-08-01"),
+            effectiveTo: null,
+          })
+          .mockResolvedValueOnce(null),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => unknown) => callback(tx),
+    );
+
+    await expect(assignLegacyCompensationToBranch({
+      businessId: "biz-1",
+      branchId: "branch-1",
+      id: "comp-legacy",
+      actorUserId: "owner-1",
+    })).rejects.toMatchObject({ statusCode: 409 });
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
 });
