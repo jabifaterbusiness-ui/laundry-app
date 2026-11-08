@@ -84,7 +84,7 @@ beforeEach(() => {
   mocks.communicationDeliveryFindMany.mockResolvedValue([]);
   mocks.communicationDeliveryCreate.mockResolvedValue({ id: "retry-delivery-1" });
   mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
-  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
+  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true, phone: "+2348000000000" });
   mocks.sendWhatsAppText.mockResolvedValue({ id: "wamid.retry-1" });
   mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid.template-1" });
   mocks.assertWhatsAppMessagingEnabled.mockResolvedValue(undefined);
@@ -146,7 +146,7 @@ describe("retryWhatsAppDelivery", () => {
     });
     expect(mocks.customerFindFirst).toHaveBeenCalledWith({
       where: { id: CUSTOMER_ID, businessId: "business-1" },
-      select: { whatsappOptIn: true },
+      select: { whatsappOptIn: true, phone: true },
     });
     expect(mocks.communicationDeliveryCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -248,8 +248,25 @@ describe("retryWhatsAppDelivery", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
+  it("rejects a retry when the customer's phone number no longer matches the original destination", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      whatsappOptIn: true,
+      phone: "+2348999999999",
+    });
+
+    await expect(
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+    ).rejects.toMatchObject({
+      message: "Customer phone number has changed since this message was created. Confirm consent for the current number before retrying.",
+      statusCode: 422,
+    });
+
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.communicationDeliveryCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects a retry when the customer has not opted in", async () => {
-    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
+    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false, phone: "+2348000000000" });
 
     await expect(
       retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
