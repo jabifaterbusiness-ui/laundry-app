@@ -68,6 +68,7 @@ const app = createApp();
 const PLATFORM_ADMIN = jwt.sign(
   {
     sub: "55555555-5555-4555-8555-555555555555",
+    sid: "session-test",
     email: "platform@example.com",
     role: "PLATFORM_ADMIN",
     securityRole: "PLATFORM_ADMIN",
@@ -80,6 +81,7 @@ const PLATFORM_ADMIN = jwt.sign(
 const OWNER_A = jwt.sign(
   {
     sub: "11111111-1111-4111-8111-111111111111",
+    sid: "session-test",
     email: "owner@example.com",
     role: "BUSINESS_OWNER",
     securityRole: "BUSINESS_OWNER",
@@ -92,6 +94,7 @@ const OWNER_A = jwt.sign(
 const STAFF_A = jwt.sign(
   {
     sub: "33333333-3333-4333-8333-333333333333",
+    sid: "session-test",
     email: "staff@example.com",
     role: "STAFF",
     securityRole: "STAFF",
