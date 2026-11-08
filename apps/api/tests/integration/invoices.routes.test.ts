@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({id: "00000000-0000-4000-8000-000000000001", allowNewBusinessRegistration: true, maintenanceMode: false, whatsappMessagingEnabled: true, automatedNotificationsEnabled: true, offlineSyncEnabled: true, version: 1, createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-01T00:00:00.000Z")}),
     },
@@ -99,6 +100,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
