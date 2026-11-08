@@ -70,6 +70,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -89,6 +90,7 @@ const compensationFindFirst = vi.mocked(prisma.employeeCompensation.findFirst);
 const compensationFindMany = vi.mocked(prisma.employeeCompensation.findMany);
 const compensationCreate = vi.mocked(prisma.employeeCompensation.create);
 const compensationUpdate = vi.mocked(prisma.employeeCompensation.update);
+const compensationUpdateMany = vi.mocked(prisma.employeeCompensation.updateMany);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
@@ -511,6 +513,98 @@ describe("Compensation routes - effective salary lookup", () => {
 
     expect(res.status).toBe(400);
     expect(compensationFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Compensation routes - legacy assignment", () => {
+  it("allows only a business owner to review unassigned compensation", async () => {
+    compensationFindMany.mockResolvedValue([] as never);
+
+    const ownerResponse = await request(app)
+      .get("/api/v1/payroll/compensation/unassigned-legacy")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(ownerResponse.status).toBe(200);
+    expect(compensationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A", branchId: null },
+      }),
+    );
+
+    vi.clearAllMocks();
+    businessFindFirst.mockResolvedValue({
+      id: "biz-A",
+      name: "Test Business",
+      isActive: true,
+    } as never);
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const managerResponse = await request(app)
+      .get("/api/v1/payroll/compensation/unassigned-legacy")
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(managerResponse.status).toBe(403);
+    expect(compensationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("assigns a legacy record only to the current branch after membership and overlap checks", async () => {
+    const effectiveFrom = new Date("2026-08-01T00:00:00.000Z");
+    const assigned = {
+      ...compensationFixture,
+      branchId: "branch-A",
+      effectiveFrom,
+      employee: employeeFixture,
+    };
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({
+            id: COMPENSATION_A,
+            employeeId: EMPLOYEE_A,
+            effectiveFrom,
+            effectiveTo: null,
+          })
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(assigned),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .patch(`/api/v1/payroll/compensation/${COMPENSATION_A}/assign-legacy-to-current-branch`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(res.status).toBe(200);
+    expect(res.body.branchId).toBe("branch-A");
+    expect(tx.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: EMPLOYEE_A,
+        businessId: "biz-A",
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId: "branch-A" } },
+      },
+      select: { id: true },
+    });
+    expect(tx.employeeCompensation.updateMany).toHaveBeenCalledWith({
+      where: { id: COMPENSATION_A, businessId: "biz-A", branchId: null },
+      data: { branchId: "branch-A" },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "employee_compensation.legacy_assigned",
+        businessId: "biz-A",
+        branchId: "branch-A",
+      }),
+    );
   });
 });
 
