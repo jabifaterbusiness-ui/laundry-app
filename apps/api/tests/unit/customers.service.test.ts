@@ -66,6 +66,8 @@ const customerAccountTransactionUpdateMany = vi.mocked(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.branchResourceShare.findMany.mockReset().mockResolvedValue([]);
+  prismaMock.branchResourceShare.findFirst.mockReset().mockResolvedValue(null);
 
   transaction.mockImplementation(
     async (callback) => callback(prismaMock as never),
