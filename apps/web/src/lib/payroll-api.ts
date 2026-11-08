@@ -427,6 +427,43 @@ export function listCompensation(
   );
 }
 
+export interface UnassignedLegacyCompensation extends EmployeeCompensation {
+  branchId: null;
+  employee: PayrollEmployee & {
+    branches: Array<{
+      branch: { id: string; name: string; isActive: boolean };
+    }>;
+  };
+}
+
+export function listUnassignedLegacyCompensation(
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<UnassignedLegacyCompensation[]>(
+    "/payroll/compensation/unassigned-legacy",
+    {
+      headers: headers(branchId),
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
+export function assignLegacyCompensationToCurrentBranch(
+  compensationId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<EmployeeCompensation>(
+    `/payroll/compensation/${compensationId}/assign-legacy-to-current-branch`,
+    {
+      method: "PATCH",
+      headers: headers(branchId),
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
 export function createCompensation(
   input: CreateCompensationInput,
   auth: AuthOptions,
