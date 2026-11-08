@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -115,6 +116,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
