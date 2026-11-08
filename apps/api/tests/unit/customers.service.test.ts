@@ -509,6 +509,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     businessId: "biz-A",
     ownerBranchId: "branch-A",
     isActive: true,
+    lifecycleStatus: "ACTIVE",
   };
 
   const targetCustomer = {
@@ -582,6 +583,20 @@ describe("mergeCustomer - duplicate account merge", () => {
       },
       data: {
         isActive: false,
+        lifecycleStatus: "DORMANT",
+        statusReason: "Merged into another customer",
+        statusChangedAt: expect.any(Date),
+        statusChangedById: "user-A",
+      },
+    });
+    expect(prismaMock.customerStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        customerId: sourceCustomer.id,
+        businessId: "biz-A",
+        previousStatus: "ACTIVE",
+        newStatus: "DORMANT",
+        reason: "Merged into another customer",
+        changedById: "user-A",
       },
     });
 
@@ -648,6 +663,10 @@ describe("mergeCustomer - duplicate account merge", () => {
       },
       data: {
         isActive: false,
+        lifecycleStatus: "DORMANT",
+        statusReason: "Merged into another customer",
+        statusChangedAt: expect.any(Date),
+        statusChangedById: "user-A",
       },
     });
 
@@ -810,6 +829,10 @@ describe("mergeCustomer - duplicate account merge", () => {
       },
       data: {
         isActive: false,
+        lifecycleStatus: "DORMANT",
+        statusReason: "Merged into another customer",
+        statusChangedAt: expect.any(Date),
+        statusChangedById: "user-A",
       },
     });
   });
