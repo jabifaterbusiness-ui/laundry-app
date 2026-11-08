@@ -670,6 +670,7 @@ export async function generatePayroll({
       where: {
         businessId,
         isActive: true,
+        deletedAt: null,
         branches: {
           some: {
             branchId,
