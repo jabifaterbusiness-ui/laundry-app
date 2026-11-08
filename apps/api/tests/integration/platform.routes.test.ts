@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     $queryRaw: vi.fn(),
     businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     business: {
