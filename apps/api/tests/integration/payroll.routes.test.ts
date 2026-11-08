@@ -1067,7 +1067,12 @@ describe("Payroll generation routes", () => {
 
     const tx = {
       payrollPeriod: {
-        findFirst: vi.fn().mockResolvedValue(periodFixture),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(periodFixture)
+          .mockResolvedValue({
+            ...periodFixture,
+            status: "PROCESSING",
+          }),
         update: vi.fn().mockResolvedValue({
           ...periodFixture,
           status: "PROCESSING",
