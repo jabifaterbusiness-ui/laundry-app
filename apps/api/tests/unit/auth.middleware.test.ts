@@ -165,7 +165,7 @@ describe("requireAuth middleware account validity", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: null });
+    userFindUniqueMock.mockResolvedValue({ isActive: true, deletedAt: null, businessId: "business-1", securityRole: "STAFF" });
     refreshTokenFindFirstMock.mockResolvedValue({ id: "refresh-session-1" });
   });
 
@@ -176,7 +176,7 @@ describe("requireAuth middleware account validity", () => {
 
     expect(userFindUniqueMock).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      select: { isActive: true, deletedAt: true },
+      select: { isActive: true, deletedAt: true, businessId: true, securityRole: true },
     });
     expect(refreshTokenFindFirstMock).toHaveBeenCalledWith({
       where: {
@@ -188,6 +188,25 @@ describe("requireAuth middleware account validity", () => {
       select: { id: true },
     });
     expect(req.user).toMatchObject({ id: "user-1", businessId: "business-1" });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses current database role and business scope instead of stale JWT claims", async () => {
+    userFindUniqueMock.mockResolvedValue({
+      isActive: true,
+      deletedAt: null,
+      businessId: "business-2",
+      securityRole: "BUSINESS_OWNER",
+    });
+    const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
+
+    await requireAuth(req, {} as Response, next);
+
+    expect(req.user).toMatchObject({
+      id: "user-1",
+      businessId: "business-2",
+      securityRole: "BUSINESS_OWNER",
+    });
     expect(next).toHaveBeenCalledTimes(1);
   });
 
