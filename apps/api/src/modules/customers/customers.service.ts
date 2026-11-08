@@ -248,7 +248,18 @@ async function updateCustomerWithDb(
   if (data.email !== undefined) patch.email = data.email;
   if (data.address !== undefined) patch.address = data.address;
   if (data.notes !== undefined) patch.notes = data.notes;
-  if (data.whatsappOptIn === true && !existing.whatsappOptIn) {
+
+  const phoneChanged = data.phone !== undefined && data.phone !== existing.phone;
+  if (phoneChanged && data.whatsappOptIn !== true) {
+    // Consent belongs to the phone number that was originally verified.
+    // A changed destination must opt in again before business-initiated sends.
+    patch.whatsappOptIn = false;
+    patch.whatsappOptInAt = null;
+    patch.whatsappOptInSource = null;
+    patch.whatsappOptOutAt = null;
+  }
+
+  if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged)) {
     patch.whatsappOptIn = true;
     patch.whatsappOptInAt = new Date();
     patch.whatsappOptInSource = data.whatsappOptInSource ?? null;
