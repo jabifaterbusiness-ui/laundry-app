@@ -46,7 +46,7 @@ export async function requireBranchContext(req: Request, _res: Response, next: N
     throw new AppError("You do not have access to this branch", 403);
   }
 
-  if (!membership.branch.isActive || membership.branch.businessId !== req.user.businessId) {
+  if (membership.branch.isActive === false || membership.branch.businessId !== req.user.businessId) {
     throw new AppError("You do not have access to this branch", 403);
   }
 
