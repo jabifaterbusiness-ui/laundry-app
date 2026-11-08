@@ -254,9 +254,8 @@ async function updateCustomerWithDb(
     // Consent belongs to the phone number that was originally verified.
     // A changed destination must opt in again before business-initiated sends.
     patch.whatsappOptIn = false;
-    patch.whatsappOptInAt = null;
-    patch.whatsappOptInSource = null;
-    patch.whatsappOptOutAt = null;
+    // Preserve the original consent timestamp/source and any prior opt-out
+    // timestamp as historical evidence; only invalidate its current validity.
   }
 
   if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged)) {
