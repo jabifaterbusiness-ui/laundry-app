@@ -123,8 +123,8 @@ describe("listCommunicationDeliveries", () => {
       customer: { name: "Ada" },
     });
     expect(result[0]).not.toHaveProperty("retryPayload");
-    expect(result[0].customer).not.toHaveProperty("phone");
-    expect(result[0].customer).not.toHaveProperty("whatsappOptIn");
+    expect(result[0]?.customer).not.toHaveProperty("phone");
+    expect(result[0]?.customer).not.toHaveProperty("whatsappOptIn");
   });
 
   it("does not advertise retries when the customer opted out or the stored destination is stale", async () => {
