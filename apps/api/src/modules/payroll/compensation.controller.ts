@@ -3,10 +3,12 @@ import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 
 import {
+  assignLegacyCompensationToBranch,
   createCompensation,
   getCompensation,
   getCurrentCompensation,
   listCompensation,
+  listUnassignedLegacyCompensation,
 } from "./compensation.service.js";
 
 import { createCompensationSchema } from "./compensation.validation.js";
@@ -25,6 +27,38 @@ function businessId(req: Request) {
   }
 
   return req.user.businessId;
+}
+
+export async function listUnassignedLegacyCompensationController(
+  req: Request,
+  res: Response,
+) {
+  if (req.user?.securityRole !== "BUSINESS_OWNER") {
+    throw new AppError(
+      "Only a business owner can review unassigned legacy compensation",
+      403,
+    );
+  }
+
+  const result = await listUnassignedLegacyCompensation({
+    businessId: businessId(req),
+  });
+
+  res.json(result);
+}
+
+export async function assignLegacyCompensationController(
+  req: Request,
+  res: Response,
+) {
+  const result = await assignLegacyCompensationToBranch({
+    businessId: businessId(req),
+    branchId: branchId(req),
+    id: req.params.id!,
+    actorUserId: req.user!.id,
+  });
+
+  res.json(result);
 }
 
 export async function createCompensationController(
