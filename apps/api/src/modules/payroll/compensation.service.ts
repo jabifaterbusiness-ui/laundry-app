@@ -225,6 +225,146 @@ export async function listCompensation({
   });
 }
 
+export async function listUnassignedLegacyCompensation({
+  businessId,
+}: {
+  businessId: string;
+}) {
+  return prisma.employeeCompensation.findMany({
+    where: { businessId, branchId: null },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          branches: {
+            where: { branch: { businessId } },
+            select: {
+              branch: {
+                select: { id: true, name: true, isActive: true },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ employeeId: "asc" }, { effectiveFrom: "desc" }],
+  });
+}
+
+export async function assignLegacyCompensationToBranch({
+  businessId,
+  branchId,
+  id,
+  actorUserId,
+}: {
+  businessId: string;
+  branchId: string;
+  id: string;
+  actorUserId: string;
+}) {
+  const compensation = await prisma.$transaction(async (tx) => {
+    const legacy = await tx.employeeCompensation.findFirst({
+      where: { id, businessId, branchId: null },
+      select: {
+        id: true,
+        employeeId: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+      },
+    });
+
+    if (!legacy) {
+      throw new AppError("Unassigned compensation record not found", 404);
+    }
+
+    const employee = await tx.user.findFirst({
+      where: {
+        id: legacy.employeeId,
+        businessId,
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId } },
+      },
+      select: { id: true },
+    });
+
+    if (!employee) {
+      throw new AppError(
+        "Employee is not an active member of the selected branch",
+        400,
+      );
+    }
+
+    const overlapping = await tx.employeeCompensation.findFirst({
+      where: {
+        businessId,
+        branchId,
+        employeeId: legacy.employeeId,
+        id: { not: legacy.id },
+        ...(legacy.effectiveTo
+          ? { effectiveFrom: { lt: legacy.effectiveTo } }
+          : {}),
+        OR: [
+          { effectiveTo: null },
+          { effectiveTo: { gt: legacy.effectiveFrom } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (overlapping) {
+      throw new AppError(
+        "This employee already has compensation covering part of this period in the selected branch",
+        409,
+      );
+    }
+
+    const updated = await tx.employeeCompensation.updateMany({
+      where: { id: legacy.id, businessId, branchId: null },
+      data: { branchId },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError(
+        "Compensation record was assigned by another request; refresh and try again",
+        409,
+      );
+    }
+
+    return tx.employeeCompensation.findFirst({
+      where: { id: legacy.id, businessId, branchId },
+      include: {
+        employee: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+      },
+    });
+  }, { isolationLevel: "Serializable" });
+
+  if (!compensation) {
+    throw new AppError("Compensation record could not be reloaded", 500);
+  }
+
+  await recordAuditEvent({
+    businessId,
+    branchId,
+    actorUserId,
+    action: "employee_compensation.legacy_assigned",
+    entityType: "EMPLOYEE_COMPENSATION",
+    entityId: compensation.id,
+    metadata: {
+      employeeId: compensation.employeeId,
+      effectiveFrom: compensation.effectiveFrom.toISOString(),
+      effectiveTo: compensation.effectiveTo?.toISOString() ?? null,
+    },
+  });
+
+  return compensation;
+}
+
 export async function getCurrentCompensation({
   businessId,
   branchId,
