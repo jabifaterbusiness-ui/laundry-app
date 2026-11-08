@@ -352,9 +352,6 @@ describe("updateCustomer - tenant isolation", () => {
       data: {
         phone: "2348022222222",
         whatsappOptIn: false,
-        whatsappOptInAt: null,
-        whatsappOptInSource: null,
-        whatsappOptOutAt: null,
       },
     });
   });
