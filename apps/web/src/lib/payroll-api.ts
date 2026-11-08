@@ -430,6 +430,8 @@ export function listCompensation(
 export interface UnassignedLegacyCompensation extends EmployeeCompensation {
   branchId: null;
   employee: PayrollEmployee & {
+    isActive: boolean;
+    deletedAt: string | null;
     branches: Array<{
       branch: { id: string; name: string; isActive: boolean };
     }>;
