@@ -46,7 +46,7 @@ export function CustomersPage() {
     mutationFn: (input: CreateCustomerInput) =>
       createCustomerWithOfflineQueue(
         input,
-        { accessToken },
+        { accessToken, branchId: activeBranchId },
         {
           businessId: user?.businessId ?? null,
           branchId: activeBranchId,
@@ -71,7 +71,7 @@ export function CustomersPage() {
       updateCustomerWithOfflineQueue(
         input.id,
         input.data,
-        { accessToken },
+        { accessToken, branchId: activeBranchId },
         {
           businessId: user?.businessId ?? null,
           branchId: activeBranchId,
