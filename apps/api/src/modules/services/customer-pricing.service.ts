@@ -3,9 +3,10 @@ import { AppError } from "../../middleware/error-handler.js";
 import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export async function listCustomerServicePrices(businessId: string, branchId: string, userId: string, customerId: string) {
-  const [scope, customerScope] = await Promise.all([
+  const [scope, customerScope, serviceScope] = await Promise.all([
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_PRICING" }),
     getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }),
+    getBranchResourceScope({ businessId, branchId, userId, resourceType: "SERVICES" }),
   ]);
   const customer = await prisma.customer.findFirst({
     where: {
@@ -21,7 +22,23 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
   });
   if (!customer) throw new AppError("Customer not found", 404);
   return prisma.customerServicePrice.findMany({
-    where: { businessId, customerId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+    where: {
+      businessId,
+      customerId,
+      OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+      // A price share must not disclose the name or base price of a service
+      // that the active branch cannot independently see.
+      service: {
+        is: {
+          businessId,
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+            { id: { in: serviceScope.resourceIds } },
+          ],
+        },
+      },
+    },
     include: {
       service: { select: { id: true, name: true, pieces: true, unitPrice: true, isActive: true } },
       branch: { select: { id: true, name: true } },
