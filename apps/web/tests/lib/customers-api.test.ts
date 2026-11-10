@@ -16,7 +16,7 @@ vi.mock("../../src/lib/customers-api.js", async () => {
   return actual;
 });
 
-const auth = { accessToken: "token" };
+const auth = { accessToken: "token", branchId: "branch-1" };
 
 const syncContext = {
   businessId: "business-1",
