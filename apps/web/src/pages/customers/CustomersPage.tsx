@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from "../../state/auth-store.js";
 import { CustomerFormDialog } from "./CustomerFormDialog.js";
 import { TableExportActions } from "../../components/exports/TableExportActions.js";
+import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 
 const PAGE_SIZE = 25;
 
@@ -22,6 +23,7 @@ export function CustomersPage() {
   const user = useAuthStore((s) => s.user);
   const activeBranchId = useAuthStore((s) => s.activeBranchId);
   const queryClient = useQueryClient();
+  const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
 
@@ -67,11 +69,11 @@ export function CustomersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; data: CreateCustomerInput }) =>
+    mutationFn: (input: { id: string; data: CreateCustomerInput; sensitiveAuthorization: string }) =>
       updateCustomerWithOfflineQueue(
         input.id,
         input.data,
-        { accessToken, branchId: activeBranchId },
+        { accessToken, branchId: activeBranchId, sensitiveAuthorization: input.sensitiveAuthorization },
         {
           businessId: user?.businessId ?? null,
           branchId: activeBranchId,
@@ -112,7 +114,13 @@ export function CustomersPage() {
 
   async function handleFormSubmit(input: CreateCustomerInput) {
     if (editingCustomer) {
-      await updateMutation.mutateAsync({ id: editingCustomer.id, data: input });
+      const sensitiveAuthorization = await requestSensitiveAuthorization();
+      if (!sensitiveAuthorization) return;
+      await updateMutation.mutateAsync({
+        id: editingCustomer.id,
+        data: input,
+        sensitiveAuthorization,
+      });
     } else {
       await createMutation.mutateAsync(input);
     }
