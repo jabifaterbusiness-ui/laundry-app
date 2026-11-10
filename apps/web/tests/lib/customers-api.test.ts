@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createCustomer,
   createCustomerWithOfflineQueue,
+  updateCustomer,
   updateCustomerWithOfflineQueue,
 } from "../../src/lib/customers-api.js";
 import { NetworkError } from "../../src/lib/api-client.js";
@@ -23,6 +25,30 @@ const syncContext = {
   branchId: "branch-1",
   actorUserId: "user-1",
 };
+
+describe("customer mutation branch context", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("sends X-Branch-Id when creating a customer", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-1" }), { status: 201 }),
+    );
+
+    await createCustomer({ name: "Test Customer", phone: "08012345678" }, auth);
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("branch-1");
+  });
+
+  it("sends X-Branch-Id when updating a customer", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-1" }), { status: 200 }),
+    );
+
+    await updateCustomer("customer-1", { name: "Updated Customer" }, auth);
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("branch-1");
+  });
+});
 
 describe("customers-api offline queue", () => {
   beforeEach(async () => {
