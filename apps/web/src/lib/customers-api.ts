@@ -151,7 +151,11 @@ export async function createCustomer(
 
 export async function createCustomerWithOfflineQueue(
   input: CreateCustomerInput,
-  auth: { accessToken: string | null; branchId?: string | null },
+  auth: {
+    accessToken: string | null;
+    branchId?: string | null;
+    sensitiveAuthorization?: string | null;
+  },
   syncContext: OfflineCustomerSyncContext,
 ): Promise<CustomerMutationResult> {
   if (input.confirmDuplicate) {
