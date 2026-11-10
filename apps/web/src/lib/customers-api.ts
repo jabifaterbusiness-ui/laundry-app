@@ -113,7 +113,7 @@ export async function createCustomer(
   const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
-    res = await fetch(`${API_BASE_URL}/customers`,
+    res = await fetch(`${API_BASE_URL}/customers`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -219,7 +219,7 @@ export async function updateCustomer(
   const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
-    res = await fetch(`${API_BASE_URL}/customers/${id}`,
+    res = await fetch(`${API_BASE_URL}/customers/${id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
