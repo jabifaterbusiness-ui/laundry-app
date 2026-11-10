@@ -138,7 +138,7 @@ describe("CustomersPage", () => {
         name: "Offline Customer",
         phone: "08012345678",
       }),
-      { accessToken: "token" },
+      { accessToken: "token", branchId: "branch-1" },
       {
         businessId: "business-1",
         branchId: "branch-1",
@@ -201,7 +201,7 @@ describe("CustomersPage", () => {
       expect.objectContaining({
         name: "Jane Updated",
       }),
-      { accessToken: "token" },
+      { accessToken: "token", branchId: "branch-1" },
       {
         businessId: "business-1",
         branchId: "branch-1",
