@@ -100,7 +100,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 // `duplicates` list on a 409 - see docs/CUSTOMERS.md section E.
 export async function createCustomer(
   input: CreateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
 ): Promise<Customer> {
   let res: Response;
 
@@ -110,6 +110,7 @@ export async function createCustomer(
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+        ...(auth.branchId ? { "X-Branch-Id": auth.branchId } : {}),
       },
       body: JSON.stringify(input),
     });
@@ -142,7 +143,7 @@ export async function createCustomer(
 
 export async function createCustomerWithOfflineQueue(
   input: CreateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
   syncContext: OfflineCustomerSyncContext,
 ): Promise<CustomerMutationResult> {
   if (input.confirmDuplicate) {
@@ -202,6 +203,7 @@ export async function updateCustomer(
   input: UpdateCustomerInput,
   auth: {
     accessToken: string | null;
+    branchId?: string | null;
     sensitiveAuthorization?: string | null;
   },
 ): Promise<Customer> {
@@ -213,6 +215,7 @@ export async function updateCustomer(
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+        ...(auth.branchId ? { "X-Branch-Id": auth.branchId } : {}),
         ...(auth.sensitiveAuthorization
           ? { "X-Sensitive-Authorization": auth.sensitiveAuthorization }
           : {}),
@@ -249,7 +252,7 @@ export async function updateCustomer(
 export async function updateCustomerWithOfflineQueue(
   id: string,
   input: UpdateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
   syncContext: OfflineCustomerSyncContext,
 ): Promise<CustomerMutationResult> {
   if (input.confirmDuplicate) {
