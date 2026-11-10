@@ -86,3 +86,123 @@ jobs:
       - name: Build production applications
         timeout-minutes: 15
         run: npm run build
+
+  deploy-staging:
+    name: Deploy PR #28 to isolated staging
+    needs: verify
+    if: >-
+      ${{ github.event_name == 'pull_request' &&
+          github.event.pull_request.head.ref == 'fix/production-acceptance-corrections' &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: laundryangel-staging
+    env:
+      STAGING_HOST: ${{ secrets.LAUNDRYANGEL_STAGING_HOST }}
+      STAGING_USER: ${{ secrets.LAUNDRYANGEL_STAGING_USER }}
+      STAGING_SSH_PRIVATE_KEY: ${{ secrets.LAUNDRYANGEL_STAGING_SSH_KEY }}
+      STAGING_KNOWN_HOSTS: ${{ secrets.LAUNDRYANGEL_STAGING_KNOWN_HOSTS }}
+    steps:
+      - name: Check one-time staging connection setup
+        id: connection
+        shell: bash
+        run: |
+          if [[ -z "$STAGING_HOST" || -z "$STAGING_USER" || -z "$STAGING_SSH_PRIVATE_KEY" || -z "$STAGING_KNOWN_HOSTS" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Staging deployment is safely skipped: GitHub staging connection secrets are not configured yet."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the exact CI-tested source
+        if: steps.connection.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Configure verified SSH connection
+        if: steps.connection.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/laundryangel_staging"
+          chmod 600 "$HOME/.ssh/laundryangel_staging"
+          printf '%s\\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Package the CI-tested source
+        if: steps.connection.outputs.enabled == 'true'
+        shell: bash
+        run: git archive --format=tar.gz --output="/tmp/laundryangel-staging-$GITHUB_SHA.tar.gz" HEAD
+
+      - name: Transfer and deploy only the staging web service
+        if: steps.connection.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="/tmp/laundryangel-staging-$GITHUB_SHA.tar.gz"
+          SSH=(ssh -i "$HOME/.ssh/laundryangel_staging" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -i "$HOME/.ssh/laundryangel_staging" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+
+          "${SCP[@]}" "$ARCHIVE" "$STAGING_USER@$STAGING_HOST:/tmp/laundryangel-staging-$GITHUB_SHA.tar.gz"
+
+          "${SSH[@]}" "$STAGING_USER@$STAGING_HOST" "bash -s -- '$GITHUB_SHA'" <<'REMOTE'
+          set -euo pipefail
+          SHA="$1"
+          SHORT_SHA="${SHA:0:7}"
+          ROOT="/opt/laundryangel/staging"
+          BASE="$ROOT/8ac9148"
+          RELEASE="$ROOT/ci-$SHA"
+          SOURCE="$RELEASE/source"
+          ARCHIVE="/tmp/laundryangel-staging-$SHA.tar.gz"
+          IMAGE="laundryangel-web:staging-$SHORT_SHA"
+
+          test -f "$BASE/compose.staging.yml"
+          test -f "$BASE/.env.staging"
+          sudo mkdir -p "$SOURCE"
+          sudo tar -xzf "$ARCHIVE" -C "$SOURCE"
+          sudo chown -R ubuntu:ubuntu "$RELEASE"
+          test -f "$SOURCE/deploy/web.production.Dockerfile"
+
+          sudo docker build \
+            --file "$SOURCE/deploy/web.production.Dockerfile" \
+            --tag "$IMAGE" \
+            "$SOURCE"
+
+          cat <<EOF | sudo tee "$RELEASE/web.override.yml" >/dev/null
+          services:
+            web:
+              image: $IMAGE
+              build:
+                context: $SOURCE
+                dockerfile: deploy/web.production.Dockerfile
+          EOF
+
+          COMPOSE=(sudo docker compose
+            --env-file "$BASE/.env.staging"
+            -f "$BASE/compose.staging.yml"
+            -f "$RELEASE/web.override.yml"
+            -p laundryangel-staging)
+
+          "${COMPOSE[@]}" config --quiet
+          "${COMPOSE[@]}" up -d --no-deps --force-recreate web
+
+          for attempt in {1..20}; do
+            if curl -fsS -I http://127.0.0.1:18080/ >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" -eq 20 ]]; then
+              echo "Staging web did not become healthy."
+              exit 1
+            fi
+            sleep 3
+          done
+
+          "${COMPOSE[@]}" exec -T api node -e 'fetch("http://127.0.0.1:4000/health").then(async r => { const body = await r.text(); console.log("API health:", r.status, body); if (!r.ok) process.exit(1); }).catch(error => { console.error(error); process.exit(1); })'
+          "${COMPOSE[@]}" ps
+          echo "Staging web deployment completed for $SHA. Production was not targeted."
+          REMOTE
+
+      - name: Report staging deployment skipped
+        if: steps.connection.outputs.enabled != 'true'
+        run: echo "CI passed. Add the four LAUNDRYANGEL_STAGING_* repository secrets to enable automatic staging deployment."
+
