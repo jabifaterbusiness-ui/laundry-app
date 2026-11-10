@@ -73,11 +73,9 @@ describe("customer-specific service pricing branch scope", () => {
   });
 
   it("does not expose a price when its linked service is not visible to the active branch", async () => {
-    prismaMock.branchResourceShare.findMany.mockImplementation(async ({ where }: any) =>
-      where.resourceType === "SERVICES"
-        ? [{ ownerBranchId: "branch-B", resourceId: "service-shared", accessLevel: "READ" }]
-        : [],
-    );
+    // No SERVICES share exists for Branch B's service, so it must not be
+    // included in the linked-service filter for Branch A.
+    prismaMock.branchResourceShare.findMany.mockResolvedValue([]);
     prismaMock.customer.findFirst.mockResolvedValue({
       id: "customer-1",
       ownerBranchId: "branch-A",
@@ -94,8 +92,8 @@ describe("customer-specific service pricing branch scope", () => {
               businessId: "biz-A",
               OR: [
                 { ownerBranchId: null },
-                { ownerBranchId: { in: ["branch-A", "branch-B"] } },
-                { id: { in: ["service-shared"] } },
+                { ownerBranchId: { in: ["branch-A"] } },
+                { id: { in: [] } },
               ],
             },
           },
@@ -103,7 +101,6 @@ describe("customer-specific service pricing branch scope", () => {
       }),
     );
   });
-
   it("does not reveal customer pricing when the customer is not visible to the branch", async () => {
     prismaMock.customer.findFirst.mockResolvedValue(null);
 
