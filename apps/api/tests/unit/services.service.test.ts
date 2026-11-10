@@ -30,6 +30,10 @@ const updateMany = vi.mocked(prisma.service.updateMany);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks preserves mock implementations; restore the default empty
+  // branch-share result so a sharing test cannot leak into later cases.
+  vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([]);
+  vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValue(null);
   vi.mocked(prisma.$transaction).mockImplementation(
     async (callback) => callback(prisma as never) as never,
   );
