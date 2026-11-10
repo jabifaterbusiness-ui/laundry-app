@@ -1,6 +1,7 @@
 import type { Customer, PaginatedResult } from "@laundry-app/shared";
 import { apiFetch, ApiError, NetworkError } from "./api-client.js";
 import { enqueueOfflineSyncOperation, type OfflineSyncQueueEntry } from "./offline-sync-queue.js";
+import { useAuthStore } from "../state/auth-store.js";
 
 export interface ListCustomersParams {
   page?: number;
@@ -95,6 +96,12 @@ export async function getCustomer(id: string, auth: { accessToken: string | null
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
+// Keep direct customer mutations aligned with apiFetch: explicit request context
+// wins, otherwise use the currently selected branch from the auth store.
+function getEffectiveBranchId(branchId?: string | null): string | null {
+  return branchId ?? useAuthStore.getState().activeBranchId;
+}
+
 // Does the POST directly (rather than via apiFetch) because apiFetch's
 // generic ApiError doesn't carry the response body, which would lose the
 // `duplicates` list on a 409 - see docs/CUSTOMERS.md section E.
@@ -103,14 +110,15 @@ export async function createCustomer(
   auth: { accessToken: string | null; branchId?: string | null },
 ): Promise<Customer> {
   let res: Response;
+  const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
-    res = await fetch(`${API_BASE_URL}/customers`, {
+    res = await fetch(`${API_BASE_URL}/customers`,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
-        ...(auth.branchId ? { "X-Branch-Id": auth.branchId } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
       },
       body: JSON.stringify(input),
     });
@@ -208,14 +216,15 @@ export async function updateCustomer(
   },
 ): Promise<Customer> {
   let res: Response;
+  const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
-    res = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    res = await fetch(`${API_BASE_URL}/customers/${id}`,
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
-        ...(auth.branchId ? { "X-Branch-Id": auth.branchId } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
         ...(auth.sensitiveAuthorization
           ? { "X-Sensitive-Authorization": auth.sensitiveAuthorization }
           : {}),
