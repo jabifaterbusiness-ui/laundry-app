@@ -124,9 +124,9 @@ jobs:
         shell: bash
         run: |
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/laundryangel_staging"
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/laundryangel_staging"
           chmod 600 "$HOME/.ssh/laundryangel_staging"
-          printf '%s\\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Package the CI-tested source
