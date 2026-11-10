@@ -18,6 +18,12 @@ const mockAuthState = vi.hoisted(() => ({
   activeBranchId: "branch-1",
 }));
 
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
+  useSensitiveAuthorization: () => ({
+    requestSensitiveAuthorization: vi.fn().mockResolvedValue("sensitive-token"),
+  }),
+}));
+
 vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: typeof mockAuthState) => unknown) =>
     selector(mockAuthState),
@@ -201,7 +207,7 @@ describe("CustomersPage", () => {
       expect.objectContaining({
         name: "Jane Updated",
       }),
-      { accessToken: "token", branchId: "branch-1" },
+      { accessToken: "token", branchId: "branch-1", sensitiveAuthorization: "sensitive-token" },
       {
         businessId: "business-1",
         branchId: "branch-1",
