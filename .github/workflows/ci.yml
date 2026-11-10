@@ -141,10 +141,7 @@ jobs:
           set -euo pipefail
           ARCHIVE="/tmp/laundryangel-staging-$GITHUB_SHA.tar.gz"
           git archive --format=tar.gz --output="$ARCHIVE" HEAD
-          ssh -i "$HOME/.ssh/laundryangel_staging" \\
-            -o IdentitiesOnly=yes \\
-            -o StrictHostKeyChecking=yes \\
-            "$STAGING_USER@$STAGING_HOST" "deploy $GITHUB_SHA" < "$ARCHIVE"
+          ssh -i "$HOME/.ssh/laundryangel_staging" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$STAGING_USER@$STAGING_HOST" "deploy $GITHUB_SHA" < "$ARCHIVE"
 
       - name: Report staging deployment skipped
         if: steps.connection.outputs.enabled != 'true'
