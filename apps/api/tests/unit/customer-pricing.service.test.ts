@@ -101,6 +101,38 @@ describe("customer-specific service pricing branch scope", () => {
       }),
     );
   });
+  it("includes a specifically shared service without widening the visible owner-branch scope", async () => {
+    prismaMock.branchResourceShare.findMany.mockImplementation(async ({ where }: any) =>
+      where.resourceType === "SERVICES"
+        ? [{ ownerBranchId: "branch-B", resourceId: "service-shared", accessLevel: "READ" }]
+        : [],
+    );
+    prismaMock.customer.findFirst.mockResolvedValue({
+      id: "customer-1",
+      ownerBranchId: "branch-A",
+    });
+    prismaMock.customerServicePrice.findMany.mockResolvedValue([]);
+
+    await listCustomerServicePrices("biz-A", "branch-A", "user-A", "customer-1");
+
+    expect(prismaMock.customerServicePrice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          service: {
+            is: {
+              businessId: "biz-A",
+              OR: [
+                { ownerBranchId: null },
+                { ownerBranchId: { in: ["branch-A"] } },
+                { id: { in: ["service-shared"] } },
+              ],
+            },
+          },
+        }),
+      }),
+    );
+  });
+
   it("does not reveal customer pricing when the customer is not visible to the branch", async () => {
     prismaMock.customer.findFirst.mockResolvedValue(null);
 
