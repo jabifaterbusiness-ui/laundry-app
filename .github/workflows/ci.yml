@@ -160,7 +160,7 @@ jobs:
           test -f "$BASE/.env.staging"
           sudo mkdir -p "$SOURCE"
           sudo tar -xzf "$ARCHIVE" -C "$SOURCE"
-          sudo chown -R ubuntu:ubuntu "$RELEASE"
+          sudo chown -R "$(id -un):$(id -gn)" "$RELEASE"
           test -f "$SOURCE/deploy/web.production.Dockerfile"
 
           sudo docker build \
