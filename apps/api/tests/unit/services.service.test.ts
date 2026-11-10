@@ -57,6 +57,31 @@ describe("listServices", () => {
     });
   });
 
+  it("includes only specifically shared service IDs in the branch visibility filter", async () => {
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([
+      { ownerBranchId: "branch-B", resourceId: "service-shared", accessLevel: "READ" },
+    ] as never);
+    findMany.mockResolvedValue([]);
+
+    await listServices({
+      businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
+      status: "all",
+    });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "biz-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: ["service-shared"] } },
+        ],
+      },
+    }));
+  });
+
   it("lists inactive services", async () => {
     findMany.mockResolvedValue([]);
 
