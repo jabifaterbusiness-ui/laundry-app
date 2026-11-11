@@ -190,6 +190,7 @@ describe("invoices.service", () => {
       const findFirst = vi.fn().mockResolvedValue(null);
 
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst,
         },
@@ -232,6 +233,7 @@ describe("invoices.service", () => {
 
     it("rejects duplicate invoice creation for the same order", async () => {
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst: vi.fn().mockResolvedValue({
             id: "order-1",
@@ -288,6 +290,7 @@ describe("invoices.service", () => {
 
     it("rejects an order with no items", async () => {
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst: vi.fn().mockResolvedValue({
             id: "order-1",
