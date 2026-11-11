@@ -71,7 +71,8 @@ describe("CustomersPage", () => {
     renderPage();
 
     expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
-    expect(screen.getByText("Business-wide legacy")).toBeInTheDocument();
+    expect(screen.queryByText("Business-wide legacy")).not.toBeInTheDocument();
+    expect(screen.getByText("Branch details unavailable")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no customers", async () => {
