@@ -66,13 +66,11 @@ export async function globalSearch(
                   { id: { in: customerScope.resourceIds } },
                 ],
               },
-              {
-                OR: [
-                  { name: { contains: query, mode: "insensitive" } },
-                  { phone: { contains: query } },
-                  { email: { contains: query, mode: "insensitive" } },
-                ],
-              },
+            ],
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { phone: { contains: query } },
+              { email: { contains: query, mode: "insensitive" } },
             ],
           },
           orderBy: {
