@@ -364,7 +364,7 @@ describe("Customers routes - authorization matrix", () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1", isActive: false } as never);
+    findFirst.mockResolvedValue({ id: "cust-1", ownerBranchId: "branch-A", isActive: false } as never);
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/deactivate")
@@ -375,7 +375,7 @@ describe("Customers routes - authorization matrix", () => {
 
   it("BUSINESS_OWNER can activate a customer", async () => {
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1", isActive: true } as never);
+    findFirst.mockResolvedValue({ id: "cust-1", ownerBranchId: "branch-A", isActive: true } as never);
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/activate")
@@ -456,7 +456,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("updating phone to a unique number succeeds", async () => {
     findMany.mockResolvedValue([]); // no duplicates in biz-A
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5559998888" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5559998888" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
@@ -488,7 +488,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
     // its own current row has this exact phone number.
     findMany.mockResolvedValue([]);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
@@ -505,7 +505,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("confirmDuplicate: true allows the update despite a match", async () => {
     findMany.mockResolvedValue([{ id: "other-cust", name: "Other Person", phone: "5551234567" }] as never);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
@@ -520,7 +520,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("security: duplicate matches are scoped to the caller's own business, never another business's customers", async () => {
     findMany.mockResolvedValue([]);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
     sensitiveAuthorizationFindUnique.mockResolvedValue({
       id: "sensitive-auth-b",
       tokenHash: "test-token-hash",
@@ -555,7 +555,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("a successful confirmed update writes a customer.updated audit event", async () => {
     findMany.mockResolvedValue([{ id: "other-cust", name: "Other Person", phone: "5551234567" }] as never);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
@@ -578,6 +578,7 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
     customerAccountFindFirst.mockResolvedValue({
@@ -620,6 +621,7 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
     customerAccountFindFirst.mockResolvedValue({
       id: "account-1",
@@ -660,6 +662,7 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
     customerAccountFindFirst.mockResolvedValue(null);
@@ -865,6 +868,7 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
     customerAccountFindFirst.mockResolvedValue(null);
