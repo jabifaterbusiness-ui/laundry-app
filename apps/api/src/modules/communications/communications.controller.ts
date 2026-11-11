@@ -22,7 +22,7 @@ export async function sendAnnouncement(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = createAnnouncementSchema.parse(req.body);
   const result = await createAnnouncement({
-    businessId: id, createdByUserId: req.user!.id,
+    businessId: id, branchId: requireBranchId(req), userId: req.user!.id, createdByUserId: req.user!.id,
     title: input.title, message: input.message, channels: input.channels, audience: input.audience,
     ...(input.whatsappTemplateName !== undefined ? { whatsappTemplateName: input.whatsappTemplateName } : {}),
     ...(input.whatsappTemplateLanguage !== undefined ? { whatsappTemplateLanguage: input.whatsappTemplateLanguage } : {}),
@@ -33,12 +33,12 @@ export async function sendAnnouncement(req: Request, res: Response) {
   res.status(201).json(result);
 }
 export async function getCustomerGroups(req: Request, res: Response) {
-  res.status(200).json({ data: await listCustomerGroups(requireBusinessId(req)) });
+  res.status(200).json({ data: await listCustomerGroups(requireBusinessId(req), requireBranchId(req), req.user!.id) });
 }
 export async function createCustomerGroup(req: Request, res: Response) {
   const id = requireBusinessId(req);
   const input = customerGroupSchema.parse(req.body);
-  const group = await saveCustomerGroup({ businessId: id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
+  const group = await saveCustomerGroup({ businessId: id, branchId: requireBranchId(req), userId: req.user!.id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
   await recordAuditEvent({ action: "communications.customer_group_created", entityType: "CustomerGroup", entityId: group.id, businessId: id, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { name: group.name, memberCount: group._count.members } });
   res.status(201).json(group);
 }
@@ -46,7 +46,7 @@ export async function updateCustomerGroupMembers(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id } = customerGroupIdSchema.parse(req.params);
   const input = customerGroupSchema.parse(req.body);
-  const group = await updateCustomerGroup({ businessId, groupId: id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
+  const group = await updateCustomerGroup({ businessId, branchId: requireBranchId(req), userId: req.user!.id, groupId: id, name: input.name, customerIds: input.customerIds, ...(input.description !== undefined ? { description: input.description } : {}) });
   await recordAuditEvent({ action: "communications.customer_group_updated", entityType: "CustomerGroup", entityId: group.id, businessId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null, metadata: { name: group.name, memberCount: group._count.members } });
   res.status(200).json(group);
 }
@@ -104,7 +104,7 @@ export async function sendReminders(req: Request, res: Response) {
 
 export async function getDeliveries(req: Request, res: Response) {
   res.status(200).json({
-    data: await listCommunicationDeliveries(requireBusinessId(req), requireBranchId(req)),
+    data: await listCommunicationDeliveries(requireBusinessId(req), requireBranchId(req), req.user!.id),
   });
 }
 
@@ -113,7 +113,7 @@ export async function retryWhatsAppDeliveryController(req: Request, res: Respons
   const { id } = statusRuleIdSchema.parse(req.params);
   const business = requireBusinessId(req);
   const branch = requireBranchId(req);
-  const result = await retryWhatsAppDelivery(id, business, branch);
+  const result = await retryWhatsAppDelivery(id, business, branch, req.user!.id);
   await recordAuditEvent({
     action: "communications.whatsapp_delivery_retried",
     entityType: "CommunicationDelivery",
