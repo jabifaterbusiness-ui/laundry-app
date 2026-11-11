@@ -182,6 +182,7 @@ const invoiceFixture = {
     id: ORDER_A,
     customer: {
       id: CUSTOMER_A,
+      ownerBranchId: BRANCH_A,
       name: "Jane Doe",
     },
     branch: {
@@ -555,6 +556,7 @@ describe("Invoices routes - tenant and branch isolation", () => {
           id: INVOICE_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          order: { is: { businessId: "biz-B", branchId: BRANCH_B, customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } } } },
         },
       }),
     );
@@ -578,6 +580,21 @@ describe("Invoices routes - tenant and branch isolation", () => {
           id: INVOICE_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          order: {
+            is: {
+              businessId: "biz-A",
+              branchId: BRANCH_A,
+              customer: {
+                is: {
+                  businessId: "biz-A",
+                  OR: [
+                    { ownerBranchId: { in: [BRANCH_A] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
+          },
         },
       }),
     );
@@ -601,6 +618,7 @@ describe("Invoices routes - tenant and branch isolation", () => {
           orderId: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          order: { is: { businessId: "biz-B", branchId: BRANCH_B, customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } } } },
         },
       }),
     );
@@ -1305,7 +1323,20 @@ describe("Invoices routes - list filters and pagination", () => {
           branchId: BRANCH_A,
           status: "ISSUED",
           order: {
-            customerId: CUSTOMER_A,
+            is: {
+              businessId: "biz-A",
+              branchId: BRANCH_A,
+              customerId: CUSTOMER_A,
+              customer: {
+                is: {
+                  businessId: "biz-A",
+                  OR: [
+                    { ownerBranchId: { in: [BRANCH_A] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
           },
         },
         skip: 10,
@@ -1319,7 +1350,20 @@ describe("Invoices routes - list filters and pagination", () => {
         branchId: BRANCH_A,
         status: "ISSUED",
         order: {
-          customerId: CUSTOMER_A,
+          is: {
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            customerId: CUSTOMER_A,
+            customer: {
+              is: {
+                businessId: "biz-A",
+                OR: [
+                  { ownerBranchId: { in: [BRANCH_A] } },
+                  { id: { in: [] } },
+                ],
+              },
+            },
+          },
         },
       },
     });
