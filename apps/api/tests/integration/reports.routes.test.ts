@@ -480,7 +480,6 @@ describe("Reports routes - filtering and isolation", () => {
         businessId: "biz-A",
         isActive: true,
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
