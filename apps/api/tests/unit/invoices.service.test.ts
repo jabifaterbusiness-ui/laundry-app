@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
     invoice: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -57,6 +58,7 @@ describe("invoices.service", () => {
             internalNote: "Staff-only note",
             customer: {
               id: "customer-1",
+              ownerBranchId: "branch-1",
               name: "John Customer",
             },
             branch: {
@@ -101,7 +103,8 @@ describe("invoices.service", () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-                invoice: {
+                branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
+        invoice: {
           create: invoiceCreate,
         },
       };
@@ -115,6 +118,7 @@ describe("invoices.service", () => {
         branchId: "branch-1",
         orderId: "order-1",
         customerAgreement: "Items left beyond 30 days may attract storage charges.",
+        actorUserId: "user-1",
       });
 
       expect(result).toEqual({
@@ -459,6 +463,7 @@ describe("invoices.service", () => {
         "invoice-1",
         "business-1",
         "branch-1",
+        "user-1",
       );
 
       expect(result).toBe(invoice);
@@ -468,6 +473,7 @@ describe("invoices.service", () => {
             id: "invoice-1",
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
@@ -492,6 +498,7 @@ describe("invoices.service", () => {
             orderId: "order-1",
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
@@ -508,6 +515,7 @@ describe("invoices.service", () => {
       const result = await listInvoices({
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
         page: 1,
         pageSize: 20,
       });
@@ -527,6 +535,7 @@ describe("invoices.service", () => {
           where: {
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
