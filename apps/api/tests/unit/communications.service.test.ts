@@ -114,8 +114,34 @@ describe("listCommunicationDeliveries", () => {
         where: {
           businessId: "business-1",
           OR: [
-            { campaignId: { not: null } },
-            { order: { is: { branchId: "branch-1" } } },
+            {
+              order: {
+                is: {
+                  branchId: "branch-1",
+                  customer: {
+                    is: {
+                      businessId: "business-1",
+                      OR: [
+                        { ownerBranchId: { in: ["branch-1"] } },
+                        { id: { in: [] } },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            {
+              campaignId: { not: null },
+              customer: {
+                is: {
+                  businessId: "business-1",
+                  OR: [
+                    { ownerBranchId: { in: ["branch-1"] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
           ],
         },
         take: 200,
@@ -165,9 +191,35 @@ describe("retryWhatsAppDelivery", () => {
         businessId: "business-1",
         channel: "WHATSAPP",
         OR: [
-          { order: { is: { branchId: "branch-1" } } },
-          { customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } },
-        ],
+            {
+              order: {
+                is: {
+                  branchId: "branch-1",
+                  customer: {
+                    is: {
+                      businessId: "business-1",
+                      OR: [
+                        { ownerBranchId: { in: ["branch-1"] } },
+                        { id: { in: [] } },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            {
+              campaignId: { not: null },
+              customer: {
+                is: {
+                  businessId: "business-1",
+                  OR: [
+                    { ownerBranchId: { in: ["branch-1"] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
+          ],
       },
       include: {
         retries: { select: { id: true }, take: 1 },
