@@ -222,6 +222,42 @@ describe("GET /api/v1/search", () => {
         (result: { type: string }) => result.type,
       ),
     ).toEqual(["CUSTOMER", "ORDER", "INVOICE"]);
+    expect(orderFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([
+          {
+            customer: {
+              is: {
+                businessId: BUSINESS_A,
+                OR: [
+                  { ownerBranchId: { in: [BRANCH_A] } },
+                  { id: { in: [] } },
+                ],
+              },
+            },
+          },
+        ]),
+      }),
+    }));
+    expect(invoiceFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        order: {
+          is: {
+            businessId: BUSINESS_A,
+            branchId: BRANCH_A,
+            customer: {
+              is: {
+                businessId: BUSINESS_A,
+                OR: [
+                  { ownerBranchId: { in: [BRANCH_A] } },
+                  { id: { in: [] } },
+                ],
+              },
+            },
+          },
+        },
+      }),
+    }));
   });
 
   it("does not return modules denied by permission", async () => {
