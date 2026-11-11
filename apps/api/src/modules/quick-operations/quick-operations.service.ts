@@ -108,6 +108,7 @@ export async function executeQuickOperation(
         parsed.orderId,
         context.businessId,
         context.branchId,
+        context.userId,
       );
 
       if (!currentOrder) {
@@ -346,6 +347,7 @@ export async function executeQuickOperation(
         parsed.orderId,
         context.businessId,
         context.branchId,
+        context.userId,
       );
 
       if (!result) {
