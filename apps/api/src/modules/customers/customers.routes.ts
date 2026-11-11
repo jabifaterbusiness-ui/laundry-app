@@ -34,7 +34,7 @@ customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list)
 
 // Business Owner review queue for records whose historical branch ownership is ambiguous.
 customersRouter.get("/legacy-unassigned", asyncHandler(listLegacyUnassigned));
-customersRouter.post("/:id/assign-owner-branch", asyncHandler(assignLegacyOwnerBranch));
+customersRouter.post("/:id/assign-owner-branch", asyncHandler(requireSensitiveAuthorization), asyncHandler(assignLegacyOwnerBranch));
 
 customersRouter.get(
   "/:id/account",
