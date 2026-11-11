@@ -125,10 +125,8 @@ export async function assignLegacyCustomerOwnerBranch(
   return apiFetch<Customer>(`/customers/${customerId}/assign-owner-branch`, {
     method: "POST",
     accessToken: auth.accessToken,
-    headers: {
-      ...(branchIdForRequest ? { "X-Branch-Id": branchIdForRequest } : {}),
-      "X-Sensitive-Authorization": auth.sensitiveAuthorization,
-    },
+    branchId: branchIdForRequest,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
     body: JSON.stringify({ branchId }),
   });
 }
