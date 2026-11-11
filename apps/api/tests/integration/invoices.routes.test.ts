@@ -415,7 +415,7 @@ describe("Invoices routes - authorization", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
@@ -703,7 +703,7 @@ describe("Invoices routes - creation security", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
@@ -784,6 +784,7 @@ describe("Invoices routes - creation security", () => {
 
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       invoice: {
         id: INVOICE_A,
       },
@@ -823,7 +824,7 @@ describe("Invoices routes - creation security", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
