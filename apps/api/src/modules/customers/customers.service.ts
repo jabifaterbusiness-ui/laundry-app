@@ -23,7 +23,7 @@ export async function listCustomers(params: ListParams) {
   const where: Prisma.CustomerWhereInput = {
     businessId,
     OR: [
-      { ownerBranchId: null },
+      
       { ownerBranchId: { in: scope.ownerBranchIds } },
       { id: { in: scope.resourceIds } },
     ],
@@ -126,7 +126,7 @@ export async function getCustomerForBusiness(
     where: {
       id,
       businessId,
-      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+      OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
     },
     include: { ownerBranch: { select: { id: true, name: true } } },
   });
@@ -155,7 +155,7 @@ export async function findPossibleDuplicates(
   return db.customer.findMany({
     where: {
       businessId,
-      OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+      OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
       phone: normalizedPhone,
       isActive: true,
       ...(excludeId ? { id: { not: excludeId } } : {}),
@@ -292,7 +292,7 @@ export async function setCustomerLifecycleStatus(
   return prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" }, tx);
     const customer = await tx.customer.findFirst({
-      where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+      where: { id, businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
       select: { id: true, lifecycleStatus: true, ownerBranchId: true },
     });
 
