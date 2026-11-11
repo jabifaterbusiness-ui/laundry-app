@@ -2,7 +2,7 @@
 -- customer belongs to exactly one branch in the same business, and every
 -- retained order has a non-null branch ID. Customers with no order history,
 -- any unassigned order history, or orders across multiple branches remain NULL
--- and are intentionally displayed as business-wide legacy records.
+-- and remain hidden from branch users until a Business Owner reviews and assigns them.
 WITH unambiguous_customer_owners AS (
   SELECT
     c."id" AS "customerId",
