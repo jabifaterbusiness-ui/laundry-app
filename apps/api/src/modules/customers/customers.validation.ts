@@ -118,3 +118,13 @@ export const listCustomersQuerySchema = z.object({
 export const customerIdParamSchema = z.object({
   id: z.string().uuid("Invalid customer id"),
 });
+
+export const legacyCustomerReviewQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(25),
+  search: z.string().trim().max(120).optional(),
+});
+
+export const assignLegacyCustomerOwnerSchema = z.object({
+  branchId: z.string().uuid("Choose a valid branch"),
+});
