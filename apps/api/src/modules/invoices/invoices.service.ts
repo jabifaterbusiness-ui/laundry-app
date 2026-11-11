@@ -259,6 +259,7 @@ export interface CreateInvoiceData {
 export interface ListInvoicesParams {
   businessId: string;
   branchId: string;
+  userId: string;
   page: number;
   pageSize: number;
   status?: InvoiceStatus;
@@ -560,12 +561,29 @@ export async function getInvoiceForBranch(
   id: string,
   businessId: string,
   branchId: string,
+  userId: string,
 ) {
+  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
   return prisma.invoice.findFirst({
     where: {
       id,
       businessId,
       branchId,
+      order: {
+        is: {
+          businessId,
+          branchId,
+          customer: {
+            is: {
+              businessId,
+              OR: [
+                { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                { id: { in: customerScope.resourceIds } },
+              ],
+            },
+          },
+        },
+      },
     },
     include: {
       items: {
@@ -591,12 +609,29 @@ export async function getInvoiceForOrder(
   orderId: string,
   businessId: string,
   branchId: string,
+  userId: string,
 ) {
+  const customerScope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
   return prisma.invoice.findFirst({
     where: {
       orderId,
       businessId,
       branchId,
+      order: {
+        is: {
+          businessId,
+          branchId,
+          customer: {
+            is: {
+              businessId,
+              OR: [
+                { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                { id: { in: customerScope.resourceIds } },
+              ],
+            },
+          },
+        },
+      },
     },
     include: {
       items: {
@@ -624,9 +659,30 @@ export async function listInvoices(params: ListInvoicesParams) {
     customerId,
   } = params;
 
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId: params.userId,
+    resourceType: "CUSTOMERS",
+  });
   const where: Prisma.InvoiceWhereInput = {
     businessId,
     branchId,
+    order: {
+      is: {
+        businessId,
+        branchId,
+        customer: {
+          is: {
+            businessId,
+            OR: [
+              { ownerBranchId: { in: customerScope.ownerBranchIds } },
+              { id: { in: customerScope.resourceIds } },
+            ],
+          },
+        },
+      },
+    },
     ...(status ? { status } : {}),
     ...(customerId
       ? {
