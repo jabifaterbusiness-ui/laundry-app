@@ -684,6 +684,7 @@ export async function listInvoices(params: ListInvoicesParams) {
       is: {
         businessId,
         branchId,
+        ...(customerId ? { customerId } : {}),
         customer: {
           is: {
             businessId,
@@ -696,13 +697,6 @@ export async function listInvoices(params: ListInvoicesParams) {
       },
     },
     ...(status ? { status } : {}),
-    ...(customerId
-      ? {
-          order: {
-            customerId,
-          },
-        }
-      : {}),
   };
 
   const [data, total] = await Promise.all([
