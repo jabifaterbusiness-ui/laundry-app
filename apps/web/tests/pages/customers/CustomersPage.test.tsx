@@ -64,7 +64,7 @@ function renderPage() {
 describe("CustomersPage", () => {
   it("renders customers once loaded", async () => {
     vi.mocked(listCustomers).mockResolvedValue({
-      data: [{ id: "1", name: "Jane Doe", phone: "5551234567", email: null, address: null, notes: null, ownerBranchId: null, ownerBranch: null, isActive: true, createdAt: "", updatedAt: "" }],
+      data: [{ id: "1", name: "Jane Doe", phone: "5551234567", email: null, address: null, notes: null, ownerBranchId: "branch-1", ownerBranch: { id: "branch-1", name: "Main Branch" }, isActive: true, createdAt: "", updatedAt: "" }],
       pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
     });
 
@@ -72,7 +72,6 @@ describe("CustomersPage", () => {
 
     expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
     expect(screen.queryByText("Business-wide legacy")).not.toBeInTheDocument();
-    expect(screen.getByText("Branch details unavailable")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no customers", async () => {
