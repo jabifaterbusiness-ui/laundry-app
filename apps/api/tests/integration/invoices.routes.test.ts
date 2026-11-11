@@ -258,6 +258,7 @@ const correctedInvoiceFixture = {
 const targetCustomerFixture = {
   id: CUSTOMER_B,
   businessId: "biz-A",
+  ownerBranchId: BRANCH_A,
   name: "John Smith",
 };
 
