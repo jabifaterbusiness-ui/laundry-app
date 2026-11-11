@@ -3,14 +3,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PayrollCompensationSection } from "./PayrollCompensationSection.js";
 import {
+  assignLegacyCompensationToCurrentBranch,
   createCompensation,
   listCompensation,
+  listUnassignedLegacyCompensation,
 } from "../../lib/payroll-api.js";
 import { listBranchUsers } from "../../lib/users-api.js";
 
 vi.mock("../../lib/payroll-api.js", () => ({
+  assignLegacyCompensationToCurrentBranch: vi.fn(),
   createCompensation: vi.fn(),
   listCompensation: vi.fn(),
+  listUnassignedLegacyCompensation: vi.fn(),
 }));
 
 vi.mock("../../lib/users-api.js", () => ({
@@ -54,6 +58,7 @@ const compensation = [
     id: "comp-1",
     businessId: "biz-1",
     employeeId: "employee-1",
+    branchId: null,
     basicSalary: 150000,
     effectiveFrom: "2026-09-01T00:00:00.000Z",
     effectiveTo: null,
@@ -68,6 +73,8 @@ const compensation = [
   },
 ];
 
+const mockedAssignLegacyCompensation = vi.mocked(assignLegacyCompensationToCurrentBranch);
+const mockedListUnassignedLegacy = vi.mocked(listUnassignedLegacyCompensation);
 const mockedCreateCompensation = vi.mocked(createCompensation);
 const mockedListCompensation = vi.mocked(listCompensation);
 const mockedListBranchUsers = vi.mocked(listBranchUsers);
@@ -95,6 +102,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedListBranchUsers.mockResolvedValue(employees);
   mockedListCompensation.mockResolvedValue(compensation);
+  mockedListUnassignedLegacy.mockResolvedValue([]);
+  mockedAssignLegacyCompensation.mockResolvedValue(compensation[0]!);
   mockedCreateCompensation.mockResolvedValue(compensation[0]!);
 });
 
@@ -164,7 +173,48 @@ describe("PayrollCompensationSection", () => {
         {
           accessToken: "token",
         },
+        "branch-1",
       );
     });
   });
+
+  it("shows the owner-only pending legacy queue and requires confirmation before assignment", async () => {
+    mockedListUnassignedLegacy.mockResolvedValue([
+      {
+        ...compensation[0]!,
+        branchId: null,
+        employee: {
+          ...compensation[0]!.employee,
+          isActive: true,
+          deletedAt: null,
+          branches: [
+            { branch: { id: "branch-1", name: "1st Avenue", isActive: true } },
+            { branch: { id: "branch-2", name: "mainbranch", isActive: true } },
+          ],
+        },
+      },
+    ]);
+
+    renderSection();
+
+    expect(
+      await screen.findByRole("heading", { name: "Unassigned legacy salaries" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1st Avenue, mainbranch")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Assign to this branch" }));
+
+    expect(screen.getByRole("button", { name: "Confirm assignment" })).toBeInTheDocument();
+    expect(mockedAssignLegacyCompensation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    await waitFor(() => {
+      expect(mockedAssignLegacyCompensation).toHaveBeenCalledWith(
+        "comp-1",
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
 });

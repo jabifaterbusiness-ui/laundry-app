@@ -28,6 +28,7 @@ import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
 import {
   getOrder,
+  getOrderStatusHistory,
   listAllOrders,
   updateOrderStatusWithOfflineQueue,
 } from "../../lib/orders-api.js";
@@ -132,6 +133,7 @@ function OrderManagementContent({
   const canManagePayments = hasPermission(user, "payments.manage");
   const canViewAccount = hasPermission(user, "customer_accounts.view");
   const canViewInvoices = hasPermission(user, "invoices.view");
+  const canViewOrders = hasPermission(user, "orders.view");
 
   const customerQuery = useQuery({
     queryKey: ["customer", customer.id, "order-management"],
@@ -194,6 +196,19 @@ function OrderManagementContent({
         activeBranchId &&
         invoiceQuery.data?.id &&
         canViewInvoices &&
+        layer === "invoice-history",
+    ),
+  });
+
+  const statusHistoryQuery = useQuery({
+    queryKey: ["order-management", "status-history", order?.id, activeBranchId],
+    queryFn: () => getOrderStatusHistory(order!.id, { accessToken }, activeBranchId),
+    enabled: Boolean(
+      accessToken &&
+        activeBranchId &&
+        mode === "view" &&
+        order?.id &&
+        canViewOrders &&
         layer === "invoice-history",
     ),
   });
@@ -1053,6 +1068,7 @@ function OrderManagementContent({
             <tr>
               <th>QTY</th>
               <th>Item</th>
+              <th>Colours</th>
               <th>PCS</th>
               <th>Unit Price</th>
               <th>Total</th>
@@ -1063,6 +1079,7 @@ function OrderManagementContent({
               <tr key={item.id}>
                 <td>{item.quantity}</td>
                 <td>{item.serviceName}</td>
+                <td>{(item.colors ?? []).length ? item.colors.join(", ") : "—"}</td>
                 <td>{item.totalPieces}</td>
                 <td>{formatMoney(item.unitPrice)}</td>
                 <td>{formatMoney(item.lineTotal)}</td>
@@ -1070,6 +1087,34 @@ function OrderManagementContent({
             ))}
           </tbody>
         </table>
+
+        {invoiceQuery.isLoading && <p role="status">Loading invoice financial breakdown...</p>}
+        {invoiceQuery.isError && <p role="alert">Unable to load the invoice financial breakdown.</p>}
+        {invoiceQuery.data && (
+          <section aria-label="Order financial breakdown" style={{ marginTop: 18, padding: 16, border: "1px solid #d8dee8", borderRadius: 12, display: "grid", gap: 9, maxWidth: 620 }}>
+            <h3 style={{ margin: 0 }}>Financial breakdown</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span>Service subtotal</span><strong>{formatMoney(invoiceQuery.data.subtotal)}</strong></div>
+            {(invoiceQuery.data.appliedAdjustments ?? []).map((adjustment) => (
+              <div key={adjustment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{adjustment.name} ({adjustment.percentage > 0 ? "+" : ""}{adjustment.percentage}%)</span>
+                <strong>{adjustment.amount < 0 ? "−" : adjustment.amount > 0 ? "+" : ""}{formatMoney(Math.abs(adjustment.amount))}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span>Adjusted taxable amount</span><strong>{formatMoney(invoiceQuery.data.adjustedSubtotal)}</strong></div>
+            {(invoiceQuery.data.appliedTaxes ?? []).map((tax) => (
+              <div key={tax.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{tax.name} ({tax.kind === "PERCENTAGE" ? tax.value + "%" : "Fixed"}) · {tax.treatment === "WITHHOLDING" ? "Withheld" : "Added"}</span>
+                <strong>{tax.treatment === "WITHHOLDING" ? "−" : "+"}{formatMoney(tax.amount)}</strong>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px solid #d8dee8", paddingTop: 8 }}>
+              <span>Adjustment total</span><strong>{formatMoney(invoiceQuery.data.adjustmentTotal)}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "2px solid #111827", paddingTop: 10, fontSize: 18 }}>
+              <strong>Total amount</strong><strong>{formatMoney(invoiceQuery.data.totalAmount)}</strong>
+            </div>
+          </section>
+        )}
       </section>
 
       )}
@@ -1247,43 +1292,81 @@ function OrderManagementContent({
           {layer === "invoice-history" && (
             <>
               <h3>Edited History</h3>
-              {invoiceHistoryQuery.isLoading ? (
-                <p>Loading edited history...</p>
-              ) : invoiceHistoryQuery.isError ? (
-                <p role="alert">Unable to load edited history.</p>
-              ) : invoiceHistoryQuery.data?.length ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {invoiceHistoryQuery.data.map((entry) => (
-                    <div
-                      key={entry.id}
-                      style={{
-                        padding: 12,
-                        border: "1px solid #ddd",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <strong>{entry.action}</strong>
-                      <div>Version: {entry.version}</div>
-                      <div>Reason: {entry.reason}</div>
-                      <div>
-                        Date/Time: {formatDate(entry.createdAt)}
-                      </div>
-                      <div>Authorized by: {entry.actorUserId}</div>                       <details>                         <summary>View Snapshot — Version {entry.version}</summary>                         <pre
-                          style={{
-                            marginTop: 12,
-                            padding: 12,
-                            overflowX: "auto",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            background: "#f7f7f7",
-                            borderRadius: 6,
-                          }}                         >
-                          {JSON.stringify(entry.snapshot, null, 2)}                         </pre>                       </details>                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p>No edited history is available for this invoice.</p>
+              {canViewOrders && (
+                <section aria-label="Order status and notification history" style={{ marginBottom: 16 }}>
+                  <h4>Order status changes & notification outcomes</h4>
+                  {statusHistoryQuery.isLoading ? <p>Loading status history...</p> : null}
+                  {statusHistoryQuery.isError ? <p role="alert">Unable to load order status history.</p> : null}
+                  {statusHistoryQuery.data?.length ? (
+                    <ol>
+                      {statusHistoryQuery.data.map((entry) => (
+                        <li key={entry.id}>
+                          <strong>{entry.previousStatus ? entry.previousStatus.replaceAll("_", " ") : "Created"} → {entry.status.replaceAll("_", " ")}</strong>
+                          <div>{entry.changedBy} · {formatDate(entry.changedAt)}</div>
+                          <div>Branch: {entry.branchName}</div>
+                          <div>
+                            <strong>Notifications:</strong>{" "}
+                            {entry.notificationResults?.length
+                              ? entry.notificationResults.map((result) => `${result.channel}: ${result.status}${result.error ? ` — ${result.error}` : ""}`).join(" · ")
+                              : "No notification attempt recorded"}
+                          </div>
+                          {entry.notificationError && <div role="alert">{entry.notificationError}</div>}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    !statusHistoryQuery.isLoading && <p>No order status changes have been recorded yet.</p>
+                  )}
+                </section>
               )}
+              {canViewInvoices && (
+                <>
+                  <h4>Invoice edits</h4>
+                  {invoiceHistoryQuery.isLoading ? (
+                    <p>Loading edited history...</p>
+                  ) : invoiceHistoryQuery.isError ? (
+                    <p role="alert">Unable to load edited history.</p>
+                  ) : invoiceHistoryQuery.data?.length ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {invoiceHistoryQuery.data.map((entry) => (
+                        <div
+                          key={entry.id}
+                          style={{
+                            padding: 12,
+                            border: "1px solid #ddd",
+                            borderRadius: 8,
+                          }}
+                        >
+                          <strong>{entry.action}</strong>
+                          <div>Version: {entry.version}</div>
+                          <div>Reason: {entry.reason}</div>
+                          <div>Date/Time: {formatDate(entry.createdAt)}</div>
+                          <div>Authorized by: {entry.actorUserId}</div>
+                          <details>
+                            <summary>View Snapshot — Version {entry.version}</summary>
+                            <pre
+                              style={{
+                                marginTop: 12,
+                                padding: 12,
+                                overflowX: "auto",
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                background: "#f7f7f7",
+                                borderRadius: 6,
+                              }}
+                            >
+                              {JSON.stringify(entry.snapshot, null, 2)}
+                            </pre>
+                          </details>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>No edited history is available for this invoice.</p>
+                  )}
+                </>
+              )}
+
             </>
           )}
 
@@ -1303,6 +1386,21 @@ function OrderManagementContent({
                   #{historyOrder.orderNumber} ·{" "}
                   {statusLabel(historyOrder.status)} ·{" "}
                   {formatMoney(historyOrder.orderTotal)}
+                  {historyOrder.items.some((item) => (item.colors ?? []).length > 0) ? (
+                    <small
+                      style={{
+                        display: "block",
+                        marginTop: 5,
+                        color: "var(--text-muted, #64748b)",
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {historyOrder.items
+                        .filter((item) => (item.colors ?? []).length > 0)
+                        .map((item) => `${item.serviceName}: ${(item.colors ?? []).join(", ")}`)
+                        .join(" · ")}
+                    </small>
+                  ) : null}
                 </button>
               ))}
             </>
@@ -1633,7 +1731,7 @@ function OrderManagementContent({
 
                   <button
                     type="button"
-                    disabled={!canViewInvoices}
+                    disabled={!(canViewInvoices || canViewOrders)}
                     onClick={() => setLayer("invoice-history")}
                     style={{
                       padding: "10px 14px",

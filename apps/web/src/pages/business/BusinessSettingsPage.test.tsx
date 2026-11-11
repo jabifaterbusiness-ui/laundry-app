@@ -62,6 +62,42 @@ describe("BusinessSettingsPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("loads the configured sensitive inactivity timeout", async () => {
+    render(<BusinessSettingsPage />);
+
+    expect(await screen.findByLabelText("Inactivity timeout (minutes)")).toHaveValue(3);
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      "/businesses/security-settings",
+      expect.objectContaining({ accessToken: "token", branchId: "branch-1" }),
+    );
+  });
+
+  it("saves the business inactivity timeout", async () => {
+    mockedApiFetch.mockImplementation(((path: string) => {
+      if (path === "/businesses/security-settings") {
+        return Promise.resolve({ sessionInactivityTimeoutMinutes: 7 });
+      }
+      return Promise.resolve(branding);
+    }) as never);
+
+    render(<BusinessSettingsPage />);
+    const timeoutInput = await screen.findByLabelText("Inactivity timeout (minutes)");
+    fireEvent.change(timeoutInput, { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save session security" }));
+
+    await waitFor(() => {
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        "/businesses/security-settings",
+        expect.objectContaining({
+          method: "PATCH",
+          accessToken: "token",
+          branchId: "branch-1",
+          body: JSON.stringify({ sessionInactivityTimeoutMinutes: 7 }),
+        }),
+      );
+    });
+  });
+
   it("saves receipt branding settings", async () => {
     render(<BusinessSettingsPage />);
 

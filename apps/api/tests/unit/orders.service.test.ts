@@ -11,6 +11,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -57,6 +60,10 @@ function createTransactionClient() {
     customerServicePrice: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     taxRule: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -75,6 +82,9 @@ function createTransactionClient() {
     },
     invoice: {
       create: vi.fn().mockResolvedValue({ totalAmount: 0 }),
+    },
+    auditLog: {
+      create: vi.fn(),
     },
     business: {
       findUnique: vi.fn().mockResolvedValue({
@@ -99,6 +109,7 @@ function createTransactionClient() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([] as never);
 });
 
 describe("createOrder", () => {
@@ -107,6 +118,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [],
       }),
@@ -126,6 +138,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-B",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -140,6 +153,10 @@ describe("createOrder", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-B",
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
       select: {
         id: true,
@@ -164,6 +181,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-B",
         branchId: BRANCH_B,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -207,6 +225,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -221,6 +240,11 @@ describe("createOrder", () => {
       where: {
         id: { in: [SERVICE_SHIRT] },
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -254,6 +278,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -296,6 +321,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -338,6 +364,7 @@ describe("createOrder", () => {
       createOrder({
         businessId: "biz-A",
         branchId: BRANCH_A,
+        actorUserId: "user-A",
         customerId: CUSTOMER_A,
         items: [
           {
@@ -407,16 +434,60 @@ describe("createOrder", () => {
 
     transaction.mockImplementation(async (callback) => callback(tx as never));
 
+    tx.branchResourceShare.findMany.mockImplementation(async (args) =>
+      (args as unknown as { where: { resourceType?: string } }).where.resourceType === "CUSTOMER_PRICING"
+        ? [{ ownerBranchId: BRANCH_B, resourceId: null, accessLevel: "READ" }] as never
+        : [],
+    );
+
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
           serviceId: SERVICE_AGBADA,
           quantity: 2,
+          colors: ["White", "Blue"],
         },
       ],
+    });
+
+    expect(tx.customer.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: CUSTOMER_A,
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+      select: { id: true, name: true },
+    });
+    expect(tx.service.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [SERVICE_AGBADA] },
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+    });
+    expect(tx.customerServicePrice.findMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        customerId: CUSTOMER_A,
+        serviceId: { in: [SERVICE_AGBADA] },
+        OR: [
+          { branchId: null },
+          { branchId: { in: [BRANCH_A, BRANCH_B] } },
+          { id: { in: [] } },
+        ],
+      },
+      select: { serviceId: true, unitPrice: true },
     });
 
     expect(tx.order.create).toHaveBeenCalledWith(
@@ -432,6 +503,7 @@ describe("createOrder", () => {
                 totalPieces: 6,
                 unitPrice: 4500,
                 lineTotal: 9000,
+                colors: ["White", "Blue"],
               }),
             ],
           },
@@ -519,6 +591,7 @@ describe("createOrder", () => {
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
@@ -618,6 +691,7 @@ describe("createOrder", () => {
     await createOrder({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      actorUserId: "user-A",
       customerId: CUSTOMER_A,
       items: [
         {
@@ -646,6 +720,7 @@ describe("createOrder", () => {
     await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       page: 1,
       pageSize: 25,
     });
@@ -655,6 +730,7 @@ describe("createOrder", () => {
         where: {
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -663,6 +739,7 @@ describe("createOrder", () => {
       where: {
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
       },
     });
   });
@@ -674,6 +751,7 @@ describe("createOrder", () => {
     await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       customerId: CUSTOMER_A,
       status: "READY_FOR_PICKUP",
       page: 2,
@@ -685,6 +763,7 @@ describe("createOrder", () => {
         where: {
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
           customerId: CUSTOMER_A,
           status: "READY_FOR_PICKUP",
         },
@@ -701,6 +780,7 @@ describe("createOrder", () => {
     const result = await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       page: 2,
       pageSize: 20,
     });
@@ -720,6 +800,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-A",
       BRANCH_A,
+      "user-A",
     );
 
     expect(orderFindFirst).toHaveBeenCalledWith(
@@ -728,6 +809,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -740,6 +822,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-B",
       BRANCH_A,
+      "user-A",
     );
 
     expect(result).toBeNull();
@@ -750,6 +833,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -762,6 +846,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-A",
       BRANCH_B,
+      "user-A",
     );
 
     expect(result).toBeNull();
@@ -772,6 +857,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_B,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -891,6 +977,74 @@ describe("createOrder", () => {
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
+  it("writes the status transition history in the same serializable transaction", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "RECEIVED",
+    } as never);
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      items: [],
+    } as never);
+    (tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create = vi.fn().mockResolvedValue({ id: "history-1" });
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    const result = await updateOrderStatus(
+      ORDER_A, "biz-A", BRANCH_A, "IN_PROGRESS", prisma,
+      { actorUserId: "user-A", correlationId: "request-1" },
+    );
+
+    expect(result.status).toBe("IN_PROGRESS");
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect((tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "order.status_updated",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-A",
+        correlationId: "request-1",
+        metadata: expect.objectContaining({
+          previousStatus: "RECEIVED",
+          status: "IN_PROGRESS",
+        }),
+      }),
+    });
+  });
+
+  it("does not report a successful status change when its history write fails", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "RECEIVED",
+    } as never);
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A,
+      orderNumber: "00042",
+      status: "IN_PROGRESS",
+      items: [],
+    } as never);
+    (tx as never as { auditLog: { create: ReturnType<typeof vi.fn> } }).auditLog.create = vi.fn().mockRejectedValue(new Error("audit storage unavailable"));
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+
+    await expect(updateOrderStatus(
+      ORDER_A, "biz-A", BRANCH_A, "IN_PROGRESS", prisma,
+      { actorUserId: "user-A" },
+    )).rejects.toThrow("audit storage unavailable");
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+  });
+
 describe("transferOrder", () => {
   it("transfers an order to another customer", async () => {
     const tx = createTransactionClient();
@@ -919,6 +1073,7 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
+      "user-A",
     );
 
     expect(result).toEqual({
@@ -944,6 +1099,10 @@ describe("transferOrder", () => {
       where: {
         id: CUSTOMER_B,
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
       select: {
         id: true,
@@ -983,6 +1142,7 @@ describe("transferOrder", () => {
         "biz-B",
         BRANCH_B,
         CUSTOMER_B,
+        "user-A",
       ),
     ).rejects.toThrow("Order not found");
 
@@ -1009,6 +1169,7 @@ describe("transferOrder", () => {
         "biz-A",
         BRANCH_A,
         CUSTOMER_B,
+        "user-A",
       ),
     ).rejects.toThrow("Customer not found");
 
@@ -1032,6 +1193,7 @@ describe("transferOrder", () => {
         "biz-A",
         BRANCH_A,
         CUSTOMER_A,
+        "user-A",
       ),
     ).rejects.toThrow(
       "Order is already assigned to this customer",
@@ -1068,6 +1230,7 @@ describe("transferOrder", () => {
       "biz-A",
       BRANCH_A,
       CUSTOMER_B,
+      "user-A",
     );
 
     expect(transaction).toHaveBeenCalledTimes(1);

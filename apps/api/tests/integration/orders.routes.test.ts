@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -29,6 +31,17 @@ vi.mock("../../src/lib/prisma.js", () => ({
       }),
     },
     $transaction: vi.fn(),
+    auditLog: {
+      findMany: vi.fn(),
+      create: vi.fn().mockResolvedValue({ id: "status-event-1" }),
+    },
+    communicationDelivery: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn(),
+    },
     order: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -68,6 +81,9 @@ vi.mock("../../src/lib/audit.js", () => ({
 import { prisma } from "../../src/lib/prisma.js";
 import { createApp } from "../../src/app.js";
 
+const auditLogFindMany = vi.mocked(prisma.auditLog.findMany);
+const auditLogCreate = vi.mocked(prisma.auditLog.create);
+const communicationDeliveryFindMany = vi.mocked(prisma.communicationDelivery.findMany);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const orderCount = vi.mocked(prisma.order.count);
 const orderFindFirst = vi.mocked(prisma.order.findFirst);
@@ -91,6 +107,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+    sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -148,12 +165,20 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  communicationDeliveryFindMany.mockResolvedValue([] as never);
 
   transaction.mockImplementation(async (callback) =>
     callback({
       order: {
         findFirst: orderFindFirst,
         update: orderUpdate,
+      },
+      auditLog: {
+        create: auditLogCreate,
+      },
+      branchResourceShare: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
       },
       customer: {
         findFirst: customerFindFirst,
@@ -261,6 +286,7 @@ describe("Orders routes - tenant and branch isolation", () => {
           id: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -284,6 +310,7 @@ describe("Orders routes - tenant and branch isolation", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -594,6 +621,106 @@ describe("Orders routes - authorization", () => {
       .send({ status: "IN_PROGRESS" });
 
     expect(res.status).toBe(200);
+    expect(auditLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "order.status_updated",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "user-mgr-a",
+        metadata: expect.objectContaining({ previousStatus: "RECEIVED", status: "IN_PROGRESS" }),
+      }),
+    });
+  });
+
+  it("does not create a status-history event when the status is unchanged", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "RECEIVED",
+    } as never);
+    orderUpdate.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "RECEIVED",
+      items: [],
+    } as never);
+
+    const res = await request(app)
+      .patch(`/api/v1/orders/${ORDER_A}/status`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A)
+      .send({ status: "RECEIVED" });
+
+    expect(res.status).toBe(200);
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns order status history scoped to the active business and branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "COMPLETED",
+      branch: { id: BRANCH_A, name: "Main Branch" },
+    } as never);
+    auditLogFindMany.mockResolvedValue([
+      {
+        id: "status-event-1",
+        timestamp: new Date("2026-11-05T12:00:00.000Z"),
+        metadata: {
+          previousStatus: "IN_PROGRESS",
+          status: "COMPLETED",
+          notificationResults: [
+            { channel: "WHATSAPP", status: "SENT", deliveryId: "delivery-1" },
+            { channel: "EMAIL", status: "FAILED", deliveryId: "delivery-2", error: "Provider temporarily unavailable" },
+          ],
+          notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
+        },
+        actor: { fullName: "Branch Manager" },
+      },
+    ] as never);
+
+    communicationDeliveryFindMany.mockResolvedValue([
+      { id: "delivery-1", status: "DELIVERED", errorMessage: null },
+      { id: "delivery-2", status: "FAILED", errorMessage: "Provider temporarily unavailable" },
+    ] as never);
+
+    const res = await request(app)
+      .get(`/api/v1/orders/${ORDER_A}/status-history`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: "status-event-1",
+        previousStatus: "IN_PROGRESS",
+        status: "COMPLETED",
+        changedAt: "2026-11-05T12:00:00.000Z",
+        changedBy: "Branch Manager",
+        branchName: "Main Branch",
+        notificationResults: [
+          { channel: "WHATSAPP", status: "DELIVERED", deliveryId: "delivery-1", error: null },
+          { channel: "EMAIL", status: "FAILED", deliveryId: "delivery-2", error: "Provider temporarily unavailable" },
+        ],
+        notificationError: "One or more status notifications could not be processed. See Communications delivery history.",
+      },
+    ]);
+    expect(auditLogFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        entityType: "Order",
+        entityId: ORDER_A,
+        action: "order.status_updated",
+      },
+    }));
   });
 
   it("BUSINESS_OWNER can change order status", async () => {

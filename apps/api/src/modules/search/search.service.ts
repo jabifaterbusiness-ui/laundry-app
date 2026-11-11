@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { hasPermission } from "../permissions/permissions.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 import type { GlobalSearchQuery } from "./search.validation.js";
 
 export interface GlobalSearchResult {
@@ -23,6 +24,13 @@ export async function globalSearch(
   if (!query) {
     return [];
   }
+
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  });
 
   const [canViewCustomers, canViewOrders, canViewInvoices] =
     await Promise.all([
@@ -51,24 +59,18 @@ export async function globalSearch(
       ? prisma.customer.findMany({
           where: {
             businessId,
+            AND: [
+              {
+                OR: [
+                  { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                  { id: { in: customerScope.resourceIds } },
+                ],
+              },
+            ],
             OR: [
-              {
-                name: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                phone: {
-                  contains: query,
-                },
-              },
-              {
-                email: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
+              { name: { contains: query, mode: "insensitive" } },
+              { phone: { contains: query } },
+              { email: { contains: query, mode: "insensitive" } },
             ],
           },
           orderBy: {
@@ -89,34 +91,25 @@ export async function globalSearch(
           where: {
             businessId,
             branchId,
-            OR: [
-              {
-                orderNumber: {
-                  contains: query,
-                },
-              },
+            AND: [
               {
                 customer: {
-                  name: {
-                    contains: query,
-                    mode: "insensitive",
+                  is: {
+                    businessId,
+                    OR: [
+                      { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                      { id: { in: customerScope.resourceIds } },
+                    ],
                   },
                 },
               },
               {
-                customer: {
-                  phone: {
-                    contains: query,
-                  },
-                },
-              },
-              {
-                customer: {
-                  email: {
-                    contains: query,
-                    mode: "insensitive",
-                  },
-                },
+                OR: [
+                  { orderNumber: { contains: query } },
+                  { customer: { name: { contains: query, mode: "insensitive" } } },
+                  { customer: { phone: { contains: query } } },
+                  { customer: { email: { contains: query, mode: "insensitive" } } },
+                ],
               },
             ],
           },
@@ -143,18 +136,24 @@ export async function globalSearch(
           where: {
             businessId,
             branchId,
+            order: {
+              is: {
+                businessId,
+                branchId,
+                customer: {
+                  is: {
+                    businessId,
+                    OR: [
+                      { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                      { id: { in: customerScope.resourceIds } },
+                    ],
+                  },
+                },
+              },
+            },
             OR: [
-              {
-                invoiceNumber: {
-                  contains: query,
-                },
-              },
-              {
-                customerName: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
+              { invoiceNumber: { contains: query } },
+              { customerName: { contains: query, mode: "insensitive" } },
             ],
           },
           orderBy: {

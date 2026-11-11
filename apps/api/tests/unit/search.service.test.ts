@@ -8,6 +8,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customer: {
       findMany: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     order: {
       findMany: vi.fn(),
     },
@@ -140,6 +143,13 @@ describe("globalSearch", () => {
     expect(customerFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                expect.objectContaining({ ownerBranchId: expect.anything() }),
+              ]),
+            }),
+          ]),
           OR: expect.arrayContaining([
             expect.objectContaining({
               email: expect.objectContaining({
@@ -149,9 +159,7 @@ describe("globalSearch", () => {
             }),
           ]),
         }),
-        select: expect.objectContaining({
-          email: true,
-        }),
+        select: expect.objectContaining({ email: true }),
       }),
     );
     expect(results).toEqual([
@@ -166,14 +174,18 @@ describe("globalSearch", () => {
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: expect.arrayContaining([
+          AND: expect.arrayContaining([
             expect.objectContaining({
-              customer: expect.objectContaining({
-                email: expect.objectContaining({
-                  contains: "aaron@example.com",
-                  mode: "insensitive",
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  customer: expect.objectContaining({
+                    email: expect.objectContaining({
+                      contains: "aaron@example.com",
+                      mode: "insensitive",
+                    }),
+                  }),
                 }),
-              }),
+              ]),
             }),
           ]),
         }),

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createCustomer,
   createCustomerWithOfflineQueue,
+  updateCustomer,
   updateCustomerWithOfflineQueue,
 } from "../../src/lib/customers-api.js";
 import { NetworkError } from "../../src/lib/api-client.js";
+import { useAuthStore } from "../../src/state/auth-store.js";
 import {
   clearOfflineSyncQueue,
   listOfflineSyncOperations,
@@ -16,13 +19,69 @@ vi.mock("../../src/lib/customers-api.js", async () => {
   return actual;
 });
 
-const auth = { accessToken: "token" };
+const auth = { accessToken: "token", branchId: "branch-1" };
 
 const syncContext = {
   businessId: "business-1",
   branchId: "branch-1",
   actorUserId: "user-1",
 };
+
+describe("customer mutation branch context", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    useAuthStore.getState().setActiveBranch(null);
+  });
+
+  it("sends X-Branch-Id when creating a customer", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-1" }), { status: 201 }),
+    );
+
+    await createCustomer({ name: "Test Customer", phone: "08012345678" }, auth);
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("branch-1");
+  });
+
+  it("sends X-Branch-Id when updating a customer", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-1" }), { status: 200 }),
+    );
+
+    await updateCustomer("customer-1", { name: "Updated Customer" }, auth);
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("branch-1");
+  });
+
+  it("falls back to the selected auth-store branch when creating a customer", async () => {
+    useAuthStore.getState().setActiveBranch("selected-branch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-2" }), { status: 201 }),
+    );
+
+    await createCustomer(
+      { name: "Store Branch Customer", phone: "08012345679" },
+      { accessToken: "token" },
+    );
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("selected-branch");
+  });
+
+  it("falls back to the selected auth-store branch when updating a customer", async () => {
+    useAuthStore.getState().setActiveBranch("selected-branch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "customer-3" }), { status: 200 }),
+    );
+
+    await updateCustomer(
+      "customer-1",
+      { name: "Store Branch Updated" },
+      { accessToken: "token" },
+    );
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Branch-Id")).toBe("selected-branch");
+  });
+});
 
 describe("customers-api offline queue", () => {
   beforeEach(async () => {

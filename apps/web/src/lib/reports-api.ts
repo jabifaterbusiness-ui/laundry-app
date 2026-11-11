@@ -156,11 +156,13 @@ export interface AnnualReport {
 export async function getAnnualReport(
   year: number,
   auth: AuthOptions,
+  branchId: string | null,
 ): Promise<AnnualReport> {
   return apiFetch<AnnualReport>(
     `/reports/annual?year=${encodeURIComponent(year)}`,
     {
       accessToken: auth.accessToken,
+      branchId,
     },
   );
 }

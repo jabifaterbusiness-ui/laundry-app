@@ -3,6 +3,7 @@ import { createAdjustment, createTax, list as listPricingRules, removeAdjustment
 import { list as listCustomerPrices, remove as removeCustomerPrice, save as saveCustomerPrice } from "./customer-pricing.controller.js";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { requireBranchContext } from "../../middleware/branch-context.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import {
   activate,
@@ -25,7 +26,7 @@ import {
 
 export const servicesRouter = Router();
 
-servicesRouter.use(requireAuth, requireBusinessContext);
+servicesRouter.use(requireAuth, requireBusinessContext, asyncHandler(requireBranchContext));
 
 // Price adjustments and tax rules are part of the Price List settings.
 servicesRouter.get("/pricing-rules", requirePermission("services.view"), asyncHandler(listPricingRules));

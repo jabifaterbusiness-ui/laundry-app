@@ -12,6 +12,7 @@ vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -67,6 +68,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       update: vi.fn(),
     },
     user: {
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
       findMany: vi.fn(),
     },
     payrollRecord: {
@@ -85,6 +87,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     loan: {
       findMany: vi.fn(),
       update: vi.fn(),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     employeeCompensation: {
       findFirst: vi.fn(),
@@ -133,6 +138,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -594,7 +600,7 @@ describe("Payroll deduction routes", () => {
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "test-sensitive-token");
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.payrollPeriodId).toBe(PERIOD_A);
     expect(res.body.records).toHaveLength(1);
 
@@ -653,7 +659,12 @@ describe("Payroll deduction routes", () => {
 
     const tx = {
       payrollPeriod: {
-        findFirst: vi.fn().mockResolvedValue(periodFixture),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(periodFixture)
+          .mockResolvedValue({
+            ...periodFixture,
+            status: "PROCESSING",
+          }),
       },
     };
     vi.mocked(prisma.$transaction).mockImplementation(
@@ -1056,18 +1067,50 @@ describe("Payroll generation routes", () => {
 
     const tx = {
       payrollPeriod: {
-        findFirst: vi.fn().mockResolvedValue({
-          ...periodFixture,
-          status: "PROCESSING",
-        }),
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(periodFixture)
+          .mockResolvedValue({
+            ...periodFixture,
+            status: "PROCESSING",
+          }),
         update: vi.fn().mockResolvedValue({
           ...periodFixture,
           status: "PROCESSING",
         }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      user: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: EMPLOYEE_A,
+            fullName: "John Employee",
+            role: "Accountant",
+          },
+        ]),
       },
       payrollRecord: {
         create: vi.fn().mockResolvedValue(createdRecord),
-        findMany: vi.fn().mockResolvedValue([createdRecord]),
+        findMany: vi.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([createdRecord]),
+        update: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          ...createdRecord,
+          ...data,
+        })),
+      },
+      branchResourceShare: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      employeeCompensation: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "comp-a",
+          businessId: "biz-A",
+          employeeId: EMPLOYEE_A,
+          branchId: BRANCH_A,
+          basicSalary: 150000,
+          effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+          effectiveTo: null,
+        }),
       },
       payrollDeduction: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -1098,9 +1141,12 @@ describe("Payroll generation routes", () => {
     expect(res.body.status).toBe("PROCESSING");
     expect(res.body.records).toHaveLength(1);
 
-    expect(tx.payrollPeriod.update).toHaveBeenCalledWith({
+    expect(tx.payrollPeriod.updateMany).toHaveBeenCalledWith({
       where: {
         id: PERIOD_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        status: "OPEN",
       },
       data: {
         status: "PROCESSING",
@@ -1185,7 +1231,7 @@ describe("Payroll generation routes", () => {
       .set("X-Sensitive-Authorization", "test-sensitive-token");
 
     expect(res.status).toBe(400);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
   });
 });
 
@@ -1692,7 +1738,7 @@ describe("Payroll status routes", () => {
       },
     ],
   };  it("returns payroll payment status for a finance user", async () => {
-    payrollPeriodFindFirst.mockResolvedValue({
+    payrollPeriodFindFirst.mockReset().mockResolvedValue({
       ...statusPeriodFixture,
       payrollRecords: [statusRecordFixture],
     } as never);
@@ -1703,7 +1749,7 @@ describe("Payroll status routes", () => {
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "test-sensitive-token");
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.summary.employeeCount).toBe(1);
     expect(res.body.summary.paidCount).toBe(0);
     expect(res.body.summary.partiallyPaidCount).toBe(1);
@@ -1768,14 +1814,14 @@ describe("Payroll status routes", () => {
       },
     } as never);
 
-    payrollPeriodFindFirst.mockResolvedValue(null);
+    payrollPeriodFindFirst.mockReset().mockResolvedValue(null);
 
     const res = await request(app)
       .get(`/api/v1/payroll/periods/${STATUS_PERIOD_ID}/status`)
       .set("Authorization", `Bearer ${OWNER_B}`)
       .set("X-Branch-Id", BRANCH_B);
 
-    expect(res.status).toBe(404);
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
     expect(payrollPeriodFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {

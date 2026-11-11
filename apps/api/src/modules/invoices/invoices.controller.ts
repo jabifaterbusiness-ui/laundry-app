@@ -37,6 +37,17 @@ function requireBusinessId(req: Request): string {
   return req.user.businessId;
 }
 
+async function assertInvoiceVisibleToBranch(
+  invoiceId: string,
+  businessId: string,
+  branchId: string,
+  userId: string,
+) {
+  const invoice = await getInvoiceForBranch(invoiceId, businessId, branchId, userId);
+  if (!invoice) throw new AppError("Invoice not found", 404);
+  return invoice;
+}
+
 function requireBranchId(req: Request): string {
   if (!req.branchId) {
     throw new AppError(
@@ -58,6 +69,7 @@ export async function create(req: Request, res: Response) {
     branchId,
     orderId: input.orderId,
     customerAgreement: input.customerAgreement,
+    actorUserId: req.user!.id,
   });
 
   await recordAuditEvent({
@@ -86,6 +98,7 @@ export async function list(req: Request, res: Response) {
   const result = await listInvoices({
     businessId,
     branchId,
+    userId: req.user!.id,
     page: query.page,
     pageSize: query.pageSize,
     ...(query.status !== undefined && {
@@ -108,6 +121,7 @@ export async function getOne(req: Request, res: Response) {
     id,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!invoice) {
@@ -126,6 +140,7 @@ export async function getByOrder(req: Request, res: Response) {
     orderId,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!invoice) {
@@ -140,6 +155,7 @@ export async function update(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
   const input = updateInvoiceCorrectionSchema.parse(req.body);
 
   const result = await updateInvoiceWithCorrection({
@@ -188,6 +204,7 @@ export async function voidInvoice(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
   const input = voidInvoiceCorrectionSchema.parse(req.body);
 
   const result = await voidInvoiceWithCorrection({
@@ -222,6 +239,7 @@ export async function deleteInvoice(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
   const input = voidInvoiceCorrectionSchema.parse(req.body);
 
   const result = await deleteInvoiceWithCorrection({
@@ -257,6 +275,7 @@ export async function transfer(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
   const input = transferInvoiceCorrectionSchema.parse(req.body);
 
   const result = await transferInvoiceWithCorrection({
@@ -294,6 +313,7 @@ export async function history(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
 
   const result = await listInvoiceHistory({
     invoiceId: id,
@@ -309,6 +329,7 @@ export async function updateFinancialRules(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = invoiceIdParamSchema.parse(req.params);
+  await assertInvoiceVisibleToBranch(id, businessId, branchId, req.user!.id);
   const input = updateInvoiceFinancialRulesSchema.parse(req.body);
   const result = await updateInvoiceFinancialRules({
     invoiceId: id, businessId, branchId, actorUserId: req.user!.id,

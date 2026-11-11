@@ -124,3 +124,32 @@ export async function updateBusinessBranding(
 
   return getBusinessBranding(businessId);
 }
+
+export async function getBusinessSecuritySettings(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { sessionInactivityTimeoutMinutes: true },
+  });
+  if (!business) throw new AppError("Business not found", 404);
+  return business;
+}
+
+export async function updateBusinessSecuritySettings(
+  businessId: string,
+  data: { sessionInactivityTimeoutMinutes: number },
+) {
+  const current = await getBusinessSecuritySettings(businessId);
+  if (current.sessionInactivityTimeoutMinutes !== data.sessionInactivityTimeoutMinutes) {
+    await prisma.$transaction([
+      prisma.business.updateMany({
+        where: { id: businessId },
+        data: { sessionInactivityTimeoutMinutes: data.sessionInactivityTimeoutMinutes },
+      }),
+      prisma.sensitiveAuthorization.updateMany({
+        where: { businessId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+  return getBusinessSecuritySettings(businessId);
+}

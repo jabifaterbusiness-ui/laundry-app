@@ -6,6 +6,7 @@ import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage.js";
 import { SetupPage } from "./pages/auth/SetupPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CustomersPage } from "./pages/customers/CustomersPage.js";
+import { CustomerGroupsPage } from "./pages/customers/CustomerGroupsPage.js";
 import { CustomerDetailsPage } from "./pages/customers/CustomerDetailsPage.js";
 import { CustomerWorkstationPage } from "./pages/customers/CustomerWorkstationPage.js";
 import { RequireAuth } from "./routes/RequireAuth.js";
@@ -28,6 +29,7 @@ import { PlatformOwnerPage } from "./pages/platform/PlatformOwnerPage.js";
 import { SuspiciousActivityPage } from "./pages/security/SuspiciousActivityPage.js";
 import { BusinessSettingsPage } from "./pages/business/BusinessSettingsPage.js";
 import { BranchesPage } from "./pages/branches/BranchesPage.js";
+import { BranchSharingPage } from "./pages/branches/BranchSharingPage.js";
 import { AccountPage } from "./pages/account/AccountPage.js";
 import { HelpCentrePage } from "./pages/help/HelpCentrePage.js";
 import { InboxPage } from "./pages/inbox/InboxPage.js";
@@ -50,6 +52,7 @@ function AuthenticatedLayout() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/data-management" element={<DataManagementPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/groups" element={<CustomerGroupsPage />} />
           <Route path="/customers/:id" element={<CustomerDetailsPage />} />
           <Route path="/customer-workstation" element={<CustomerWorkstationPage />} />
           <Route path="/services" element={<ServicesPage />} />
@@ -71,6 +74,7 @@ function AuthenticatedLayout() {
           <Route path="/security/suspicious-activity" element={<SuspiciousActivityPage />} />
           <Route path="/business/settings" element={<BusinessSettingsPage />} />
           <Route path="/branches" element={<BranchesPage />} />
+          <Route path="/branches/sharing" element={<BranchSharingPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/help" element={<HelpCentrePage />} />
           <Route path="/inbox" element={<InboxPage />} />

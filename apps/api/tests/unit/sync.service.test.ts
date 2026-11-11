@@ -721,6 +721,8 @@ describe("replaySyncOperation", () => {
 
     expect(findPossibleDuplicates).toHaveBeenCalledWith(
       BUSINESS_A,
+      BRANCH_A,
+      USER_A,
       "08012345678",
       undefined,
       prismaMock,
@@ -729,6 +731,7 @@ describe("replaySyncOperation", () => {
     expect(createCustomer).toHaveBeenCalledWith(
       {
         businessId: BUSINESS_A,
+        branchId: BRANCH_A,
         name: "Replay Customer",
         phone: "08012345678",
       },
@@ -949,6 +952,8 @@ describe("replaySyncOperation", () => {
     expect(updateCustomer).toHaveBeenCalledWith(
       "550e8400-e29b-41d4-a716-446655440004",
       BUSINESS_A,
+      BRANCH_A,
+      USER_A,
       { name: "Updated Replay Customer" },
       prismaMock,
     );
@@ -1014,6 +1019,7 @@ describe("replaySyncOperation", () => {
       {
         businessId: BUSINESS_A,
         branchId: BRANCH_A,
+        actorUserId: USER_A,
         customerId: "550e8400-e29b-41d4-a716-446655440000",
         items: [
           {
@@ -1083,6 +1089,7 @@ describe("replaySyncOperation", () => {
       BUSINESS_A,
       BRANCH_A,
       operation.payload.customerId,
+      USER_A,
       prismaMock,
     );
 

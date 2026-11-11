@@ -5,12 +5,18 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     inventoryItem: {
       update: vi.fn(),
+      updateMany: vi.fn(),
       create: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
+    },
+    inventoryStocktake: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     inventoryStock: {
       upsert: vi.fn(),
@@ -39,6 +45,7 @@ import {
   updateInventoryItem,
   createInventoryMovement,
   adjustInventoryStock,
+  applyInventoryStocktake,
   listInventoryItems,
   listInventoryStock,
   type CreateInventoryMovementInput,
@@ -69,6 +76,30 @@ beforeEach(() => {
   });
 });
 
+describe("applyInventoryStocktake branch sharing", () => {
+  it("rechecks current EDIT access and refuses to apply after inventory sharing is revoked", async () => {
+    prismaMock.inventoryStocktake.findFirst.mockResolvedValue({
+      id: "stocktake-1",
+      status: "APPROVED",
+      lines: [{ inventoryItemId: "item-owned-by-another-branch", countedQuantity: 8, expectedQuantity: 5 }],
+    } as never);
+    // No current share means the item is no longer visible to this branch.
+    prismaMock.inventoryItem.findMany.mockResolvedValue([] as never);
+
+    await expect(applyInventoryStocktake({
+      businessId: "biz-A",
+      branchId: "branch-B",
+      userId: "user-B",
+    }, {
+      stocktakeId: "stocktake-1",
+      appliedById: "user-B",
+    })).rejects.toThrow("One or more stocktake items are no longer available to this branch");
+
+    expect(prismaMock.inventoryStock.update).not.toHaveBeenCalled();
+    expect(prismaMock.inventoryStocktake.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("inventory.service", () => {
   describe("createInventoryMovement", () => {
     it("increases stock for a RECEIPT and records the resulting balance", async () => {
@@ -83,6 +114,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -93,6 +125,7 @@ describe("inventory.service", () => {
         id: "movement-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 5,
         type: "RECEIPT",
@@ -119,6 +152,7 @@ describe("inventory.service", () => {
       const result = await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, input);
 
       expect(result).toEqual({
@@ -174,6 +208,7 @@ describe("inventory.service", () => {
       const result = await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, {
         inventoryItemId: "item-1",
         quantity: 4,
@@ -209,6 +244,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 4,
@@ -231,6 +267,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-from-biz-B",
           quantity: 5,
@@ -246,6 +283,11 @@ describe("inventory.service", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
       expect(prismaMock.branch.findFirst).not.toHaveBeenCalled();
@@ -265,6 +307,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-from-biz-B",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 5,
@@ -297,6 +340,7 @@ describe("inventory.service", () => {
         createInventoryMovement({
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         }, {
           inventoryItemId: "item-1",
           quantity: 5,
@@ -327,6 +371,7 @@ describe("inventory.service", () => {
         id: "stock-2",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-2",
         quantity: 0,
       });
@@ -344,6 +389,7 @@ describe("inventory.service", () => {
       await createInventoryMovement({
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
       }, {
         inventoryItemId: "item-2",
         quantity: 20,
@@ -385,6 +431,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -395,6 +442,7 @@ describe("inventory.service", () => {
         id: "movement-adjustment-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 5,
         type: "ADJUSTMENT",
@@ -417,6 +465,7 @@ describe("inventory.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         },
         {
           inventoryItemId: "item-1",
@@ -466,6 +515,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 10,
       };
@@ -476,6 +526,7 @@ describe("inventory.service", () => {
         id: "movement-adjustment-2",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: -3,
         type: "ADJUSTMENT",
@@ -498,6 +549,7 @@ describe("inventory.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-1",
         },
         {
           inventoryItemId: "item-1",
@@ -545,6 +597,7 @@ describe("inventory.service", () => {
         id: "stock-1",
         businessId: "biz-A",
         branchId: "branch-A",
+        userId: "user-1",
         inventoryItemId: "item-1",
         quantity: 3,
       });
@@ -554,6 +607,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -579,6 +633,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-from-biz-B",
@@ -596,6 +651,11 @@ describe("inventory.service", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
       expect(prismaMock.branch.findFirst).not.toHaveBeenCalled();
@@ -615,6 +675,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-A",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -647,6 +708,7 @@ describe("inventory.service", () => {
           {
             businessId: "biz-A",
             branchId: "branch-from-biz-B",
+            userId: "user-1",
           },
           {
             inventoryItemId: "item-1",
@@ -685,6 +747,8 @@ describe("inventory.service", () => {
 
       const result = await createInventoryItem({
         businessId: "biz-A",
+        branchId: "branch-A",
+        userId: "user-1",
       }, {
         name: " Laundry Detergent ",
         description: " 5 litre detergent ",
@@ -704,6 +768,7 @@ describe("inventory.service", () => {
       expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
         data: {
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: "5 litre detergent",
           unit: "LITRE",
@@ -726,6 +791,8 @@ describe("inventory.service", () => {
       await expect(
         createInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, {
           name: "Laundry Detergent",
           unit: "LITRE",
@@ -738,6 +805,7 @@ describe("inventory.service", () => {
       expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
         data: {
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: null,
           unit: "LITRE",
@@ -769,7 +837,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(2);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 1,
         pageSize: 10,
@@ -789,6 +857,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -800,6 +873,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -817,7 +895,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(1);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         search: "detergent",
         page: 1,
@@ -831,10 +909,17 @@ describe("inventory.service", () => {
       where: {
         businessId: "business-1",
         OR: [
-          { name: { contains: "detergent", mode: "insensitive" } },
-          { sku: { contains: "detergent", mode: "insensitive" } },
-          { category: { contains: "detergent", mode: "insensitive" } },
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
         ],
+        AND: [{
+          OR: [
+            { name: { contains: "detergent", mode: "insensitive" } },
+            { sku: { contains: "detergent", mode: "insensitive" } },
+            { category: { contains: "detergent", mode: "insensitive" } },
+          ],
+        }],
       },
       orderBy: {
         name: "asc",
@@ -847,10 +932,17 @@ describe("inventory.service", () => {
       where: {
         businessId: "business-1",
         OR: [
-          { name: { contains: "detergent", mode: "insensitive" } },
-          { sku: { contains: "detergent", mode: "insensitive" } },
-          { category: { contains: "detergent", mode: "insensitive" } },
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
         ],
+        AND: [{
+          OR: [
+            { name: { contains: "detergent", mode: "insensitive" } },
+            { sku: { contains: "detergent", mode: "insensitive" } },
+            { category: { contains: "detergent", mode: "insensitive" } },
+          ],
+        }],
       },
     });
   });
@@ -869,7 +961,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(1);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         isActive: true,
         page: 1,
@@ -882,6 +974,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
         isActive: true,
       },
       orderBy: {
@@ -894,6 +991,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
         isActive: true,
       },
     });
@@ -912,7 +1014,7 @@ describe("inventory.service", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(21);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 2,
         pageSize: 10,
@@ -932,6 +1034,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.findMany).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
       orderBy: {
         name: "asc",
@@ -943,6 +1050,11 @@ describe("inventory.service", () => {
     expect(prismaMock.inventoryItem.count).toHaveBeenCalledWith({
       where: {
         businessId: "business-1",
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
       },
     });
   });
@@ -954,7 +1066,7 @@ describe("listInventoryItems empty results", () => {
     prismaMock.inventoryItem.count.mockResolvedValue(0);
 
     const result = await listInventoryItems(
-      { businessId: "business-1" },
+      { businessId: "business-1", branchId: "branch-1", userId: "user-1" },
       {
         page: 1,
         pageSize: 10,
@@ -1007,6 +1119,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 1,
@@ -1028,6 +1141,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1045,6 +1167,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1071,6 +1202,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         inventoryItemId: "item-1",
@@ -1086,6 +1218,15 @@ describe("listInventoryStock", () => {
         businessId: "business-1",
         branchId: "branch-1",
         inventoryItemId: "item-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1104,6 +1245,15 @@ describe("listInventoryStock", () => {
         businessId: "business-1",
         branchId: "branch-1",
         inventoryItemId: "item-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1136,6 +1286,10 @@ describe("listInventoryStock", () => {
       },
     ];
 
+    prismaMock.branchResourceShare.findMany.mockResolvedValueOnce([
+      { ownerBranchId: "branch-2", resourceId: "shared-item-1", accessLevel: "READ" },
+    ] as never);
+
     prismaMock.$queryRaw
       .mockResolvedValueOnce([
         { id: "stock-1" },
@@ -1149,6 +1303,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         lowStockOnly: true,
@@ -1174,6 +1329,7 @@ describe("listInventoryStock", () => {
     expect(stockQuery.sql).toContain('"businessId"');
     expect(stockQuery.sql).toContain('"branchId"');
     expect(stockQuery.sql).toContain('"lowStockThreshold"');
+    expect(stockQuery.sql).toMatch(/AND \(i\."ownerBranchId".*OR i\.id IN/);
     expect(stockQuery.sql).not.toContain("inventory_item_id");
     expect(stockQuery.sql).not.toContain("low_stock_threshold");
 
@@ -1183,6 +1339,15 @@ describe("listInventoryStock", () => {
         branchId: "branch-1",
         id: {
           in: ["stock-1", "stock-2"],
+        },
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: ["shared-item-1"] } },
+            ],
+          },
         },
       },
       include: {
@@ -1213,6 +1378,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 2,
@@ -1234,6 +1400,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1251,6 +1426,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1277,6 +1461,7 @@ describe("listInventoryStock", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         lowStockOnly: false,
@@ -1291,6 +1476,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         inventoryItem: true,
@@ -1308,6 +1502,15 @@ describe("listInventoryStock", () => {
       where: {
         businessId: "business-1",
         branchId: "branch-1",
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: ["branch-1"] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
@@ -1322,6 +1525,7 @@ describe("listInventoryStock empty results", () => {
       {
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
       },
       {
         page: 1,
@@ -1346,6 +1550,7 @@ describe("createInventoryItem catalogue metadata", () => {
     const created = {
       id: "item-catalogue-1",
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
       name: "Fabric Softener",
       sku: "FAB-002",
       category: "Fabric Care",
@@ -1358,7 +1563,7 @@ describe("createInventoryItem catalogue metadata", () => {
     };
     prismaMock.inventoryItem.create.mockResolvedValue(created);
 
-    const result = await createInventoryItem({ businessId: "biz-A" }, {
+    const result = await createInventoryItem({ businessId: "biz-A", branchId: "branch-A", userId: "user-1" }, {
       name: " Fabric Softener ",
       sku: " FAB-002 ",
       category: " Fabric Care ",
@@ -1372,6 +1577,7 @@ describe("createInventoryItem catalogue metadata", () => {
     expect(prismaMock.inventoryItem.create).toHaveBeenCalledWith({
       data: {
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Fabric Care",
@@ -1391,16 +1597,33 @@ describe("updateInventoryItem", () => {
         .mockResolvedValueOnce({
           id: "item-1",
           businessId: "biz-A",
+          ownerBranchId: "branch-A",
           name: "Laundry Detergent",
           description: "Old description",
           unit: "LITRE",
           lowStockThreshold: 10,
           isActive: true,
         })
-        .mockResolvedValueOnce(null);
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: "item-1",
+          businessId: "biz-A",
+          ownerBranchId: "branch-A",
+          name: "Fabric Softener",
+          sku: "FAB-002",
+          category: "Care",
+          storageLocation: "Shelf B2",
+          description: "New description",
+          unit: "BOTTLE",
+          reorderQuantity: 12,
+          lowStockThreshold: 5,
+          isActive: false,
+        } as never);
+      prismaMock.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
       prismaMock.inventoryItem.update.mockResolvedValue({
         id: "item-1",
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Care",
@@ -1414,6 +1637,8 @@ describe("updateInventoryItem", () => {
 
       const result = await updateInventoryItem({
         businessId: "biz-A",
+        branchId: "branch-A",
+        userId: "user-1",
       }, "item-1", {
         name: " Fabric Softener ",
         sku: " FAB-002 ",
@@ -1429,6 +1654,7 @@ describe("updateInventoryItem", () => {
       expect(result).toEqual({
         id: "item-1",
         businessId: "biz-A",
+        ownerBranchId: "branch-A",
         name: "Fabric Softener",
         sku: "FAB-002",
         category: "Care",
@@ -1439,8 +1665,8 @@ describe("updateInventoryItem", () => {
         lowStockThreshold: 5,
         isActive: false,
       });
-      expect(prismaMock.inventoryItem.update).toHaveBeenCalledWith({
-        where: { id: "item-1" },
+      expect(prismaMock.inventoryItem.updateMany).toHaveBeenCalledWith({
+        where: { id: "item-1", businessId: "biz-A", ownerBranchId: "branch-A" },
         data: {
           name: "Fabric Softener",
           sku: "FAB-002",
@@ -1456,12 +1682,66 @@ describe("updateInventoryItem", () => {
     });
   });
 
+    it("rechecks shared inventory EDIT access inside a serializable update transaction", async () => {
+      prismaMock.branchResourceShare.findMany.mockResolvedValueOnce([{
+        ownerBranchId: "branch-B", resourceId: null, accessLevel: "READ",
+      }] as never);
+      prismaMock.inventoryItem.findFirst.mockResolvedValueOnce({
+        id: "item-shared", businessId: "biz-A", ownerBranchId: "branch-B", name: "Detergent",
+      } as never);
+      prismaMock.branchResourceShare.findFirst.mockResolvedValueOnce(null);
+
+      await expect(updateInventoryItem({
+        businessId: "biz-A", branchId: "branch-A", userId: "user-A",
+      }, "item-shared", { name: "Changed detergent" })).rejects.toThrow("not shared with edit access");
+
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: "Serializable",
+      });
+      expect(prismaMock.inventoryItem.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("maps a duplicate SKU constraint to a conflict when updating an inventory item", async () => {
+      prismaMock.inventoryItem.findFirst.mockResolvedValueOnce({
+        id: "item-1",
+        businessId: "biz-A",
+        ownerBranchId: "branch-A",
+        name: "Laundry Detergent",
+        sku: "OLD-SKU",
+      } as never);
+      prismaMock.inventoryItem.updateMany.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+          code: "P2002",
+          clientVersion: "6.0.0",
+          meta: { target: ["businessId", "ownerBranchId", "sku"] },
+        }),
+      );
+
+      await expect(
+        updateInventoryItem({
+          businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
+        }, "item-1", { sku: " EXISTING-SKU " }),
+      ).rejects.toMatchObject({
+        message: "An inventory item with this SKU already exists",
+        statusCode: 409,
+      });
+
+      expect(prismaMock.inventoryItem.updateMany).toHaveBeenCalledWith({
+        where: { id: "item-1", businessId: "biz-A", ownerBranchId: "branch-A" },
+        data: { sku: "EXISTING-SKU" },
+      });
+    });
+
     it("rejects updating an inventory item outside the authenticated business", async () => {
       prismaMock.inventoryItem.findFirst.mockResolvedValue(null);
 
       await expect(
         updateInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, "item-from-biz-B", {
           name: "Unauthorized Update",
         }),
@@ -1474,9 +1754,14 @@ describe("updateInventoryItem", () => {
         where: {
           id: "item-from-biz-B",
           businessId: "biz-A",
+          OR: [
+            { ownerBranchId: null },
+            { ownerBranchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
         },
       });
-      expect(prismaMock.inventoryItem.update).not.toHaveBeenCalled();
+      expect(prismaMock.inventoryItem.updateMany).not.toHaveBeenCalled();
     });
 
     it("rejects updating an inventory item to a duplicate name within the same business", async () => {
@@ -1495,6 +1780,8 @@ describe("updateInventoryItem", () => {
       await expect(
         updateInventoryItem({
           businessId: "biz-A",
+          branchId: "branch-A",
+          userId: "user-1",
         }, "item-1", {
           name: " Fabric Softener ",
         }),

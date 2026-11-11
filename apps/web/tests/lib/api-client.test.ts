@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch } from "../../src/lib/api-client.js";
+import { useAuthStore } from "../../src/state/auth-store.js";
+
+beforeEach(() => {
+  useAuthStore.setState({ user: null, accessToken: null, refreshToken: null, activeBranchId: null } as never);
+});
 
 describe("apiFetch network errors", () => {
   it("classifies fetch failures as NetworkError", async () => {
@@ -162,6 +167,56 @@ describe("apiFetch sensitive authorization", () => {
       expect(requestOptions.headers).not.toHaveProperty(
         "X-Sensitive-Authorization",
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+
+describe("apiFetch access-token renewal", () => {
+  it("renews an expired access token and retries the original request once", async () => {
+    const originalFetch = globalThis.fetch;
+    useAuthStore.setState({ accessToken: "expired-access", refreshToken: "refresh-one" } as never);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Invalid or expired access token" } }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ accessToken: "fresh-access", refreshToken: "refresh-two" }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    try {
+      globalThis.fetch = fetchMock;
+      await expect(apiFetch("/orders", { accessToken: "expired-access", branchId: "branch-1" })).resolves.toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/auth/refresh");
+      expect(fetchMock.mock.calls[2]?.[1]).toEqual(expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer fresh-access", "X-Branch-Id": "branch-1" }),
+      }));
+      expect(useAuthStore.getState().accessToken).toBe("fresh-access");
+      expect(useAuthStore.getState().refreshToken).toBe("refresh-two");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("shares one refresh request when multiple API calls expire together", async () => {
+    const originalFetch = globalThis.fetch;
+    useAuthStore.setState({ accessToken: "expired-access", refreshToken: "refresh-one" } as never);
+    let resolveRefresh!: (response: Response) => void;
+    const refreshResponse = new Promise<Response>((resolve) => { resolveRefresh = resolve; });
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url) === "/api/v1/auth/refresh") return refreshResponse;
+      if ((init?.headers as Record<string, string> | undefined)?.Authorization === "Bearer fresh-access") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: { message: "Invalid or expired access token" } }), { status: 401 }));
+    });
+    try {
+      globalThis.fetch = fetchMock;
+      const first = apiFetch("/orders", { accessToken: "expired-access" });
+      const second = apiFetch("/invoices", { accessToken: "expired-access" });
+      await Promise.resolve();
+      resolveRefresh(new Response(JSON.stringify({ accessToken: "fresh-access", refreshToken: "refresh-two" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      await expect(Promise.all([first, second])).resolves.toEqual([{ ok: true }, { ok: true }]);
+      expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/auth/refresh")).toHaveLength(1);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -45,10 +45,11 @@ export function ReportsPage() {
   });
 
   const annualReportQuery = useQuery({
-    queryKey: ["reports", "annual", annualYear],
-    queryFn: () => getAnnualReport(Number(annualYear), { accessToken }),
+    queryKey: ["reports", "annual", activeBranchId, annualYear],
+    queryFn: () => getAnnualReport(Number(annualYear), { accessToken }, activeBranchId),
     enabled: Boolean(
       accessToken &&
+        activeBranchId &&
         canViewReports &&
         /^\d{4}$/.test(annualYear),
     ),
@@ -159,6 +160,7 @@ export function ReportsPage() {
           />
         </label>
 
+        {!activeBranchId && <p role="status">Select a branch to view its annual report.</p>}
         {annualReportQuery.isLoading && <p>Loading annual report...</p>}
 
         {annualReportQuery.isError && (
@@ -172,8 +174,7 @@ export function ReportsPage() {
         {annualReportQuery.data && (
           <>
             <p>
-              {annualReportQuery.data.period.year} business-wide financial
-              report across all branches.
+              {annualReportQuery.data.period.year} financial report for the selected branch.
             </p>
 
             <h3>Annual financial summary</h3>

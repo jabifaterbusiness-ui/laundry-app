@@ -18,6 +18,12 @@ const mockAuthState = vi.hoisted(() => ({
   activeBranchId: "branch-1",
 }));
 
+vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.js", () => ({
+  useSensitiveAuthorization: () => ({
+    requestSensitiveAuthorization: vi.fn().mockResolvedValue("sensitive-token"),
+  }),
+}));
+
 vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: typeof mockAuthState) => unknown) =>
     selector(mockAuthState),
@@ -58,13 +64,14 @@ function renderPage() {
 describe("CustomersPage", () => {
   it("renders customers once loaded", async () => {
     vi.mocked(listCustomers).mockResolvedValue({
-      data: [{ id: "1", name: "Jane Doe", phone: "5551234567", email: null, address: null, notes: null, isActive: true, createdAt: "", updatedAt: "" }],
+      data: [{ id: "1", name: "Jane Doe", phone: "5551234567", email: null, address: null, notes: null, ownerBranchId: "branch-1", ownerBranch: { id: "branch-1", name: "Main Branch" }, isActive: true, createdAt: "", updatedAt: "" }],
       pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
     });
 
     renderPage();
 
     expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.queryByText("Business-wide legacy")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no customers", async () => {
@@ -137,7 +144,7 @@ describe("CustomersPage", () => {
         name: "Offline Customer",
         phone: "08012345678",
       }),
-      { accessToken: "token" },
+      { accessToken: "token", branchId: "branch-1" },
       {
         businessId: "business-1",
         branchId: "branch-1",
@@ -200,7 +207,7 @@ describe("CustomersPage", () => {
       expect.objectContaining({
         name: "Jane Updated",
       }),
-      { accessToken: "token" },
+      { accessToken: "token", branchId: "branch-1", sensitiveAuthorization: "sensitive-token" },
       {
         businessId: "business-1",
         branchId: "branch-1",

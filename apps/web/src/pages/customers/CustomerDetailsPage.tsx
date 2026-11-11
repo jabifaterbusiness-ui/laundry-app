@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../lib/api-client.js";
 import { getCustomer } from "../../lib/customers-api.js";
+import { listBranchResourceShares } from "../../lib/branch-sharing-api.js";
+import { listCustomerGroups } from "../../lib/communications-api.js";
 import { listServices, listCustomerServicePrices, saveCustomerServicePrice, deleteCustomerServicePrice } from "../../lib/services-api.js";
 import {
   fundCustomerAccount,
@@ -32,6 +34,8 @@ export function CustomerDetailsPage() {
   const canViewAccount = hasPermission(user, "customer_accounts.view");
   const canManageAccount = hasPermission(user, "customer_accounts.manage");
   const canManageServicePrices = hasPermission(user, "services.update");
+  const canViewBranchSharing = hasPermission(user, "branches.view");
+  const canManageBranchSharing = hasPermission(user, "branches.update");
 
   const [fundingOpen, setFundingOpen] = useState(false);
   const [fundingAmount, setFundingAmount] = useState("");
@@ -40,35 +44,47 @@ export function CustomerDetailsPage() {
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
   const customerQuery = useQuery({
-    queryKey: ["customer", id],
+    queryKey: ["customer", activeBranchId, id],
     queryFn: () => getCustomer(id!, { accessToken }),
-    enabled: Boolean(id),
+    enabled: Boolean(accessToken && id && activeBranchId),
+  });
+
+  const branchSharesQuery = useQuery({
+    queryKey: ["branch-resource-shares", "customer", id, activeBranchId],
+    queryFn: () => listBranchResourceShares(accessToken!),
+    enabled: Boolean(accessToken && id && canViewBranchSharing && customerQuery.data?.ownerBranchId),
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: ["communications", "customer-groups"],
+    queryFn: () => listCustomerGroups({ accessToken }),
+    enabled: Boolean(accessToken && id),
   });
 
   const servicesQuery = useQuery({
-    queryKey: ["services", "active"],
+    queryKey: ["services", "active", activeBranchId],
     queryFn: () => listServices({ status: "active" }, { accessToken }),
-    enabled: canManageServicePrices,
+    enabled: Boolean(accessToken && activeBranchId && canManageServicePrices),
   });
   const customerPricesQuery = useQuery({
-    queryKey: ["customer-service-prices", id],
+    queryKey: ["customer-service-prices", activeBranchId, id],
     queryFn: () => listCustomerServicePrices(id!, { accessToken }),
-    enabled: Boolean(id) && canManageServicePrices,
+    enabled: Boolean(accessToken && id && activeBranchId && canManageServicePrices),
   });
   const savePriceMutation = useMutation({
     mutationFn: async (input: { serviceId: string; unitPrice: number }) =>
       saveCustomerServicePrice({ customerId: id!, ...input }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", activeBranchId, id] }),
   });
   const removePriceMutation = useMutation({
     mutationFn: (priceId: string) => deleteCustomerServicePrice(priceId, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["customer-service-prices", activeBranchId, id] }),
   });
 
   const accountQuery = useQuery({
-    queryKey: ["customer-account", id],
+    queryKey: ["customer-account", activeBranchId, id],
     queryFn: () => getCustomerAccount(id!, { accessToken }),
-    enabled: Boolean(id) && canViewAccount,
+    enabled: Boolean(accessToken && id && activeBranchId && canViewAccount),
   });
 
   const fundMutation = useMutation({
@@ -111,7 +127,7 @@ export function CustomerDetailsPage() {
       setFundingOpen(false);
 
       await queryClient.invalidateQueries({
-        queryKey: ["customer-account", id],
+        queryKey: ["customer-account", activeBranchId, id],
       });
     },
     onError: (error) => {
@@ -159,6 +175,19 @@ export function CustomerDetailsPage() {
 
   const customer = customerQuery.data;
   const account = accountQuery.data;
+  const customerBranchShares = (branchSharesQuery.data ?? []).filter((share) =>
+    Boolean(
+      customer?.ownerBranchId &&
+      share.resourceType === "CUSTOMERS" &&
+      share.ownerBranchId === customer.ownerBranchId &&
+      (share.resourceId === null || share.resourceId === customer.id),
+    ),
+  );
+  const canManageCustomerSharing = Boolean(
+    canManageBranchSharing &&
+    customer?.ownerBranchId &&
+    (user?.securityRole === "BUSINESS_OWNER" || customer.ownerBranchId === activeBranchId),
+  );
 
   function submitFunding(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,7 +213,48 @@ export function CustomerDetailsPage() {
         <p><strong>Status:</strong> {customer.lifecycleStatus}</p>
         <p><strong>Status reason:</strong> {customer.statusReason ?? "-"}</p>
         <p><strong>Notes:</strong> {customer.notes ?? "-"}</p>
+        <p><strong>Customer groups:</strong> {(groupsQuery.data?.data ?? []).filter((group) => group.members.some((member) => member.customerId === customer.id)).map((group) => group.name).join(", ") || "No group membership"}</p>
       </div>
+
+      <section aria-label="Branch ownership and sharing" style={{ margin: "1.25rem 0", padding: "1rem", border: "1px solid var(--border, #d9dce3)", borderRadius: 12 }}>
+        <h2>Branch ownership & access</h2>
+        <p><strong>Owning branch:</strong> {customer.ownerBranch?.name ?? (customer.ownerBranchId ? "Branch details unavailable" : "Business-wide legacy record (no owning branch assigned)")}</p>
+        {customer.ownerBranchId ? (
+          <>
+            {canViewBranchSharing && (
+              <>
+                {branchSharesQuery.isLoading ? <p>Loading authorized branch access...</p> : null}
+                {branchSharesQuery.isError ? <p role="alert">Unable to load branch-sharing details.</p> : null}
+                {customerBranchShares.length > 0 ? (
+                  <ul>
+                    {customerBranchShares.map((share) => (
+                      <li key={share.id}>
+                        <strong>{share.targetBranch.name}</strong>
+                        {" — "}
+                        {share.accessLevel === "EDIT" ? "Edit access" : "View-only access"}
+                        {share.user ? ` for ${share.user.fullName}` : " for authorized branch users"}
+                        {share.resourceId === null ? " (branch-wide customer share)" : " (this customer)"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  !branchSharesQuery.isLoading && <p>No additional branch shares are configured for this customer.</p>
+                )}
+              </>
+            )}
+            {canManageCustomerSharing && (
+              <button
+                type="button"
+                onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(customer.ownerBranchId!)}&resourceType=CUSTOMERS&resourceId=${encodeURIComponent(customer.id)}`)}
+              >
+                Manage customer sharing
+              </button>
+            )}
+          </>
+        ) : (
+          <p>This legacy customer has no assigned owning branch and retains business-wide visibility. It has not been assigned to a branch automatically.</p>
+        )}
+      </section>
 
       <section aria-label="Customer account">
         <h2>Customer Account</h2>
@@ -316,6 +386,7 @@ export function CustomerDetailsPage() {
                     <div style={{ flex: "1 1 180px" }}>
                       <strong>{service.name}</strong>
                       <div><small>Standard: {formatMoney(service.unitPrice)}{override ? " · Special price active" : ""}</small></div>
+                      {override && <div><small>Special price owner: {override.branch?.name ?? (override.branchId ? "Branch details unavailable" : "Business-wide legacy")}</small></div>}
                     </div>
                     <label>Customer price (₦)
                       <input type="number" min="0" step="1" value={value} onChange={(event) => setPriceDrafts((current) => ({ ...current, [service.id]: event.target.value }))} />
@@ -325,6 +396,14 @@ export function CustomerDetailsPage() {
                       if (Number.isSafeInteger(amount) && amount >= 0) savePriceMutation.mutate({ serviceId: service.id, unitPrice: amount });
                     }}>Save price</button>
                     {override && <button type="button" disabled={removePriceMutation.isPending} onClick={() => removePriceMutation.mutate(override.id)}>Use standard price</button>}
+                    {override?.branchId && canManageBranchSharing && (user?.securityRole === "BUSINESS_OWNER" || override.branchId === activeBranchId) && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/branches/sharing?ownerBranchId=${encodeURIComponent(override.branchId!)}&resourceType=CUSTOMER_PRICING&resourceId=${encodeURIComponent(override.id)}`)}
+                      >
+                        Manage price sharing
+                      </button>
+                    )}
                   </div>
                 );
               })}

@@ -16,6 +16,8 @@ export function BusinessSettingsPage() {
   const [text, setText] = useState("#111827");
   const [headerStyle, setHeaderStyle] = useState("standard");
   const [agreement, setAgreement] = useState("");
+  const [sessionInactivityTimeoutMinutes, setSessionInactivityTimeoutMinutes] = useState(3);
+  const [savingSecurity, setSavingSecurity] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -24,8 +26,15 @@ export function BusinessSettingsPage() {
 
   async function load() {
     if (!accessToken) return;
-    const result = await getBusinessBranding({ accessToken }, activeBranchId);
+    const [result, securitySettings] = await Promise.all([
+      getBusinessBranding({ accessToken }, activeBranchId),
+      apiFetch<{ sessionInactivityTimeoutMinutes: number }>("/businesses/security-settings", {
+        accessToken,
+        branchId: activeBranchId,
+      }),
+    ]);
     setBranding(result);
+    setSessionInactivityTimeoutMinutes(securitySettings.sessionInactivityTimeoutMinutes ?? 3);
     setPrimary(result.receiptPrimaryColor ?? "#1f7a4d");
     setAccent(result.receiptAccentColor ?? "#f59e0b");
     setBackground(result.receiptBackgroundColor ?? "#ffffff");
@@ -117,6 +126,26 @@ export function BusinessSettingsPage() {
       setMessage(error instanceof Error ? error.message : "Unable to save branding.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveSecuritySettings() {
+    if (!accessToken) return;
+    setSavingSecurity(true);
+    setMessage("");
+    try {
+      const result = await apiFetch<{ sessionInactivityTimeoutMinutes: number }>("/businesses/security-settings", {
+        method: "PATCH",
+        accessToken,
+        branchId: activeBranchId,
+        body: JSON.stringify({ sessionInactivityTimeoutMinutes }),
+      });
+      setSessionInactivityTimeoutMinutes(result.sessionInactivityTimeoutMinutes);
+      setMessage("Session security settings saved successfully.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save session security settings.");
+    } finally {
+      setSavingSecurity(false);
     }
   }
 
@@ -314,6 +343,25 @@ export function BusinessSettingsPage() {
             style={{ width: "100%", maxWidth: 800 }}
           />
           <p style={{ fontSize: 13 }}>Leave unchanged to preserve the existing agreement.</p>
+        </div>
+
+        <div>
+          <h2>Session security</h2>
+          <p>Active work stays signed in. After the selected period without activity, your password is required again before the next sensitive action.</p>
+          <label style={{ display: "grid", gap: 6, maxWidth: 320 }}>
+            Inactivity timeout (minutes)
+            <input
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={sessionInactivityTimeoutMinutes}
+              onChange={(event) => setSessionInactivityTimeoutMinutes(Math.max(1, Math.min(60, Number(event.target.value) || 1)))}
+            />
+          </label>
+          <button type="button" onClick={() => void saveSecuritySettings()} disabled={savingSecurity}>
+            {savingSecurity ? "Saving…" : "Save session security"}
+          </button>
         </div>
 
         <div>

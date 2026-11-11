@@ -1,8 +1,10 @@
 import { prisma } from "../../lib/prisma.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export interface ReportsScope {
   businessId: string;
   branchId: string;
+  userId: string;
 }
 
 export interface ReportsDateRange {
@@ -56,6 +58,27 @@ export async function getDashboardReport(
 ) {
   const dateWhere = buildDateWhere(range);
   const pickupDateWhere = buildDateWhere(range, "pickedUpAt");
+  const [customerScope, inventoryScope] = await Promise.all([
+    getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "CUSTOMERS",
+    }),
+    getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }),
+  ]);
+  const inventoryItemVisibility = {
+    OR: [
+      { ownerBranchId: null },
+      { ownerBranchId: { in: inventoryScope.ownerBranchIds } },
+      { id: { in: inventoryScope.resourceIds } },
+    ],
+  };
 
   const [
     ordersTotal,
@@ -97,6 +120,10 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         isActive: true,
+        OR: [
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
       },
     }),
 
@@ -104,6 +131,7 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         branchId: scope.branchId,
+        inventoryItem: { is: inventoryItemVisibility },
       },
     }),
 
@@ -111,6 +139,7 @@ export async function getDashboardReport(
       where: {
         businessId: scope.businessId,
         branchId: scope.branchId,
+        inventoryItem: { is: inventoryItemVisibility },
         ...dateWhere,
       },
     }),

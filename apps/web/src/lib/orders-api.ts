@@ -17,6 +17,22 @@ export interface ListOrdersParams {
   customerId?: string;
 }
 
+export interface OrderStatusHistoryEntry {
+  id: string;
+  previousStatus: string | null;
+  status: string;
+  changedAt: string;
+  changedBy: string;
+  branchName: string;
+  notificationResults?: Array<{
+    channel: string;
+    status: string;
+    deliveryId: string | null;
+    error?: string | null;
+  }>;
+  notificationError?: string | null;
+}
+
 export interface EditOrderInput {
   reason: string;
   confirmed: true;
@@ -151,6 +167,17 @@ export async function createOrder(
     branchId,
     body: JSON.stringify(input),
   });
+}
+
+export async function getOrderStatusHistory(
+  id: string,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<OrderStatusHistoryEntry[]> {
+  return apiFetch<OrderStatusHistoryEntry[]>(
+    `/orders/${encodeURIComponent(id)}/status-history`,
+    { accessToken: auth.accessToken, branchId },
+  );
 }
 
 export async function updateOrderStatus(

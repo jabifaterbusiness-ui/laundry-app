@@ -469,6 +469,8 @@ async function applySyncOperation(
 
         const duplicates = await findPossibleDuplicates(
           context.businessId,
+          context.branchId,
+          context.actorUserId,
           input.phone,
           undefined,
           tx,
@@ -484,6 +486,7 @@ async function applySyncOperation(
         result = await createCustomer(
           {
             businessId: context.businessId,
+            branchId: context.branchId,
             name: input.name,
             phone: input.phone,
             ...(input.email !== undefined && { email: input.email }),
@@ -514,6 +517,8 @@ async function applySyncOperation(
         if (input.data.phone !== undefined) {
           const duplicates = await findPossibleDuplicates(
             context.businessId,
+            context.branchId,
+            context.actorUserId,
             input.data.phone,
             input.customerId,
             tx,
@@ -530,6 +535,8 @@ async function applySyncOperation(
         result = await updateCustomer(
           input.customerId,
           context.businessId,
+          context.branchId,
+          context.actorUserId,
           input.data,
           tx,
         );
@@ -552,6 +559,7 @@ async function applySyncOperation(
           {
             businessId: context.businessId,
             branchId: context.branchId,
+            actorUserId: context.actorUserId,
             customerId: input.customerId,
             items: input.items,
             ...(input.expectedReadyAt !== undefined && {
@@ -588,6 +596,7 @@ async function applySyncOperation(
             context.businessId,
             context.branchId,
             input.customerId,
+            context.actorUserId,
             tx,
           );
         } else {

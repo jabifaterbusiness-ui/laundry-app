@@ -14,6 +14,7 @@ import {
   list,
   transfer,
   updateStatus,
+  statusHistory,
 } from "./orders.controller.js";
 
 // Order authorization:
@@ -49,6 +50,12 @@ ordersRouter.get(
   "/:id",
   requirePermission("orders.view"),
   asyncHandler(getOne),
+);
+
+ordersRouter.get(
+  "/:id/status-history",
+  requirePermission("orders.view"),
+  asyncHandler(statusHistory),
 );
 
 ordersRouter.patch(

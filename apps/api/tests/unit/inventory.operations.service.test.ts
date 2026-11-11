@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db } = vi.hoisted(() => ({
   db: {
     $transaction: vi.fn(), $queryRaw: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     branch: { findFirst: vi.fn(), findMany: vi.fn() },
     inventoryItem: { findMany: vi.fn(), findFirst: vi.fn() },
     inventoryStock: { upsert: vi.fn(), findUniqueOrThrow: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
@@ -72,7 +73,7 @@ describe("inventory operations", () => {
         receipts: [],
       },
     ]);
-    const report = await getInventoryReports({ businessId: BUSINESS, branchId: SOURCE });
+    const report = await getInventoryReports({ businessId: BUSINESS, branchId: SOURCE, userId: USER });
     expect(db.inventoryPurchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         businessId: BUSINESS,
@@ -135,7 +136,7 @@ describe("inventory operations", () => {
     ];
     for (const line of invalidLines) {
       await expect(receiveInventoryPurchaseOrder(
-        { businessId: BUSINESS, branchId: SOURCE },
+        { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: USER, lines: [line] },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
@@ -154,7 +155,7 @@ describe("inventory operations", () => {
     ];
     for (const invalid of invalidInputs) {
       await expect(createInventoryMovement(
-        { businessId: BUSINESS, branchId: SOURCE },
+        { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { inventoryItemId: ITEM, type: "RECEIPT", createdById: USER, ...invalid },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
@@ -168,7 +169,7 @@ describe("inventory operations", () => {
       { quantity: 2, reason: "   " },
     ]) {
       await expect(adjustInventoryStock(
-        { businessId: BUSINESS, branchId: SOURCE },
+        { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { inventoryItemId: ITEM, createdById: USER, ...input },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
@@ -178,7 +179,7 @@ describe("inventory operations", () => {
   it("requires an audit reason for returns, waste and expiry movements", async () => {
     for (const type of ["RETURN", "WASTE", "EXPIRED"] as const) {
       await expect(createInventoryMovement(
-        { businessId: BUSINESS, branchId: SOURCE },
+        { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { inventoryItemId: ITEM, quantity: 1, type, createdById: USER },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
@@ -187,7 +188,7 @@ describe("inventory operations", () => {
 
   it("rejects transfers to the same branch", async () => {
     await expect(createInventoryTransfer(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { destinationBranchId: SOURCE, transferNumber: "TR-1", createdById: USER, lines: [{ inventoryItemId: ITEM, quantity: 2 }] },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryStock.upsert).not.toHaveBeenCalled();
@@ -201,7 +202,7 @@ describe("inventory operations", () => {
     db.inventoryStock.update.mockResolvedValue({ id: "stock-1", quantity: 5 });
     db.inventoryTransfer.create.mockResolvedValue({ id: "transfer-1", transferNumber: "TR-1", lines: [] });
     await createInventoryTransfer(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { destinationBranchId: DESTINATION, transferNumber: "TR-1", createdById: USER, lines: [{ inventoryItemId: ITEM, quantity: 5 }] },
     );
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 3 } });
@@ -214,7 +215,7 @@ describe("inventory operations", () => {
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 8, reservedQuantity: 4, averageUnitCost: 0 });
     await expect(createInventoryTransfer(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { destinationBranchId: DESTINATION, transferNumber: "TR-2", createdById: USER, lines: [{ inventoryItemId: ITEM, quantity: 5 }] },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryTransfer.create).not.toHaveBeenCalled();
@@ -232,7 +233,7 @@ describe("inventory operations", () => {
     db.inventoryTransferLine.findMany.mockResolvedValue([{ quantityDispatched: 5, quantityReceived: 5 }]);
     db.inventoryTransfer.update.mockResolvedValue({ id: "transfer-1", status: "RECEIVED" });
     await receiveInventoryTransfer(
-      { businessId: BUSINESS, branchId: DESTINATION },
+      { businessId: BUSINESS, branchId: DESTINATION, userId: USER },
       { transferId: "transfer-1", receivedById: USER, lines: [{ transferLineId: "line-1", quantity: 3 }] },
     );
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-2" }, data: { quantity: 5, averageUnitCost: 115 } });
@@ -244,7 +245,7 @@ describe("inventory operations", () => {
       .mockResolvedValueOnce({ id: SOURCE, isActive: true })
       .mockResolvedValueOnce(null);
     await expect(createInventoryTransfer(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { destinationBranchId: "foreign-business-branch", transferNumber: "TR-FOREIGN", createdById: USER, lines: [{ inventoryItemId: ITEM, quantity: 1 }] },
     )).rejects.toMatchObject({ statusCode: 404 });
     expect(db.inventoryItem.findMany).not.toHaveBeenCalled();
@@ -254,7 +255,7 @@ describe("inventory operations", () => {
   it("allows a transfer receipt only from its destination branch", async () => {
     db.inventoryTransfer.findFirst.mockResolvedValue(null);
     await expect(receiveInventoryTransfer(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { transferId: "transfer-owned-by-another-branch", receivedById: USER, lines: [{ transferLineId: "line-1", quantity: 1 }] },
     )).rejects.toMatchObject({ statusCode: 404 });
     expect(db.inventoryTransfer.findFirst).toHaveBeenCalledWith(expect.objectContaining({
@@ -271,7 +272,7 @@ describe("inventory operations", () => {
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 7, reservedQuantity: 0 });
     db.inventoryStocktake.create.mockResolvedValue({ id: "count-1" });
     await createInventoryStocktake(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { reference: "COUNT-1", createdById: USER, lines: [{ inventoryItemId: ITEM, countedQuantity: 5 }] },
     );
     expect(db.inventoryStocktake.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -283,17 +284,17 @@ describe("inventory operations", () => {
 
   it("lists stocktakes within the active business and branch", async () => {
     db.inventoryStocktake.findMany.mockResolvedValue([{ id: "count-1" }]);
-    await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });
+    await expect(listInventoryStocktakes({ businessId: BUSINESS, branchId: SOURCE, userId: USER })).resolves.toEqual({ stocktakes: [{ id: "count-1" }] });
     expect(db.inventoryStocktake.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: BUSINESS, branchId: SOURCE } }));
   });
 
   it("requires a submitted stocktake and a different user to approve it", async () => {
     db.inventoryStocktake.update.mockResolvedValue({ id: "count-1", status: "SUBMITTED" });
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "DRAFT", createdById: USER });
-    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();
+    await expect(submitInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE, userId: USER }, { stocktakeId: "count-1", submittedById: USER })).resolves.toBeDefined();
     expect(db.inventoryStocktake.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUBMITTED" }) }));
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", createdById: USER });
-    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });
+    await expect(approveInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE, userId: USER }, { stocktakeId: "count-1", approvedById: USER })).rejects.toMatchObject({ statusCode: 403 });
     expect(db.inventoryStocktake.update).toHaveBeenCalledTimes(1);
   });
 
@@ -302,7 +303,7 @@ describe("inventory operations", () => {
       id: "count-2", status: "SUBMITTED", createdById: "creator-1", submittedById: "submitter-2",
     });
     await expect(approveInventoryStocktake(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { stocktakeId: "count-2", approvedById: "submitter-2" },
     )).rejects.toMatchObject({ statusCode: 403 });
     expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
@@ -310,7 +311,7 @@ describe("inventory operations", () => {
 
   it("does not apply a stocktake before independent approval", async () => {
     db.inventoryStocktake.findFirst.mockResolvedValue({ id: "count-1", status: "SUBMITTED", lines: [] });
-    await expect(applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" })).rejects.toMatchObject({ statusCode: 422 });
+    await expect(applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE, userId: USER }, { stocktakeId: "count-1", appliedById: "manager-2" })).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryStocktake.update).not.toHaveBeenCalled();
   });
 
@@ -322,7 +323,7 @@ describe("inventory operations", () => {
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 2, reservedQuantity: 0 });
     await expect(applyInventoryStocktake(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { stocktakeId: "count-negative", appliedById: "manager-2" },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryStock.update).not.toHaveBeenCalled();
@@ -340,7 +341,7 @@ describe("inventory operations", () => {
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 5, reservedQuantity: 0 });
     db.inventoryStock.update.mockResolvedValue({ id: "stock-1", quantity: 7 });
     db.inventoryStocktake.update.mockResolvedValue({ id: "count-1", status: "APPLIED", appliedById: "manager-2" });
-    await applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE }, { stocktakeId: "count-1", appliedById: "manager-2" });
+    await applyInventoryStocktake({ businessId: BUSINESS, branchId: SOURCE, userId: USER }, { stocktakeId: "count-1", appliedById: "manager-2" });
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 7 } });
     expect(db.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: "STOCKTAKE", quantity: 2, resultingQuantity: 7 }) });
     expect(db.inventoryStocktakeLine.update).not.toHaveBeenCalled();
@@ -349,7 +350,7 @@ describe("inventory operations", () => {
 
   it("rejects reservations that expire in the past", async () => {
     await expect(createInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { inventoryItemId: ITEM, quantity: 1, createdById: USER, expiresAt: new Date(Date.now() - 1) },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryReservation.create).not.toHaveBeenCalled();
@@ -361,7 +362,7 @@ describe("inventory operations", () => {
     db.inventoryStock.upsert.mockResolvedValue({ id: "stock-1" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", quantity: 5, reservedQuantity: 4 });
     await expect(createInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { inventoryItemId: ITEM, quantity: 2, createdById: USER },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryReservation.create).not.toHaveBeenCalled();
@@ -372,7 +373,7 @@ describe("inventory operations", () => {
     db.inventoryStock.findUnique.mockResolvedValue({ id: "stock-2" });
     db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-2", quantity: 5, reservedQuantity: 2 });
     await expect(releaseInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { reservationId: "reservation-2", consumed: true, actedById: "consumer-2" },
     )).rejects.toMatchObject({ statusCode: 409 });
     expect(db.inventoryStock.update).not.toHaveBeenCalled();
@@ -382,7 +383,7 @@ describe("inventory operations", () => {
   it("does not release a reservation that is no longer active", async () => {
     db.inventoryReservation.findFirst.mockResolvedValue(null);
     await expect(releaseInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { reservationId: "reservation-3", actedById: "manager-2" },
     )).rejects.toMatchObject({ statusCode: 404 });
     expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
@@ -394,7 +395,7 @@ describe("inventory operations", () => {
       createdById: USER, expiresAt: new Date(Date.now() - 1000),
     });
     await expect(releaseInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { reservationId: "reservation-expired", consumed: true, actedById: "consumer-2" },
     )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.inventoryStock.findUnique).not.toHaveBeenCalled();
@@ -410,7 +411,7 @@ describe("inventory operations", () => {
     db.inventoryMovement.create.mockResolvedValue({});
     db.inventoryReservation.update.mockResolvedValue({ id: "reservation-1", status: "CONSUMED" });
     await releaseInventoryReservation(
-      { businessId: BUSINESS, branchId: SOURCE },
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { reservationId: "reservation-1", consumed: true, actedById: "consumer-2" },
     );
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { reservedQuantity: { decrement: 2 }, quantity: { decrement: 2 } } });

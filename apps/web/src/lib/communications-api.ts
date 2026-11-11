@@ -8,7 +8,7 @@ export interface AnnouncementInput {
 }
 export interface CustomerGroup {
   id: string; name: string; description: string | null;
-  _count: { members: number }; members: Array<{ customerId: string }>;
+  _count: { members: number }; members: Array<{ customerId: string; customer: { id: string; name: string; phone: string } }>;
 }
 export interface StatusNotificationRule {
   id: string; status: string; enabled: boolean; channel: CommunicationChannel | "BOTH";
@@ -19,6 +19,7 @@ export interface CommunicationDelivery {
   id: string; channel: CommunicationChannel; messageType: string; destination: string;
   status: string; providerMessageId: string | null; errorMessage: string | null;
   createdAt: string; sentAt: string | null;
+  retryOfId: string | null; retryAttempt: number; retryAvailable: boolean;
   customer: { id: string; name: string };
   order: { id: string; orderNumber: string } | null;
   campaign: { id: string; title: string } | null;
@@ -67,8 +68,11 @@ export async function listUnpickedOrders(auth: { accessToken: string | null; bra
 export async function sendUnpickedReminders(input: { orderIds: string[]; channels: CommunicationChannel[]; message: string }, auth: { accessToken: string | null; branchId?: string | null }) {
   return apiFetch<{ orderCount: number; results: Array<{ status: string; orderId?: string; channel: string; error?: string }> }>("/communications/unpicked-orders/remind", { method: "POST", accessToken: auth.accessToken, branchId: auth.branchId, body: JSON.stringify(input) });
 }
-export async function listCommunicationDeliveries(auth: { accessToken: string | null }) {
-  return apiFetch<{ data: CommunicationDelivery[] }>("/communications/deliveries", { accessToken: auth.accessToken });
+export async function listCommunicationDeliveries(auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<{ data: CommunicationDelivery[] }>("/communications/deliveries", {
+    accessToken: auth.accessToken,
+    branchId: auth.branchId,
+  });
 }
 
 
@@ -99,4 +103,12 @@ export async function completeWhatsAppConnection(input: { code: string; wabaId: 
 }
 export async function disconnectWhatsAppConnection(auth: { accessToken: string | null }) {
   return apiFetch<void>("/whatsapp/connection", { method: "DELETE", accessToken: auth.accessToken });
+}
+
+
+export async function retryCommunicationDelivery(id: string, auth: { accessToken: string | null; branchId?: string | null }) {
+  return apiFetch<{ status: string; deliveryId?: string; providerMessageId?: string; retryOfId: string; retryAttempt: number; error?: string }>(
+    `/communications/deliveries/${id}/retry`,
+    { method: "POST", accessToken: auth.accessToken, branchId: auth.branchId },
+  );
 }

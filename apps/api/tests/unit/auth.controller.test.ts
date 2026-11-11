@@ -32,6 +32,11 @@ vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
   issueSensitiveAuthorization: vi.fn().mockResolvedValue({
     token: "sensitive-token",
     expiresAt: new Date(Date.now() + 300000),
+    inactivityTimeoutMs: 180000,
+  }),
+  recordSensitiveActivity: vi.fn().mockResolvedValue({
+    expiresAt: new Date(Date.now() + 180000),
+    inactivityTimeoutMs: 180000,
   }),
   revokeSensitiveAuthorizations: vi.fn().mockResolvedValue(undefined),
 }));
@@ -61,12 +66,13 @@ import {
   login,
   me,
   reauthorize,
+  recordSensitiveActivityController,
   resetPasswordController,
   account,
   changePassword,
 } from "../../src/modules/auth/auth.controller.js";
 
-import { issueSensitiveAuthorization } from "../../src/modules/auth/sensitive-authorization.service.js";
+import { issueSensitiveAuthorization, recordSensitiveActivity } from "../../src/modules/auth/sensitive-authorization.service.js";
 import { getEffectivePermissionCodes } from "../../src/modules/permissions/permissions.service.js";
 
 const findUniqueUser = vi.mocked(prisma.user.findUnique);
@@ -82,6 +88,7 @@ const resetPasswordMock = vi.mocked(resetPassword);
 const issueSensitiveAuthorizationMock = vi.mocked(
   issueSensitiveAuthorization,
 );
+const recordSensitiveActivityMock = vi.mocked(recordSensitiveActivity);
 
 const getEffectivePermissionCodesMock = vi.mocked(getEffectivePermissionCodes);
 
@@ -110,6 +117,29 @@ function makeRes() {
   return res;
 }
 
+describe("recordSensitiveActivityController", () => {
+  it("extends the authenticated user's sensitive authorization", async () => {
+    const token = "sensitive-token";
+    const req = {
+      user: { id: "user-1", businessId: "biz-1" },
+      header: vi.fn().mockReturnValue(token),
+    } as unknown as Request;
+    const res = makeRes();
+
+    await recordSensitiveActivityController(req, res);
+
+    expect(recordSensitiveActivityMock).toHaveBeenCalledWith({
+      token,
+      userId: "user-1",
+      businessId: "biz-1",
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      inactivityTimeoutMs: 180000,
+    }));
+  });
+});
+
 describe("reauthorize", () => {
   it("requires the current password and returns a sensitive authorization", async () => {
     findUniqueUser.mockResolvedValue({
@@ -121,6 +151,7 @@ describe("reauthorize", () => {
     issueSensitiveAuthorizationMock.mockResolvedValue({
       token: "sensitive-token",
       expiresAt: new Date(Date.now() + 300000),
+      inactivityTimeoutMs: 180000,
     });
 
     const req = {
@@ -163,6 +194,7 @@ describe("reauthorize", () => {
     expect(res.json).toHaveBeenCalledWith({
       token: "sensitive-token",
       expiresAt: expect.any(Date),
+      inactivityTimeoutMs: 180000,
     });
   });
 
@@ -258,6 +290,7 @@ beforeEach(() => {
   issueSensitiveAuthorizationMock.mockResolvedValue({
     token: "sensitive-token",
     expiresAt: new Date(Date.now() + 300000),
+    inactivityTimeoutMs: 180000,
   });
 });
 

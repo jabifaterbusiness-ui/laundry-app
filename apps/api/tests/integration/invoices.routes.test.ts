@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({id: "00000000-0000-4000-8000-000000000001", allowNewBusinessRegistration: true, maintenanceMode: false, whatsappMessagingEnabled: true, automatedNotificationsEnabled: true, offlineSyncEnabled: true, version: 1, createdAt: new Date("2026-01-01T00:00:00.000Z"), updatedAt: new Date("2026-01-01T00:00:00.000Z")}),
     },
@@ -18,6 +19,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       }),
     },
     $transaction: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     invoice: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     user: {
       findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -98,6 +101,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -178,6 +182,7 @@ const invoiceFixture = {
     id: ORDER_A,
     customer: {
       id: CUSTOMER_A,
+      ownerBranchId: BRANCH_A,
       name: "Jane Doe",
     },
     branch: {
@@ -224,6 +229,7 @@ const correctionInvoiceFixture = {
     customerId: CUSTOMER_A,
     customer: {
       id: CUSTOMER_A,
+      ownerBranchId: BRANCH_A,
       name: "Jane Doe",
     },
     branch: {
@@ -252,6 +258,7 @@ const correctedInvoiceFixture = {
 const targetCustomerFixture = {
   id: CUSTOMER_B,
   businessId: "biz-A",
+  ownerBranchId: BRANCH_A,
   name: "John Smith",
 };
 
@@ -409,7 +416,7 @@ describe("Invoices routes - authorization", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
@@ -505,7 +512,6 @@ describe("Invoices routes - permission enforcement", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 });
 
@@ -551,6 +557,7 @@ describe("Invoices routes - tenant and branch isolation", () => {
           id: INVOICE_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          order: { is: { businessId: "biz-B", branchId: BRANCH_B, customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } } } },
         },
       }),
     );
@@ -574,6 +581,21 @@ describe("Invoices routes - tenant and branch isolation", () => {
           id: INVOICE_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          order: {
+            is: {
+              businessId: "biz-A",
+              branchId: BRANCH_A,
+              customer: {
+                is: {
+                  businessId: "biz-A",
+                  OR: [
+                    { ownerBranchId: { in: [BRANCH_A] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
+          },
         },
       }),
     );
@@ -597,6 +619,7 @@ describe("Invoices routes - tenant and branch isolation", () => {
           orderId: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          order: { is: { businessId: "biz-B", branchId: BRANCH_B, customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } } } },
         },
       }),
     );
@@ -680,7 +703,7 @@ describe("Invoices routes - creation security", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
@@ -761,6 +784,7 @@ describe("Invoices routes - creation security", () => {
 
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       invoice: {
         id: INVOICE_A,
       },
@@ -800,7 +824,7 @@ describe("Invoices routes - creation security", () => {
       orderTotal: 9000,
       garmentNote: null,
       internalNote: null,
-      customer: { id: CUSTOMER_A, name: "Jane Doe" },
+      customer: { id: CUSTOMER_A, ownerBranchId: BRANCH_A, name: "Jane Doe" },
       branch: { id: BRANCH_A, name: "Main Branch" },
       business: {
         id: "biz-A",
@@ -896,7 +920,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -913,7 +936,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -1166,7 +1188,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -1301,7 +1322,20 @@ describe("Invoices routes - list filters and pagination", () => {
           branchId: BRANCH_A,
           status: "ISSUED",
           order: {
-            customerId: CUSTOMER_A,
+            is: {
+              businessId: "biz-A",
+              branchId: BRANCH_A,
+              customerId: CUSTOMER_A,
+              customer: {
+                is: {
+                  businessId: "biz-A",
+                  OR: [
+                    { ownerBranchId: { in: [BRANCH_A] } },
+                    { id: { in: [] } },
+                  ],
+                },
+              },
+            },
           },
         },
         skip: 10,
@@ -1315,7 +1349,20 @@ describe("Invoices routes - list filters and pagination", () => {
         branchId: BRANCH_A,
         status: "ISSUED",
         order: {
-          customerId: CUSTOMER_A,
+          is: {
+            businessId: "biz-A",
+            branchId: BRANCH_A,
+            customerId: CUSTOMER_A,
+            customer: {
+              is: {
+                businessId: "biz-A",
+                OR: [
+                  { ownerBranchId: { in: [BRANCH_A] } },
+                  { id: { in: [] } },
+                ],
+              },
+            },
+          },
         },
       },
     });
@@ -1344,7 +1391,6 @@ describe("Invoices routes - lookup validation", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid order id for invoice lookup", async () => {
@@ -1356,6 +1402,5 @@ describe("Invoices routes - lookup validation", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 });

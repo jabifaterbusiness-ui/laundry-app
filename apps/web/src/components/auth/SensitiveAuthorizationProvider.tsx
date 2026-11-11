@@ -6,7 +6,8 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { reauthorize } from "../../lib/auth-api.js";
+import { recordSensitiveActivity, reauthorize } from "../../lib/auth-api.js";
+import { ApiError } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 interface SensitiveAuthorizationContextValue {
@@ -29,6 +30,9 @@ export function SensitiveAuthorizationProvider({
   const setSensitiveAuthorization = useAuthStore(
     (state) => state.setSensitiveAuthorization,
   );
+  const clearSensitiveAuthorization = useAuthStore(
+    (state) => state.clearSensitiveAuthorization,
+  );
 
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -38,23 +42,34 @@ export function SensitiveAuthorizationProvider({
     ((token: string | null) => void) | null
   >(null);
 
-  const requestSensitiveAuthorization = useCallback(() => {
+  const requestSensitiveAuthorization = useCallback(async () => {
     if (
       sensitiveAuthorization &&
       sensitiveAuthorizationExpiresAt &&
       new Date(sensitiveAuthorizationExpiresAt).getTime() > Date.now()
     ) {
-      return Promise.resolve(sensitiveAuthorization);
+      if (!accessToken) return null;
+      try {
+        const activity = await recordSensitiveActivity(sensitiveAuthorization, accessToken);
+        setSensitiveAuthorization({
+          token: sensitiveAuthorization,
+          expiresAt: activity.expiresAt,
+          inactivityTimeoutMs: activity.inactivityTimeoutMs,
+        });
+        return sensitiveAuthorization;
+      } catch (activityError) {
+        if (!(activityError instanceof ApiError) || activityError.status !== 403) {
+          throw activityError;
+        }
+        clearSensitiveAuthorization();
+      }
     }
 
-    if (!accessToken) {
-      return Promise.resolve(null);
-    }
+    if (!accessToken) return null;
 
     if (open && resolveRequest) {
       return new Promise<string | null>((resolve) => {
         const existingResolve = resolveRequest;
-
         setResolveRequest(() => (token: string | null) => {
           existingResolve(token);
           resolve(token);
@@ -70,10 +85,12 @@ export function SensitiveAuthorizationProvider({
     });
   }, [
     accessToken,
+    clearSensitiveAuthorization,
     open,
     resolveRequest,
     sensitiveAuthorization,
     sensitiveAuthorizationExpiresAt,
+    setSensitiveAuthorization,
   ]);
 
   const closeDialog = useCallback((result: string | null) => {

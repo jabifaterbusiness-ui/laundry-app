@@ -21,17 +21,6 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
-      update: vi.fn(),
-      updateMany: vi.fn(),
-    },
-    user: {
-      findMany: vi.fn(),
-    },
-    payrollRecord: {
-      findMany: vi.fn(),
-    },
-    employeeCompensation: {
-      findFirst: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -41,7 +30,6 @@ vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent: vi.fn(),
 }));
 
-const mockedPrisma = vi.mocked(prisma);
 const mockedRecordAuditEvent = vi.mocked(recordAuditEvent);
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -55,11 +43,6 @@ const payrollPeriodCreate =
   prisma.payrollPeriod.create as unknown as MockFn;
 const payrollPeriodUpdate =
   prisma.payrollPeriod.update as unknown as MockFn;
-const userFindMany = prisma.user.findMany as unknown as MockFn;
-const payrollRecordFindMany =
-  prisma.payrollRecord.findMany as unknown as MockFn;
-const employeeCompensationFindFirst =
-  prisma.employeeCompensation.findFirst as unknown as MockFn;
 const transaction = prisma.$transaction as unknown as MockFn;
 
 describe("payroll.service", () => {
@@ -69,11 +52,6 @@ describe("payroll.service", () => {
     payrollPeriodFindFirst.mockReset();
     payrollPeriodFindMany.mockReset();
     payrollPeriodCreate.mockReset();
-    payrollPeriodUpdate.mockReset();
-    (prisma.payrollPeriod.updateMany as unknown as MockFn).mockReset();
-    userFindMany.mockReset();
-    payrollRecordFindMany.mockReset();
-    employeeCompensationFindFirst.mockReset();
     transaction.mockReset();
   });
 
@@ -559,52 +537,89 @@ describe("payroll.service", () => {
       periodEnd: new Date("2026-08-31T23:59:59.999Z"),
       status: "OPEN",
     };
+    const employee = {
+      id: "employee-1",
+      fullName: "John Staff",
+      role: "STAFF",
+    };
+    const compensation = {
+      id: "comp-1",
+      basicSalary: 150000,
+      effectiveFrom: new Date("2026-07-01T00:00:00.000Z"),
+      effectiveTo: null,
+    };
+    const createdRecord = {
+      id: "record-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      payrollPeriodId: "period-1",
+      employeeId: "employee-1",
+      basicSalary: 150000,
+      allowances: 0,
+      bonuses: 0,
+      grossPay: 150000,
+      totalDeductions: 0,
+      netPay: 150000,
+    };
 
-    it("generates payroll using compensation effective at the period end", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(period as never);
+    function mockGenerationTransaction({
+      periodResult = period,
+      employees = [employee],
+      existingRecords = [],
+      compensationResult = compensation,
+      claimCount = 1,
+    }: {
+      periodResult?: typeof period | null;
+      employees?: typeof employee[];
+      existingRecords?: Array<{ employeeId: string }>;
+      compensationResult?: typeof compensation | null;
+      claimCount?: number;
+    } = {}) {
+      const txPayrollPeriodFindFirst = vi.fn().mockResolvedValue(periodResult);
+      const txPayrollPeriodUpdateMany = vi.fn().mockResolvedValue({ count: claimCount });
+      const txUserFindMany = vi.fn().mockResolvedValue(employees);
+      const txBranchResourceShareFindMany = vi.fn().mockResolvedValue([
+        { ownerBranchId: "branch-owner", resourceId: null, accessLevel: "READ" },
+      ]);
+      const txPayrollRecordFindMany = vi.fn().mockResolvedValue(existingRecords);
+      const txEmployeeCompensationFindFirst = vi.fn().mockResolvedValue(compensationResult);
+      const txPayrollRecordCreate = vi.fn().mockResolvedValue(createdRecord);
 
-      userFindMany.mockResolvedValue([
-        {
-          id: "employee-1",
-          fullName: "John Staff",
-          role: "STAFF",
-        },
-      ] as never);
-
-      payrollRecordFindMany.mockResolvedValue([]);
-
-      employeeCompensationFindFirst.mockResolvedValue({
-        id: "comp-1",
-        basicSalary: 150000,
-        effectiveFrom: new Date("2026-07-01T00:00:00.000Z"),
-        effectiveTo: null,
-      } as never);
-
-      const txPayrollPeriodUpdate = vi.fn().mockResolvedValue({});
-      const txPayrollRecordCreate = vi.fn().mockResolvedValue({
-        id: "record-1",
-        businessId: "business-1",
-        branchId: "branch-1",
-        payrollPeriodId: "period-1",
-        employeeId: "employee-1",
-        basicSalary: 150000,
-        allowances: 0,
-        bonuses: 0,
-        grossPay: 150000,
-        totalDeductions: 0,
-        netPay: 150000,
-      });
-
-      transaction.mockImplementation(async (callback) =>
+      transaction.mockImplementation(async (callback, options) =>
         callback({
           payrollPeriod: {
-            update: txPayrollPeriodUpdate,
+            findFirst: txPayrollPeriodFindFirst,
+            updateMany: txPayrollPeriodUpdateMany,
+          },
+          user: {
+            findMany: txUserFindMany,
+          },
+          branchResourceShare: {
+            findMany: txBranchResourceShareFindMany,
           },
           payrollRecord: {
+            findMany: txPayrollRecordFindMany,
             create: txPayrollRecordCreate,
+          },
+          employeeCompensation: {
+            findFirst: txEmployeeCompensationFindFirst,
           },
         } as never),
       );
+
+      return {
+        txPayrollPeriodFindFirst,
+        txPayrollPeriodUpdateMany,
+        txUserFindMany,
+        txBranchResourceShareFindMany,
+        txPayrollRecordFindMany,
+        txEmployeeCompensationFindFirst,
+        txPayrollRecordCreate,
+      };
+    }
+
+    it("generates payroll from current branch members and shared compensation in one serializable transaction", async () => {
+      const tx = mockGenerationTransaction();
 
       const result = await generatePayroll({
         businessId: "business-1",
@@ -613,39 +628,76 @@ describe("payroll.service", () => {
         actorUserId: "user-1",
       });
 
-      expect(employeeCompensationFindFirst).toHaveBeenCalledWith({
+      expect(transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        { isolationLevel: "Serializable" },
+      );
+      expect(tx.txPayrollPeriodFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: "period-1",
+          businessId: "business-1",
+          branchId: "branch-1",
+        },
+      });
+      expect(tx.txPayrollPeriodUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: "period-1",
+          businessId: "business-1",
+          branchId: "branch-1",
+          status: "OPEN",
+        },
+        data: { status: "PROCESSING" },
+      });
+      expect(tx.txUserFindMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "business-1",
+          isActive: true,
+          deletedAt: null,
+          branches: { some: { branchId: "branch-1" } },
+        },
+        select: { id: true, fullName: true, role: true },
+        orderBy: { id: "asc" },
+      });
+      expect(tx.txBranchResourceShareFindMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "business-1",
+          targetBranchId: "branch-1",
+          resourceType: "PAYROLL_COMPENSATION",
+          AND: [{ OR: [{ userId: null }, { userId: "user-1" }] }],
+        },
+        select: { ownerBranchId: true, resourceId: true, accessLevel: true },
+      });
+      expect(tx.txPayrollRecordFindMany).toHaveBeenCalledWith({
+        where: {
+          businessId: "business-1",
+          branchId: "branch-1",
+          payrollPeriodId: "period-1",
+        },
+        select: { employeeId: true },
+      });
+      expect(tx.txEmployeeCompensationFindFirst).toHaveBeenCalledWith({
         where: {
           businessId: "business-1",
           employeeId: "employee-1",
-          effectiveFrom: {
-            lte: period.periodEnd,
-          },
-          OR: [
+          AND: [
             {
-              effectiveTo: null,
+              OR: [
+                { branchId: { in: ["branch-1", "branch-owner"] } },
+                { id: { in: [] } },
+              ],
             },
             {
-              effectiveTo: {
-                gt: period.periodEnd,
-              },
+              effectiveFrom: { lte: period.periodEnd },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gt: period.periodEnd } },
+              ],
             },
           ],
         },
-        orderBy: {
-          effectiveFrom: "desc",
-        },
+        orderBy: { effectiveFrom: "desc" },
       });
-
-      expect(txPayrollPeriodUpdate).toHaveBeenCalledWith({
-        where: {
-          id: "period-1",
-        },
-        data: {
-          status: "PROCESSING",
-        },
-      });
-
-      expect(txPayrollRecordCreate).toHaveBeenCalledWith({
+      expect(tx.txPayrollRecordCreate).toHaveBeenCalledWith({
         data: {
           businessId: "business-1",
           branchId: "branch-1",
@@ -659,21 +711,11 @@ describe("payroll.service", () => {
           netPay: 150000,
         },
       });
-
       expect(result).toMatchObject({
         payrollPeriodId: "period-1",
         status: "PROCESSING",
-        records: [
-          expect.objectContaining({
-            employeeId: "employee-1",
-            basicSalary: 150000,
-            grossPay: 150000,
-            totalDeductions: 0,
-            netPay: 150000,
-          }),
-        ],
+        records: [expect.objectContaining({ employeeId: "employee-1", basicSalary: 150000 })],
       });
-
       expect(mockedRecordAuditEvent).toHaveBeenCalledWith({
         businessId: "business-1",
         branchId: "branch-1",
@@ -681,168 +723,94 @@ describe("payroll.service", () => {
         action: "payroll_records.generated",
         entityType: "PAYROLL_PERIOD",
         entityId: "period-1",
-        metadata: {
-          recordCount: 1,
-          payrollPeriodId: "period-1",
-        },
+        metadata: { recordCount: 1, payrollPeriodId: "period-1" },
       });
     });
 
-    it("rejects generation for a payroll period outside the business and branch scope", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(null);
-
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-other",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
-        message: "Payroll period not found",
-        statusCode: 404,
-      });
-
-      expect(userFindMany).not.toHaveBeenCalled();
+    it("rejects a payroll period outside the business and branch scope", async () => {
+      const tx = mockGenerationTransaction({ periodResult: null });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-other",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({ message: "Payroll period not found", statusCode: 404 });
+      expect(tx.txUserFindMany).not.toHaveBeenCalled();
+      expect(mockedRecordAuditEvent).not.toHaveBeenCalled();
     });
 
-    it("rejects generation when the period is not open", async () => {
-      payrollPeriodFindFirst.mockResolvedValue({
-        ...period,
-        status: "PROCESSING",
-      } as never);
-
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-1",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
+    it("rejects a period that is no longer open", async () => {
+      mockGenerationTransaction({ periodResult: { ...period, status: "PROCESSING" } });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({
         message: "Payroll can only be generated for an open payroll period",
         statusCode: 400,
       });
-
-      expect(userFindMany).not.toHaveBeenCalled();
     });
 
-    it("rejects generation when there are no active employees assigned to the branch", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(period as never);
-      userFindMany.mockResolvedValue([]);
+    it("rejects when another request has already claimed the open period", async () => {
+      const tx = mockGenerationTransaction({ claimCount: 0 });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({
+        message: "Payroll generation could not be completed because the period state changed",
+        statusCode: 409,
+      });
+      expect(tx.txUserFindMany).not.toHaveBeenCalled();
+      expect(tx.txPayrollRecordCreate).not.toHaveBeenCalled();
+      expect(mockedRecordAuditEvent).not.toHaveBeenCalled();
+    });
 
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-1",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
+    it("rejects generation when no active employees are assigned to the branch", async () => {
+      const tx = mockGenerationTransaction({ employees: [] });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({
         message: "No active employees are assigned to this branch",
         statusCode: 400,
       });
-
-      expect(employeeCompensationFindFirst).not.toHaveBeenCalled();
+      expect(tx.txEmployeeCompensationFindFirst).not.toHaveBeenCalled();
+      expect(tx.txPayrollRecordCreate).not.toHaveBeenCalled();
     });
 
-    it("rejects generation when an employee has no compensation record", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(period as never);
-
-      userFindMany.mockResolvedValue([
-        {
-          id: "employee-1",
-          fullName: "John Staff",
-          role: "STAFF",
-        },
-      ] as never);
-
-      payrollRecordFindMany.mockResolvedValue([]);
-      employeeCompensationFindFirst.mockResolvedValue(null);
-
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-1",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
-        message:
-          "No compensation record found for employee John Staff as of the payroll period end",
+    it("rejects when an employee has no compensation visible to the branch", async () => {
+      const tx = mockGenerationTransaction({ compensationResult: null });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({
+        message: "No compensation record found for employee John Staff as of the payroll period end",
         statusCode: 400,
       });
-
-      expect(transaction).not.toHaveBeenCalled();
+      expect(tx.txPayrollRecordCreate).not.toHaveBeenCalled();
+      expect(mockedRecordAuditEvent).not.toHaveBeenCalled();
     });
 
-    it("rejects generation when all payroll records already exist", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(period as never);
-
-      userFindMany.mockResolvedValue([
-        {
-          id: "employee-1",
-          fullName: "John Staff",
-          role: "STAFF",
-        },
-      ] as never);
-
-      payrollRecordFindMany.mockResolvedValue([
-        {
-          employeeId: "employee-1",
-        },
-      ] as never);
-
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-1",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
+    it("rejects when all payroll records already exist for the period", async () => {
+      const tx = mockGenerationTransaction({ existingRecords: [{ employeeId: "employee-1" }] });
+      await expect(generatePayroll({
+        businessId: "business-1",
+        branchId: "branch-1",
+        payrollPeriodId: "period-1",
+        actorUserId: "user-1",
+      })).rejects.toMatchObject({
         message: "Payroll records have already been generated for this period",
         statusCode: 409,
       });
-
-      expect(employeeCompensationFindFirst).not.toHaveBeenCalled();
-      expect(transaction).not.toHaveBeenCalled();
-    });
-
-    it("queries employees using the current business and branch assignment", async () => {
-      payrollPeriodFindFirst.mockResolvedValue(period as never);
-      userFindMany.mockResolvedValue([]);
-
-      await expect(
-        generatePayroll({
-          businessId: "business-1",
-          branchId: "branch-1",
-          payrollPeriodId: "period-1",
-          actorUserId: "user-1",
-        }),
-      ).rejects.toMatchObject({
-        message: "No active employees are assigned to this branch",
-      });
-
-      expect(userFindMany).toHaveBeenCalledWith({
-        where: {
-          businessId: "business-1",
-          isActive: true,
-          branches: {
-            some: {
-              branchId: "branch-1",
-            },
-          },
-        },
-        select: {
-          id: true,
-          fullName: true,
-          role: true,
-        },
-        orderBy: {
-          id: "asc",
-        },
-      });
+      expect(tx.txEmployeeCompensationFindFirst).not.toHaveBeenCalled();
+      expect(tx.txPayrollRecordCreate).not.toHaveBeenCalled();
     });
   });
 });

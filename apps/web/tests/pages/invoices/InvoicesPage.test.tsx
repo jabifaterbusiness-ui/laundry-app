@@ -9,14 +9,17 @@ import { useAuthStore } from "../../../src/state/auth-store.js";
 import * as invoicesApi from "../../../src/lib/invoices-api.js";
 import * as businessesApi from "../../../src/lib/businesses-api.js";
 import * as customersApi from "../../../src/lib/customers-api.js";
+import * as servicesApi from "../../../src/lib/services-api.js";
 
 vi.mock("../../../src/lib/invoices-api.js");
 vi.mock("../../../src/lib/businesses-api.js");
 vi.mock("../../../src/lib/customers-api.js");
+vi.mock("../../../src/lib/services-api.js");
 
 const mockedInvoicesApi = vi.mocked(invoicesApi);
 const mockedBusinessesApi = vi.mocked(businessesApi);
 const mockedCustomersApi = vi.mocked(customersApi);
+const mockedServicesApi = vi.mocked(servicesApi);
 
 function renderPage(
   permissions: string[] = [
@@ -122,6 +125,11 @@ beforeEach(() => {
     receiptBackgroundColor: "#ffffff",
     receiptTextColor: "#111111",
     receiptHeaderStyle: "standard",
+  });
+
+  mockedServicesApi.listPricingRules.mockResolvedValue({
+    adjustments: [],
+    taxes: [],
   });
 
   mockedInvoicesApi.listInvoices.mockResolvedValue({
@@ -345,6 +353,9 @@ describe("InvoicesPage invoice correction workflow", () => {
     renderPage(["invoices.view", "invoices.manage", "payments.view"]);
     await selectInvoice();
 
+    // Garment colours must survive the order-to-invoice snapshot and remain visible on screen.
+    expect(screen.getByText("Blue")).toBeInTheDocument();
+
     const financialBreakdown = screen.getByRole("region", { name: "Invoice financial breakdown" });
     expect(within(financialBreakdown).getByText("Service subtotal")).toBeInTheDocument();
     expect(within(financialBreakdown).getByText("Special customer (-10%)")).toBeInTheDocument();
@@ -359,6 +370,80 @@ describe("InvoicesPage invoice correction workflow", () => {
     expect(within(paymentHistory).getByText("BANK-REF-1")).toBeInTheDocument();
     expect(within(paymentHistory).getByText("Amount paid")).toBeInTheDocument();
     expect(within(paymentHistory).getByText("Balance due")).toBeInTheDocument();
+  });
+
+  it("shows only manual choices and already-applied automatic discounts during invoice repricing", async () => {
+    mockedInvoicesApi.getInvoice.mockResolvedValue({
+      ...invoice,
+      appliedAdjustments: [{
+        id: "existing-vip",
+        name: "Existing VIP discount",
+        percentage: -10,
+        amount: -1000,
+        scope: "INVOICE",
+      }],
+    });
+    mockedServicesApi.listPricingRules.mockResolvedValue({
+      adjustments: [
+        {
+          id: "existing-vip",
+          name: "Existing VIP discount",
+          percentage: -10,
+          isActive: false,
+          targetScope: "CUSTOMER",
+          customerId: "customer-1",
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+        {
+          id: "unrelated-vip",
+          name: "Another customer's VIP discount",
+          percentage: -15,
+          isActive: true,
+          targetScope: "CUSTOMER",
+          customerId: "customer-2",
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+        {
+          id: "manual-courtesy",
+          name: "Courtesy adjustment",
+          percentage: -5,
+          isActive: true,
+          targetScope: "MANUAL",
+          customerId: null,
+          groupId: null,
+          startsAt: null,
+          endsAt: null,
+          allowStacking: false,
+          excludedServiceIds: [],
+          customer: null,
+          group: null,
+        },
+      ],
+      taxes: [],
+    });
+
+    renderPage();
+    await selectInvoice();
+    fireEvent.click(screen.getByRole("button", { name: "Adjust Discounts & Taxes" }));
+
+    const correction = await screen.findByRole("region", { name: "Adjust invoice discounts and taxes" });
+    expect(within(correction).getByText(/Courtesy adjustment/)).toBeInTheDocument();
+    expect(within(correction).getByText(/Existing VIP discount/)).toBeInTheDocument();
+    expect(within(correction).queryByText("Another customer's VIP discount")).not.toBeInTheDocument();
+    expect(within(correction).getByLabelText(/Existing VIP discount/)).toBeChecked();
+    expect(within(correction).getByLabelText(/Courtesy adjustment/)).not.toBeChecked();
   });
 
   it("shows correction controls with invoices.manage permission", async () => {
@@ -734,9 +819,16 @@ describe("InvoicesPage digital receipt shortcut", () => {
         },
       ],
       totalAmount: 5000,
-      totalPaid: 0,
-      balanceDue: 5000,
-      payments: [],
+      totalPaid: 2500,
+      balanceDue: 2500,
+      payments: [{
+        id: "payment-1",
+        amount: 2500,
+        method: "TRANSFER",
+        type: "PAYMENT",
+        reference: "BANK-REF-1",
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }],
       garmentNote: "Handle with care",
       customerAgreement: "Customer agreement",
     });
@@ -769,6 +861,11 @@ describe("InvoicesPage digital receipt shortcut", () => {
     expect(customerReceipt).toHaveTextContent("AMOUNT");
     expect(customerReceipt).toHaveTextContent("TOTAL PCS");
     expect(customerReceipt).toHaveTextContent("TOTAL AMOUNT");
+    expect(customerReceipt).toHaveTextContent("PAYMENT HISTORY");
+    expect(customerReceipt).toHaveTextContent("Bank transfer");
+    expect(customerReceipt).toHaveTextContent("BANK-REF-1");
+    expect(customerReceipt).toHaveTextContent("AMOUNT PAID");
+    expect(customerReceipt).toHaveTextContent("BALANCE DUE");
     expect(customerReceipt).toHaveTextContent("₦2,500");
     expect(customerReceipt).toHaveTextContent("₦5,000");
     expect(customerReceipt).not.toHaveTextContent("UNIT PRICE");
@@ -784,6 +881,52 @@ describe("InvoicesPage digital receipt shortcut", () => {
       "--receipt-background": "#f5f5f5",
       "--receipt-text": "#222222",
     });
+  });
+
+  it("clearly marks a fully paid customer receipt in deep green", async () => {
+    mockedInvoicesApi.getCustomerReceipt.mockResolvedValue({
+      receiptType: "CUSTOMER",
+      invoiceNumber: "INV-00001",
+      orderNumber: "00001",
+      companyName: "Test Laundry",
+      companyPhone: "08000000000",
+      companyEmail: "test@laundry.com",
+      companyWebsite: "https://laundry.test",
+      companyAddress: "Test Address",
+      customerName: "John Doe",
+      branchName: "Main Branch",
+      createdAt: "2026-09-01T10:00:00.000Z",
+      items: [],
+      subtotal: 5000,
+      adjustedSubtotal: 5000,
+      adjustmentTotal: 0,
+      additiveTaxTotal: 0,
+      withholdingTaxTotal: 0,
+      appliedAdjustments: [],
+      appliedTaxes: [],
+      totalAmount: 5000,
+      totalPaid: 5000,
+      balanceDue: 0,
+      payments: [{
+        id: "payment-paid",
+        amount: 5000,
+        method: "CASH",
+        type: "PAYMENT",
+        reference: null,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      }],
+      garmentNote: null,
+      customerAgreement: "Customer agreement",
+    });
+
+    renderPage();
+    await selectInvoice();
+    screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
+
+    await screen.findByText("LAUNDRY RECEIPT");
+    const paidInFull = screen.getByText("PAID IN FULL");
+    expect(paidInFull).toHaveTextContent("PAID IN FULL");
+    expect(paidInFull).toHaveClass("receipt__paid-in-full");
   });
 
   it("renders the company receipt with the internal note and without customer contact details", async () => {

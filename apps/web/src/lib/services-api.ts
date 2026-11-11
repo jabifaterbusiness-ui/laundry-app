@@ -3,6 +3,8 @@ import { apiFetch } from "./api-client.js";
 export interface Service {
   id: string;
   businessId: string;
+  ownerBranchId?: string | null;
+  ownerBranch?: { id: string; name: string } | null;
   name: string;
   pieces: number;
   unitPrice: number;
@@ -55,11 +57,12 @@ export async function getService(
 
 export async function createService(
   input: CreateServiceInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
 ): Promise<Service> {
   return apiFetch<Service>("/services", {
     method: "POST",
     accessToken: auth.accessToken,
+    branchId: auth.branchId,
     body: JSON.stringify(input),
   });
 }
@@ -114,13 +117,40 @@ export interface TaxRuleSetting {
 export interface PricingRulesResponse {
   adjustments: PriceAdjustmentRule[];
   taxes: TaxRuleSetting[];
+  pagination?: {
+    pageSize: number;
+    adjustments: { page: number; total: number; totalPages: number };
+    taxes: { page: number; total: number; totalPages: number };
+  };
 }
 export interface CustomerServicePrice {
-  id: string; customerId: string; serviceId: string; unitPrice: number;
+  id: string;
+  customerId: string;
+  serviceId: string;
+  branchId?: string | null;
+  branch?: { id: string; name: string } | null;
+  unitPrice: number;
   service: Pick<Service, "id" | "name" | "pieces" | "unitPrice" | "isActive">;
 }
-export async function listPricingRules(auth: { accessToken: string | null }): Promise<PricingRulesResponse> {
-  return apiFetch<PricingRulesResponse>("/services/pricing-rules", { accessToken: auth.accessToken });
+export async function listPricingRules(
+  auth: { accessToken: string | null },
+  customerId?: string,
+  purpose: "order" | "management" = "management",
+  pagination: { adjustmentPage?: number; taxPage?: number; pageSize?: number } = {},
+): Promise<PricingRulesResponse> {
+  const query = new URLSearchParams();
+  if (customerId) query.set("customerId", customerId);
+  if (purpose !== "management") query.set("purpose", purpose);
+  if (purpose === "management") {
+    if (pagination.adjustmentPage) query.set("adjustmentPage", String(pagination.adjustmentPage));
+    if (pagination.taxPage) query.set("taxPage", String(pagination.taxPage));
+    if (pagination.pageSize) query.set("pageSize", String(pagination.pageSize));
+  }
+  const suffix = query.toString();
+  return apiFetch<PricingRulesResponse>(
+    `/services/pricing-rules${suffix ? `?${suffix}` : ""}`,
+    { accessToken: auth.accessToken },
+  );
 }
 export async function createPriceAdjustment(input: {
   name: string;

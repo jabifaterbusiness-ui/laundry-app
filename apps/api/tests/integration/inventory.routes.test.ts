@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -30,12 +32,17 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     $transaction: vi.fn(),
     $queryRaw: vi.fn().mockResolvedValue([]),
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     inventoryItem: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     inventoryStock: {
       findMany: vi.fn(),
@@ -99,6 +106,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+    sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -152,6 +160,11 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
+    const { userId, branchId } = where.userId_branchId;
+    const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+    return { userId, branchId, branch: { id: branchId, businessId, name: "Main Branch" } } as never;
+  }) as never);
 
   vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
     const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
@@ -193,7 +206,7 @@ describe("Inventory routes - permissions", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", BRANCH_A)
       .send({
         name: "Detergent",
         unit: "LITRE",
@@ -210,7 +223,7 @@ describe("Inventory routes - permissions", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(inventoryItemFindMany).toHaveBeenCalled();
@@ -242,7 +255,7 @@ describe("Inventory routes - permissions", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory")
-      .set("Authorization", `Bearer ${managerToken}`)
+      .set("Authorization", `Bearer ${managerToken}`).set("X-Branch-Id", BRANCH_A)
       .send({
         name: "Bleach",
         unit: "LITRE",
@@ -274,7 +287,7 @@ describe("Inventory routes - business-wide reporting", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/reports/branch-comparison")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject([{
@@ -301,7 +314,7 @@ describe("Inventory routes - business-wide reporting", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/stocktakes/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/approve")
-      .set("Authorization", `Bearer ${managerToken}`)
+      .set("Authorization", `Bearer ${managerToken}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
@@ -321,7 +334,7 @@ describe("Inventory routes - business-wide reporting", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/reports/branch-comparison")
-      .set("Authorization", `Bearer ${managerToken}`);
+      .set("Authorization", `Bearer ${managerToken}`).set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
     expect(prisma.branch.findMany).not.toHaveBeenCalled();
@@ -347,14 +360,26 @@ describe("Inventory movement history", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/movements?page=1&pageSize=25")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(res.body.movements).toHaveLength(1);
     expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { businessId: "biz-A", branchId: BRANCH_A },
+        where: {
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
+      },
         include: { inventoryItem: true },
       }),
     );
@@ -378,18 +403,18 @@ describe("Inventory routes - authentication", () => {
 });
 
 describe("Inventory routes - business-scoped items", () => {
-  it("lists inventory items without requiring a branch header", async () => {
+  it("lists inventory items with the active branch context", async () => {
     inventoryItemFindMany.mockResolvedValue([] as never);
     inventoryItemCount.mockResolvedValue(0);
 
     const res = await request(app)
       .get("/api/v1/inventory")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(inventoryItemFindMany).toHaveBeenCalled();
     expect(inventoryItemCount).toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("allows an authenticated business user to access inventory items", async () => {
@@ -410,22 +435,36 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory?page=1&pageSize=25")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
   });
 
-  it("updates an inventory item without requiring a branch header", async () => {
+  it("updates an inventory item within the active branch", async () => {
     vi.mocked(prisma.inventoryItem.findFirst).mockResolvedValueOnce({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
       lowStockThreshold: 5,
       isActive: true,
     } as never);
+    vi.mocked(prisma.inventoryItem.findFirst)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
+        name: "Liquid Detergent",
+        description: "Laundry detergent",
+        unit: "LITRE",
+        lowStockThreshold: 10,
+        isActive: true,
+      } as never);
+    vi.mocked(prisma.inventoryItem.updateMany).mockResolvedValue({ count: 1 } as never);
 
     vi.mocked(prisma.inventoryItem.update).mockResolvedValue({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -439,7 +478,7 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .patch("/api/v1/inventory/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .send({
         name: "Liquid Detergent",
         description: "Laundry detergent",
@@ -456,8 +495,8 @@ describe("Inventory routes - business-scoped items", () => {
       lowStockThreshold: 10,
       isActive: true,
     });
-    expect(prisma.inventoryItem.update).toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 404 when updating a non-existent inventory item", async () => {
@@ -465,13 +504,13 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .patch("/api/v1/inventory/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .send({ name: "Liquid Detergent" });
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toBe("Inventory item not found");
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 409 when updating an inventory item to a duplicate name", async () => {
@@ -497,15 +536,15 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .patch("/api/v1/inventory/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .send({ name: "Fabric Softener" });
 
     expect(res.status).toBe(409);
     expect(res.body.error.message).toBe(
       "An inventory item with this name already exists",
     );
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
   it("returns 404 when updating an inventory item from another business", async () => {
@@ -513,19 +552,20 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .patch("/api/v1/inventory/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .send({ name: "Updated Item" });
 
     expect(res.status).toBe(404);
     expect(res.body.error.message).toBe("Inventory item not found");
-    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.updateMany).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
-  it("creates an inventory item without requiring a branch header", async () => {
+  it("creates an inventory item owned by the active branch", async () => {
     vi.mocked(prisma.inventoryItem.create).mockResolvedValue({
       id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
@@ -535,7 +575,7 @@ describe("Inventory routes - business-scoped items", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .send({
         name: "Detergent",
         sku: "DET-001",
@@ -558,13 +598,14 @@ describe("Inventory routes - business-scoped items", () => {
     expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         sku: "DET-001",
         category: "Chemicals",
         storageLocation: "Store A / Shelf 2",
         reorderQuantity: 24,
       }),
     }));
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
   });
 });
 
@@ -587,7 +628,7 @@ describe("Inventory routes - reservation register", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/reservations")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
@@ -607,6 +648,7 @@ describe("Inventory routes - branch-scoped stock", () => {
     vi.mocked(prisma.inventoryItem.findFirst).mockResolvedValueOnce({
       id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       name: "Detergent",
       description: null,
       unit: "LITRE",
@@ -637,7 +679,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/movements")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -705,7 +747,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/movements")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -755,7 +797,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/movements")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -777,7 +819,7 @@ describe("Inventory routes - branch-scoped stock", () => {
     for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
       const res = await request(app)
         .post("/api/v1/inventory/movements")
-        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
         .set("X-Branch-Id", BRANCH_A)
         .send({
           inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -804,7 +846,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/stock")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
@@ -818,7 +860,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .get("/api/v1/inventory/stock")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
@@ -875,7 +917,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/stock/adjust")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -950,7 +992,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/stock/adjust")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -1004,7 +1046,7 @@ describe("Inventory routes - branch-scoped stock", () => {
 
     const res = await request(app)
       .post("/api/v1/inventory/stock/adjust")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
       .set("X-Branch-Id", BRANCH_A)
       .send({
         inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",

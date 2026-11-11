@@ -1,7 +1,7 @@
 import argon2 from "argon2";
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
-import type { Role, User } from "@prisma/client";
+import type { Prisma, Role, User } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -24,18 +24,37 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
 // change during a session.
 type TokenSubject = Pick<User, "id" | "email" | "securityRole" | "businessId">;
 
-function signAccessToken(user: TokenSubject): string {
+function signAccessToken(user: TokenSubject, sessionId: string): string {
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
       securityRole: user.securityRole,
       businessId: user.businessId,
+      sid: sessionId,
     },
     config.auth.accessTokenSecret,
     { expiresIn: config.auth.accessTokenExpiresIn as `${number}${"s" | "m" | "h" | "d"}` },
   );
 }
+
+function parseTokenLifetime(value: string): number {
+  const match = /^(\d+)([smhd])$/.exec(value);
+  if (!match) throw new Error("JWT_REFRESH_EXPIRES_IN must use a duration such as 7d, 12h, 30m or 60s");
+  const amount = Number(match[1]);
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    throw new Error("JWT_REFRESH_EXPIRES_IN must be a positive duration");
+  }
+  const unit = match[2];
+  const multiplier = unit === "s" ? 1_000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
+  const durationMs = amount * multiplier;
+  if (!Number.isSafeInteger(durationMs) || durationMs > 8_640_000_000_000_000) {
+    throw new Error("JWT_REFRESH_EXPIRES_IN exceeds the supported date range");
+  }
+  return durationMs;
+}
+
+type TokenDb = typeof prisma | Prisma.TransactionClient;
 
 function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -46,16 +65,14 @@ function hashToken(token: string): string {
  * hash of the refresh token so it can be looked up / revoked later.
  * Raw refresh tokens are never stored.
  */
-export async function issueTokenPair(user: TokenSubject) {
-  const accessToken = signAccessToken(user);
+export async function issueTokenPair(user: TokenSubject, db: TokenDb = prisma, sessionId: string = crypto.randomUUID()) {
+  const accessToken = signAccessToken(user, sessionId);
   const refreshToken = crypto.randomBytes(64).toString("hex");
   const refreshTokenHash = hashToken(refreshToken);
+  const expiresAt = new Date(Date.now() + parseTokenLifetime(config.auth.refreshTokenExpiresIn));
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // aligned with JWT_REFRESH_EXPIRES_IN default
-
-  await prisma.refreshToken.create({
-    data: { tokenHash: refreshTokenHash, userId: user.id, expiresAt },
+  await db.refreshToken.create({
+    data: { tokenHash: refreshTokenHash, sessionId, userId: user.id, expiresAt },
   });
 
   return { accessToken, refreshToken };
@@ -63,45 +80,65 @@ export async function issueTokenPair(user: TokenSubject) {
 
 export async function rotateRefreshToken(rawToken: string) {
   const tokenHash = hashToken(rawToken);
-  const existing = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    include: { user: true },
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+    const now = new Date();
+
+    if (!existing || existing.revokedAt || existing.expiresAt <= now || !existing.user.isActive) {
+      throw new AppError("Invalid or expired refresh token", 401);
+    }
+
+    // Claim the token with a conditional update. Concurrent refresh requests
+    // can no longer both rotate the same token into separate active sessions.
+    const claimed = await tx.refreshToken.updateMany({
+      where: {
+        id: existing.id,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { revokedAt: now },
+    });
+
+    if (claimed.count !== 1) {
+      throw new AppError("Invalid or expired refresh token", 401);
+    }
+
+    return issueTokenPair(existing.user, tx, existing.sessionId);
   });
-
-  if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
-    throw new AppError("Invalid or expired refresh token", 401);
-  }
-
-  await prisma.refreshToken.update({
-    where: { id: existing.id },
-    data: { revokedAt: new Date() },
-  });
-
-  return issueTokenPair(existing.user);
 }
 
 /**
- * Revokes a refresh token and returns the user it belonged to (or null if
- * the token was unknown/already revoked), so the caller can attribute an
- * audit log entry without a second database round trip.
+ * Revokes every refresh token in the supplied session and returns its user
+ * (or null if the token was unknown/already revoked). Access tokens carry
+ * the same session ID, so requireAuth rejects them on the next request.
  */
 export async function revokeRefreshToken(rawToken: string): Promise<Pick<User, "id" | "businessId"> | null> {
   const tokenHash = hashToken(rawToken);
 
-  const existing = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-    select: { id: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.refreshToken.findUnique({
+      where: { tokenHash },
+      select: { id: true, sessionId: true, revokedAt: true, user: { select: { id: true, businessId: true } } },
+    });
+
+    if (!existing || existing.revokedAt) {
+      return null;
+    }
+
+    // Claim revocation conditionally so concurrent logout requests cannot
+    // both report success for the same refresh token. Database errors must
+    // propagate; silently swallowing one would leave the session active.
+    const revoked = await tx.refreshToken.updateMany({
+      where: { sessionId: existing.sessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    return revoked.count > 0 ? existing.user : null;
   });
-
-  if (!existing || existing.revokedAt) {
-    return null;
-  }
-
-  await prisma.refreshToken
-    .update({ where: { id: existing.id }, data: { revokedAt: new Date() } })
-    .catch(() => undefined);
-
-  return existing.user;
 }
 
 export type { Role };

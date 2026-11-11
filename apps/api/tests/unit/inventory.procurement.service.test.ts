@@ -11,6 +11,7 @@ const { db } = vi.hoisted(() => ({
     inventoryStock: { upsert: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
     inventoryMovement: { create: vi.fn() },
     branch: { findFirst: vi.fn() },
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     inventoryItem: { findMany: vi.fn() },
   },
 }));
@@ -56,6 +57,7 @@ describe("inventory procurement service", () => {
     db.inventoryPurchaseOrder.findFirst.mockResolvedValue({
       id: "po-1", status: "ORDERED", lines: [line],
     });
+    db.inventoryItem.findMany.mockResolvedValue([{ id: "item-1", ownerBranchId: "branch-A" }]);
     db.inventoryPurchaseOrderLine.findFirst.mockResolvedValue({
       ...line, inventoryItem: { id: "item-1", name: "Detergent", isActive: true },
     });
@@ -68,7 +70,7 @@ describe("inventory procurement service", () => {
     db.inventoryPurchaseOrder.update.mockResolvedValue({ id: "po-1", status: "PARTIALLY_RECEIVED" });
 
     const result = await receiveInventoryPurchaseOrder(
-      { businessId: "biz-A", branchId: "branch-A" },
+      { businessId: "biz-A", branchId: "branch-A", userId: "user-A" },
       { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: "user-A", lines: [{ purchaseOrderLineId: "line-1", quantity: 4 }] },
     );
 
@@ -85,11 +87,12 @@ describe("inventory procurement service", () => {
   it("rejects a receipt quantity above the outstanding purchase order quantity", async () => {
     const line = { id: "line-1", purchaseOrderId: "po-1", inventoryItemId: "item-1", quantityOrdered: 5, quantityReceived: 4, unitCost: 250 };
     db.inventoryPurchaseOrder.findFirst.mockResolvedValue({ id: "po-1", status: "PARTIALLY_RECEIVED", lines: [line] });
+    db.inventoryItem.findMany.mockResolvedValue([{ id: "item-1", ownerBranchId: "branch-A" }]);
     db.inventoryPurchaseOrderLine.findFirst.mockResolvedValue({
       ...line, inventoryItem: { id: "item-1", name: "Detergent", isActive: true },
     });
     await expect(receiveInventoryPurchaseOrder(
-      { businessId: "biz-A", branchId: "branch-A" },
+      { businessId: "biz-A", branchId: "branch-A", userId: "user-A" },
       { purchaseOrderId: "po-1", receiptNumber: "GRN-2", receivedById: "user-A", lines: [{ purchaseOrderLineId: "line-1", quantity: 2 }] },
     )).rejects.toMatchObject({ statusCode: 422, message: "Received quantity exceeds the outstanding quantity for Detergent" });
     expect(db.inventoryGoodsReceipt.create).not.toHaveBeenCalled();

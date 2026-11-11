@@ -19,10 +19,8 @@ const BRANCH_HEADER = "x-branch-id";
  * On success sets req.branchId. Denies (403) if:
  *   - no X-Branch-Id header was sent
  *   - the user has no UserBranch row for that branch (not a member)
+ *   - the branch is inactive
  *   - the branch belongs to a different business than req.user.businessId
- *     (defense in depth - UserBranch membership should already imply
- *     same-business, but this is cheap to double-check and protects
- *     against a future bug in how memberships get created)
  */
 export async function requireBranchContext(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) {
@@ -48,7 +46,7 @@ export async function requireBranchContext(req: Request, _res: Response, next: N
     throw new AppError("You do not have access to this branch", 403);
   }
 
-  if (membership.branch.businessId !== req.user.businessId) {
+  if (membership.branch.isActive === false || membership.branch.businessId !== req.user.businessId) {
     throw new AppError("You do not have access to this branch", 403);
   }
 

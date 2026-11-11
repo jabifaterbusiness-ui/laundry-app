@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
+    branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
     invoice: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -57,6 +58,7 @@ describe("invoices.service", () => {
             internalNote: "Staff-only note",
             customer: {
               id: "customer-1",
+              ownerBranchId: "branch-1",
               name: "John Customer",
             },
             branch: {
@@ -101,7 +103,8 @@ describe("invoices.service", () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-                invoice: {
+                branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
+        invoice: {
           create: invoiceCreate,
         },
       };
@@ -115,6 +118,7 @@ describe("invoices.service", () => {
         branchId: "branch-1",
         orderId: "order-1",
         customerAgreement: "Items left beyond 30 days may attract storage charges.",
+        actorUserId: "user-1",
       });
 
       expect(result).toEqual({
@@ -186,6 +190,7 @@ describe("invoices.service", () => {
       const findFirst = vi.fn().mockResolvedValue(null);
 
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst,
         },
@@ -228,12 +233,13 @@ describe("invoices.service", () => {
 
     it("rejects duplicate invoice creation for the same order", async () => {
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst: vi.fn().mockResolvedValue({
             id: "order-1",
             orderNumber: "00042",
             orderTotal: 5000,
-            customer: { id: "customer-1", name: "John" },
+            customer: { id: "customer-1", ownerBranchId: "branch-1", name: "John" },
             branch: { id: "branch-1", name: "Main" },
             business: {
               id: "business-1",
@@ -284,12 +290,13 @@ describe("invoices.service", () => {
 
     it("rejects an order with no items", async () => {
       const tx = {
+        branchResourceShare: { findMany: vi.fn().mockResolvedValue([]) },
         order: {
           findFirst: vi.fn().mockResolvedValue({
             id: "order-1",
             orderNumber: "00042",
             orderTotal: 0,
-            customer: { id: "customer-1", name: "John" },
+            customer: { id: "customer-1", ownerBranchId: "branch-1", name: "John" },
             branch: { id: "branch-1", name: "Main" },
             business: {
               id: "business-1",
@@ -347,12 +354,21 @@ describe("invoices.service", () => {
         startsAt: null,
         endsAt: null,
       };
+      const branchShareFindMany = vi.fn().mockResolvedValue([{
+        ownerBranchId: "branch-2",
+        resourceId: null,
+        accessLevel: "VIEW",
+      }]);
+      const priceAdjustmentFindMany = vi.fn().mockResolvedValue([automaticDiscount]);
       const tx = {
+        branchResourceShare: {
+          findMany: branchShareFindMany,
+        },
         customerGroupMember: {
           findMany: vi.fn().mockResolvedValue([]),
         },
         priceAdjustment: {
-          findMany: vi.fn().mockResolvedValue([automaticDiscount]),
+          findMany: priceAdjustmentFindMany,
         },
         taxRule: {
           findMany: vi.fn().mockResolvedValue([]),
@@ -402,9 +418,29 @@ describe("invoices.service", () => {
           receiptHeaderStyle: null,
         },
         "Customer agreement",
+        { actorUserId: "staff-1" },
       );
 
       expect(result).toBe(invoice);
+      expect(branchShareFindMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "business-1",
+          targetBranchId: "branch-1",
+          resourceType: "DISCOUNTS",
+          AND: [{ OR: [{ userId: null }, { userId: "staff-1" }] }],
+        }),
+      }));
+      expect(priceAdjustmentFindMany.mock.calls[0]![0]!.where).toMatchObject({
+        AND: expect.arrayContaining([
+          {
+            OR: [
+              { branchId: null },
+              { branchId: { in: ["branch-1", "branch-2"] } },
+              { id: { in: [] } },
+            ],
+          },
+        ]),
+      });
       expect(tx.invoice.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -430,6 +466,7 @@ describe("invoices.service", () => {
         "invoice-1",
         "business-1",
         "branch-1",
+        "user-1",
       );
 
       expect(result).toBe(invoice);
@@ -439,6 +476,7 @@ describe("invoices.service", () => {
             id: "invoice-1",
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
@@ -454,6 +492,7 @@ describe("invoices.service", () => {
         "order-1",
         "business-1",
         "branch-1",
+        "user-1",
       );
 
       expect(result).toBe(invoice);
@@ -463,6 +502,7 @@ describe("invoices.service", () => {
             orderId: "order-1",
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
@@ -479,6 +519,7 @@ describe("invoices.service", () => {
       const result = await listInvoices({
         businessId: "business-1",
         branchId: "branch-1",
+        userId: "user-1",
         page: 1,
         pageSize: 20,
       });
@@ -498,6 +539,7 @@ describe("invoices.service", () => {
           where: {
             businessId: "business-1",
             branchId: "branch-1",
+            order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
           },
         }),
       );
@@ -506,6 +548,7 @@ describe("invoices.service", () => {
         where: {
           businessId: "business-1",
           branchId: "branch-1",
+          order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
         },
       });
     });

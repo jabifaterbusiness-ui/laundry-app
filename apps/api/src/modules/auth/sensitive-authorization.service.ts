@@ -2,7 +2,16 @@ import crypto from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 
-const SENSITIVE_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_SENSITIVE_INACTIVITY_TIMEOUT_MINUTES = 3;
+
+async function getInactivityTimeoutMinutes(businessId: string | null) {
+  if (!businessId) return DEFAULT_SENSITIVE_INACTIVITY_TIMEOUT_MINUTES;
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { sessionInactivityTimeoutMinutes: true },
+  });
+  return business?.sessionInactivityTimeoutMinutes ?? DEFAULT_SENSITIVE_INACTIVITY_TIMEOUT_MINUTES;
+}
 
 function hashAuthorizationToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -14,9 +23,9 @@ export async function issueSensitiveAuthorization(data: {
 }) {
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashAuthorizationToken(rawToken);
-  const expiresAt = new Date(
-    Date.now() + SENSITIVE_AUTHORIZATION_TTL_MS,
-  );
+  const inactivityTimeoutMinutes = await getInactivityTimeoutMinutes(data.businessId);
+  const inactivityTimeoutMs = inactivityTimeoutMinutes * 60 * 1000;
+  const expiresAt = new Date(Date.now() + inactivityTimeoutMs);
 
   await prisma.sensitiveAuthorization.create({
     data: {
@@ -30,7 +39,39 @@ export async function issueSensitiveAuthorization(data: {
   return {
     token: rawToken,
     expiresAt,
+    inactivityTimeoutMs,
   };
+}
+
+export async function recordSensitiveActivity(data: {
+  token: string;
+  userId: string;
+  businessId: string | null;
+}) {
+  if (!data.token) {
+    throw new AppError("Sensitive authorization is required", 403);
+  }
+
+  const now = new Date();
+  const inactivityTimeoutMinutes = await getInactivityTimeoutMinutes(data.businessId);
+  const inactivityTimeoutMs = inactivityTimeoutMinutes * 60 * 1000;
+  const expiresAt = new Date(now.getTime() + inactivityTimeoutMs);
+  const result = await prisma.sensitiveAuthorization.updateMany({
+    where: {
+      tokenHash: hashAuthorizationToken(data.token),
+      userId: data.userId,
+      businessId: data.businessId,
+      revokedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: { expiresAt },
+  });
+
+  if (result.count !== 1) {
+    throw new AppError("Sensitive authorization is missing or expired", 403);
+  }
+
+  return { expiresAt, inactivityTimeoutMs };
 }
 
 export async function requireSensitiveAuthorization(data: {

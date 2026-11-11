@@ -1,6 +1,7 @@
 import type { Customer, PaginatedResult } from "@laundry-app/shared";
 import { apiFetch, ApiError, NetworkError } from "./api-client.js";
 import { enqueueOfflineSyncOperation, type OfflineSyncQueueEntry } from "./offline-sync-queue.js";
+import { useAuthStore } from "../state/auth-store.js";
 
 export interface ListCustomersParams {
   page?: number;
@@ -89,20 +90,68 @@ export async function listCustomers(
   });
 }
 
+export interface LegacyUnassignedCustomer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  address: string | null;
+  lifecycleStatus: Customer["lifecycleStatus"];
+  createdAt: string;
+  updatedAt: string;
+  _count: { orders: number };
+}
+
+export async function listLegacyUnassignedCustomers(
+  params: { page?: number; pageSize?: number; search?: string },
+  auth: { accessToken: string | null },
+): Promise<PaginatedResult<LegacyUnassignedCustomer>> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  if (params.search) query.set("search", params.search);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiFetch<PaginatedResult<LegacyUnassignedCustomer>>(`/customers/legacy-unassigned${suffix}`, {
+    accessToken: auth.accessToken,
+  });
+}
+
+export async function assignLegacyCustomerOwnerBranch(
+  customerId: string,
+  branchId: string,
+  auth: { accessToken: string | null; sensitiveAuthorization: string },
+): Promise<Customer> {
+  const branchIdForRequest = getEffectiveBranchId();
+  return apiFetch<Customer>(`/customers/${customerId}/assign-owner-branch`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId: branchIdForRequest,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+    body: JSON.stringify({ branchId }),
+  });
+}
+
 export async function getCustomer(id: string, auth: { accessToken: string | null }): Promise<Customer> {
   return apiFetch<Customer>(`/customers/${id}`, { accessToken: auth.accessToken });
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
+// Keep direct customer mutations aligned with apiFetch: explicit request context
+// wins, otherwise use the currently selected branch from the auth store.
+function getEffectiveBranchId(branchId?: string | null): string | null {
+  return branchId ?? useAuthStore.getState().activeBranchId;
+}
+
 // Does the POST directly (rather than via apiFetch) because apiFetch's
 // generic ApiError doesn't carry the response body, which would lose the
 // `duplicates` list on a 409 - see docs/CUSTOMERS.md section E.
 export async function createCustomer(
   input: CreateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
 ): Promise<Customer> {
   let res: Response;
+  const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
     res = await fetch(`${API_BASE_URL}/customers`, {
@@ -110,6 +159,7 @@ export async function createCustomer(
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
       },
       body: JSON.stringify(input),
     });
@@ -142,7 +192,7 @@ export async function createCustomer(
 
 export async function createCustomerWithOfflineQueue(
   input: CreateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; branchId?: string | null },
   syncContext: OfflineCustomerSyncContext,
 ): Promise<CustomerMutationResult> {
   if (input.confirmDuplicate) {
@@ -202,10 +252,12 @@ export async function updateCustomer(
   input: UpdateCustomerInput,
   auth: {
     accessToken: string | null;
+    branchId?: string | null;
     sensitiveAuthorization?: string | null;
   },
 ): Promise<Customer> {
   let res: Response;
+  const branchId = getEffectiveBranchId(auth.branchId);
 
   try {
     res = await fetch(`${API_BASE_URL}/customers/${id}`, {
@@ -213,6 +265,7 @@ export async function updateCustomer(
       headers: {
         "Content-Type": "application/json",
         ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+        ...(branchId ? { "X-Branch-Id": branchId } : {}),
         ...(auth.sensitiveAuthorization
           ? { "X-Sensitive-Authorization": auth.sensitiveAuthorization }
           : {}),
@@ -249,7 +302,11 @@ export async function updateCustomer(
 export async function updateCustomerWithOfflineQueue(
   id: string,
   input: UpdateCustomerInput,
-  auth: { accessToken: string | null },
+  auth: {
+    accessToken: string | null;
+    branchId?: string | null;
+    sensitiveAuthorization?: string | null;
+  },
   syncContext: OfflineCustomerSyncContext,
 ): Promise<CustomerMutationResult> {
   if (input.confirmDuplicate) {

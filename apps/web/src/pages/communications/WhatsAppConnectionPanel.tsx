@@ -158,7 +158,20 @@ export function WhatsAppConnectionPanel() {
           <div>
             <strong>{connection.displayPhoneNumber ?? connection.phoneNumberId}</strong>
             <p style={{ margin: "3px 0", color: "#64748b", fontSize: 13 }}>{connection.verifiedName ?? "WhatsApp Business"} · WABA {connection.wabaId}</p>
-            <small style={{ color: "#64748b" }}>Connected {new Date(connection.connectedAt).toLocaleDateString("en-NG")}</small>
+            <small style={{ color: "#64748b", display: "block" }}>Connected {new Date(connection.connectedAt).toLocaleDateString("en-NG")}</small>
+            <small style={{ color: "#64748b", display: "block" }}>
+              Last Meta verification: {connection.lastVerifiedAt ? new Date(connection.lastVerifiedAt).toLocaleString("en-NG") : "Not yet verified"}
+            </small>
+            {connection.tokenExpiresAt ? (
+              <small style={{ color: new Date(connection.tokenExpiresAt).getTime() <= Date.now() ? "#b91c1c" : "#64748b", display: "block" }}>
+                Access token {new Date(connection.tokenExpiresAt).getTime() <= Date.now() ? "expired" : "expires"} {new Date(connection.tokenExpiresAt).toLocaleString("en-NG")}
+              </small>
+            ) : null}
+            {connection.lastError ? (
+              <p role="alert" style={{ color: "#b91c1c", margin: "8px 0 0", fontSize: 13 }}>
+                Last connection error: {connection.lastError}
+              </p>
+            ) : null}
           </div>
           <button type="button" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending} style={{ border: "1px solid #fecaca", color: "#b91c1c", background: "#fff", borderRadius: 10, padding: "9px 13px", fontWeight: 700 }}>
             {disconnectMutation.isPending ? "Disconnecting…" : "Disconnect number"}

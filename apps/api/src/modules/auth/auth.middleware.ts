@@ -1,41 +1,93 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../../config/index.js";
+import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { requireSensitiveAuthorization as requireSensitiveAuthorizationToken } from "./sensitive-authorization.service.js";
 import type { Role } from "@prisma/client";
 
 interface AccessTokenPayload {
   sub: string;
+  sid: string;
   email: string;
   username?: string | null;
   securityRole: Role;
   businessId: string | null;
 }
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
 
   if (!header?.startsWith("Bearer ")) {
-    throw new AppError("Missing or malformed Authorization header", 401);
+    return next(new AppError("Missing or malformed Authorization header", 401));
   }
 
   const token = header.slice("Bearer ".length);
+  let payload: AccessTokenPayload;
 
   try {
-    const payload = jwt.verify(token, config.auth.accessTokenSecret) as AccessTokenPayload;
-    // No branchId here by design - see AccessTokenPayload / auth.service.ts.
-    req.user = {
-      id: payload.sub,
-      email: payload.email,
-      role: "",
-      securityRole: payload.securityRole,
-      businessId: payload.businessId,
-    };
-    next();
+    payload = jwt.verify(token, config.auth.accessTokenSecret) as AccessTokenPayload;
   } catch {
-    throw new AppError("Invalid or expired access token", 401);
+    return next(new AppError("Invalid or expired access token", 401));
   }
+
+  if (
+    typeof payload.sub !== "string" ||
+    !payload.sub.trim() ||
+    typeof payload.sid !== "string" ||
+    !payload.sid.trim()
+  ) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  let account: { isActive: boolean; deletedAt: Date | null; businessId: string | null; securityRole: Role } | null;
+
+  try {
+    account = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { isActive: true, deletedAt: true, businessId: true, securityRole: true },
+    });
+  } catch (error) {
+    return next(error);
+  }
+
+  if (!account || !account.isActive || account.deletedAt) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  let activeSession: { id: string } | null;
+  try {
+    activeSession = await prisma.refreshToken.findFirst({
+      where: {
+        sessionId: payload.sid,
+        userId: payload.sub,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    return next(error);
+  }
+
+  if (!activeSession) {
+    return next(new AppError("Invalid or expired access token", 401));
+  }
+
+  // No branchId here by design - see AccessTokenPayload / auth.service.ts.
+  req.user = {
+    id: payload.sub,
+    email: payload.email,
+    role: "",
+    // Authorization scope and role are read from the current account record,
+    // not stale JWT claims, so role/business changes take effect immediately.
+    securityRole: account.securityRole ?? payload.securityRole,
+    // A real database row returns this selected field even when it is null
+    // for a platform account. Retain the signed claim only if the property
+    // is absent from a partial account projection.
+    businessId: account.businessId === undefined ? payload.businessId : account.businessId,
+  };
+  return next();
 }
 
 /**

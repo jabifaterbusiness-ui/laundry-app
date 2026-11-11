@@ -14,12 +14,15 @@ interface AuthState {
   activeBranchId: string | null;
   sensitiveAuthorization: string | null;
   sensitiveAuthorizationExpiresAt: string | null;
+  sensitiveAuthorizationInactivityTimeoutMs: number | null;
   setSession: (session: { user: AuthenticatedUser; accessToken: string; refreshToken: string }) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   setUser: (user: AuthenticatedUser) => void;
   setActiveBranch: (branchId: string | null) => void;
   setSensitiveAuthorization: (authorization: {
     token: string;
     expiresAt: string;
+    inactivityTimeoutMs?: number;
   }) => void;
   clearSensitiveAuthorization: () => void;
   clearSession: () => void;
@@ -37,8 +40,11 @@ export const useAuthStore = create<AuthState>()(
       activeBranchId: null,
       sensitiveAuthorization: null,
       sensitiveAuthorizationExpiresAt: null,
+      sensitiveAuthorizationInactivityTimeoutMs: null,
 
       setUser: (user) => set({ user }),
+
+      setTokens: ({ accessToken, refreshToken }) => set({ accessToken, refreshToken }),
 
       setSession: ({ user, accessToken, refreshToken }) =>
         set({
@@ -51,16 +57,18 @@ export const useAuthStore = create<AuthState>()(
 
       setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
 
-      setSensitiveAuthorization: ({ token, expiresAt }) =>
+      setSensitiveAuthorization: ({ token, expiresAt, inactivityTimeoutMs }) =>
         set({
           sensitiveAuthorization: token,
           sensitiveAuthorizationExpiresAt: expiresAt,
+          sensitiveAuthorizationInactivityTimeoutMs: inactivityTimeoutMs ?? 3 * 60 * 1000,
         }),
 
       clearSensitiveAuthorization: () =>
         set({
           sensitiveAuthorization: null,
           sensitiveAuthorizationExpiresAt: null,
+          sensitiveAuthorizationInactivityTimeoutMs: null,
         }),
 
       clearSession: () =>
@@ -71,6 +79,7 @@ export const useAuthStore = create<AuthState>()(
           activeBranchId: null,
           sensitiveAuthorization: null,
           sensitiveAuthorizationExpiresAt: null,
+          sensitiveAuthorizationInactivityTimeoutMs: null,
         }),
     }),
     {

@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const listPricingRulesQuerySchema = z.object({
+  customerId: z.string().uuid().optional(),
+  purpose: z.enum(["order", "management"]).default("management"),
+  adjustmentPage: z.coerce.number().int().min(1).default(1),
+  taxPage: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+}).strict();
+
 export const createAdjustmentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   percentage: z.number().finite().min(-100).max(1000),

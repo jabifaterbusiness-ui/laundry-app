@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -47,12 +48,29 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     user: {
       findFirst: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
+    },
+    userBranch: {
+      findUnique: vi.fn().mockImplementation(async ({ where }: { where: { userId_branchId: { userId: string; branchId: string } } }) => {
+        const { userId, branchId } = where.userId_branchId;
+        const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+        return {
+          id: `membership-${userId}-${branchId}`,
+          userId,
+          branchId,
+          branch: { id: branchId, businessId, name: "Main", address: null, isActive: true },
+        };
+      }),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     employeeCompensation: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -72,6 +90,7 @@ const compensationFindFirst = vi.mocked(prisma.employeeCompensation.findFirst);
 const compensationFindMany = vi.mocked(prisma.employeeCompensation.findMany);
 const compensationCreate = vi.mocked(prisma.employeeCompensation.create);
 const compensationUpdate = vi.mocked(prisma.employeeCompensation.update);
+const compensationUpdateMany = vi.mocked(prisma.employeeCompensation.updateMany);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 
 function tokenFor(
@@ -82,6 +101,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+    sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -113,6 +133,7 @@ const compensationFixture = {
   id: COMPENSATION_A,
   businessId: "biz-A",
   employeeId: EMPLOYEE_A,
+  branchId: "branch-A",
   basicSalary: 150000,
   effectiveFrom: new Date("2026-09-01T00:00:00.000Z"),
   effectiveTo: null,
@@ -141,19 +162,19 @@ describe("Compensation routes - authentication", () => {
   it("rejects PLATFORM_ADMIN because it has no business context", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(403);
   });
 
-  it("does not require branch context", async () => {
-    compensationFindMany.mockResolvedValue([] as never);
-
+  it("rejects requests without branch context", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    expect(compensationFindMany).not.toHaveBeenCalled();
   });
 });
 
@@ -162,6 +183,7 @@ describe("Compensation routes - authorization", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -176,6 +198,7 @@ describe("Compensation routes - authorization", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -192,6 +215,7 @@ describe("Compensation routes - authorization", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -206,6 +230,7 @@ describe("Compensation routes - authorization", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -218,7 +243,8 @@ describe("Compensation routes - authorization", () => {
   it("STAFF cannot access compensation management", async () => {
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -229,6 +255,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         basicSalary: 150000,
         effectiveFrom: "2026-09-01",
@@ -242,6 +269,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: "not-a-uuid",
         basicSalary: 150000,
@@ -256,6 +284,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 0,
@@ -270,6 +299,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,
@@ -284,6 +314,7 @@ describe("Compensation routes - creation validation", () => {
     userFindFirst.mockResolvedValue(employeeFixture as never);
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(compensationFixture),
@@ -298,6 +329,7 @@ describe("Compensation routes - creation validation", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         businessId: "biz-B",
         employeeId: EMPLOYEE_A,
@@ -307,10 +339,13 @@ describe("Compensation routes - creation validation", () => {
 
     expect(res.status).toBe(201);
 
-    expect(userFindFirst).toHaveBeenCalledWith(
+    expect(tx.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: "biz-A",
+          isActive: true,
+          deletedAt: null,
+          branches: { some: { branchId: "branch-A" } },
         }),
       }),
     );
@@ -331,7 +366,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get("/api/v1/payroll/compensation")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -341,6 +377,11 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          OR: [
+            { branchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
+          employee: { is: { branches: { some: { branchId: "branch-A" } } } },
         },
       }),
     );
@@ -351,7 +392,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation?employeeId=${EMPLOYEE_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
 
@@ -359,6 +401,11 @@ describe("Compensation routes - history and isolation", () => {
       expect.objectContaining({
         where: {
           businessId: "biz-A",
+          OR: [
+            { branchId: { in: ["branch-A"] } },
+            { id: { in: [] } },
+          ],
+          employee: { is: { branches: { some: { branchId: "branch-A" } } } },
           employeeId: EMPLOYEE_A,
         },
       }),
@@ -370,7 +417,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/${COMPENSATION_A}`)
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("x-branch-id", "branch-B");
 
     expect(res.status).toBe(404);
 
@@ -379,6 +427,11 @@ describe("Compensation routes - history and isolation", () => {
         where: {
           id: COMPENSATION_A,
           businessId: "biz-B",
+          OR: [
+            { branchId: { in: ["branch-B"] } },
+            { id: { in: [] } },
+          ],
+          employee: { is: { branches: { some: { branchId: "branch-B" } } } },
         },
       }),
     );
@@ -392,7 +445,8 @@ describe("Compensation routes - history and isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/${COMPENSATION_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(COMPENSATION_A);
@@ -407,7 +461,8 @@ describe("Compensation routes - effective salary lookup", () => {
       .get(
         `/api/v1/payroll/compensation/current/${EMPLOYEE_A}?effectiveDate=2026-09-15`,
       )
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.basicSalary).toBe(150000);
@@ -417,6 +472,21 @@ describe("Compensation routes - effective salary lookup", () => {
         where: expect.objectContaining({
           businessId: "biz-A",
           employeeId: EMPLOYEE_A,
+          AND: [
+            {
+              OR: [
+                { branchId: { in: ["branch-A"] } },
+                { id: { in: [] } },
+              ],
+            },
+            {
+              effectiveFrom: { lte: new Date("2026-09-15T00:00:00.000Z") },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gt: new Date("2026-09-15T00:00:00.000Z") } },
+              ],
+            },
+          ],
         }),
       }),
     );
@@ -427,7 +497,8 @@ describe("Compensation routes - effective salary lookup", () => {
 
     const res = await request(app)
       .get(`/api/v1/payroll/compensation/current/${EMPLOYEE_A}`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -437,10 +508,104 @@ describe("Compensation routes - effective salary lookup", () => {
       .get(
         `/api/v1/payroll/compensation/current/${EMPLOYEE_A}?effectiveDate=invalid-date`,
       )
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
 
     expect(res.status).toBe(400);
     expect(compensationFindFirst).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Compensation routes - legacy assignment", () => {
+  it("allows only a business owner to review unassigned compensation", async () => {
+    compensationFindMany.mockResolvedValue([] as never);
+
+    const ownerResponse = await request(app)
+      .get("/api/v1/payroll/compensation/unassigned-legacy")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(ownerResponse.status).toBe(200);
+    expect(compensationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: "biz-A", branchId: null },
+      }),
+    );
+
+    vi.clearAllMocks();
+    businessFindFirst.mockResolvedValue({
+      id: "biz-A",
+      name: "Test Business",
+      isActive: true,
+    } as never);
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+
+    const managerResponse = await request(app)
+      .get("/api/v1/payroll/compensation/unassigned-legacy")
+      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(managerResponse.status).toBe(403);
+    expect(compensationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("assigns a legacy record only to the current branch after membership and overlap checks", async () => {
+    const effectiveFrom = new Date("2026-08-01T00:00:00.000Z");
+    const assigned = {
+      ...compensationFixture,
+      branchId: "branch-A",
+      effectiveFrom,
+      employee: employeeFixture,
+    };
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
+      employeeCompensation: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce({
+            id: COMPENSATION_A,
+            employeeId: EMPLOYEE_A,
+            effectiveFrom,
+            effectiveTo: null,
+          })
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(assigned),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback: (transaction: any) => unknown) => callback(tx),
+    );
+
+    const res = await request(app)
+      .patch(`/api/v1/payroll/compensation/${COMPENSATION_A}/assign-legacy-to-current-branch`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A");
+
+    expect(res.status).toBe(200);
+    expect(res.body.branchId).toBe("branch-A");
+    expect(compensationUpdateMany).not.toHaveBeenCalled();
+    expect(tx.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: EMPLOYEE_A,
+        businessId: "biz-A",
+        isActive: true,
+        deletedAt: null,
+        branches: { some: { branchId: "branch-A" } },
+      },
+      select: { id: true },
+    });
+    expect(tx.employeeCompensation.updateMany).toHaveBeenCalledWith({
+      where: { id: COMPENSATION_A, businessId: "biz-A", branchId: null },
+      data: { branchId: "branch-A" },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "employee_compensation.legacy_assigned",
+        businessId: "biz-A",
+        branchId: "branch-A",
+      }),
+    );
   });
 });
 
@@ -457,6 +622,7 @@ describe("Compensation routes - salary history", () => {
     };
 
     const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ id: EMPLOYEE_A }) },
       employeeCompensation: {
         findFirst: vi
           .fn()
@@ -480,6 +646,7 @@ describe("Compensation routes - salary history", () => {
     const res = await request(app)
       .post("/api/v1/payroll/compensation")
       .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("x-branch-id", "branch-A")
       .send({
         employeeId: EMPLOYEE_A,
         basicSalary: 150000,

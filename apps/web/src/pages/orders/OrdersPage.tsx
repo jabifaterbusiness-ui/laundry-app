@@ -248,7 +248,7 @@ export function OrdersPage() {
   });
 
   const customersQuery = useQuery({
-    queryKey: ["customers", "order-selector", customerSearch],
+    queryKey: ["customers", "order-selector", activeBranchId, customerSearch],
     queryFn: () =>
       listCustomers(
         {
@@ -259,18 +259,18 @@ export function OrdersPage() {
         },
         { accessToken },
       ),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && activeBranchId),
   });
 
   const customerFromUrlQuery = useQuery({
-    queryKey: ["customer", customerIdFromUrl],
+    queryKey: ["customer", activeBranchId, customerIdFromUrl],
     queryFn: () =>
       getCustomer(customerIdFromUrl!, { accessToken }),
-    enabled: Boolean(accessToken && customerIdFromUrl),
+    enabled: Boolean(accessToken && activeBranchId && customerIdFromUrl),
   });
 
   const servicesQuery = useQuery({
-    queryKey: ["services", "order-selector"],
+    queryKey: ["services", "order-selector", activeBranchId],
     queryFn: () =>
       listServices(
         {
@@ -278,14 +278,45 @@ export function OrdersPage() {
         },
         { accessToken },
       ),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && activeBranchId),
   });
 
   const pricingRulesQuery = useQuery({
-    queryKey: ["pricing-rules"],
-    queryFn: () => listPricingRules({ accessToken }),
-    enabled: Boolean(accessToken),
+    queryKey: ["pricing-rules", activeBranchId, activeWorkspace?.draft.customerId ?? ""],
+    queryFn: () => listPricingRules(
+      { accessToken },
+      activeWorkspace?.draft.customerId || undefined,
+      "order",
+    ),
+    enabled: Boolean(accessToken && activeBranchId),
   });
+
+  useEffect(() => {
+    if (!pricingRulesQuery.isSuccess) return;
+    const allowedManualIds = new Set(
+      pricingRulesQuery.data.adjustments
+        .filter((rule) => rule.targetScope === "MANUAL")
+        .map((rule) => rule.id),
+    );
+    setAdjustmentSelections((current) => {
+      const next: typeof current = {};
+      for (const id of Object.keys(current)) {
+        if (allowedManualIds.has(id)) next[id] = current[id]!;
+      }
+      return Object.keys(next).length === Object.keys(current).length
+        ? current
+        : next;
+    });
+    const allowedTaxIds = new Set(
+      pricingRulesQuery.data.taxes
+        .filter((rule) => rule.isActive && !rule.enabledByDefault)
+        .map((rule) => rule.id),
+    );
+    setSelectedTaxRuleIds((current) => {
+      const next = current.filter((id) => allowedTaxIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [pricingRulesQuery.data, pricingRulesQuery.isSuccess]);
 
   const colorsQuery = useQuery({
     queryKey: ["colors", "order-selector"],
@@ -601,11 +632,18 @@ export function OrdersPage() {
 
   const formCustomerId =
     activeWorkspace?.draft.customerId ?? "";
+  const pricingAdjustments = pricingRulesQuery.data?.adjustments ?? [];
+  const automaticDiscountRules = pricingAdjustments.filter(
+    (rule) => rule.isActive && rule.targetScope !== "MANUAL",
+  );
+  const manualAdjustmentRules = pricingAdjustments.filter(
+    (rule) => rule.isActive && rule.targetScope === "MANUAL",
+  );
 
   const customerPricesQuery = useQuery({
-    queryKey: ["customer-service-prices", formCustomerId, "order-form"],
+    queryKey: ["customer-service-prices", activeBranchId, formCustomerId, "order-form"],
     queryFn: () => listCustomerServicePrices(formCustomerId, { accessToken }),
-    enabled: Boolean(accessToken && formCustomerId && activeWorkspace?.mode !== "edit"),
+    enabled: Boolean(accessToken && activeBranchId && formCustomerId && activeWorkspace?.mode !== "edit"),
   });
   const customerPriceMap = useMemo(
     () => new Map((customerPricesQuery.data?.data ?? []).map((entry) => [entry.serviceId, entry.unitPrice])),
@@ -1478,39 +1516,63 @@ export function OrdersPage() {
               <section aria-label="Invoice discounts and taxes" style={{ margin: "1rem 0", padding: "1rem", border: "1px solid var(--border, #ddd)", borderRadius: 12 }}>
                 <h3>Invoice discounts & taxes</h3>
                 {pricingRulesQuery.isLoading && <p>Loading pricing options...</p>}
-                {(pricingRulesQuery.data?.adjustments ?? []).filter((rule) => rule.isActive).map((rule) => {
-                  const selection = adjustmentSelections[rule.id];
-                  return (
-                    <div key={rule.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
-                      <label>
-                        <input type="checkbox" checked={Boolean(selection)} onChange={(event) => setAdjustmentSelections((current) => {
-                          const next = { ...current };
-                          if (event.target.checked) next[rule.id] = { scope: "INVOICE", itemIndexes: [] };
-                          else delete next[rule.id];
-                          return next;
-                        })} />
-                        {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%)
-                      </label>
-                      {selection && (
-                        <div style={{ marginLeft: "1.5rem" }}>
-                          <label>Apply to<select value={selection.scope} onChange={(event) => setAdjustmentSelections((current) => ({ ...current, [rule.id]: { scope: event.target.value as "INVOICE" | "ITEMS", itemIndexes: [] } }))}>
-                            <option value="INVOICE">Entire invoice</option><option value="ITEMS">Selected items only</option>
-                          </select></label>
-                          {selection.scope === "ITEMS" && lines.map((line, index) => {
-                            const service = selectedServices.get(line.serviceId);
-                            return <label key={index} style={{ display: "block" }}>
-                              <input type="checkbox" checked={selection.itemIndexes.includes(index)} onChange={(event) => setAdjustmentSelections((current) => {
-                                const existing = current[rule.id] ?? { scope: "ITEMS" as const, itemIndexes: [] };
-                                return { ...current, [rule.id]: { scope: "ITEMS", itemIndexes: event.target.checked ? [...existing.itemIndexes, index] : existing.itemIndexes.filter((item) => item !== index) } };
-                              })} />
-                              {service?.name || `Order item ${index + 1}`} × {line.quantity}
-                            </label>;
-                          })}
+                {automaticDiscountRules.length > 0 && (
+                  <div aria-label="Automatic customer discounts" style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+                    <h4 style={{ margin: 0 }}>Automatic customer discounts</h4>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>
+                      Eligible customer, group and promotion discounts are applied automatically when their service conditions match. Staff do not need to select them.
+                    </p>
+                    {automaticDiscountRules.map((rule) => (
+                      <div key={rule.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
+                        <span>{rule.name}</span>
+                        <strong>{rule.percentage}% · Automatic</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {manualAdjustmentRules.length > 0 && (
+                  <div aria-label="Manual adjustments" style={{ display: "grid", gap: 6 }}>
+                    <h4 style={{ margin: 0 }}>Manual adjustments</h4>
+                    {manualAdjustmentRules.map((rule) => {
+                      const selection = adjustmentSelections[rule.id];
+                      return (
+                        <div key={rule.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border, #eee)" }}>
+                          <label>
+                            <input type="checkbox" checked={Boolean(selection)} onChange={(event) => setAdjustmentSelections((current) => {
+                              const next = { ...current };
+                              if (event.target.checked) next[rule.id] = { scope: "INVOICE", itemIndexes: [] };
+                              else delete next[rule.id];
+                              return next;
+                            })} />
+                            {rule.name} ({rule.percentage > 0 ? "+" : ""}{rule.percentage}%)
+                          </label>
+                          {selection && (
+                            <div style={{ marginLeft: "1.5rem" }}>
+                              <label>Apply to<select value={selection.scope} onChange={(event) => setAdjustmentSelections((current) => ({ ...current, [rule.id]: { scope: event.target.value as "INVOICE" | "ITEMS", itemIndexes: [] } }))}>
+                                <option value="INVOICE">Entire invoice</option><option value="ITEMS">Selected items only</option>
+                              </select></label>
+                              {selection.scope === "ITEMS" && lines.map((line, index) => {
+                                const service = selectedServices.get(line.serviceId);
+                                return <label key={index} style={{ display: "block" }}>
+                                  <input type="checkbox" checked={selection.itemIndexes.includes(index)} onChange={(event) => setAdjustmentSelections((current) => {
+                                    const existing = current[rule.id] ?? { scope: "ITEMS" as const, itemIndexes: [] };
+                                    return { ...current, [rule.id]: { scope: "ITEMS", itemIndexes: event.target.checked ? [...existing.itemIndexes, index] : existing.itemIndexes.filter((item) => item !== index) } };
+                                  })} />
+                                  {service?.name || `Order item ${index + 1}`} × {line.quantity}
+                                </label>;
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
+                {!formCustomerId && (
+                  <p style={{ color: "#64748b", fontSize: 13 }}>
+                    Select a customer to load discounts assigned to that customer or their groups.
+                  </p>
+                )}
                 <h4>Taxes</h4>
                 {(pricingRulesQuery.data?.taxes ?? []).filter((rule) => rule.isActive).map((rule) => (
                   <label key={rule.id} style={{ display: "block", margin: "0.35rem 0" }}>

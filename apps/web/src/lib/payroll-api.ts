@@ -387,6 +387,7 @@ export function createOtherPayrollDeduction(
 export interface EmployeeCompensation {
   id: string;
   businessId: string;
+  branchId: string | null;
   employeeId: string;
   basicSalary: number;
   effectiveFrom: string;
@@ -407,6 +408,7 @@ export function listCompensation(
     employeeId?: string;
   },
   auth: AuthOptions,
+  branchId: string | null,
 ) {
   const query = new URLSearchParams();
 
@@ -419,7 +421,46 @@ export function listCompensation(
   return apiFetch<EmployeeCompensation[]>(
     `/payroll/compensation${suffix}`,
     {
-      headers: {},
+      headers: headers(branchId),
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
+export interface UnassignedLegacyCompensation extends EmployeeCompensation {
+  branchId: null;
+  employee: PayrollEmployee & {
+    isActive: boolean;
+    deletedAt: string | null;
+    branches: Array<{
+      branch: { id: string; name: string; isActive: boolean };
+    }>;
+  };
+}
+
+export function listUnassignedLegacyCompensation(
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<UnassignedLegacyCompensation[]>(
+    "/payroll/compensation/unassigned-legacy",
+    {
+      headers: headers(branchId),
+      accessToken: auth.accessToken,
+    },
+  );
+}
+
+export function assignLegacyCompensationToCurrentBranch(
+  compensationId: string,
+  auth: AuthOptions,
+  branchId: string | null,
+) {
+  return apiFetch<EmployeeCompensation>(
+    `/payroll/compensation/${compensationId}/assign-legacy-to-current-branch`,
+    {
+      method: "PATCH",
+      headers: headers(branchId),
       accessToken: auth.accessToken,
     },
   );
@@ -428,9 +469,11 @@ export function listCompensation(
 export function createCompensation(
   input: CreateCompensationInput,
   auth: AuthOptions,
+  branchId: string | null,
 ) {
   return apiFetch<EmployeeCompensation>("/payroll/compensation", {
     method: "POST",
+    headers: headers(branchId),
     body: JSON.stringify(input),
     accessToken: auth.accessToken,
     sensitiveAuthorization: auth.sensitiveAuthorization,

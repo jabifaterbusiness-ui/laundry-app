@@ -112,6 +112,10 @@ describe("payroll record editing service", () => {
       },
     });
     expect(mocks.recordAuditEvent).toHaveBeenCalled();
+    expect(mocks.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: "Serializable" },
+    );
   });
 
   it("rejects earnings below existing deductions", async () => {
@@ -170,6 +174,10 @@ describe("payroll record editing service", () => {
       },
     });
     expect(mocks.recordAuditEvent).toHaveBeenCalled();
+    expect(mocks.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: "Serializable" },
+    );
   });
 
   it("rejects manual deductions after a posted payment", async () => {

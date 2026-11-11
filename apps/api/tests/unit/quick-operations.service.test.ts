@@ -225,6 +225,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
 
       expect(updateOrderStatusMock).toHaveBeenCalledWith(
@@ -282,6 +283,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
       expect(updateOrderStatusMock).not.toHaveBeenCalled();
       expect(recordAuditEventMock).not.toHaveBeenCalled();
@@ -385,6 +387,8 @@ describe("quick-operations.service", () => {
         "biz-A",
         "branch-A",
         "22222222-2222-4222-8222-222222222222",
+        "user-A",
+        expect.anything(),
       );
 
       expect(response).toEqual({
@@ -450,6 +454,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
 
       expect(response).toEqual({
@@ -499,6 +504,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         CONTEXT.businessId,
         CONTEXT.branchId,
+        CONTEXT.userId,
       );
     });
 
@@ -610,17 +616,12 @@ describe("quick-operations.service", () => {
           name: "Customer B",
           businessId: "biz-A",
         },
-        transferredOrderCount: 2,
+        transferredOrderCount: 1,
         transferredOrders: [
           {
             id: "11111111-1111-4111-8111-111111111111",
             orderNumber: "00042",
             branchId: "branch-A",
-          },
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            orderNumber: "00043",
-            branchId: "branch-B",
           },
         ],
       };
@@ -641,6 +642,8 @@ describe("quick-operations.service", () => {
       expect(transferCustomerMock).toHaveBeenCalledWith(
         result.customer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         result.targetCustomer.id,
       );
 
@@ -654,6 +657,7 @@ describe("quick-operations.service", () => {
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: "biz-A",
+        branchId: "branch-A",
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
@@ -661,12 +665,9 @@ describe("quick-operations.service", () => {
           operationName: "Transfer Customer",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
-          transferredOrderCount: 2,
-          transferredOrderIds: [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-          ],
-          transferredOrderNumbers: ["00042", "00043"],
+          transferredOrderCount: 1,
+          transferredOrderIds: ["11111111-1111-4111-8111-111111111111"],
+          transferredOrderNumbers: ["00042"],
         },
       });
     });
@@ -704,17 +705,12 @@ describe("quick-operations.service", () => {
           businessId: "biz-A",
           isActive: true,
         },
-        mergedOrderCount: 2,
+        mergedOrderCount: 1,
         mergedOrders: [
           {
             id: "11111111-1111-4111-8111-111111111111",
             orderNumber: "00042",
             branchId: "branch-A",
-          },
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            orderNumber: "00043",
-            branchId: "branch-B",
           },
         ],
         sourceDeactivated: true,
@@ -736,6 +732,8 @@ describe("quick-operations.service", () => {
       expect(mergeCustomerMock).toHaveBeenCalledWith(
         result.customer.id,
         "biz-A",
+        "branch-A",
+        "user-A",
         result.targetCustomer.id,
       );
 
@@ -749,6 +747,7 @@ describe("quick-operations.service", () => {
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: "biz-A",
+        branchId: "branch-A",
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
@@ -756,12 +755,9 @@ describe("quick-operations.service", () => {
           operationName: "Merge Account",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
-          mergedOrderCount: 2,
-          mergedOrderIds: [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-          ],
-          mergedOrderNumbers: ["00042", "00043"],
+          mergedOrderCount: 1,
+          mergedOrderIds: ["11111111-1111-4111-8111-111111111111"],
+          mergedOrderNumbers: ["00042"],
           sourceDeactivated: true,
         },
       });
@@ -1105,6 +1101,7 @@ describe("quick-operations.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-A",
         },
         {
           inventoryItemId: "55555555-5555-4555-8555-555555555555",
@@ -1175,6 +1172,7 @@ describe("quick-operations.service", () => {
         {
           businessId: "biz-A",
           branchId: "branch-A",
+          userId: "user-A",
         },
         {
           inventoryItemId: "88888888-8888-4888-8888-888888888888",
@@ -1928,6 +1926,8 @@ describe("SC — Switch Customer", () => {
     expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
       customer.id,
       "biz-A",
+      "33333333-3333-4333-8333-333333333333",
+      "user-staff-a",
     );
   });
 
@@ -1970,6 +1970,8 @@ describe("SC — Switch Customer", () => {
     expect(getCustomerForBusinessMock).toHaveBeenCalledWith(
       customer.id,
       "biz-A",
+      "33333333-3333-4333-8333-333333333333",
+      "user-staff-a",
     );
   });
 

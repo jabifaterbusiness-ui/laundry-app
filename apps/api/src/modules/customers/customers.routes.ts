@@ -13,6 +13,8 @@ import {
   getOne,
   list,
   update,
+  listLegacyUnassigned,
+  assignLegacyOwnerBranch,
 } from "./customers.controller.js";
 import {
   getAccount,
@@ -25,10 +27,14 @@ import {
 // it from these tenant-scoped routes.
 export const customersRouter = Router();
 
-customersRouter.use(requireAuth, requireBusinessContext);
+customersRouter.use(requireAuth, requireBusinessContext, asyncHandler(requireBranchContext));
 
 customersRouter.post("/", requirePermission("customers.create"), asyncHandler(create));
 customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list));
+
+// Business Owner review queue for records whose historical branch ownership is ambiguous.
+customersRouter.get("/legacy-unassigned", asyncHandler(listLegacyUnassigned));
+customersRouter.post("/:id/assign-owner-branch", asyncHandler(requireSensitiveAuthorization), asyncHandler(assignLegacyOwnerBranch));
 
 customersRouter.get(
   "/:id/account",
@@ -39,7 +45,6 @@ customersRouter.get(
 customersRouter.post(
   "/:id/account/fund",
   requirePermission("customer_accounts.manage"),
-  asyncHandler(requireBranchContext),
   asyncHandler(requireSensitiveAuthorization),
   asyncHandler(fundAccount),
 );

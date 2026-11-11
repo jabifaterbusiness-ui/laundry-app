@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -38,6 +40,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userPermissionOverride: {
       findUnique: vi.fn(),
     },
+    branch: { findFirst: vi.fn() },
+    userBranch: { findUnique: vi.fn() },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     service: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -61,6 +69,8 @@ const updateMany = vi.mocked(prisma.service.updateMany);
 const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
+const branchFindFirst = vi.mocked(prisma.branch.findFirst);
+const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
 
 function tokenFor(
   role: string,
@@ -68,7 +78,8 @@ function tokenFor(
   userId = "user-1",
 ) {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
+    { sub: userId,
+      sid: "session-test", email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -103,6 +114,12 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  branchFindFirst.mockImplementation((async ({ where }: any) => ({ id: where.id, businessId: where.businessId }) as never) as never);
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
+    const { userId, branchId } = where.userId_branchId;
+    const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+    return { userId, branchId, branch: { id: branchId, businessId } } as never;
+  }) as never);
 });
 
 describe("Services routes - authentication", () => {
@@ -128,17 +145,13 @@ describe("Services routes - tenant isolation", () => {
 
     const res = await request(app)
       .get("/api/v1/services?status=all")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
-    expect(findMany).toHaveBeenCalledWith({
-      where: {
-        businessId: "biz-A",
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ businessId: "biz-A" }),
+      orderBy: { name: "asc" },
+    }));
   });
 
   it("business B cannot access business A service by id", async () => {
@@ -148,15 +161,12 @@ describe("Services routes - tenant isolation", () => {
 
     const res = await request(app)
       .get(`/api/v1/services/${serviceId}`)
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B");
 
     expect(res.status).toBe(404);
-    expect(findFirst).toHaveBeenCalledWith({
-      where: {
-        id: serviceId,
-        businessId: "biz-B",
-      },
-    });
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: serviceId, businessId: "biz-B" }),
+    }));
   });
 });
 
@@ -167,7 +177,7 @@ describe("Services routes - authorization", () => {
 
     const res = await request(app)
       .get("/api/v1/services")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -185,7 +195,7 @@ describe("Services routes - authorization", () => {
 
     const res = await request(app)
       .post("/api/v1/services")
-      .set("Authorization", `Bearer ${MANAGER_A}`)
+      .set("Authorization", `Bearer ${MANAGER_A}`).set("X-Branch-Id", "branch-A")
       .send({
         name: "Shirt",
         pieces: 1,
@@ -199,7 +209,7 @@ describe("Services routes - authorization", () => {
   it("rejects STAFF from activating a service", async () => {
     const res = await request(app)
       .post("/api/v1/services/service-1/activate")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
     expect(updateMany).not.toHaveBeenCalled();
@@ -214,7 +224,7 @@ describe("Services routes - permission enforcement", () => {
 
     const res = await request(app)
       .post("/api/v1/services")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .send({
         name: "Blocked Service",
         pieces: 1,
@@ -232,7 +242,7 @@ describe("Services routes - permission enforcement", () => {
 
     const res = await request(app)
       .get("/api/v1/services")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
     expect(findMany).not.toHaveBeenCalled();

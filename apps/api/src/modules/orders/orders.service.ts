@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
 import { createInvoiceFromOrderWithTx } from "../invoices/invoices.service.js";
 import { notifyOrderStatus } from "../communications/communications.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 export interface CreateOrderItemData {
   serviceId: string;
@@ -14,6 +15,7 @@ export interface CreateOrderItemData {
 export interface CreateOrderData {
   businessId: string;
   branchId: string;
+  actorUserId: string;
   customerId: string;
   items: CreateOrderItemData[];
   garmentNote?: string;
@@ -25,7 +27,8 @@ export interface CreateOrderData {
 
 export interface ListOrdersParams {
   businessId: string;
-  branchId?: string;
+  branchId: string;
+  userId: string;
   customerId?: string;
   status?: OrderStatus;
   page: number;
@@ -62,11 +65,29 @@ async function createOrderWithTx(
   tx: Prisma.TransactionClient,
   data: CreateOrderData,
 ) {
-    // Customer must belong to the authenticated business.
+    const customerScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "CUSTOMERS",
+    }, tx);
+    const serviceScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "SERVICES",
+    }, tx);
+
+    // A customer must be visible to this branch, not merely belong to the
+    // same business. Unassigned legacy customers remain hidden pending owner review.
     const customer = await tx.customer.findFirst({
       where: {
         id: data.customerId,
         businessId: data.businessId,
+        OR: [
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
       },
       select: {
         id: true,
@@ -100,6 +121,11 @@ async function createOrderWithTx(
       where: {
         id: { in: serviceIds },
         businessId: data.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+          { id: { in: serviceScope.resourceIds } },
+        ],
       },
     });
 
@@ -114,13 +140,25 @@ async function createOrderWithTx(
       services.map((service) => [service.id, service]),
     );
 
-    // Customer-specific prices are read only for this business/customer.
-    // The selected price is copied into OrderItem, preserving history.
+    // Customer-specific prices must follow the active branch's sharing
+    // permissions. A price owned by another branch is usable only when
+    // that price (or its owning branch's pricing category) is shared.
+    const pricingScope = await getBranchResourceScope({
+      businessId: data.businessId,
+      branchId: data.branchId,
+      userId: data.actorUserId,
+      resourceType: "CUSTOMER_PRICING",
+    }, tx);
     const customerPrices = await tx.customerServicePrice.findMany({
       where: {
         businessId: data.businessId,
         customerId: data.customerId,
         serviceId: { in: serviceIds },
+        OR: [
+          { branchId: null },
+          { branchId: { in: pricingScope.ownerBranchIds } },
+          { id: { in: pricingScope.resourceIds } },
+        ],
       },
       select: { serviceId: true, unitPrice: true },
     });
@@ -247,7 +285,11 @@ async function createOrderWithTx(
       order,
       business,
       business.defaultCustomerAgreement,
-      { adjustments: data.adjustments ?? [], taxRuleIds: data.taxRuleIds ?? [] },
+      {
+        adjustments: data.adjustments ?? [],
+        taxRuleIds: data.taxRuleIds ?? [],
+        ...(typeof data.actorUserId === "string" ? { actorUserId: data.actorUserId } : {}),
+      },
     );
 
     // Keep the order's displayed total aligned with the issued invoice total
@@ -311,9 +353,24 @@ export async function listOrders(params: ListOrdersParams) {
     pageSize,
   } = params;
 
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId: params.userId,
+    resourceType: "CUSTOMERS",
+  });
   const where: Prisma.OrderWhereInput = {
     businessId,
-    ...(branchId ? { branchId } : {}),
+    branchId,
+    customer: {
+      is: {
+        businessId,
+        OR: [
+          { ownerBranchId: { in: scope.ownerBranchIds } },
+          { id: { in: scope.resourceIds } },
+        ],
+      },
+    },
     ...(customerId ? { customerId } : {}),
     ...(status ? { status } : {}),
   };
@@ -355,13 +412,29 @@ export async function listOrders(params: ListOrdersParams) {
 export async function getOrderForBusiness(
   id: string,
   businessId: string,
-  branchId?: string,
+  branchId: string,
+  userId: string,
 ) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  });
   return prisma.order.findFirst({
     where: {
       id,
       businessId,
-      ...(branchId ? { branchId } : {}),
+      branchId,
+      customer: {
+        is: {
+          businessId,
+          OR: [
+            { ownerBranchId: { in: scope.ownerBranchIds } },
+            { id: { in: scope.resourceIds } },
+          ],
+        },
+      },
     },
     include: {
       customer: true,
@@ -383,11 +456,12 @@ export async function transferOrder(
   businessId: string,
   branchId: string,
   newCustomerId: string,
+  userId: string,
   db: OrderDb = prisma,
 ) {
   if (db === prisma) {
     return prisma.$transaction(async (tx) =>
-      transferOrderWithTx(tx, id, businessId, branchId, newCustomerId),
+      transferOrderWithTx(tx, id, businessId, branchId, newCustomerId, userId),
     );
   }
 
@@ -397,6 +471,7 @@ export async function transferOrder(
     businessId,
     branchId,
     newCustomerId,
+    userId,
   );
 }
 
@@ -406,6 +481,7 @@ async function transferOrderWithTx(
   businessId: string,
   branchId: string,
   newCustomerId: string,
+  userId: string,
 ) {
   const order = await tx.order.findFirst({
     where: {
@@ -431,10 +507,20 @@ async function transferOrderWithTx(
     );
   }
 
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  }, tx);
   const customer = await tx.customer.findFirst({
     where: {
       id: newCustomerId,
       businessId,
+      OR: [
+        { ownerBranchId: { in: customerScope.ownerBranchIds } },
+        { id: { in: customerScope.resourceIds } },
+      ],
     },
     select: {
       id: true,
@@ -466,20 +552,71 @@ async function transferOrderWithTx(
 }
 
 
+export interface OrderStatusHistoryContext {
+  actorUserId: string;
+  correlationId?: string | null;
+}
+
 export async function updateOrderStatus(
   id: string,
   businessId: string,
   branchId: string,
   status: OrderStatus,
   db: OrderDb = prisma,
+  history?: OrderStatusHistoryContext,
 ) {
-  return updateOrderStatusWithDb(
-    db,
-    id,
-    businessId,
-    branchId,
-    status,
-  );
+  if (db === prisma && history) {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findFirst({
+        where: { id, businessId, branchId },
+        select: { id: true, status: true },
+      });
+      if (!existing) throw new AppError("Order not found", 404);
+
+      const updated = await updateOrderStatusWithDb(
+        tx, id, businessId, branchId, status,
+      );
+
+      if (existing.status !== status) {
+        await tx.auditLog.create({
+          data: {
+            action: "order.status_updated",
+            entityType: "Order",
+            entityId: updated.id,
+            businessId,
+            branchId,
+            actorUserId: history.actorUserId,
+            correlationId: history.correlationId ?? null,
+            metadata: {
+              orderNumber: updated.orderNumber,
+              previousStatus: existing.status,
+              status: updated.status,
+            },
+          },
+        });
+      }
+      return { updated, changed: existing.status !== status };
+    }, { isolationLevel: "Serializable" });
+
+    if (!result.changed) return result.updated;
+
+    let notificationResults: Awaited<ReturnType<typeof notifyOrderStatus>> = [];
+    let notificationError: string | undefined;
+    try {
+      notificationResults = await notifyOrderStatus({
+        orderId: id, businessId, branchId, status,
+      });
+    } catch {
+      notificationError = "Notification processing failed. Check Delivery History for details.";
+    }
+    return {
+      ...result.updated,
+      notificationResults,
+      ...(notificationError ? { notificationError } : {}),
+    };
+  }
+
+  return updateOrderStatusWithDb(db, id, businessId, branchId, status);
 }
 
 async function updateOrderStatusWithDb(

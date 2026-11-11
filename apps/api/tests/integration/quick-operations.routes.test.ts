@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -41,6 +43,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customer: {
       findFirst: vi.fn(),
       updateMany: vi.fn(),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     customerAccount: {
       findFirst: vi.fn(),
@@ -137,6 +143,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -197,6 +204,7 @@ function mockTransaction() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  orderFindFirst.mockReset();
   mockTransaction();
   vi.mocked(prisma.inventoryStock.findUniqueOrThrow).mockImplementation((async () => {
     const latestUpsert = vi.mocked(prisma.inventoryStock.upsert).mock.results.at(-1)?.value;
@@ -406,6 +414,15 @@ describe("Quick Operations routes - MU", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
@@ -484,6 +501,15 @@ describe("Quick Operations routes - MU", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
@@ -1400,6 +1426,15 @@ describe("Quick Operations routes - SO", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
@@ -1478,6 +1513,7 @@ describe("Quick Operations routes - SC", () => {
       id: CUSTOMER_A,
       name: "Customer A",
       businessId: "biz-A",
+      ownerBranchId: BRANCH_A,
       isActive: true,
     } as never);
 
@@ -1500,7 +1536,12 @@ describe("Quick Operations routes - SC", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -1554,7 +1595,12 @@ describe("Quick Operations routes - SC", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
       },
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
 
     expect(customerUpdateMany).not.toHaveBeenCalled();
@@ -1607,7 +1653,7 @@ describe("Quick Operations routes - SC", () => {
 
 
 describe("Quick Operations routes - TC", () => {
-  it("transfers every order from Customer A to Customer B across the business", async () => {
+  it("transfers only Customer A orders from the active branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
@@ -1623,11 +1669,13 @@ describe("Quick Operations routes - TC", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       } as never)
       .mockResolvedValueOnce({
         id: CUSTOMER_B,
         name: "Customer B",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       } as never);
 
     const transferredOrders = [
@@ -1635,11 +1683,6 @@ describe("Quick Operations routes - TC", () => {
         id: ORDER_A,
         orderNumber: "00042",
         branchId: BRANCH_A,
-      },
-      {
-        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        orderNumber: "00043",
-        branchId: BRANCH_B,
       },
     ];
 
@@ -1668,6 +1711,7 @@ describe("Quick Operations routes - TC", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       select: {
@@ -1683,6 +1727,7 @@ describe("Quick Operations routes - TC", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       data: {
@@ -1700,9 +1745,9 @@ describe("Quick Operations routes - TC", () => {
           operationCode: "TC",
           operationName: "Transfer Customer",
           targetCustomerId: CUSTOMER_B,
-          transferredOrderCount: 2,
+          transferredOrderCount: 1,
           transferredOrderIds: transferredOrders.map((order) => order.id),
-          transferredOrderNumbers: ["00042", "00043"],
+          transferredOrderNumbers: ["00042"],
         }),
       }),
     );
@@ -1716,6 +1761,7 @@ describe("Quick Operations routes - TC", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       } as never)
       .mockResolvedValueOnce(null);
 
@@ -1794,7 +1840,7 @@ describe("Quick Operations routes - TC", () => {
 
 
 describe("Quick Operations routes - MA", () => {
-  it("merges Customer A into Customer B across the business and deactivates Customer A", async () => {
+  it("merges Customer A into Customer B within the active branch", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     permissionFindUnique.mockResolvedValue({
@@ -1810,12 +1856,14 @@ describe("Quick Operations routes - MA", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never)
       .mockResolvedValueOnce({
         id: CUSTOMER_B,
         name: "Customer B",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never);
 
@@ -1824,11 +1872,6 @@ describe("Quick Operations routes - MA", () => {
         id: ORDER_A,
         orderNumber: "00042",
         branchId: BRANCH_A,
-      },
-      {
-        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        orderNumber: "00043",
-        branchId: BRANCH_B,
       },
     ];
 
@@ -1860,6 +1903,7 @@ describe("Quick Operations routes - MA", () => {
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       select: {
@@ -1875,6 +1919,7 @@ describe("Quick Operations routes - MA", () => {
     expect(orderUpdateMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
+        branchId: BRANCH_A,
         customerId: CUSTOMER_A,
       },
       data: {
@@ -1886,6 +1931,7 @@ describe("Quick Operations routes - MA", () => {
       where: {
         id: CUSTOMER_A,
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       },
       data: {
         isActive: false,
@@ -1902,9 +1948,10 @@ describe("Quick Operations routes - MA", () => {
           operationCode: "MA",
           operationName: "Merge Account",
           targetCustomerId: CUSTOMER_B,
-          mergedOrderCount: 2,
+          mergedOrderCount: 1,
           mergedOrderIds: mergedOrders.map((order) => order.id),
-          mergedOrderNumbers: ["00042", "00043"],
+          mergedOrderNumbers: ["00042"],
+          reason: "Routine customer merge test",
           sourceDeactivated: true,
         }),
       }),
@@ -1919,6 +1966,7 @@ describe("Quick Operations routes - MA", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never)
       .mockResolvedValueOnce(null);

@@ -210,6 +210,7 @@ describe("ReportsPage", () => {
     expect(reportsApi.getAnnualReport).toHaveBeenCalledWith(
       new Date().getFullYear(),
       { accessToken: "test-token" },
+      "33333333-3333-4333-8333-333333333333",
     );
   });
 

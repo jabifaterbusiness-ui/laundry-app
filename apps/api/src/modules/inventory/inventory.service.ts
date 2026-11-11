@@ -1,14 +1,18 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type BusinessScope = {
   businessId: string;
+  branchId?: string;
+  userId?: string;
 };
 
 type BranchScope = {
   businessId: string;
   branchId: string;
+  userId?: string;
 };
 
 type CreateInventoryItemInput = {
@@ -26,6 +30,7 @@ export async function createInventoryItem(
   scope: BusinessScope,
   input: CreateInventoryItemInput,
 ) {
+  if (!scope.branchId) throw new AppError("A valid branch context is required", 400);
   const name = input.name.trim();
 
   if (!name) {
@@ -36,6 +41,7 @@ export async function createInventoryItem(
     return await prisma.inventoryItem.create({
       data: {
         businessId: scope.businessId,
+        ownerBranchId: scope.branchId,
         name,
         sku: input.sku?.trim() || null,
         category: input.category?.trim() || null,
@@ -83,76 +89,48 @@ export async function updateInventoryItem(
   inventoryItemId: string,
   input: UpdateInventoryItemInput,
 ) {
-  const existing = await prisma.inventoryItem.findFirst({
-    where: {
-      id: inventoryItemId,
-      businessId: scope.businessId,
-    },
-  });
-
-  if (!existing) {
-    throw new AppError("Inventory item not found", 404);
-  }
-
-  const data: Prisma.InventoryItemUpdateInput = {};
-
-  if (input.name !== undefined) {
-    const name = input.name.trim();
-
-    if (!name) {
-      throw new AppError("Inventory item name is required", 422);
-    }
-
-    const duplicate = await prisma.inventoryItem.findFirst({
-      where: {
-        businessId: scope.businessId,
-        name,
-        NOT: {
-          id: inventoryItemId,
-        },
-      },
-    });
-
-    if (duplicate) {
-      throw new AppError(
-        "An inventory item with this name already exists",
-        409,
-      );
-    }
-
-    data.name = name;
-  }
-
-  if (input.sku !== undefined) data.sku = input.sku.trim() || null;
-  if (input.category !== undefined) data.category = input.category.trim() || null;
-  if (input.storageLocation !== undefined) data.storageLocation = input.storageLocation.trim() || null;
-  if (input.description !== undefined) {
-    data.description = input.description.trim() || null;
-  }
-
-  if (input.unit !== undefined) {
-    data.unit = input.unit;
-  }
-
-  if (input.reorderQuantity !== undefined) data.reorderQuantity = input.reorderQuantity;
-  if (input.lowStockThreshold !== undefined) {
-    data.lowStockThreshold = input.lowStockThreshold;
-  }
-
-  if (input.isActive !== undefined) {
-    data.isActive = input.isActive;
-  }
+  if (!scope.branchId || !scope.userId) throw new AppError("A valid branch and user context are required", 400);
 
   try {
-    return await prisma.inventoryItem.update({
-      where: { id: inventoryItemId },
-      data,
-    });
+    return await prisma.$transaction(async (tx) => {
+      const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId!, userId: scope.userId!, resourceType: "INVENTORY" }, tx);
+      const existing = await tx.inventoryItem.findFirst({
+        where: { id: inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
+      });
+      if (!existing) throw new AppError("Inventory item not found", 404);
+
+      await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId!, userId: scope.userId!, resourceType: "INVENTORY", ownerBranchId: existing.ownerBranchId, resourceId: inventoryItemId }, tx);
+      const data: Prisma.InventoryItemUpdateInput = {};
+
+      if (input.name !== undefined) {
+        const name = input.name.trim();
+        if (!name) throw new AppError("Inventory item name is required", 422);
+        const duplicate = await tx.inventoryItem.findFirst({
+          where: { businessId: scope.businessId, ownerBranchId: existing.ownerBranchId, name, NOT: { id: inventoryItemId } },
+        });
+        if (duplicate) throw new AppError("An inventory item with this name already exists", 409);
+        data.name = name;
+      }
+      if (input.sku !== undefined) data.sku = input.sku.trim() || null;
+      if (input.category !== undefined) data.category = input.category.trim() || null;
+      if (input.storageLocation !== undefined) data.storageLocation = input.storageLocation.trim() || null;
+      if (input.description !== undefined) data.description = input.description.trim() || null;
+      if (input.unit !== undefined) data.unit = input.unit;
+      if (input.reorderQuantity !== undefined) data.reorderQuantity = input.reorderQuantity;
+      if (input.lowStockThreshold !== undefined) data.lowStockThreshold = input.lowStockThreshold;
+      if (input.isActive !== undefined) data.isActive = input.isActive;
+
+      const updated = await tx.inventoryItem.updateMany({
+        where: { id: inventoryItemId, businessId: scope.businessId, ownerBranchId: existing.ownerBranchId },
+        data,
+      });
+      if (!updated.count) throw new AppError("Inventory item not found", 404);
+      return tx.inventoryItem.findFirst({
+        where: { id: inventoryItemId, businessId: scope.businessId, ownerBranchId: existing.ownerBranchId },
+      });
+    }, { isolationLevel: "Serializable" });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const target = Array.isArray(error.meta?.target)
         ? error.meta.target.join(",").toLowerCase()
         : String(error.meta?.target ?? "").toLowerCase();
@@ -163,7 +141,6 @@ export async function updateInventoryItem(
         409,
       );
     }
-
     throw error;
   }
 }
@@ -177,8 +154,11 @@ export async function listInventoryItems(
     pageSize: number;
   },
 ) {
+  if (!scope.branchId || !scope.userId) throw new AppError("A valid branch and user context are required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
   const where: Prisma.InventoryItemWhereInput = {
     businessId: scope.businessId,
+    OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }],
   };
 
   if (input.isActive !== undefined) {
@@ -187,11 +167,11 @@ export async function listInventoryItems(
 
   const term = input.search?.trim();
   if (term) {
-    where.OR = [
+    where.AND = [{ OR: [
       { name: { contains: term, mode: "insensitive" } },
       { sku: { contains: term, mode: "insensitive" } },
       { category: { contains: term, mode: "insensitive" } },
-    ];
+    ] }];
   }
 
   const skip = (input.page - 1) * input.pageSize;
@@ -226,9 +206,15 @@ export async function listInventoryStock(
     pageSize: number;
   },
 ) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
+  const itemVisibility = {
+    OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }],
+  };
   const where: Prisma.InventoryStockWhereInput = {
     businessId: scope.businessId,
     branchId: scope.branchId,
+    inventoryItem: { is: itemVisibility },
   };
 
   if (input.inventoryItemId) {
@@ -241,6 +227,10 @@ export async function listInventoryStock(
     const itemFilter = input.inventoryItemId
       ? Prisma.sql`AND s."inventoryItemId" = ${input.inventoryItemId}`
       : Prisma.empty;
+    const resourceCondition = itemScope.resourceIds.length
+      ? Prisma.sql`OR i.id IN (${Prisma.join(itemScope.resourceIds)})`
+      : Prisma.empty;
+    const ownerBranchFilter = Prisma.sql`AND (i."ownerBranchId" IS NULL OR i."ownerBranchId" IN (${Prisma.join(itemScope.ownerBranchIds)}) ${resourceCondition})`;
 
     const [stockRows, countRows] = await prisma.$transaction([
       prisma.$queryRaw<Array<{ id: string }>>(
@@ -252,6 +242,7 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
+            ${ownerBranchFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
           ORDER BY i.name ASC, s.id ASC
           LIMIT ${input.pageSize}
@@ -267,6 +258,7 @@ export async function listInventoryStock(
           WHERE s."businessId" = ${scope.businessId}
             AND s."branchId" = ${scope.branchId}
             ${itemFilter}
+            ${ownerBranchFilter}
             AND (s.quantity - s."reservedQuantity") <= i."lowStockThreshold"
         `,
       ),
@@ -356,16 +348,17 @@ export async function createInventoryMovement(
     throw new AppError(`${input.type} movements require an audit reason`, 422);
   }
   const result = await prisma.$transaction(async (tx) => {
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" }, tx);
     const item = await tx.inventoryItem.findFirst({
-      where: {
-        id: input.inventoryItemId,
-        businessId: scope.businessId,
-      },
+      where: { id: input.inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
     });
 
     if (!item) {
       throw new AppError("Inventory item not found", 404);
     }
+
+    await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: item.ownerBranchId, resourceId: item.id }, tx);
 
     if (!item.isActive) {
       throw new AppError("Cannot create movement for an inactive inventory item", 422);
@@ -459,16 +452,17 @@ export async function adjustInventoryStock(
     throw new AppError("Adjustment reason is required", 422);
   }
   const result = await prisma.$transaction(async (tx) => {
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" }, tx);
     const item = await tx.inventoryItem.findFirst({
-      where: {
-        id: input.inventoryItemId,
-        businessId: scope.businessId,
-      },
+      where: { id: input.inventoryItemId, businessId: scope.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] },
     });
 
     if (!item) {
       throw new AppError("Inventory item not found", 404);
     }
+
+    await assertBranchResourceWriteAccess({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY", ownerBranchId: item.ownerBranchId, resourceId: item.id }, tx);
 
     if (!item.isActive) {
       throw new AppError(
@@ -560,9 +554,12 @@ export async function listInventoryMovements(
     pageSize: number;
   },
 ) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" });
   const where: Prisma.InventoryMovementWhereInput = {
     businessId: scope.businessId,
     branchId: scope.branchId,
+    inventoryItem: { is: { OR: [{ ownerBranchId: null }, { ownerBranchId: { in: itemScope.ownerBranchIds } }, { id: { in: itemScope.resourceIds } }] } },
     ...(input.inventoryItemId ? { inventoryItemId: input.inventoryItemId } : {}),
     ...(input.type ? { type: input.type } : {}),
   };
@@ -640,8 +637,37 @@ export async function createInventoryPurchaseOrder(scope: BranchScope, input: {
     if (!supplier) throw new AppError("Supplier not found or inactive for this business", 404);
     const itemIds = [...new Set(input.lines.map((line) => line.inventoryItemId))];
     if (itemIds.length !== input.lines.length) throw new AppError("Each inventory item may appear only once on a purchase order", 422);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: itemIds }, businessId: scope.businessId, isActive: true }, select: { id: true } });
-    if (items.length !== itemIds.length) throw new AppError("One or more inventory items are unavailable in this business", 422);
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: itemIds },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (items.length !== itemIds.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     try {
       return await tx.inventoryPurchaseOrder.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, supplierId: supplier.id,
@@ -706,6 +732,39 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
     if (!order) throw new AppError("Purchase order not found for this branch", 404);
     if (order.status !== "ORDERED" && order.status !== "PARTIALLY_RECEIVED") {
       throw new AppError("Only ordered or partially received purchase orders can receive goods", 422);
+    }
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const orderItemIds = [...new Set(order.lines.map((line) => line.inventoryItemId))];
+    const accessibleItems = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: orderItemIds },
+        businessId: scope.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (accessibleItems.length !== orderItemIds.length) {
+      throw new AppError("One or more purchase order items are no longer available to this branch", 422);
+    }
+    for (const item of accessibleItems) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
     }
     if (input.lines.length === 0) throw new AppError("At least one receipt line is required", 422);
     const ids = [...new Set(input.lines.map((line) => line.purchaseOrderLineId))];
@@ -774,9 +833,37 @@ export async function createInventoryTransfer(scope: BranchScope, input: {
     if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) {
       throw new AppError("Transfer must contain unique inventory items", 422);
     }
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
     const ids = input.lines.map((line) => line.inventoryItemId);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
-    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: ids },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     const transferLines: Array<{ inventoryItemId: string; quantity: number; unitCost: number; resultingQuantity: number }> = [];
     for (const line of input.lines) {
       if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0) throw new AppError("Transfer quantities must be positive whole numbers", 422);
@@ -876,10 +963,38 @@ export async function createInventoryStocktake(scope: BranchScope, input: {
   return prisma.$transaction(async (tx) => {
     const branch = await tx.branch.findFirst({ where: { id: scope.branchId, businessId: scope.businessId, isActive: true } });
     if (!branch) throw new AppError("Branch not found or inactive", 404);
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
     if (!input.lines.length || new Set(input.lines.map((line) => line.inventoryItemId)).size !== input.lines.length) throw new AppError("Stocktake requires unique inventory items", 422);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
     const ids = input.lines.map((line) => line.inventoryItemId);
-    const items = await tx.inventoryItem.findMany({ where: { id: { in: ids }, businessId: scope.businessId, isActive: true } });
-    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable", 422);
+    const items = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: ids },
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
+    if (items.length !== ids.length) throw new AppError("One or more inventory items are unavailable to this branch", 422);
+    for (const item of items) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     const lines = [];
     for (const line of input.lines) {
       if (!Number.isSafeInteger(line.countedQuantity) || line.countedQuantity < 0) throw new AppError("Counted quantities cannot be negative", 422);
@@ -939,6 +1054,41 @@ export async function applyInventoryStocktake(scope: BranchScope, input: { stock
     const stocktake = await tx.inventoryStocktake.findFirst({ where: { id: input.stocktakeId, businessId: scope.businessId, branchId: scope.branchId }, include: { lines: true } });
     if (!stocktake) throw new AppError("Stocktake not found for this branch", 404);
     if (stocktake.status !== "APPROVED") throw new AppError("Only approved stocktakes can be applied", 422);
+    // Sharing can be revoked after a stocktake is created or approved. Recheck
+    // current edit access at apply time so a stale approval cannot mutate stock.
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const stocktakeItemIds = [...new Set(stocktake.lines.map((line) => line.inventoryItemId))];
+    const accessibleItems = await tx.inventoryItem.findMany({
+      where: {
+        id: { in: stocktakeItemIds },
+        businessId: scope.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+      select: { id: true, ownerBranchId: true },
+    });
+    if (accessibleItems.length !== stocktakeItemIds.length) {
+      throw new AppError("One or more stocktake items are no longer available to this branch", 403);
+    }
+    for (const item of accessibleItems) {
+      await assertBranchResourceWriteAccess({
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        resourceType: "INVENTORY",
+        ownerBranchId: item.ownerBranchId,
+        resourceId: item.id,
+      }, tx);
+    }
     for (const line of stocktake.lines) {
       const stock = await tx.inventoryStock.upsert({
         where: { inventoryItemId_branchId: { inventoryItemId: line.inventoryItemId, branchId: scope.branchId } },
@@ -982,8 +1132,34 @@ export async function createInventoryReservation(scope: BranchScope, input: {
     if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
       throw new AppError("Reservation expiry must be in the future", 422);
     }
-    const item = await tx.inventoryItem.findFirst({ where: { id: input.inventoryItemId, businessId: scope.businessId, isActive: true } });
+    if (!scope.userId) throw new AppError("A valid user context is required", 400);
+    const itemScope = await getBranchResourceScope({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+    }, tx);
+    const item = await tx.inventoryItem.findFirst({
+      where: {
+        id: input.inventoryItemId,
+        businessId: scope.businessId,
+        isActive: true,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: itemScope.ownerBranchIds } },
+          { id: { in: itemScope.resourceIds } },
+        ],
+      },
+    });
     if (!item) throw new AppError("Inventory item not found or inactive", 404);
+    await assertBranchResourceWriteAccess({
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      resourceType: "INVENTORY",
+      ownerBranchId: item.ownerBranchId,
+      resourceId: item.id,
+    }, tx);
     const stock = await tx.inventoryStock.upsert({
       where: { inventoryItemId_branchId: { inventoryItemId: input.inventoryItemId, branchId: scope.branchId } },
       create: { businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: input.inventoryItemId, quantity: 0 },
@@ -1046,8 +1222,23 @@ export async function releaseInventoryReservation(scope: BranchScope, input: { r
 }
 
 export async function getInventoryReorderRecommendations(scope: BranchScope) {
+  if (!scope.userId) throw new AppError("A valid user context is required", 400);
+  const itemScope = await getBranchResourceScope({
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    userId: scope.userId,
+    resourceType: "INVENTORY",
+  });
   const items = await prisma.inventoryItem.findMany({
-    where: { businessId: scope.businessId, isActive: true },
+    where: {
+      businessId: scope.businessId,
+      isActive: true,
+      OR: [
+        { ownerBranchId: null },
+        { ownerBranchId: { in: itemScope.ownerBranchIds } },
+        { id: { in: itemScope.resourceIds } },
+      ],
+    },
     include: { stocks: { where: { businessId: scope.businessId, branchId: scope.branchId } } },
     orderBy: { name: "asc" },
   });

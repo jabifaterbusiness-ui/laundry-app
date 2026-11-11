@@ -15,6 +15,11 @@ import {
   updateService,
 } from "./services.service.js";
 
+function requireBranchId(req: Request): string {
+  if (!req.branchId) throw new AppError("A valid branch context is required", 400);
+  return req.branchId;
+}
+
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
     throw new AppError(
@@ -28,10 +33,12 @@ function requireBusinessId(req: Request): string {
 
 export async function create(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const input = createServiceSchema.parse(req.body);
 
   const service = await createService({
     businessId,
+    branchId,
     name: input.name,
     pieces: input.pieces,
     unitPrice: input.unitPrice,
@@ -43,6 +50,7 @@ export async function create(req: Request, res: Response) {
     entityId: service.id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       name: service.name,
@@ -56,10 +64,13 @@ export async function create(req: Request, res: Response) {
 
 export async function list(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const query = listServicesQuerySchema.parse(req.query);
 
   const services = await listServices({
     businessId,
+    branchId,
+    userId: req.user!.id,
     status: query.status,
     ...(query.search !== undefined && { search: query.search }),
   });
@@ -71,9 +82,10 @@ export async function list(req: Request, res: Response) {
 
 export async function getOne(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = serviceIdParamSchema.parse(req.params);
 
-  const service = await getServiceForBusiness(id, businessId);
+  const service = await getServiceForBusiness(id, businessId, branchId, req.user!.id);
 
   if (!service) {
     throw new AppError("Service not found", 404);
@@ -84,10 +96,11 @@ export async function getOne(req: Request, res: Response) {
 
 export async function update(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = serviceIdParamSchema.parse(req.params);
   const input = updateServiceSchema.parse(req.body);
 
-  const service = await updateService(id, businessId, input);
+  const service = await updateService(id, businessId, branchId, req.user!.id, input);
 
   await recordAuditEvent({
     action: "service.updated",
@@ -95,6 +108,7 @@ export async function update(req: Request, res: Response) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       fields: Object.keys(input),
@@ -110,11 +124,14 @@ async function setActiveStatus(
   isActive: boolean,
 ) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = serviceIdParamSchema.parse(req.params);
 
   const service = await setServiceActiveStatus(
     id,
     businessId,
+    branchId,
+    req.user!.id,
     isActive,
   );
 
@@ -124,6 +141,7 @@ async function setActiveStatus(
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
   });
 

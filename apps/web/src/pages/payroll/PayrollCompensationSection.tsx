@@ -2,9 +2,12 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
+  assignLegacyCompensationToCurrentBranch,
   createCompensation,
   listCompensation,
+  listUnassignedLegacyCompensation,
   type EmployeeCompensation,
+  type UnassignedLegacyCompensation,
 } from "../../lib/payroll-api.js";
 import {
   listBranchUsers,
@@ -67,6 +70,7 @@ export function PayrollCompensationSection({
 
   const canView = hasPermission(user, "compensation.view");
   const canManage = hasPermission(user, "compensation.manage");
+  const canReviewLegacy = user?.securityRole === "BUSINESS_OWNER" && canManage;
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -74,6 +78,8 @@ export function PayrollCompensationSection({
   const [basicSalary, setBasicSalary] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(todayInputValue());
   const [formError, setFormError] = useState("");
+  const [confirmAssignmentId, setConfirmAssignmentId] = useState<string | null>(null);
+  const [assignmentError, setAssignmentError] = useState("");
 
   const employeesQuery = useQuery({
     queryKey: ["payroll", "compensation", "employees", branchId],
@@ -89,8 +95,42 @@ export function PayrollCompensationSection({
         {
           accessToken,
         },
+        branchId,
       ),
     enabled: Boolean(accessToken && branchId && canView),
+  });
+
+  const unassignedLegacyQuery = useQuery({
+    queryKey: ["payroll", "compensation", "unassigned-legacy", user?.businessId],
+    queryFn: () =>
+      listUnassignedLegacyCompensation({ accessToken }, branchId),
+    enabled: Boolean(accessToken && branchId && canReviewLegacy),
+  });
+
+  const assignLegacyMutation = useMutation({
+    mutationFn: (compensationId: string) =>
+      assignLegacyCompensationToCurrentBranch(
+        compensationId,
+        { accessToken },
+        branchId,
+      ),
+    onSuccess: async () => {
+      setConfirmAssignmentId(null);
+      setAssignmentError("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payroll", "compensation"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["payroll", "compensation", "unassigned-legacy"],
+        }),
+      ]);
+    },
+    onError: (error) => {
+      setAssignmentError(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to assign this legacy compensation. Refresh and try again.",
+      );
+    },
   });
 
   const employees = useMemo(
@@ -169,6 +209,7 @@ export function PayrollCompensationSection({
         {
           accessToken,
         },
+        branchId,
       ),
     onSuccess: async () => {
       setFormOpen(false);
@@ -350,6 +391,117 @@ export function PayrollCompensationSection({
           </strong>
         </div>
       </div>
+
+      {canReviewLegacy && (
+        <section
+          aria-label="Unassigned legacy compensation"
+          style={{
+            ...cardStyle,
+            border: "1px solid #f3c66b",
+            background: "linear-gradient(135deg, #fffbeb 0%, #fff 72%)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div>
+              <p style={{ margin: 0, color: "#92400e", fontSize: 12, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                Owner review required
+              </p>
+              <h3 style={{ margin: "5px 0" }}>Unassigned legacy salaries</h3>
+              <p style={{ ...mutedStyle, margin: 0 }}>
+                These historical records are not visible to any branch until you assign each one deliberately.
+              </p>
+            </div>
+            <strong style={{ color: "#92400e", fontSize: 28 }}>
+              {unassignedLegacyQuery.data?.length ?? (unassignedLegacyQuery.isLoading ? "…" : 0)}
+            </strong>
+          </div>
+
+          {unassignedLegacyQuery.isLoading ? (
+            <p>Checking unassigned records…</p>
+          ) : unassignedLegacyQuery.isError ? (
+            <p role="alert">
+              {unassignedLegacyQuery.error instanceof ApiError
+                ? unassignedLegacyQuery.error.message
+                : "Unable to load unassigned legacy compensation."}
+            </p>
+          ) : (unassignedLegacyQuery.data ?? []).length === 0 ? (
+            <p style={{ marginBottom: 0, color: "#166534", fontWeight: 650 }}>
+              All legacy compensation records have been assigned.
+            </p>
+          ) : (
+            <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Employee", "Historical salary", "Effective period", "Eligible branches", "Action"].map((heading) => (
+                      <th key={heading} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #f3d69a", fontSize: 12, color: "#78350f" }}>
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(unassignedLegacyQuery.data ?? []).map((item: UnassignedLegacyCompensation) => {
+                    const employeeActive = item.employee.isActive && !item.employee.deletedAt;
+                    const eligibleHere = employeeActive && item.employee.branches.some(
+                      (membership) => membership.branch.id === branchId && membership.branch.isActive,
+                    );
+                    const eligibleBranches = item.employee.branches
+                      .filter((membership) => membership.branch.isActive)
+                      .map((membership) => membership.branch.name);
+                    const confirming = confirmAssignmentId === item.id;
+
+                    return (
+                      <tr key={item.id}>
+                        <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3" }}>
+                          <strong>{item.employee.fullName}</strong>
+                          <div style={{ ...mutedStyle, fontSize: 12 }}>{item.employee.email || "No email"}</div>
+                        </td>
+                        <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3", fontWeight: 800 }}>{money(item.basicSalary)}</td>
+                        <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3" }}>
+                          {displayDate(item.effectiveFrom)}{item.effectiveTo ? ` – ${displayDate(item.effectiveTo)}` : " – Current"}
+                        </td>
+                        <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3" }}>
+                          {eligibleBranches.length ? eligibleBranches.join(", ") : "No active branch memberships"}
+                        </td>
+                        <td style={{ padding: 10, borderBottom: "1px solid #f1e7d3" }}>
+                          {!employeeActive ? (
+                            <span style={{ color: "#92400e", fontSize: 12 }}>Employee inactive or deleted</span>
+                          ) : !eligibleHere ? (
+                            <span style={{ color: "#92400e", fontSize: 12 }}>Switch to an eligible branch</span>
+                          ) : confirming ? (
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                disabled={assignLegacyMutation.isPending}
+                                onClick={() => {
+                                  setAssignmentError("");
+                                  assignLegacyMutation.mutate(item.id);
+                                }}
+                              >
+                                {assignLegacyMutation.isPending ? "Assigning…" : "Confirm assignment"}
+                              </button>
+                              <button type="button" onClick={() => setConfirmAssignmentId(null)}>Cancel</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setConfirmAssignmentId(item.id)}>
+                              Assign to this branch
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {assignmentError && <p role="alert" style={{ color: "#991b1b", marginBottom: 0 }}>{assignmentError}</p>}
+          <p style={{ ...mutedStyle, fontSize: 12, marginBottom: 0 }}>
+            Assignment moves the historical record to the selected branch; it does not copy it to other branches. Review the employee’s intended salary arrangement before confirming.
+          </p>
+        </section>
+      )}
 
       {formOpen && canManage && (
         <div style={cardStyle}>

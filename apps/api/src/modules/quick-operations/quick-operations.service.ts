@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { prisma } from "../../lib/prisma.js";
 import { requireReason } from "../../lib/reason.js";
 import { hasPermission } from "../permissions/permissions.service.js";
 import {
@@ -107,6 +108,7 @@ export async function executeQuickOperation(
         parsed.orderId,
         context.businessId,
         context.branchId,
+        context.userId,
       );
 
       if (!currentOrder) {
@@ -166,6 +168,8 @@ export async function executeQuickOperation(
         context.businessId,
         context.branchId,
         parsed.customerId,
+        context.userId,
+        prisma,
       );
 
       await recordAuditEvent({
@@ -197,6 +201,8 @@ export async function executeQuickOperation(
       const result = await transferCustomer(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
         parsed.targetCustomerId,
       );
 
@@ -205,6 +211,7 @@ export async function executeQuickOperation(
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: context.businessId,
+        branchId: context.branchId,
         actorUserId: context.userId,
         correlationId: context.correlationId ?? null,
         metadata: {
@@ -232,6 +239,8 @@ export async function executeQuickOperation(
       const result = await mergeCustomer(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
         parsed.targetCustomerId,
       );
 
@@ -240,6 +249,7 @@ export async function executeQuickOperation(
         entityType: "Customer",
         entityId: result.customer.id,
         businessId: context.businessId,
+        branchId: context.branchId,
         actorUserId: context.userId,
         correlationId: context.correlationId ?? null,
         metadata: {
@@ -337,6 +347,7 @@ export async function executeQuickOperation(
         parsed.orderId,
         context.businessId,
         context.branchId,
+        context.userId,
       );
 
       if (!result) {
@@ -372,6 +383,8 @@ export async function executeQuickOperation(
       const result = await getCustomerForBusiness(
         parsed.customerId,
         context.businessId,
+        context.branchId,
+        context.userId,
       );
 
       if (!result) {
@@ -589,6 +602,7 @@ export async function executeQuickOperation(
         {
           businessId: context.businessId,
           branchId: context.branchId,
+          userId: context.userId,
         },
         {
           inventoryItemId: parsed.inventoryItemId,

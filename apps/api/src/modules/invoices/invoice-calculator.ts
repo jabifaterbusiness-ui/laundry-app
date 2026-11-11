@@ -3,7 +3,7 @@ export interface PriceLine { id: string; amount: number }
 export interface PriceAdjustment { id: string; name: string; percentage: number; scope: AdjustmentScope; itemIds?: string[] }
 export interface TaxRule { id: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number; treatment: "ADDITIVE" | "WITHHOLDING"; enabled: boolean; allowWithOtherTaxes: boolean }
 export interface AppliedAdjustment { id: string; name: string; percentage: number; amount: number; scope: AdjustmentScope; itemIds?: string[]; itemIndexes?: number[] }
-export interface AppliedTax { id: string; name: string; kind: TaxRule["kind"]; value: number; treatment: TaxRule["treatment"]; amount: number }
+export interface AppliedTax { id: string; name: string; kind: TaxRule["kind"]; value: number; treatment: TaxRule["treatment"]; amount: number; allowWithOtherTaxes: boolean }
 export interface InvoiceCalculation {
   subtotal: number; adjustedSubtotal: number; adjustmentTotal: number; taxableBase: number;
   additiveTaxTotal: number; withholdingTaxTotal: number; totalAmount: number;
@@ -79,7 +79,7 @@ export function calculateInvoice(lines: PriceLine[], adjustments: PriceAdjustmen
     if (!tax.id || !tax.name.trim()) throw new Error("Every tax requires an ID and name");
     if (!Number.isFinite(tax.value) || tax.value < 0 || (tax.kind === "PERCENTAGE" && tax.value > 1000)) throw new Error(`Tax "${tax.name}" has an invalid value`);
     const amount = tax.kind === "PERCENTAGE" ? roundNaira(adjustedSubtotal * tax.value / 100) : roundNaira(tax.value);
-    return { id: tax.id, name: tax.name, kind: tax.kind, value: tax.value, treatment: tax.treatment, amount };
+    return { id: tax.id, name: tax.name, kind: tax.kind, value: tax.value, treatment: tax.treatment, amount, allowWithOtherTaxes: tax.allowWithOtherTaxes };
   });
   const additiveTaxTotal = appliedTaxes.filter((x) => x.treatment === "ADDITIVE").reduce((sum, x) => sum + x.amount, 0);
   const withholdingTaxTotal = appliedTaxes.filter((x) => x.treatment === "WITHHOLDING").reduce((sum, x) => sum + x.amount, 0);

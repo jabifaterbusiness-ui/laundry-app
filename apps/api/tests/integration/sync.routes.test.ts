@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -41,13 +42,20 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     branch: {
       findFirst: vi.fn(),
     },
     user: {
       findFirst: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }),
     },
     userBranch: {
       findUnique: vi.fn(),
@@ -92,6 +100,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -196,6 +205,7 @@ const operationFixture = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, deletedAt: null } as never);
   mockTransaction();
 
   vi.mocked(prisma.userBranch.findUnique).mockResolvedValue({

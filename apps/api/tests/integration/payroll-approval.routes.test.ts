@@ -12,6 +12,8 @@ vi.mock("../../src/modules/auth/sensitive-authorization.service.js", () => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "platform-config",
@@ -91,6 +93,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+    sid: "session-test",
       email: `${userId}@example.com`,
       role: securityRole,
       securityRole,

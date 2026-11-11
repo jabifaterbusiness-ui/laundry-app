@@ -1,13 +1,32 @@
 
-import type {
-  PayrollPaymentStatus,
-  Prisma,
-} from "@prisma/client";
+import { Prisma, type PayrollPaymentStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { requireReason } from "../../lib/reason.js";
 import { AppError } from "../../middleware/error-handler.js";
+
+async function runSerializableTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034";
+
+      if (!retryable || attempt === 2) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Payroll payment transaction exhausted retries");
+}
 
 export interface CreatePayrollPaymentData {
   businessId: string;
@@ -118,7 +137,7 @@ async function updatePayrollPeriodPaymentStatus(
 export async function createPayrollPayment(
   data: CreatePayrollPaymentData,
 ) {
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await runSerializableTransaction(async (tx) => {
     const record = await tx.payrollRecord.findFirst({
       where: {
         id: data.payrollRecordId,
@@ -247,7 +266,7 @@ export async function voidPayrollPayment(
 ) {
   const reason = requireReason(rawReason);
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await runSerializableTransaction(async (tx) => {
     const payment = await tx.payrollPayment.findFirst({
       where: {
         id,

@@ -33,7 +33,7 @@ export async function getAccount(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const { id: customerId } = customerIdParamSchema.parse(req.params);
 
-  const account = await getCustomerAccount(customerId, businessId);
+  const account = await getCustomerAccount(customerId, businessId, requireBranchId(req), req.user!.id);
 
   res.status(200).json(account);
 }
@@ -48,6 +48,7 @@ export async function fundAccount(req: Request, res: Response) {
     customerId,
     businessId,
     branchId,
+    userId: req.user!.id,
     amount: input.amount,
     ...(input.note !== undefined && {
       note: input.note,

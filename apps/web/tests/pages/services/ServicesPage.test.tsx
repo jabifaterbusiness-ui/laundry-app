@@ -6,6 +6,7 @@ import { useAuthStore } from "../../../src/state/auth-store.js";
 
 const apiMocks = vi.hoisted(() => ({
   listServices: vi.fn(),
+  listPricingRules: vi.fn(),
   createService: vi.fn(),
   updateService: vi.fn(),
   setServiceActive: vi.fn(),
@@ -34,6 +35,17 @@ describe("ServicesPage", () => {
 
     useAuthStore.setState({
       accessToken: "test-token",
+      activeBranchId: "branch-1",
+    });
+
+    apiMocks.listPricingRules.mockResolvedValue({
+      adjustments: [],
+      taxes: [],
+      pagination: {
+        pageSize: 50,
+        adjustments: { page: 1, total: 0, totalPages: 1 },
+        taxes: { page: 1, total: 0, totalPages: 1 },
+      },
     });
 
     apiMocks.listServices.mockResolvedValue({
@@ -94,6 +106,46 @@ describe("ServicesPage", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
+  it("paginates large discount and tax rule lists independently", async () => {
+    apiMocks.listPricingRules.mockImplementation(async (
+      _auth,
+      _customerId,
+      _purpose,
+      pagination,
+    ) => ({
+      adjustments: [],
+      taxes: [],
+      pagination: {
+        pageSize: 50,
+        adjustments: {
+          page: pagination?.adjustmentPage ?? 1,
+          total: 75,
+          totalPages: 2,
+        },
+        taxes: {
+          page: pagination?.taxPage ?? 1,
+          total: 0,
+          totalPages: 1,
+        },
+      },
+    }));
+
+    renderPage();
+
+    expect(await screen.findByText(/Page 1 of 2/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Next" })[0]!);
+
+    await waitFor(() => {
+      expect(apiMocks.listPricingRules).toHaveBeenLastCalledWith(
+        { accessToken: "test-token" },
+        undefined,
+        "management",
+        { adjustmentPage: 2, taxPage: 1, pageSize: 50 },
+      );
+    });
+    expect(await screen.findByText(/Page 2 of 2/)).toBeInTheDocument();
+  });
+
   it("creates a new service", async () => {
     renderPage();
 
@@ -120,7 +172,7 @@ describe("ServicesPage", () => {
           pieces: 1,
           unitPrice: 1500,
         },
-        { accessToken: "test-token" },
+        { accessToken: "test-token", branchId: "branch-1" },
       );
     });
   });

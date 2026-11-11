@@ -8,6 +8,8 @@ import {
   normalizePhone,
   updateCustomerSchema,
   changeCustomerStatusSchema,
+  legacyCustomerReviewQuerySchema,
+  assignLegacyCustomerOwnerSchema,
 } from "./customers.validation.js";
 import {
   createCustomer,
@@ -16,6 +18,8 @@ import {
   listCustomers,
   setCustomerLifecycleStatus,
   updateCustomer,
+  listUnassignedLegacyCustomers,
+  assignLegacyCustomerOwnerBranch,
 } from "./customers.service.js";
 
 /**
@@ -24,6 +28,11 @@ import {
  * req.query, or req.params. This is the enforcement point for the
  * LOCKED tenant-isolation decision at the Customers module boundary.
  */
+function requireBranchId(req: Request): string {
+  if (!req.branchId) throw new AppError("A valid branch context is required", 400);
+  return req.branchId;
+}
+
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) {
     throw new AppError("This action requires an account scoped to a business", 403);
@@ -33,11 +42,12 @@ function requireBusinessId(req: Request): string {
 
 export async function create(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const input = createCustomerSchema.parse(req.body);
   const normalizedPhone = normalizePhone(input.phone);
 
   if (!input.confirmDuplicate) {
-    const duplicates = await findPossibleDuplicates(businessId, normalizedPhone);
+    const duplicates = await findPossibleDuplicates(businessId, branchId, req.user!.id, normalizedPhone);
     if (duplicates.length > 0) {
       res.status(409).json({
         error: {
@@ -51,6 +61,7 @@ export async function create(req: Request, res: Response) {
 
   const customer = await createCustomer({
   businessId,
+  branchId,
   name: input.name,
   phone: normalizedPhone,
   ...(input.email !== undefined && { email: input.email }),
@@ -66,6 +77,7 @@ export async function create(req: Request, res: Response) {
     entityId: customer.id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: { name: customer.name },
   });
@@ -75,10 +87,13 @@ export async function create(req: Request, res: Response) {
 
 export async function list(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const query = listCustomersQuerySchema.parse(req.query);
 
   const result = await listCustomers({
   businessId,
+  branchId,
+  userId: req.user!.id,
   status: query.status,
   page: query.page,
   pageSize: query.pageSize,
@@ -89,9 +104,10 @@ export async function list(req: Request, res: Response) {
 
 export async function getOne(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = customerIdParamSchema.parse(req.params);
 
-  const customer = await getCustomerForBusiness(id, businessId);
+  const customer = await getCustomerForBusiness(id, businessId, branchId, req.user!.id);
   if (!customer) {
     throw new AppError("Customer not found", 404);
   }
@@ -101,6 +117,7 @@ export async function getOne(req: Request, res: Response) {
 
 export async function update(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = customerIdParamSchema.parse(req.params);
   const { confirmDuplicate, ...fields } = updateCustomerSchema.parse(req.body);
 
@@ -113,7 +130,7 @@ export async function update(req: Request, res: Response) {
   // 409 the update is not performed and no audit event is written,
   // since nothing actually changed yet.
   if (normalizedPhone !== undefined && !confirmDuplicate) {
-    const duplicates = await findPossibleDuplicates(businessId, normalizedPhone, id);
+    const duplicates = await findPossibleDuplicates(businessId, branchId, req.user!.id, normalizedPhone, id);
     if (duplicates.length > 0) {
       res.status(409).json({
         error: {
@@ -133,12 +150,12 @@ const patch = {
   ...(normalizedPhone !== undefined && { phone: normalizedPhone }),
 };
 
-const existingCustomer = await getCustomerForBusiness(id, businessId);
+const existingCustomer = await getCustomerForBusiness(id, businessId, branchId, req.user!.id);
 if (!existingCustomer) {
   throw new AppError("Customer not found", 404);
 }
 
-const customer = await updateCustomer(id, businessId, patch);
+const customer = await updateCustomer(id, businessId, branchId, req.user!.id, patch);
 
 const before: Record<string, unknown> = {};
 const after: Record<string, unknown> = {};
@@ -159,6 +176,7 @@ for (const field of Object.keys(patch) as Array<keyof typeof patch>) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       changedFields: Object.keys(after),
@@ -172,12 +190,15 @@ for (const field of Object.keys(patch) as Array<keyof typeof patch>) {
 
 export async function changeStatus(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
   const { id } = customerIdParamSchema.parse(req.params);
   const input = changeCustomerStatusSchema.parse(req.body);
 
   const result = await setCustomerLifecycleStatus(
     id,
     businessId,
+    branchId,
+    req.user!.id,
     input.status,
     input.reason,
     req.user!.id,
@@ -189,6 +210,7 @@ export async function changeStatus(req: Request, res: Response) {
     entityId: id,
     businessId,
     actorUserId: req.user!.id,
+    branchId,
     correlationId: req.correlationId ?? null,
     metadata: {
       previousStatus: result.previousStatus,
@@ -198,4 +220,49 @@ export async function changeStatus(req: Request, res: Response) {
   });
 
   res.status(200).json(result.customer);
+}
+
+function requireBusinessOwner(req: Request): string {
+  const businessId = requireBusinessId(req);
+  if (req.user?.securityRole !== "BUSINESS_OWNER") {
+    throw new AppError("Only a Business Owner can review and assign legacy customer ownership", 403);
+  }
+  return businessId;
+}
+
+export async function listLegacyUnassigned(req: Request, res: Response) {
+  const businessId = requireBusinessOwner(req);
+  const query = legacyCustomerReviewQuerySchema.parse(req.query);
+  const result = await listUnassignedLegacyCustomers({
+    businessId,
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.search !== undefined ? { search: query.search } : {}),
+  });
+  res.status(200).json(result);
+}
+
+export async function assignLegacyOwnerBranch(req: Request, res: Response) {
+  const businessId = requireBusinessOwner(req);
+  const { id } = customerIdParamSchema.parse(req.params);
+  const input = assignLegacyCustomerOwnerSchema.parse(req.body);
+  const customer = await assignLegacyCustomerOwnerBranch({
+    customerId: id,
+    businessId,
+    branchId: input.branchId,
+  });
+  await recordAuditEvent({
+    action: "customer.legacy_owner_assigned",
+    entityType: "Customer",
+    entityId: customer.id,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      previousOwnerBranchId: null,
+      ownerBranchId: customer.ownerBranchId,
+      ownerBranchName: customer.ownerBranch?.name ?? null,
+    },
+  });
+  res.status(200).json(customer);
 }

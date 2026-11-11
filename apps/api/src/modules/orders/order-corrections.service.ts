@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { calculateInvoice } from "../invoices/invoice-calculator.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 const HISTORY_RETENTION_DAYS = 60;
 
@@ -325,12 +326,23 @@ export async function editOrderWithCorrection(params: {
       ),
     ];
 
+    const serviceScope = await getBranchResourceScope({
+      businessId: params.businessId,
+      branchId: params.branchId,
+      userId: params.actorUserId,
+      resourceType: "SERVICES",
+    }, tx);
     const services = await tx.service.findMany({
       where: {
         id: {
           in: serviceIds,
         },
         businessId: params.businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+          { id: { in: serviceScope.resourceIds } },
+        ],
       },
       select: {
         id: true,
@@ -352,11 +364,22 @@ export async function editOrderWithCorrection(params: {
       services.map((service) => [service.id, service]),
     );
 
+    const pricingScope = await getBranchResourceScope({
+      businessId: params.businessId,
+      branchId: params.branchId,
+      userId: params.actorUserId,
+      resourceType: "CUSTOMER_PRICING",
+    }, tx);
     const customerPrices = await tx.customerServicePrice.findMany({
       where: {
         businessId: params.businessId,
         customerId: current.customerId,
         serviceId: { in: serviceIds },
+        OR: [
+          { branchId: null },
+          { branchId: { in: pricingScope.ownerBranchIds } },
+          { id: { in: pricingScope.resourceIds } },
+        ],
       },
       select: { serviceId: true, unitPrice: true },
     });

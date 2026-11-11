@@ -6,6 +6,8 @@ export type CustomerLifecycleStatus =
 
 export interface Customer {
   id: string;
+  ownerBranchId?: string | null;
+  ownerBranch?: { id: string; name: string } | null;
   name: string;
   phone: string;
   email: string | null;

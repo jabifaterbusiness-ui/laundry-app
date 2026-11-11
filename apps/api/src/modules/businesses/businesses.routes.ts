@@ -11,6 +11,8 @@ import {
   removeLogo,
   updateBranding,
   uploadLogo,
+  getSecuritySettings,
+  updateSecuritySettings,
 } from "./businesses.controller.js";
 
 export const businessesRouter = Router();
@@ -30,6 +32,18 @@ businessesRouter.patch(
   "/branding",
   requirePermission("business.update"),
   asyncHandler(updateBranding),
+);
+
+businessesRouter.get(
+  "/security-settings",
+  requirePermission("business.view"),
+  asyncHandler(getSecuritySettings),
+);
+
+businessesRouter.patch(
+  "/security-settings",
+  requirePermission("business.update"),
+  asyncHandler(updateSecuritySettings),
 );
 
 businessesRouter.get(

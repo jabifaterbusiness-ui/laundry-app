@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -42,6 +44,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -49,15 +52,22 @@ vi.mock("../../src/lib/prisma.js", () => ({
     customerStatusHistory: {
       create: vi.fn(),
     },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     customerAccount: {
       findFirst: vi.fn(),
-      upsert: vi.fn(),
+      create: vi.fn(),
     },
     customerAccountTransaction: {
       create: vi.fn(),
     },
     userBranch: {
       findUnique: vi.fn(),
+    },
+    branch: {
+      findFirst: vi.fn(),
     },
     sensitiveAuthorization: {
       findUnique: vi.fn(),
@@ -84,11 +94,13 @@ const findPermission = vi.mocked(prisma.permission.findUnique);
 const findRoleOverride = vi.mocked(prisma.businessRolePermission.findUnique);
 const findUserOverride = vi.mocked(prisma.userPermissionOverride.findUnique);
 const customerAccountFindFirst = vi.mocked(prisma.customerAccount.findFirst);
-const customerAccountUpsert = vi.mocked(prisma.customerAccount.upsert);
+const customerAccountCreate = vi.mocked(prisma.customerAccount.create);
 const customerAccountTransactionCreate = vi.mocked(
   prisma.customerAccountTransaction.create,
 );
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const branchFindFirst = vi.mocked(prisma.branch.findFirst);
+const customerFindFirstOrThrow = vi.mocked(prisma.customer.findFirstOrThrow);
 const sensitiveAuthorizationFindUnique = vi.mocked(
   prisma.sensitiveAuthorization.findUnique,
 );
@@ -99,7 +111,8 @@ vi.mocked(prisma.$transaction).mockImplementation(
 
 function tokenFor(role: string, businessId: string | null, userId = "user-1") {
   return jwt.sign(
-    { sub: userId, email: "user@example.com", role, securityRole: role, businessId },
+    { sub: userId,
+    sid: "session-test", email: "user@example.com", role, securityRole: role, businessId },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "15m" },
   );
@@ -135,14 +148,11 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
 
-  userBranchFindUnique.mockResolvedValue({
-    userId: "user-1",
-    branchId: "branch-A",
-    branch: {
-      id: "branch-A",
-      businessId: "biz-A",
-    },
-  } as never);
+  userBranchFindUnique.mockImplementation((async ({ where }: any) => {
+    const { userId, branchId } = where.userId_branchId;
+    const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
+    return { userId, branchId, branch: { id: branchId, businessId } } as never;
+  }) as never);
 
   sensitiveAuthorizationFindUnique.mockResolvedValue({
     id: "sensitive-auth-1",
@@ -153,6 +163,65 @@ beforeEach(() => {
     revokedAt: null,
     createdAt: new Date(),
   } as never);
+});
+
+describe("Customers routes - legacy ownership review", () => {
+  const LEGACY_CUSTOMER_ID = "11111111-1111-4111-8111-111111111111";
+  const TARGET_BRANCH_ID = "22222222-2222-4222-8222-222222222222";
+
+  it("does not allow branch staff to inspect unassigned legacy customers", async () => {
+    const response = await request(app)
+      .get("/api/v1/customers/legacy-unassigned")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", "branch-A");
+
+    expect(response.status).toBe(403);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("allows a Business Owner to review unassigned customers in their business", async () => {
+    findMany.mockResolvedValue([{ id: LEGACY_CUSTOMER_ID, name: "Legacy Customer" }] as never);
+    count.mockResolvedValue(1);
+
+    const response = await request(app)
+      .get("/api/v1/customers/legacy-unassigned")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A");
+
+    expect(response.status).toBe(200);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", ownerBranchId: null },
+    }));
+  });
+
+  it("assigns an unassigned customer to an active branch and audits the owner decision", async () => {
+    branchFindFirst.mockResolvedValue({ id: TARGET_BRANCH_ID } as never);
+    findFirst.mockResolvedValue({ id: LEGACY_CUSTOMER_ID } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+    customerFindFirstOrThrow.mockResolvedValue({
+      id: LEGACY_CUSTOMER_ID,
+      ownerBranchId: TARGET_BRANCH_ID,
+      ownerBranch: { id: TARGET_BRANCH_ID, name: "Branch B" },
+    } as never);
+
+    const response = await request(app)
+      .post(`/api/v1/customers/${LEGACY_CUSTOMER_ID}/assign-owner-branch`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .set("x-sensitive-authorization", "test-sensitive-token")
+      .send({ branchId: TARGET_BRANCH_ID });
+
+    expect(response.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: LEGACY_CUSTOMER_ID, businessId: "biz-A", ownerBranchId: null },
+      data: { ownerBranchId: TARGET_BRANCH_ID },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "customer.legacy_owner_assigned",
+      entityId: LEGACY_CUSTOMER_ID,
+      businessId: "biz-A",
+    }));
+  });
 });
 
 describe("Customers routes - authentication", () => {
@@ -174,10 +243,18 @@ describe("Customers routes - tenant isolation end-to-end", () => {
     findMany.mockResolvedValue([{ id: "cust-1", businessId: "biz-A", name: "Jane" }] as never);
     count.mockResolvedValue(1);
 
-    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`);
+    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A").set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      }),
+    }));
   });
 
   it("business B cannot access business A's customer by id (404, not leaked)", async () => {
@@ -190,11 +267,15 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     const res = await request(app)
       .get("/api/v1/customers/11111111-1111-1111-1111-111111111111")
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B");
 
     expect(res.status).toBe(404);
     expect(findFirst).toHaveBeenCalledWith({
-      where: { id: "11111111-1111-1111-1111-111111111111", businessId: "biz-B" },
+      where: expect.objectContaining({
+        id: "11111111-1111-1111-1111-111111111111",
+        businessId: "biz-B",
+      }),
+      include: { ownerBranch: { select: { id: true, name: true } } },
     });
   });
 
@@ -204,10 +285,10 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", businessId: "biz-B" });
 
-    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ businessId: "biz-A" }) });
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ businessId: "biz-A", ownerBranchId: "branch-A" }) });
   });
 
   it("security: a client-supplied businessId in the query string does not change which business is queried", async () => {
@@ -216,7 +297,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
 
     await request(app)
       .get("/api/v1/customers?businessId=biz-B")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
   });
@@ -230,7 +311,7 @@ describe("Customers routes - permission enforcement", () => {
 
     const response = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Blocked Customer" });
 
     expect(response.status).toBe(403);
@@ -247,7 +328,7 @@ describe("Customers routes - authorization matrix", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567" });
 
     expect(res.status).toBe(201);
@@ -259,14 +340,14 @@ describe("Customers routes - authorization matrix", () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
 
-    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${STAFF_A}`);
+    const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
     expect(res.status).toBe(200);
   });
 
   it("STAFF cannot activate a customer", async () => {
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/activate")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -274,7 +355,7 @@ describe("Customers routes - authorization matrix", () => {
   it("STAFF cannot deactivate a customer", async () => {
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/deactivate")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
   });
@@ -283,22 +364,22 @@ describe("Customers routes - authorization matrix", () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1", isActive: false } as never);
+    findFirst.mockResolvedValue({ id: "cust-1", ownerBranchId: "branch-A", isActive: false } as never);
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/deactivate")
-      .set("Authorization", `Bearer ${MANAGER_A}`);
+      .set("Authorization", `Bearer ${MANAGER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
   });
 
   it("BUSINESS_OWNER can activate a customer", async () => {
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1", isActive: true } as never);
+    findFirst.mockResolvedValue({ id: "cust-1", ownerBranchId: "branch-A", isActive: true } as never);
 
     const res = await request(app)
       .post("/api/v1/customers/11111111-1111-1111-1111-111111111111/activate")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
   });
@@ -308,7 +389,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with no name (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ phone: "555-123-4567" });
 
     expect(res.status).toBe(422);
@@ -317,7 +398,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with an invalid phone (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "abc" });
 
     expect(res.status).toBe(422);
@@ -326,7 +407,7 @@ describe("Customers routes - validation", () => {
   it("rejects a create with an invalid email (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", email: "not-an-email" });
 
     expect(res.status).toBe(422);
@@ -335,7 +416,7 @@ describe("Customers routes - validation", () => {
   it("rejects oversized notes (422)", async () => {
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane", phone: "555-123-4567", notes: "a".repeat(2001) });
 
     expect(res.status).toBe(422);
@@ -348,7 +429,7 @@ describe("Customers routes - duplicate handling", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane Doe", phone: "555-123-4567" });
 
     expect(res.status).toBe(409);
@@ -362,7 +443,7 @@ describe("Customers routes - duplicate handling", () => {
 
     const res = await request(app)
       .post("/api/v1/customers")
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .send({ name: "Jane Doe", phone: "555-123-4567", confirmDuplicate: true });
 
     expect(res.status).toBe(201);
@@ -375,11 +456,11 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("updating phone to a unique number succeeds", async () => {
     findMany.mockResolvedValue([]); // no duplicates in biz-A
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5559998888" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5559998888" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-999-8888" });
 
@@ -392,7 +473,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -407,11 +488,11 @@ describe("Customers routes - update duplicate-phone handling", () => {
     // its own current row has this exact phone number.
     findMany.mockResolvedValue([]);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -424,11 +505,11 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("confirmDuplicate: true allows the update despite a match", async () => {
     findMany.mockResolvedValue([{ id: "other-cust", name: "Other Person", phone: "5551234567" }] as never);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
@@ -439,7 +520,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("security: duplicate matches are scoped to the caller's own business, never another business's customers", async () => {
     findMany.mockResolvedValue([]);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
     sensitiveAuthorizationFindUnique.mockResolvedValue({
       id: "sensitive-auth-b",
       tokenHash: "test-token-hash",
@@ -452,7 +533,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     const res = await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_B}`)
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -464,7 +545,7 @@ describe("Customers routes - update duplicate-phone handling", () => {
 
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567" });
 
@@ -474,11 +555,11 @@ describe("Customers routes - update duplicate-phone handling", () => {
   it("a successful confirmed update writes a customer.updated audit event", async () => {
     findMany.mockResolvedValue([{ id: "other-cust", name: "Other Person", phone: "5551234567" }] as never);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: CUSTOMER_ID, phone: "5551234567" } as never);
+    findFirst.mockResolvedValue({ id: CUSTOMER_ID, ownerBranchId: "branch-A", phone: "5551234567" } as never);
 
     await request(app)
       .patch(`/api/v1/customers/${CUSTOMER_ID}`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ phone: "555-123-4567", confirmDuplicate: true });
 
@@ -491,12 +572,13 @@ describe("Customers routes - customer account / POA", () => {
   const CUSTOMER_ID = "11111111-1111-1111-1111-111111111111";
   const BRANCH_A = "branch-A";
 
-  it("views a customer account without requiring branch context", async () => {
+  it("views a customer account within the active branch", async () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
 
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
     customerAccountFindFirst.mockResolvedValue({
@@ -512,7 +594,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body.balance).toBe(8000);
@@ -521,6 +603,7 @@ describe("Customers routes - customer account / POA", () => {
       where: {
         customerId: CUSTOMER_ID,
         businessId: "biz-A",
+        branchId: null,
       },
       include: {
         transactions: {
@@ -530,7 +613,47 @@ describe("Customers routes - customer account / POA", () => {
         },
       },
     });
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
+  });
+
+  it("shows the same business-wide account and complete ledger from another branch", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+      ownerBranchId: "branch-A",
+    } as never);
+    customerAccountFindFirst.mockResolvedValue({
+      id: "account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      branchId: null,
+      transactions: [
+        { id: "tx-main", type: "CREDIT", amount: 10000, branchId: "branch-A" },
+        { id: "tx-second", type: "DEBIT", amount: 2500, branchId: "branch-B" },
+      ],
+    } as never);
+
+    const res = await request(app)
+      .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B");
+
+    expect(res.status).toBe(200);
+    expect(res.body.balance).toBe(7500);
+    expect(res.body.transactions).toHaveLength(2);
+    expect(customerAccountFindFirst).toHaveBeenCalledWith({
+      where: {
+        customerId: CUSTOMER_ID,
+        businessId: "biz-A",
+        branchId: null,
+      },
+      include: {
+        transactions: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
   });
 
   it("returns a zero balance when the customer has no account yet", async () => {
@@ -539,19 +662,21 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
     customerAccountFindFirst.mockResolvedValue(null);
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       id: null,
       customerId: CUSTOMER_ID,
       businessId: "biz-A",
+      branchId: null,
       balance: 0,
       transactions: [],
     });
@@ -564,7 +689,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${OWNER_B}`);
+      .set("Authorization", `Bearer ${OWNER_B}`).set("X-Branch-Id", "branch-B");
 
     expect(res.status).toBe(404);
     expect(customerAccountFindFirst).not.toHaveBeenCalled();
@@ -575,7 +700,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .get(`/api/v1/customers/${CUSTOMER_ID}/account`)
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
     expect(customerAccountFindFirst).not.toHaveBeenCalled();
@@ -586,14 +711,14 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("Authorization", `Bearer ${STAFF_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(userBranchFindUnique).not.toHaveBeenCalled();
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(userBranchFindUnique).toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 
@@ -608,7 +733,7 @@ describe("Customers routes - customer account / POA", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain("Missing X-Branch-Id");
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("requires sensitive authorization before funding an account", async () => {
@@ -616,13 +741,13 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
     expect(res.body.error.message).toContain("Sensitive authorization is required");
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("rejects funding when the selected branch is not accessible", async () => {
@@ -631,13 +756,13 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
   });
 
   it("rejects funding through a branch belonging to another business", async () => {
@@ -654,13 +779,87 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
+      .set("X-Branch-Id", "branch-B")
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 5000 });
+
+    expect(res.status).toBe(403);
+    expect(customerAccountCreate).not.toHaveBeenCalled();
+  });
+
+  it("allows a shared customer account to be viewed but blocks funding through a READ-only customer share", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+      ownerBranchId: "branch-A",
+    } as never);
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([{
+      ownerBranchId: "branch-A",
+      resourceId: CUSTOMER_ID,
+      accessLevel: "READ",
+    }] as never);
+    vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", "branch-B")
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({ amount: 5000 });
 
     expect(res.status).toBe(403);
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
+    expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
+  });
+
+  it("uses an independent branch ledger when the customer sharing rule is SEPARATE", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findFirst.mockResolvedValue({
+      id: CUSTOMER_ID,
+      businessId: "biz-A",
+      ownerBranchId: "branch-A",
+    } as never);
+    vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([{
+      ownerBranchId: "branch-A",
+      resourceId: null,
+      accessLevel: "EDIT",
+    }] as never);
+    vi.mocked(prisma.branchResourceShare.findFirst).mockResolvedValue({
+      id: "customer-share-1",
+      accessLevel: "EDIT",
+      customerAccountMode: "SEPARATE",
+    } as never);
+    customerAccountFindFirst.mockResolvedValue(null);
+    customerAccountCreate.mockResolvedValue({
+      id: "branch-account-1",
+      customerId: CUSTOMER_ID,
+      businessId: "biz-A",
+      branchId: "branch-B",
+      transactions: [],
+    } as never);
+    customerAccountTransactionCreate.mockResolvedValue({
+      id: "tx-branch-1",
+      customerAccountId: "branch-account-1",
+      businessId: "biz-A",
+      branchId: "branch-B",
+      type: "CREDIT",
+      amount: 2500,
+    } as never);
+
+    const res = await request(app)
+      .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-B")
+      .set("X-Sensitive-Authorization", "a".repeat(64))
+      .send({ amount: 2500 });
+
+    expect(res.status).toBe(201);
+    expect(customerAccountCreate).toHaveBeenCalledWith({
+      data: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: "branch-B" },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
   });
 
   it("funds the customer account with a positive whole-naira CREDIT", async () => {
@@ -669,12 +868,15 @@ describe("Customers routes - customer account / POA", () => {
     findFirst.mockResolvedValue({
       id: CUSTOMER_ID,
       businessId: "biz-A",
+      ownerBranchId: "branch-A",
     } as never);
 
-    customerAccountUpsert.mockResolvedValue({
+    customerAccountFindFirst.mockResolvedValue(null);
+    customerAccountCreate.mockResolvedValue({
       id: "account-1",
       customerId: CUSTOMER_ID,
       businessId: "biz-A",
+      branchId: null,
       transactions: [],
     } as never);
 
@@ -690,7 +892,7 @@ describe("Customers routes - customer account / POA", () => {
 
     const res = await request(app)
       .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
       .set("X-Branch-Id", BRANCH_A)
       .set("X-Sensitive-Authorization", "a".repeat(64))
       .send({
@@ -709,6 +911,14 @@ describe("Customers routes - customer account / POA", () => {
       note: "Customer POA",
     });
 
+    expect(customerAccountFindFirst).toHaveBeenCalledWith({
+      where: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: null },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
+    expect(customerAccountCreate).toHaveBeenCalledWith({
+      data: { businessId: "biz-A", customerId: CUSTOMER_ID, branchId: null },
+      include: { transactions: { orderBy: { createdAt: "asc" } } },
+    });
     expect(customerAccountTransactionCreate).toHaveBeenCalledWith({
       data: {
         businessId: "biz-A",
@@ -749,7 +959,7 @@ describe("Customers routes - customer account / POA", () => {
     ]) {
       const res = await request(app)
         .post(`/api/v1/customers/${CUSTOMER_ID}/account/fund`)
-        .set("Authorization", `Bearer ${OWNER_A}`)
+        .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A")
         .set("X-Branch-Id", BRANCH_A)
         .set("X-Sensitive-Authorization", "a".repeat(64))
         .send(body);
@@ -757,7 +967,7 @@ describe("Customers routes - customer account / POA", () => {
       expect(res.status).toBe(422);
     }
 
-    expect(customerAccountUpsert).not.toHaveBeenCalled();
+    expect(customerAccountCreate).not.toHaveBeenCalled();
     expect(customerAccountTransactionCreate).not.toHaveBeenCalled();
   });
 });
@@ -769,7 +979,7 @@ describe("Customers routes - list search/pagination", () => {
 
     await request(app)
       .get("/api/v1/customers?search=Jane&page=2&pageSize=5")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A");
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({

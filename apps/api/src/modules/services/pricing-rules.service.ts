@@ -1,16 +1,160 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { assertBranchResourceWriteAccess, getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
-export async function listPricingRules(businessId: string) {
-  const [adjustments, taxes] = await Promise.all([
-    prisma.priceAdjustment.findMany({ where: { businessId }, include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } }, orderBy: { name: "asc" } }),
-    prisma.taxRule.findMany({ where: { businessId }, orderBy: { name: "asc" } }),
+export async function listPricingRules(
+  businessId: string,
+  branchId: string,
+  userId: string,
+  customerId?: string,
+  purpose: "order" | "management" = "management",
+  pagination: {
+    adjustmentPage?: number;
+    taxPage?: number;
+    pageSize?: number;
+  } = {},
+) {
+  const [discountScope, taxScope] = await Promise.all([
+    getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }),
+    getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" }),
   ]);
-  return { adjustments, taxes };
+
+  let applicableGroupIds: string[] = [];
+  if (customerId) {
+    const customerScope = await getBranchResourceScope({
+      businessId,
+      branchId,
+      userId,
+      resourceType: "CUSTOMERS",
+    });
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        businessId,
+        OR: [
+          { ownerBranchId: null },
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!customer) throw new AppError("Customer not found", 404);
+
+    const memberships = await prisma.customerGroupMember.findMany({
+      where: { businessId, customerId },
+      select: { groupId: true },
+    });
+    applicableGroupIds = memberships.map((membership) => membership.groupId);
+  }
+
+  const now = new Date();
+  const applicableTargets = [
+    { targetScope: "MANUAL" },
+    ...(customerId
+      ? [
+          { targetScope: "CUSTOMER", customerId },
+          ...(applicableGroupIds.length
+            ? [{ targetScope: "GROUP", groupId: { in: applicableGroupIds } }]
+            : []),
+          { targetScope: "ALL_CUSTOMERS" },
+        ]
+      : []),
+  ];
+
+  const pageSize = Math.min(Math.max(pagination.pageSize ?? 50, 1), 100);
+  const adjustmentPage = Math.max(pagination.adjustmentPage ?? 1, 1);
+  const taxPage = Math.max(pagination.taxPage ?? 1, 1);
+  const adjustmentWhere = {
+    businessId,
+    ...(purpose === "order" ? { isActive: true } : {}),
+    OR: [
+      { branchId: null },
+      { branchId: { in: discountScope.ownerBranchIds } },
+      { id: { in: discountScope.resourceIds } },
+    ],
+    ...(purpose === "order"
+      ? {
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            { OR: applicableTargets },
+          ],
+        }
+      : {}),
+  };
+  const taxWhere = {
+    businessId,
+    ...(purpose === "order" ? { isActive: true } : {}),
+    OR: [
+      { branchId: null },
+      { branchId: { in: taxScope.ownerBranchIds } },
+      { id: { in: taxScope.resourceIds } },
+    ],
+  };
+
+  if (purpose === "order") {
+    const [adjustments, taxes] = await Promise.all([
+      prisma.priceAdjustment.findMany({
+        where: adjustmentWhere,
+        include: {
+          customer: { select: { id: true, name: true } },
+          group: { select: { id: true, name: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.taxRule.findMany({
+        where: taxWhere,
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    return { adjustments, taxes };
+  }
+
+  const [adjustments, taxes, totalAdjustments, totalTaxes] = await Promise.all([
+    prisma.priceAdjustment.findMany({
+      where: adjustmentWhere,
+      include: {
+        customer: { select: { id: true, name: true } },
+        group: { select: { id: true, name: true } },
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (adjustmentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.taxRule.findMany({
+      where: taxWhere,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (taxPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.priceAdjustment.count({ where: adjustmentWhere }),
+    prisma.taxRule.count({ where: taxWhere }),
+  ]);
+
+  return {
+    adjustments,
+    taxes,
+    pagination: {
+      pageSize,
+      adjustments: {
+        page: adjustmentPage,
+        total: totalAdjustments,
+        totalPages: Math.max(1, Math.ceil(totalAdjustments / pageSize)),
+      },
+      taxes: {
+        page: taxPage,
+        total: totalTaxes,
+        totalPages: Math.max(1, Math.ceil(totalTaxes / pageSize)),
+      },
+    },
+  };
 }
 
 export async function createPriceAdjustment(input: {
   businessId: string;
+  branchId: string;
+  userId: string;
   name: string;
   percentage: number;
   targetScope?: "MANUAL" | "CUSTOMER" | "GROUP" | "ALL_CUSTOMERS";
@@ -22,6 +166,8 @@ export async function createPriceAdjustment(input: {
   excludedServiceIds?: string[];
 }) {
   const targetScope = input.targetScope ?? "MANUAL";
+  const customerScope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "CUSTOMERS" });
+  const serviceScope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "SERVICES" });
   if (!Number.isFinite(input.percentage) || input.percentage < -100 || input.percentage > 1000) {
     throw new AppError("Adjustment percentage must be between -100 and 1000", 422);
   }
@@ -52,13 +198,13 @@ export async function createPriceAdjustment(input: {
   const excludedServiceIds = [...new Set(input.excludedServiceIds ?? [])];
   const [customer, group, services] = await Promise.all([
     input.customerId
-      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId }, select: { id: true } })
+      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve(null),
     input.groupId
       ? prisma.customerGroup.findFirst({ where: { id: input.groupId, businessId: input.businessId }, select: { id: true } })
       : Promise.resolve(null),
     excludedServiceIds.length
-      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds } }, select: { id: true } })
+      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds }, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: serviceScope.ownerBranchIds } }, { id: { in: serviceScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve([]),
   ]);
   if (input.customerId && !customer) throw new AppError("Selected customer is unavailable", 404);
@@ -68,6 +214,7 @@ export async function createPriceAdjustment(input: {
     return await prisma.priceAdjustment.create({
       data: {
         businessId: input.businessId,
+        branchId: input.branchId,
         name: input.name,
         percentage: input.percentage,
         targetScope,
@@ -88,25 +235,37 @@ export async function createPriceAdjustment(input: {
   }
 }
 
-export async function setPriceAdjustmentActive(id: string, businessId: string, isActive: boolean) {
-  const result = await prisma.priceAdjustment.updateMany({
-    where: { id, businessId },
-    data: { isActive },
-  });
-  if (!result.count) throw new AppError("Price adjustment not found", 404);
-  return prisma.priceAdjustment.findFirst({
-    where: { id, businessId },
-    include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } },
-  });
+export async function setPriceAdjustmentActive(id: string, businessId: string, branchId: string, userId: string, isActive: boolean) {
+  return prisma.$transaction(async (tx) => {
+    const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
+    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    if (!existing) throw new AppError("Price adjustment not found", 404);
+    await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
+    const result = await tx.priceAdjustment.updateMany({
+      where: { id, businessId, branchId: existing.branchId },
+      data: { isActive },
+    });
+    if (!result.count) throw new AppError("Price adjustment not found", 404);
+    return tx.priceAdjustment.findFirst({
+      where: { id, businessId, branchId: existing.branchId },
+      include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } },
+    });
+  }, { isolationLevel: "Serializable" });
 }
 
-export async function deletePriceAdjustment(id: string, businessId: string) {
-  const result = await prisma.priceAdjustment.deleteMany({ where: { id, businessId } });
-  if (!result.count) throw new AppError("Price adjustment not found", 404);
+export async function deletePriceAdjustment(id: string, businessId: string, branchId: string, userId: string) {
+  await prisma.$transaction(async (tx) => {
+    const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
+    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    if (!existing) throw new AppError("Price adjustment not found", 404);
+    await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
+    const result = await tx.priceAdjustment.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
+    if (!result.count) throw new AppError("Price adjustment not found", 404);
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function createTaxRule(input: {
-  businessId: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
+  businessId: string; branchId: string; name: string; kind: "PERCENTAGE" | "FIXED"; value: number;
   treatment: "ADDITIVE" | "WITHHOLDING"; enabledByDefault: boolean; allowWithOtherTaxes: boolean;
 }) {
   if (!Number.isFinite(input.value) || input.value < 0 || (input.kind === "PERCENTAGE" && input.value > 1000)) {
@@ -122,7 +281,13 @@ export async function createTaxRule(input: {
   }
 }
 
-export async function deleteTaxRule(id: string, businessId: string) {
-  const result = await prisma.taxRule.deleteMany({ where: { id, businessId } });
-  if (!result.count) throw new AppError("Tax rule not found", 404);
+export async function deleteTaxRule(id: string, businessId: string, branchId: string, userId: string) {
+  await prisma.$transaction(async (tx) => {
+    const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" }, tx);
+    const existing = await tx.taxRule.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    if (!existing) throw new AppError("Tax rule not found", 404);
+    await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "TAX_RULES", ownerBranchId: existing.branchId, resourceId: id }, tx);
+    const result = await tx.taxRule.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
+    if (!result.count) throw new AppError("Tax rule not found", 404);
+  }, { isolationLevel: "Serializable" });
 }

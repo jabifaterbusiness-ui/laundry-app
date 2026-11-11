@@ -45,6 +45,8 @@ vi.mock("../../src/modules/reports/annual-report.service.js", () => ({
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
+    user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
       upsert: vi.fn().mockResolvedValue({
         id: "00000000-0000-4000-8000-000000000001",
@@ -82,6 +84,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       count: vi.fn(),
+    },
+    branchResourceShare: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     inventoryStock: {
       count: vi.fn(),
@@ -131,6 +136,7 @@ function tokenFor(
   return jwt.sign(
     {
       sub: userId,
+      sid: "session-test",
       email: "user@example.com",
       role,
       securityRole: role,
@@ -229,6 +235,7 @@ beforeEach(() => {
 
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
+  vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([] as never);
 });
 
 describe("Reports routes - authentication", () => {
@@ -289,10 +296,12 @@ describe("Reports routes - branch context", () => {
 });
 
 describe("Reports routes - annual report", () => {
-  it("BUSINESS_OWNER can access the business-wide annual report without branch context", async () => {
+  it("BUSINESS_OWNER can access the annual report for the active branch", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=2026")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(200);
     expect(res.body.period.year).toBe(2026);
@@ -301,17 +310,21 @@ describe("Reports routes - annual report", () => {
   });
 
   it("STAFF cannot access the annual report without reports.view permission", async () => {
+    allowBranch("user-staff-a", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=2026")
-      .set("Authorization", `Bearer ${STAFF_A}`);
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
   });
 
   it("rejects an invalid annual report year", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
     const res = await request(app)
       .get("/api/v1/reports/annual?year=abc")
-      .set("Authorization", `Bearer ${OWNER_A}`);
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
   });
@@ -462,10 +475,30 @@ describe("Reports routes - filtering and isolation", () => {
       }),
     );
 
+    expect(customerCount).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        isActive: true,
+        OR: [
+          { ownerBranchId: { in: [BRANCH_A] } },
+          { id: { in: [] } },
+        ],
+      },
+    });
+
     expect(inventoryMovementCount).toHaveBeenCalledWith({
       where: {
         businessId: "biz-A",
         branchId: BRANCH_A,
+        inventoryItem: {
+          is: {
+            OR: [
+              { ownerBranchId: null },
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
     });
   });
