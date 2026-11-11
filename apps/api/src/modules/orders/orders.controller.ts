@@ -141,6 +141,7 @@ export async function transfer(req: Request, res: Response) {
     id,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!previousOrder) {
@@ -202,7 +203,7 @@ export async function statusHistory(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const { id } = orderIdParamSchema.parse(req.params);
-  const order = await getOrderForBusiness(id, businessId, branchId);
+  const order = await getOrderForBusiness(id, businessId, branchId, req.user!.id);
   if (!order) throw new AppError("Order not found", 404);
 
   const entries = await prisma.auditLog.findMany({
