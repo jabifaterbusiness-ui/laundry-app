@@ -527,8 +527,34 @@ export async function retryWhatsAppDelivery(
       businessId,
       channel: "WHATSAPP",
       OR: [
-        { order: { is: { branchId } } },
-        { customer: { is: { businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } } },
+        {
+          order: {
+            is: {
+              branchId,
+              customer: {
+                is: {
+                  businessId,
+                  OR: [
+                    { ownerBranchId: { in: scope.ownerBranchIds } },
+                    { id: { in: scope.resourceIds } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          campaignId: { not: null },
+          customer: {
+            is: {
+              businessId,
+              OR: [
+                { ownerBranchId: { in: scope.ownerBranchIds } },
+                { id: { in: scope.resourceIds } },
+              ],
+            },
+          },
+        },
       ],
     },
     include: {
@@ -626,8 +652,34 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
     where: {
       businessId,
       OR: [
-        { order: { is: { branchId } } },
-        { customer: { is: { businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } } },
+        {
+          order: {
+            is: {
+              branchId,
+              customer: {
+                is: {
+                  businessId,
+                  OR: [
+                    { ownerBranchId: { in: scope.ownerBranchIds } },
+                    { id: { in: scope.resourceIds } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          campaignId: { not: null },
+          customer: {
+            is: {
+              businessId,
+              OR: [
+                { ownerBranchId: { in: scope.ownerBranchIds } },
+                { id: { in: scope.resourceIds } },
+              ],
+            },
+          },
+        },
       ],
     },
     select: {
