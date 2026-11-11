@@ -8,6 +8,8 @@ import {
   normalizePhone,
   updateCustomerSchema,
   changeCustomerStatusSchema,
+  legacyCustomerReviewQuerySchema,
+  assignLegacyCustomerOwnerSchema,
 } from "./customers.validation.js";
 import {
   createCustomer,
@@ -16,6 +18,8 @@ import {
   listCustomers,
   setCustomerLifecycleStatus,
   updateCustomer,
+  listUnassignedLegacyCustomers,
+  assignLegacyCustomerOwnerBranch,
 } from "./customers.service.js";
 
 /**
@@ -216,4 +220,49 @@ export async function changeStatus(req: Request, res: Response) {
   });
 
   res.status(200).json(result.customer);
+}
+
+function requireBusinessOwner(req: Request): string {
+  const businessId = requireBusinessId(req);
+  if (req.user?.securityRole !== "BUSINESS_OWNER") {
+    throw new AppError("Only a Business Owner can review and assign legacy customer ownership", 403);
+  }
+  return businessId;
+}
+
+export async function listLegacyUnassigned(req: Request, res: Response) {
+  const businessId = requireBusinessOwner(req);
+  const query = legacyCustomerReviewQuerySchema.parse(req.query);
+  const result = await listUnassignedLegacyCustomers({
+    businessId,
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.search !== undefined ? { search: query.search } : {}),
+  });
+  res.status(200).json(result);
+}
+
+export async function assignLegacyOwnerBranch(req: Request, res: Response) {
+  const businessId = requireBusinessOwner(req);
+  const { id } = customerIdParamSchema.parse(req.params);
+  const input = assignLegacyCustomerOwnerSchema.parse(req.body);
+  const customer = await assignLegacyCustomerOwnerBranch({
+    customerId: id,
+    businessId,
+    branchId: input.branchId,
+  });
+  await recordAuditEvent({
+    action: "customer.legacy_owner_assigned",
+    entityType: "Customer",
+    entityId: customer.id,
+    businessId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      previousOwnerBranchId: null,
+      ownerBranchId: customer.ownerBranchId,
+      ownerBranchName: customer.ownerBranch?.name ?? null,
+    },
+  });
+  res.status(200).json(customer);
 }
