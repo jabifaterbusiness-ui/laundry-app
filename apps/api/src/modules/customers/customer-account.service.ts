@@ -65,7 +65,6 @@ export async function getOrCreateCustomerAccount(
       id: customerId,
       businessId,
       OR: [
-        { ownerBranchId: null },
         { ownerBranchId: { in: customerScope.ownerBranchIds } },
         { id: { in: customerScope.resourceIds } },
       ],
@@ -143,7 +142,6 @@ export async function getCustomerAccount(
       id: customerId,
       businessId,
       OR: [
-        { ownerBranchId: null },
         { ownerBranchId: { in: customerScope.ownerBranchIds } },
         { id: { in: customerScope.resourceIds } },
       ],
