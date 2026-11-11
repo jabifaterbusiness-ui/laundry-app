@@ -177,13 +177,15 @@ describe("globalSearch", () => {
           AND: expect.arrayContaining([
             expect.objectContaining({
               OR: expect.arrayContaining([
-            expect.objectContaining({
-              customer: expect.objectContaining({
-                email: expect.objectContaining({
-                  contains: "aaron@example.com",
-                  mode: "insensitive",
+                expect.objectContaining({
+                  customer: expect.objectContaining({
+                    email: expect.objectContaining({
+                      contains: "aaron@example.com",
+                      mode: "insensitive",
+                    }),
+                  }),
                 }),
-              }),
+              ]),
             }),
           ]),
         }),
