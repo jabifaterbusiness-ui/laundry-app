@@ -13,7 +13,6 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
       id: customerId,
       businessId,
       OR: [
-        { ownerBranchId: null },
         { ownerBranchId: { in: customerScope.ownerBranchIds } },
         { id: { in: customerScope.resourceIds } },
       ],
@@ -32,8 +31,7 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
         is: {
           businessId,
           OR: [
-            { ownerBranchId: null },
-            { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
         },
@@ -63,8 +61,7 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
           id: input.customerId,
           businessId: input.businessId,
           OR: [
-            { ownerBranchId: null },
-            { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                { ownerBranchId: { in: customerScope.ownerBranchIds } },
             { id: { in: customerScope.resourceIds } },
           ],
         },
@@ -75,8 +72,7 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
           id: input.serviceId,
           businessId: input.businessId,
           OR: [
-            { ownerBranchId: null },
-            { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
         },
