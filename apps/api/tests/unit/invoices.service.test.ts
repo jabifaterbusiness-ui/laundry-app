@@ -239,7 +239,7 @@ describe("invoices.service", () => {
             id: "order-1",
             orderNumber: "00042",
             orderTotal: 5000,
-            customer: { id: "customer-1", name: "John" },
+            customer: { id: "customer-1", ownerBranchId: "branch-1", name: "John" },
             branch: { id: "branch-1", name: "Main" },
             business: {
               id: "business-1",
@@ -296,7 +296,7 @@ describe("invoices.service", () => {
             id: "order-1",
             orderNumber: "00042",
             orderTotal: 0,
-            customer: { id: "customer-1", name: "John" },
+            customer: { id: "customer-1", ownerBranchId: "branch-1", name: "John" },
             branch: { id: "branch-1", name: "Main" },
             business: {
               id: "business-1",
