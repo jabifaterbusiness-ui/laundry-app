@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   communicationDeliveryCreate: vi.fn(),
   communicationDeliveryUpdateMany: vi.fn(),
   customerFindFirst: vi.fn(),
+  customerFindMany: vi.fn(),
+  customerGroupFindMany: vi.fn(),
   branchResourceShareFindMany: vi.fn(),
   sendWhatsAppText: vi.fn(),
   sendAutomatedWhatsAppTemplate: vi.fn(),
@@ -23,6 +25,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: mocks.customerFindFirst,
+      findMany: mocks.customerFindMany,
+    },
+    customerGroup: {
+      findMany: mocks.customerGroupFindMany,
     },
     branchResourceShare: {
       findMany: mocks.branchResourceShareFindMany,
@@ -50,7 +56,7 @@ vi.mock("../../src/modules/whatsapp/whatsapp-templates.service.js", () => ({
   sendAutomatedWhatsAppTemplate: mocks.sendAutomatedWhatsAppTemplate,
 }));
 
-import { listCommunicationDeliveries, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
+import { createAnnouncement, listCommunicationDeliveries, listCustomerGroups, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
 
 const DELIVERY_ID = "11111111-1111-4111-8111-111111111111";
 const CUSTOMER_ID = "22222222-2222-4222-8222-222222222222";
@@ -89,11 +95,65 @@ beforeEach(() => {
   mocks.communicationDeliveryCreate.mockResolvedValue({ id: "retry-delivery-1" });
   mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
   mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true, phone: "+2348000000000" });
+  mocks.customerFindMany.mockResolvedValue([]);
+  mocks.customerGroupFindMany.mockResolvedValue([]);
   mocks.branchResourceShareFindMany.mockResolvedValue([]);
   mocks.sendWhatsAppText.mockResolvedValue({ id: "wamid.retry-1" });
   mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid.template-1" });
   mocks.assertWhatsAppMessagingEnabled.mockResolvedValue(undefined);
   mocks.replayPendingWhatsAppStatusEvents.mockResolvedValue(undefined);
+});
+
+describe("customer communications branch visibility", () => {
+  it("lists only customer groups containing customers visible to the active branch", async () => {
+    await listCustomerGroups("business-1", "branch-1", "user-1");
+
+    expect(mocks.customerGroupFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "business-1",
+        members: {
+          some: {
+            businessId: "business-1",
+            customer: {
+              OR: [
+                { ownerBranchId: { in: ["branch-1"] } },
+                { id: { in: [] } },
+              ],
+            },
+          },
+        },
+      },
+    }));
+  });
+
+  it("rejects an announcement selection containing a customer hidden from the active branch", async () => {
+    await expect(createAnnouncement({
+      businessId: "business-1",
+      branchId: "branch-1",
+      userId: "user-1",
+      createdByUserId: "user-1",
+      title: "Branch update",
+      message: "Hello",
+      channels: ["EMAIL"],
+      audience: "SELECTED_CUSTOMERS",
+      customerIds: [CUSTOMER_ID],
+    })).rejects.toMatchObject({
+      message: "One or more selected customers are unavailable",
+      statusCode: 422,
+    });
+
+    expect(mocks.customerFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "business-1",
+        id: { in: [CUSTOMER_ID] },
+        lifecycleStatus: "ACTIVE",
+        OR: [
+          { ownerBranchId: { in: ["branch-1"] } },
+          { id: { in: [] } },
+        ],
+      },
+    }));
+  });
 });
 
 describe("listCommunicationDeliveries", () => {
