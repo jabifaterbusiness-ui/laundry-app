@@ -66,8 +66,11 @@ export function CustomersPage() {
   });
 
   const assignLegacyOwnerMutation = useMutation({
-    mutationFn: (input: { customerId: string; branchId: string }) =>
-      assignLegacyCustomerOwnerBranch(input.customerId, input.branchId, { accessToken }),
+    mutationFn: (input: { customerId: string; branchId: string; sensitiveAuthorization: string }) =>
+      assignLegacyCustomerOwnerBranch(input.customerId, input.branchId, {
+        accessToken,
+        sensitiveAuthorization: input.sensitiveAuthorization,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers", "legacy-unassigned"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
@@ -211,7 +214,15 @@ export function CustomersPage() {
                         <button
                           type="button"
                           disabled={!legacyBranchSelections[customer.id] || assignLegacyOwnerMutation.isPending}
-                          onClick={() => assignLegacyOwnerMutation.mutate({ customerId: customer.id, branchId: legacyBranchSelections[customer.id]! })}
+                          onClick={async () => {
+                            const sensitiveAuthorization = await requestSensitiveAuthorization();
+                            if (!sensitiveAuthorization) return;
+                            assignLegacyOwnerMutation.mutate({
+                              customerId: customer.id,
+                              branchId: legacyBranchSelections[customer.id]!,
+                              sensitiveAuthorization,
+                            });
+                          }}
                         >Assign branch</button>
                       </td>
                     </tr>
