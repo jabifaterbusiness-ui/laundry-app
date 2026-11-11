@@ -47,7 +47,6 @@ describe("customer-specific service pricing branch scope", () => {
         id: "customer-1",
         businessId: "biz-A",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
