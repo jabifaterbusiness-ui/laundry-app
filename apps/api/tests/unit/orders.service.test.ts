@@ -1098,7 +1098,6 @@ describe("transferOrder", () => {
         id: CUSTOMER_B,
         businessId: "biz-A",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
