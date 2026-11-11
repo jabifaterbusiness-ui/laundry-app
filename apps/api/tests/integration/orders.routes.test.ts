@@ -286,6 +286,7 @@ describe("Orders routes - tenant and branch isolation", () => {
           id: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_B,
+          customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -309,6 +310,7 @@ describe("Orders routes - tenant and branch isolation", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
