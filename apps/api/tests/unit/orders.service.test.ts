@@ -154,7 +154,6 @@ describe("createOrder", () => {
         id: CUSTOMER_A,
         businessId: "biz-B",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
@@ -722,6 +721,7 @@ describe("createOrder", () => {
     await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       page: 1,
       pageSize: 25,
     });
@@ -731,6 +731,7 @@ describe("createOrder", () => {
         where: {
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -761,6 +762,7 @@ describe("createOrder", () => {
         where: {
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
           customerId: CUSTOMER_A,
           status: "READY_FOR_PICKUP",
         },
@@ -777,6 +779,7 @@ describe("createOrder", () => {
     const result = await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       page: 2,
       pageSize: 20,
     });
@@ -796,6 +799,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-A",
       BRANCH_A,
+      "user-A",
     );
 
     expect(orderFindFirst).toHaveBeenCalledWith(
@@ -804,6 +808,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -816,6 +821,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-B",
       BRANCH_A,
+      "user-A",
     );
 
     expect(result).toBeNull();
@@ -826,6 +832,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-B",
           branchId: BRANCH_A,
+          customer: { is: { businessId: "biz-B", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
         },
       }),
     );
@@ -838,6 +845,7 @@ describe("createOrder", () => {
       ORDER_A,
       "biz-A",
       BRANCH_B,
+      "user-A",
     );
 
     expect(result).toBeNull();
@@ -848,6 +856,7 @@ describe("createOrder", () => {
           id: ORDER_A,
           businessId: "biz-A",
           branchId: BRANCH_B,
+          customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_B] } }, { id: { in: [] } }] } },
         },
       }),
     );
