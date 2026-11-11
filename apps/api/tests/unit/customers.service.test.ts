@@ -262,7 +262,6 @@ describe("findPossibleDuplicates", () => {
       where: {
         businessId: "biz-1",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
