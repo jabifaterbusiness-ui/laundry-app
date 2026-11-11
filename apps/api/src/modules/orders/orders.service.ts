@@ -78,13 +78,12 @@ async function createOrderWithTx(
     }, tx);
 
     // A customer must be visible to this branch, not merely belong to the
-    // same business. Legacy business-wide customers remain visible.
+    // same business. Unassigned legacy customers remain hidden pending owner review.
     const customer = await tx.customer.findFirst({
       where: {
         id: data.customerId,
         businessId: data.businessId,
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: customerScope.ownerBranchIds } },
           { id: { in: customerScope.resourceIds } },
         ],
@@ -122,7 +121,6 @@ async function createOrderWithTx(
         id: { in: serviceIds },
         businessId: data.businessId,
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: serviceScope.ownerBranchIds } },
           { id: { in: serviceScope.resourceIds } },
         ],
@@ -487,7 +485,6 @@ async function transferOrderWithTx(
       id: newCustomerId,
       businessId,
       OR: [
-        { ownerBranchId: null },
         { ownerBranchId: { in: customerScope.ownerBranchIds } },
         { id: { in: customerScope.resourceIds } },
       ],
