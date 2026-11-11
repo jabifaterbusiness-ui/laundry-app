@@ -6,6 +6,7 @@ import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
 import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 type Channel = "WHATSAPP" | "EMAIL";
 type WhatsAppRetryPayload = {
@@ -255,20 +256,37 @@ export async function removeOrderStatusRule(id: string, businessId: string) {
   if (!result.count) throw new AppError("Notification rule not found", 404);
 }
 
-export async function listCustomerGroups(businessId: string) {
+export async function listCustomerGroups(businessId: string, branchId: string, userId: string) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
+  const visibleCustomer = {
+    OR: [
+      { ownerBranchId: { in: scope.ownerBranchIds } },
+      { id: { in: scope.resourceIds } },
+    ],
+  };
   return prisma.customerGroup.findMany({
-    where: { businessId },
-    include: { _count: { select: { members: true } }, members: { select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } } } },
+    where: { businessId, members: { some: { businessId, customer: visibleCustomer } } },
+    include: {
+      _count: { select: { members: { where: { businessId, customer: visibleCustomer } } } },
+      members: {
+        where: { businessId, customer: visibleCustomer },
+        select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } },
+      },
+    },
     orderBy: { name: "asc" },
   });
 }
 
 export async function saveCustomerGroup(input: {
-  businessId: string; name: string; description?: string | null; customerIds: string[];
+  businessId: string; branchId: string; userId: string; name: string; description?: string | null; customerIds: string[];
 }) {
   const ids = [...new Set(input.customerIds)];
+  const scope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "CUSTOMERS" });
   const customers = ids.length ? await prisma.customer.findMany({
-    where: { businessId: input.businessId, id: { in: ids } },
+    where: {
+      businessId: input.businessId, id: { in: ids },
+      OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+    },
     select: { id: true },
   }) : [];
   if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
@@ -294,12 +312,19 @@ export async function saveCustomerGroup(input: {
 }
 
 export async function updateCustomerGroup(input: {
-  businessId: string; groupId: string; name: string; description?: string | null; customerIds: string[];
+  businessId: string; branchId: string; userId: string; groupId: string; name: string; description?: string | null; customerIds: string[];
 }) {
   const ids = [...new Set(input.customerIds)];
+  const scope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "CUSTOMERS" });
   const [group, customers] = await Promise.all([
     prisma.customerGroup.findFirst({ where: { id: input.groupId, businessId: input.businessId }, select: { id: true } }),
-    ids.length ? prisma.customer.findMany({ where: { businessId: input.businessId, id: { in: ids } }, select: { id: true } }) : [],
+    ids.length ? prisma.customer.findMany({
+      where: {
+        businessId: input.businessId, id: { in: ids },
+        OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+      },
+      select: { id: true },
+    }) : [],
   ]);
   if (!group) throw new AppError("Customer group not found", 404);
   if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
@@ -327,21 +352,28 @@ export async function deleteCustomerGroup(groupId: string, businessId: string) {
 type AnnouncementCustomer = { id: string; name: string; email: string | null; phone: string };
 
 export async function createAnnouncement(input: {
-  businessId: string; createdByUserId: string; title: string; message: string;
+  businessId: string; branchId: string; userId: string; createdByUserId: string; title: string; message: string;
   channels: Channel[]; audience: "ALL_CUSTOMERS" | "SELECTED_CUSTOMERS" | "CUSTOMER_GROUP"; customerIds?: string[]; groupId?: string;
   whatsappTemplateName?: string | null; whatsappTemplateLanguage?: string | null;
 }) {
   if (!input.channels.length) throw new AppError("Choose at least one delivery channel", 422);
+  const scope = await getBranchResourceScope({ businessId: input.businessId, branchId: input.branchId, userId: input.userId, resourceType: "CUSTOMERS" });
+  const visibleCustomerWhere = {
+    OR: [
+      { ownerBranchId: { in: scope.ownerBranchIds } },
+      { id: { in: scope.resourceIds } },
+    ],
+  };
   let customers: AnnouncementCustomer[];
   if (input.audience === "ALL_CUSTOMERS") {
     customers = await prisma.customer.findMany({
-      where: { businessId: input.businessId, lifecycleStatus: "ACTIVE" },
+      where: { businessId: input.businessId, lifecycleStatus: "ACTIVE", ...visibleCustomerWhere },
       select: { id: true, name: true, email: true, phone: true },
     });
   } else if (input.audience === "SELECTED_CUSTOMERS") {
     const ids = [...new Set(input.customerIds ?? [])];
     customers = await prisma.customer.findMany({
-      where: { businessId: input.businessId, id: { in: ids }, lifecycleStatus: "ACTIVE" },
+      where: { businessId: input.businessId, id: { in: ids }, lifecycleStatus: "ACTIVE", ...visibleCustomerWhere },
       select: { id: true, name: true, email: true, phone: true },
     });
     if (customers.length !== ids.length) throw new AppError("One or more selected customers are unavailable", 422);
@@ -349,7 +381,7 @@ export async function createAnnouncement(input: {
     if (!input.groupId) throw new AppError("Choose a customer group", 422);
     const group = await prisma.customerGroup.findFirst({
       where: { id: input.groupId, businessId: input.businessId },
-      include: { members: { where: { businessId: input.businessId, customer: { lifecycleStatus: "ACTIVE" } }, include: { customer: { select: { id: true, name: true, email: true, phone: true } } } } },
+      include: { members: { where: { businessId: input.businessId, customer: { lifecycleStatus: "ACTIVE", ...visibleCustomerWhere } }, include: { customer: { select: { id: true, name: true, email: true, phone: true } } } } },
     });
     if (!group) throw new AppError("Customer group not found", 404);
     customers = group.members.map((member) => member.customer);
@@ -486,15 +518,17 @@ export async function retryWhatsAppDelivery(
   deliveryId: string,
   businessId: string,
   branchId: string,
+  userId: string,
 ) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
   const source = await prisma.communicationDelivery.findFirst({
     where: {
       id: deliveryId,
       businessId,
       channel: "WHATSAPP",
       OR: [
-        { campaignId: { not: null } },
         { order: { is: { branchId } } },
+        { customer: { is: { businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } } },
       ],
     },
     include: {
@@ -586,13 +620,14 @@ export async function retryWhatsAppDelivery(
   return { ...result, retryOfId: source.id, retryAttempt };
 }
 
-export async function listCommunicationDeliveries(businessId: string, branchId: string) {
+export async function listCommunicationDeliveries(businessId: string, branchId: string, userId: string) {
+  const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMERS" });
   const deliveries = await prisma.communicationDelivery.findMany({
     where: {
       businessId,
       OR: [
-        { campaignId: { not: null } },
         { order: { is: { branchId } } },
+        { customer: { is: { businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } } },
       ],
     },
     select: {
