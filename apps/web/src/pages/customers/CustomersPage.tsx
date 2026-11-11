@@ -2,10 +2,12 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Customer } from "@laundry-app/shared";
-import { ApiError } from "../../lib/api-client.js";
+import { ApiError, apiFetch } from "../../lib/api-client.js";
 import {
   createCustomerWithOfflineQueue,
   listCustomers,
+  listLegacyUnassignedCustomers,
+  assignLegacyCustomerOwnerBranch,
   setCustomerLifecycleStatus,
   updateCustomerWithOfflineQueue,
   type CreateCustomerInput,
@@ -26,6 +28,10 @@ export function CustomersPage() {
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
 
   const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
+  const [legacySearch, setLegacySearch] = useState("");
+  const [legacyPage, setLegacyPage] = useState(1);
+  const [legacyBranchSelections, setLegacyBranchSelections] = useState<Record<string, string>>({});
+  const isBusinessOwner = user?.securityRole === "BUSINESS_OWNER";
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -42,6 +48,31 @@ export function CustomersPage() {
   const listQuery = useQuery({
     queryKey: ["customers", activeBranchId, { page, search, status }],
     queryFn: () => listCustomers({ page, pageSize: PAGE_SIZE, search: search || undefined, status }, { accessToken }),
+  });
+
+  const legacyCustomersQuery = useQuery({
+    queryKey: ["customers", "legacy-unassigned", activeBranchId, legacyPage, legacySearch],
+    queryFn: () => listLegacyUnassignedCustomers(
+      { page: legacyPage, pageSize: 10, search: legacySearch || undefined },
+      { accessToken },
+    ),
+    enabled: Boolean(accessToken && activeBranchId && isBusinessOwner),
+  });
+
+  const branchesQuery = useQuery({
+    queryKey: ["branches", "legacy-customer-assignment"],
+    queryFn: () => apiFetch<Array<{ id: string; name: string }>>("/branches?status=active", { accessToken }),
+    enabled: Boolean(accessToken && activeBranchId && isBusinessOwner),
+  });
+
+  const assignLegacyOwnerMutation = useMutation({
+    mutationFn: (input: { customerId: string; branchId: string }) =>
+      assignLegacyCustomerOwnerBranch(input.customerId, input.branchId, { accessToken }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers", "legacy-unassigned"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setLegacyBranchSelections({});
+    },
   });
 
   const createMutation = useMutation({
@@ -141,6 +172,64 @@ export function CustomersPage() {
     <main>
       <h1>Customers</h1>
       <button type="button" onClick={() => navigate("/customers/groups")} style={{ marginBottom: 16 }}>Customer Groups</button>
+      {isBusinessOwner && (
+        <section aria-label="Legacy customer ownership review" style={{ margin: "16px 0 24px", padding: 16, border: "1px solid #d7dee8", borderRadius: 12, background: "#f8fafc" }}>
+          <h2>Legacy customer ownership review</h2>
+          <p>Customers with missing or ambiguous historical branch ownership stay hidden from branch users until you assign them to the correct branch.</p>
+          <input
+            type="search"
+            aria-label="Search unassigned legacy customers"
+            placeholder="Search legacy customers by name, phone or email"
+            value={legacySearch}
+            onChange={(event) => { setLegacySearch(event.target.value); setLegacyPage(1); }}
+          />
+          {legacyCustomersQuery.isLoading && <p>Loading unassigned customers...</p>}
+          {legacyCustomersQuery.isError && <p role="alert">Unable to load the legacy customer review queue.</p>}
+          {assignLegacyOwnerMutation.isError && <p role="alert">{assignLegacyOwnerMutation.error instanceof Error ? assignLegacyOwnerMutation.error.message : "Unable to assign customer ownership."}</p>}
+          {legacyCustomersQuery.data?.data.length === 0 && <p>No unassigned legacy customers require review.</p>}
+          {!!legacyCustomersQuery.data?.data.length && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th align="left">Customer</th><th align="left">Phone</th><th align="left">Historical orders</th><th align="left">Assign owning branch</th><th align="left">Action</th></tr></thead>
+                <tbody>
+                  {legacyCustomersQuery.data.data.map((customer) => (
+                    <tr key={customer.id}>
+                      <td>{customer.name}</td>
+                      <td>{customer.phone}</td>
+                      <td>{customer._count.orders}</td>
+                      <td>
+                        <select
+                          aria-label={`Owning branch for ${customer.name}`}
+                          value={legacyBranchSelections[customer.id] ?? ""}
+                          onChange={(event) => setLegacyBranchSelections((current) => ({ ...current, [customer.id]: event.target.value }))}
+                        >
+                          <option value="">Select verified branch</option>
+                          {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          disabled={!legacyBranchSelections[customer.id] || assignLegacyOwnerMutation.isPending}
+                          onClick={() => assignLegacyOwnerMutation.mutate({ customerId: customer.id, branchId: legacyBranchSelections[customer.id]! })}
+                        >Assign branch</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {legacyCustomersQuery.data && legacyCustomersQuery.data.pagination.totalPages > 1 && (
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12 }}>
+              <button type="button" disabled={legacyPage <= 1} onClick={() => setLegacyPage((page) => page - 1)}>Previous</button>
+              <span>Page {legacyPage} of {legacyCustomersQuery.data.pagination.totalPages}</span>
+              <button type="button" disabled={legacyPage >= legacyCustomersQuery.data.pagination.totalPages} onClick={() => setLegacyPage((page) => page + 1)}>Next</button>
+            </div>
+          )}
+        </section>
+      )}
+
       <TableExportActions title="Complete customer list" filename="laundryangel-customers" loadRows={loadAllCustomersForExport} columns={[
         { header: "Customer name", value: (row) => row.name }, { header: "Phone", value: (row) => row.phone },
         { header: "Email", value: (row) => row.email }, { header: "Address", value: (row) => row.address },
