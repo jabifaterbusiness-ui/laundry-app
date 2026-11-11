@@ -119,11 +119,16 @@ export async function listLegacyUnassignedCustomers(
 export async function assignLegacyCustomerOwnerBranch(
   customerId: string,
   branchId: string,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; sensitiveAuthorization: string },
 ): Promise<Customer> {
+  const branchIdForRequest = getEffectiveBranchId();
   return apiFetch<Customer>(`/customers/${customerId}/assign-owner-branch`, {
     method: "POST",
     accessToken: auth.accessToken,
+    headers: {
+      ...(branchIdForRequest ? { "X-Branch-Id": branchIdForRequest } : {}),
+      "X-Sensitive-Authorization": auth.sensitiveAuthorization,
+    },
     body: JSON.stringify({ branchId }),
   });
 }
