@@ -121,6 +121,7 @@ async function createOrderWithTx(
         id: { in: serviceIds },
         businessId: data.businessId,
         OR: [
+          { ownerBranchId: null },
           { ownerBranchId: { in: serviceScope.ownerBranchIds } },
           { id: { in: serviceScope.resourceIds } },
         ],
