@@ -225,6 +225,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
 
       expect(updateOrderStatusMock).toHaveBeenCalledWith(
@@ -282,6 +283,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
       expect(updateOrderStatusMock).not.toHaveBeenCalled();
       expect(recordAuditEventMock).not.toHaveBeenCalled();
@@ -452,6 +454,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         "biz-A",
         "branch-A",
+        CONTEXT.userId,
       );
 
       expect(response).toEqual({
@@ -501,6 +504,7 @@ describe("quick-operations.service", () => {
         ORDER_ID,
         CONTEXT.businessId,
         CONTEXT.branchId,
+        CONTEXT.userId,
       );
     });
 
