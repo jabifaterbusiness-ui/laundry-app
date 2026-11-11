@@ -314,7 +314,7 @@ describe("updateCustomer - tenant isolation", () => {
   it("records opt-out only when a previously opted-in customer withdraws consent", async () => {
     findFirst.mockResolvedValue({ whatsappOptIn: true } as never);
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValueOnce({ whatsappOptIn: true } as never).mockResolvedValueOnce({ id: "cust-1" } as never);
+    findFirst.mockResolvedValueOnce({ ownerBranchId: "branch-A", whatsappOptIn: true } as never).mockResolvedValueOnce({ id: "cust-1", ownerBranchId: "branch-A" } as never);
     await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", { whatsappOptIn: false });
     expect(updateMany).toHaveBeenCalledWith({
       where: { id: "cust-1", businessId: "biz-1" },
