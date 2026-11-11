@@ -13,6 +13,17 @@ ALTER TABLE "tax_rules" DROP CONSTRAINT IF EXISTS "tax_rules_businessId_name_key
 ALTER TABLE "inventory_items" DROP CONSTRAINT IF EXISTS "inventory_items_businessId_name_key";
 ALTER TABLE "inventory_items" DROP CONSTRAINT IF EXISTS "inventory_items_businessId_sku_key";
 
+-- These legacy unique indexes were created as standalone indexes rather than
+-- UNIQUE constraints in some deployed databases. DROP CONSTRAINT does not
+-- remove standalone indexes, so remove them explicitly before creating the
+-- branch-scoped replacements.
+DROP INDEX IF EXISTS "customer_accounts_customerId_key";
+DROP INDEX IF EXISTS "customer_service_prices_customerId_serviceId_key";
+DROP INDEX IF EXISTS "price_adjustments_businessId_name_key";
+DROP INDEX IF EXISTS "tax_rules_businessId_name_key";
+DROP INDEX IF EXISTS "inventory_items_businessId_name_key";
+DROP INDEX IF EXISTS "inventory_items_businessId_sku_key";
+
 CREATE UNIQUE INDEX "customer_accounts_customerId_branchId_key" ON "customer_accounts"("customerId", "branchId");
 CREATE UNIQUE INDEX "customer_accounts_shared_customerId_key" ON "customer_accounts"("customerId") WHERE "branchId" IS NULL;
 CREATE UNIQUE INDEX "customer_service_prices_customerId_serviceId_branchId_key" ON "customer_service_prices"("customerId", "serviceId", "branchId");
