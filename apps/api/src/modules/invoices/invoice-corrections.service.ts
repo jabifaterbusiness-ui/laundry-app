@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { calculateInvoice } from "./invoice-calculator.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 
 const HISTORY_RETENTION_DAYS = 60;
 
@@ -528,10 +529,20 @@ export async function transferInvoiceWithCorrection(params: {
       );
     }
 
+    const customerScope = await getBranchResourceScope({
+      businessId: params.businessId,
+      branchId: params.branchId,
+      userId: params.actorUserId,
+      resourceType: "CUSTOMERS",
+    }, tx);
     const targetCustomer = await tx.customer.findFirst({
       where: {
         id: params.customerId,
         businessId: params.businessId,
+        OR: [
+          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+          { id: { in: customerScope.resourceIds } },
+        ],
       },
     });
 
