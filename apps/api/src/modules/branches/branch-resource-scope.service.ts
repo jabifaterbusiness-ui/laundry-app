@@ -48,6 +48,9 @@ export async function assertBranchResourceWriteAccess(input: {
   ownerBranchId: string | null;
   resourceId: string;
 }, db: BranchShareDb = prisma) {
+  if (input.resourceType === "CUSTOMERS" && !input.ownerBranchId) {
+    throw new AppError("Unassigned legacy customers must be reviewed by a business owner before branch access", 403);
+  }
   if (!input.ownerBranchId || input.ownerBranchId === input.branchId) return;
   const share = await db.branchResourceShare.findFirst({
     where: {
