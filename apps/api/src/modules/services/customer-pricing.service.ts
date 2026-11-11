@@ -31,7 +31,8 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
         is: {
           businessId,
           OR: [
-                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+            { ownerBranchId: null },
+            { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
         },
@@ -72,7 +73,8 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
           id: input.serviceId,
           businessId: input.businessId,
           OR: [
-                { ownerBranchId: { in: serviceScope.ownerBranchIds } },
+            { ownerBranchId: null },
+            { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
         },
