@@ -143,12 +143,16 @@ describe("globalSearch", () => {
     expect(customerFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: expect.arrayContaining([
+          AND: expect.arrayContaining([
             expect.objectContaining({
-              email: expect.objectContaining({
-                contains: "aaron@example.com",
-                mode: "insensitive",
-              }),
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  email: expect.objectContaining({
+                    contains: "aaron@example.com",
+                    mode: "insensitive",
+                  }),
+                }),
+              ]),
             }),
           ]),
         }),
