@@ -241,7 +241,6 @@ describe("createOrder", () => {
         id: { in: [SERVICE_SHIRT] },
         businessId: "biz-A",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
