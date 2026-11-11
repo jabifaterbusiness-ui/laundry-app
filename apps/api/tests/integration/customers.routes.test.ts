@@ -246,7 +246,15 @@ describe("Customers routes - tenant isolation end-to-end", () => {
     const res = await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", "branch-A").set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(200);
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ businessId: "biz-A" }) }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      }),
+    }));
   });
 
   it("business B cannot access business A's customer by id (404, not leaked)", async () => {
