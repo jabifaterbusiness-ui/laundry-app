@@ -1569,7 +1569,6 @@ describe("Quick Operations routes - SC", () => {
         id: CUSTOMER_A,
         businessId: "biz-A",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
@@ -1735,6 +1734,7 @@ describe("Quick Operations routes - TC", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
       } as never)
       .mockResolvedValueOnce(null);
 
@@ -1939,6 +1939,7 @@ describe("Quick Operations routes - MA", () => {
         id: CUSTOMER_A,
         name: "Customer A",
         businessId: "biz-A",
+        ownerBranchId: BRANCH_A,
         isActive: true,
       } as never)
       .mockResolvedValueOnce(null);
