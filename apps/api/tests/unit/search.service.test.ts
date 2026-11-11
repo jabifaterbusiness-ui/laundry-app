@@ -146,19 +146,20 @@ describe("globalSearch", () => {
           AND: expect.arrayContaining([
             expect.objectContaining({
               OR: expect.arrayContaining([
-                expect.objectContaining({
-                  email: expect.objectContaining({
-                    contains: "aaron@example.com",
-                    mode: "insensitive",
-                  }),
-                }),
+                expect.objectContaining({ ownerBranchId: expect.anything() }),
               ]),
             }),
           ]),
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              email: expect.objectContaining({
+                contains: "aaron@example.com",
+                mode: "insensitive",
+              }),
+            }),
+          ]),
         }),
-        select: expect.objectContaining({
-          email: true,
-        }),
+        select: expect.objectContaining({ email: true }),
       }),
     );
     expect(results).toEqual([
@@ -173,7 +174,7 @@ describe("globalSearch", () => {
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: expect.arrayContaining([
+          AND: expect.arrayContaining([\n            expect.objectContaining({\n              OR: expect.arrayContaining([
             expect.objectContaining({
               customer: expect.objectContaining({
                 email: expect.objectContaining({
