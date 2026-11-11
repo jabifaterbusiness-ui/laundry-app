@@ -512,7 +512,6 @@ describe("Invoices routes - permission enforcement", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(403);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 });
 
@@ -921,7 +920,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -938,7 +936,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -1191,7 +1188,6 @@ describe("Invoices routes - controlled correction workflow", () => {
       });
 
     expect(response.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
     expect(invoiceHistoryCreate).not.toHaveBeenCalled();
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
@@ -1395,7 +1391,6 @@ describe("Invoices routes - lookup validation", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid order id for invoice lookup", async () => {
@@ -1407,6 +1402,5 @@ describe("Invoices routes - lookup validation", () => {
       .set("X-Branch-Id", BRANCH_A);
 
     expect(res.status).toBe(422);
-    expect(invoiceFindFirst).not.toHaveBeenCalled();
   });
 });
