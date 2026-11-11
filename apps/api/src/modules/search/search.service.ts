@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { hasPermission } from "../permissions/permissions.service.js";
+import { getBranchResourceScope } from "../branches/branch-resource-scope.service.js";
 import type { GlobalSearchQuery } from "./search.validation.js";
 
 export interface GlobalSearchResult {
@@ -23,6 +24,13 @@ export async function globalSearch(
   if (!query) {
     return [];
   }
+
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  });
 
   const [canViewCustomers, canViewOrders, canViewInvoices] =
     await Promise.all([
@@ -51,23 +59,19 @@ export async function globalSearch(
       ? prisma.customer.findMany({
           where: {
             businessId,
-            OR: [
+            AND: [
               {
-                name: {
-                  contains: query,
-                  mode: "insensitive",
-                },
+                OR: [
+                  { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                  { id: { in: customerScope.resourceIds } },
+                ],
               },
               {
-                phone: {
-                  contains: query,
-                },
-              },
-              {
-                email: {
-                  contains: query,
-                  mode: "insensitive",
-                },
+                OR: [
+                  { name: { contains: query, mode: "insensitive" } },
+                  { phone: { contains: query } },
+                  { email: { contains: query, mode: "insensitive" } },
+                ],
               },
             ],
           },
