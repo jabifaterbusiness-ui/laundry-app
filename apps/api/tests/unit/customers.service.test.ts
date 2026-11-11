@@ -303,7 +303,7 @@ describe("createCustomer", () => {
 describe("updateCustomer - tenant isolation", () => {
   it("scopes the update by id AND businessId together", async () => {
     updateMany.mockResolvedValue({ count: 1 });
-    findFirst.mockResolvedValue({ id: "cust-1" } as never);
+    findFirst.mockResolvedValue({ id: "cust-1", ownerBranchId: "branch-A" } as never);
 
     await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", { name: "New Name" });
 
@@ -439,6 +439,7 @@ describe("setCustomerLifecycleStatus", () => {
   it("changes status and records the complete status history", async () => {
     findFirst.mockResolvedValue({
       id: "cust-1",
+      ownerBranchId: "branch-A",
       lifecycleStatus: "ACTIVE",
     } as never);
 
@@ -860,12 +861,14 @@ describe("transferCustomer - full account transfer", () => {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     name: "Customer A",
     businessId: "biz-A",
+    ownerBranchId: "branch-A",
   };
 
   const targetCustomer = {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     name: "Customer B",
     businessId: "biz-A",
+    ownerBranchId: "branch-A",
   };
 
   const orders = [
