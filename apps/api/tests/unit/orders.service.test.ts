@@ -740,6 +740,7 @@ describe("createOrder", () => {
       where: {
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: { is: { businessId: "biz-A", OR: [{ ownerBranchId: { in: [BRANCH_A] } }, { id: { in: [] } }] } },
       },
     });
   });
@@ -751,6 +752,7 @@ describe("createOrder", () => {
     await listOrders({
       businessId: "biz-A",
       branchId: BRANCH_A,
+      userId: "user-A",
       customerId: CUSTOMER_A,
       status: "READY_FOR_PICKUP",
       page: 2,
