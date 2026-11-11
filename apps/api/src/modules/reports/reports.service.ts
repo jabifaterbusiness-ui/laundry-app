@@ -121,7 +121,6 @@ export async function getDashboardReport(
         businessId: scope.businessId,
         isActive: true,
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: customerScope.ownerBranchIds } },
           { id: { in: customerScope.resourceIds } },
         ],
