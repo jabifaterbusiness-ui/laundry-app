@@ -240,7 +240,6 @@ describe("reports.service", () => {
         businessId: "business-2",
         isActive: true,
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-9"] } },
           { id: { in: [] } },
         ],
