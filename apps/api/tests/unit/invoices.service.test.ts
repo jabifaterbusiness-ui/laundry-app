@@ -489,6 +489,7 @@ describe("invoices.service", () => {
         "order-1",
         "business-1",
         "branch-1",
+        "user-1",
       );
 
       expect(result).toBe(invoice);
@@ -544,6 +545,7 @@ describe("invoices.service", () => {
         where: {
           businessId: "business-1",
           branchId: "branch-1",
+          order: { is: { businessId: "business-1", branchId: "branch-1", customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } } },
         },
       });
     });
