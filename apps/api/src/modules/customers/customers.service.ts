@@ -164,6 +164,86 @@ export async function findPossibleDuplicates(
   });
 }
 
+export async function listUnassignedLegacyCustomers(input: {
+  businessId: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+}) {
+  const where: Prisma.CustomerWhereInput = {
+    businessId: input.businessId,
+    ownerBranchId: null,
+    ...(input.search ? {
+      OR: [
+        { name: { contains: input.search, mode: "insensitive" } },
+        { phone: { contains: input.search } },
+        { email: { contains: input.search, mode: "insensitive" } },
+      ],
+    } : {}),
+  };
+  const [data, total] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      select: {
+        id: true, name: true, phone: true, email: true, address: true,
+        lifecycleStatus: true, createdAt: true, updatedAt: true,
+        _count: { select: { orders: true } },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+    prisma.customer.count({ where }),
+  ]);
+  return {
+    data,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+    },
+  };
+}
+
+export async function assignLegacyCustomerOwnerBranch(input: {
+  customerId: string;
+  businessId: string;
+  branchId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const branch = await tx.branch.findFirst({
+      where: { id: input.branchId, businessId: input.businessId, isActive: true },
+      select: { id: true },
+    });
+    if (!branch) throw new AppError("Choose an active branch belonging to this business", 422);
+
+    const customer = await tx.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId, ownerBranchId: null },
+      select: { id: true },
+    });
+    if (!customer) {
+      const existing = await tx.customer.findFirst({
+        where: { id: input.customerId, businessId: input.businessId },
+        select: { id: true, ownerBranchId: true },
+      });
+      if (!existing) throw new AppError("Customer not found", 404);
+      throw new AppError("This customer has already been assigned to a branch", 409);
+    }
+
+    const updated = await tx.customer.updateMany({
+      where: { id: customer.id, businessId: input.businessId, ownerBranchId: null },
+      data: { ownerBranchId: branch.id },
+    });
+    if (!updated.count) throw new AppError("Customer ownership changed. Refresh the review list and try again.", 409);
+
+    return tx.customer.findFirstOrThrow({
+      where: { id: customer.id, businessId: input.businessId },
+      include: { ownerBranch: { select: { id: true, name: true } } },
+    });
+  }, { isolationLevel: "Serializable" });
+}
+
 export interface CreateCustomerData {
   businessId: string;
   branchId: string;
