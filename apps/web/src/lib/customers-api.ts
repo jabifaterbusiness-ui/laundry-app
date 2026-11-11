@@ -90,6 +90,44 @@ export async function listCustomers(
   });
 }
 
+export interface LegacyUnassignedCustomer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  address: string | null;
+  lifecycleStatus: Customer["lifecycleStatus"];
+  createdAt: string;
+  updatedAt: string;
+  _count: { orders: number };
+}
+
+export async function listLegacyUnassignedCustomers(
+  params: { page?: number; pageSize?: number; search?: string },
+  auth: { accessToken: string | null },
+): Promise<PaginatedResult<LegacyUnassignedCustomer>> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  if (params.search) query.set("search", params.search);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiFetch<PaginatedResult<LegacyUnassignedCustomer>>(`/customers/legacy-unassigned${suffix}`, {
+    accessToken: auth.accessToken,
+  });
+}
+
+export async function assignLegacyCustomerOwnerBranch(
+  customerId: string,
+  branchId: string,
+  auth: { accessToken: string | null },
+): Promise<Customer> {
+  return apiFetch<Customer>(`/customers/${customerId}/assign-owner-branch`, {
+    method: "POST",
+    accessToken: auth.accessToken,
+    body: JSON.stringify({ branchId }),
+  });
+}
+
 export async function getCustomer(id: string, auth: { accessToken: string | null }): Promise<Customer> {
   return apiFetch<Customer>(`/customers/${id}`, { accessToken: auth.accessToken });
 }
