@@ -331,11 +331,29 @@ export async function updateCustomerGroup(input: {
   try {
     return await prisma.$transaction(async (tx) => {
       await tx.customerGroup.update({ where: { id: group.id }, data: { name: input.name, description: input.description ?? null } });
-      await tx.customerGroupMember.deleteMany({ where: { businessId: input.businessId, groupId: group.id } });
-      if (ids.length) await tx.customerGroupMember.createMany({ data: ids.map((customerId) => ({ businessId: input.businessId, groupId: group.id, customerId })) });
+      const visibleCustomer = {
+        OR: [
+          { ownerBranchId: { in: scope.ownerBranchIds } },
+          { id: { in: scope.resourceIds } },
+        ],
+      };
+      // Preserve memberships owned by other branches; this branch only replaces
+      // the customer memberships it is authorized to manage.
+      await tx.customerGroupMember.deleteMany({
+        where: { businessId: input.businessId, groupId: group.id, customer: visibleCustomer },
+      });
+      if (ids.length) await tx.customerGroupMember.createMany({
+        data: ids.map((customerId) => ({ businessId: input.businessId, groupId: group.id, customerId })),
+      });
       return tx.customerGroup.findUniqueOrThrow({
         where: { id: group.id },
-        include: { _count: { select: { members: true } }, members: { select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } } } },
+        include: {
+          _count: { select: { members: { where: { businessId: input.businessId, customer: visibleCustomer } } } },
+          members: {
+            where: { businessId: input.businessId, customer: visibleCustomer },
+            select: { customerId: true, customer: { select: { id: true, name: true, phone: true } } },
+          },
+        },
       });
     });
   } catch (error) {
