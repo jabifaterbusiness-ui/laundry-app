@@ -208,6 +208,7 @@ describe("Customers routes - legacy ownership review", () => {
       .post(`/api/v1/customers/${LEGACY_CUSTOMER_ID}/assign-owner-branch`)
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", "branch-A")
+      .set("x-sensitive-authorization", "test-sensitive-token")
       .send({ branchId: TARGET_BRANCH_ID });
 
     expect(response.status).toBe(200);
