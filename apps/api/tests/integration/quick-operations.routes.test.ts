@@ -414,6 +414,15 @@ describe("Quick Operations routes - MU", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
@@ -492,6 +501,15 @@ describe("Quick Operations routes - MU", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
@@ -1408,6 +1426,15 @@ describe("Quick Operations routes - SO", () => {
         id: ORDER_A,
         businessId: "biz-A",
         branchId: BRANCH_A,
+        customer: {
+          is: {
+            businessId: "biz-A",
+            OR: [
+              { ownerBranchId: { in: [BRANCH_A] } },
+              { id: { in: [] } },
+            ],
+          },
+        },
       },
       include: {
         customer: true,
