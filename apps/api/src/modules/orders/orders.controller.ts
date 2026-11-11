@@ -183,6 +183,8 @@ export async function updateStatus(req: Request, res: Response) {
   const branchId = requireBranchId(req);
   const { id } = orderIdParamSchema.parse(req.params);
   const input = updateOrderStatusSchema.parse(req.body);
+  const visibleOrder = await getOrderForBusiness(id, businessId, branchId, req.user!.id);
+  if (!visibleOrder) throw new AppError("Order not found", 404);
 
   const order = await updateOrderStatus(
     id,
@@ -275,6 +277,8 @@ export async function editInvoice(req: Request, res: Response) {
   const branchId = requireBranchId(req);
   const { id } = orderIdParamSchema.parse(req.params);
   const input = editOrderSchema.parse(req.body);
+  const visibleOrder = await getOrderForBusiness(id, businessId, branchId, req.user!.id);
+  if (!visibleOrder) throw new AppError("Order not found", 404);
 
   const result = await editOrderWithCorrection({
     orderId: id,
