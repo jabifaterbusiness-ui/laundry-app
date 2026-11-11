@@ -174,7 +174,9 @@ describe("globalSearch", () => {
     expect(orderFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          AND: expect.arrayContaining([\n            expect.objectContaining({\n              OR: expect.arrayContaining([
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
             expect.objectContaining({
               customer: expect.objectContaining({
                 email: expect.objectContaining({
