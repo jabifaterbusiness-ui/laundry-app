@@ -316,6 +316,18 @@ export async function createInvoiceWithTx(
     throw new AppError("Order not found", 404);
   }
 
+  const customerScope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId: actorUserId,
+    resourceType: "CUSTOMERS",
+  }, tx);
+  const customerVisible = Boolean(
+    order.customer.ownerBranchId &&
+    customerScope.ownerBranchIds.includes(order.customer.ownerBranchId),
+  ) || customerScope.resourceIds.includes(order.customerId);
+  if (!customerVisible) throw new AppError("Order not found", 404);
+
   if (order.invoice) {
     throw new AppError(
       "An invoice already exists for this order",
