@@ -229,6 +229,7 @@ const correctionInvoiceFixture = {
     customerId: CUSTOMER_A,
     customer: {
       id: CUSTOMER_A,
+      ownerBranchId: BRANCH_A,
       name: "Jane Doe",
     },
     branch: {
