@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   communicationDeliveryCreate: vi.fn(),
   communicationDeliveryUpdateMany: vi.fn(),
   customerFindFirst: vi.fn(),
+  branchResourceShareFindMany: vi.fn(),
   sendWhatsAppText: vi.fn(),
   sendAutomatedWhatsAppTemplate: vi.fn(),
   assertWhatsAppMessagingEnabled: vi.fn(),
@@ -22,6 +23,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: mocks.customerFindFirst,
+    },
+    branchResourceShare: {
+      findMany: mocks.branchResourceShareFindMany,
     },
   },
 }));
@@ -85,6 +89,7 @@ beforeEach(() => {
   mocks.communicationDeliveryCreate.mockResolvedValue({ id: "retry-delivery-1" });
   mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
   mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true, phone: "+2348000000000" });
+  mocks.branchResourceShareFindMany.mockResolvedValue([]);
   mocks.sendWhatsAppText.mockResolvedValue({ id: "wamid.retry-1" });
   mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid.template-1" });
   mocks.assertWhatsAppMessagingEnabled.mockResolvedValue(undefined);
@@ -102,7 +107,7 @@ describe("listCommunicationDeliveries", () => {
       },
     ]);
 
-    const result = await listCommunicationDeliveries("business-1", "branch-1");
+    const result = await listCommunicationDeliveries("business-1", "branch-1", "user-1");
 
     expect(mocks.communicationDeliveryFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -143,7 +148,7 @@ describe("listCommunicationDeliveries", () => {
       },
     ]);
 
-    const result = await listCommunicationDeliveries("business-1", "branch-1");
+    const result = await listCommunicationDeliveries("business-1", "branch-1", "user-1");
 
     expect(result).toHaveLength(2);
     expect(result.every((delivery) => delivery.retryAvailable === false)).toBe(true);
@@ -152,7 +157,7 @@ describe("listCommunicationDeliveries", () => {
 
 describe("retryWhatsAppDelivery", () => {
   it("retries a failed WhatsApp delivery using the stored original message", async () => {
-    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1");
+    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1");
 
     expect(mocks.communicationDeliveryFindFirst).toHaveBeenCalledWith({
       where: {
@@ -160,8 +165,8 @@ describe("retryWhatsAppDelivery", () => {
         businessId: "business-1",
         channel: "WHATSAPP",
         OR: [
-          { campaignId: { not: null } },
           { order: { is: { branchId: "branch-1" } } },
+          { customer: { is: { businessId: "business-1", OR: [{ ownerBranchId: { in: ["branch-1"] } }, { id: { in: [] } }] } } },
         ],
       },
       include: {
@@ -215,7 +220,7 @@ describe("retryWhatsAppDelivery", () => {
       new Error("24-hour WhatsApp customer-service window is closed"),
     );
 
-    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1");
+    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1");
 
     expect(mocks.sendAutomatedWhatsAppTemplate).toHaveBeenCalledWith({
       businessId: "business-1",
@@ -235,7 +240,7 @@ describe("retryWhatsAppDelivery", () => {
     );
 
     await expect(
-      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
       message: "Only failed WhatsApp deliveries can be retried",
       statusCode: 409,
@@ -250,7 +255,7 @@ describe("retryWhatsAppDelivery", () => {
     );
 
     await expect(
-      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
       message: "This delivery already has a retry attempt. Retry the latest failed attempt instead.",
       statusCode: 409,
@@ -264,7 +269,7 @@ describe("retryWhatsAppDelivery", () => {
     );
 
     await expect(
-      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
       message: "The original WhatsApp message payload is unavailable for retry",
       statusCode: 422,
@@ -279,7 +284,7 @@ describe("retryWhatsAppDelivery", () => {
     });
 
     await expect(
-      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
       message: "Customer phone number has changed since this message was created. Confirm consent for the current number before retrying.",
       statusCode: 422,
@@ -293,7 +298,7 @@ describe("retryWhatsAppDelivery", () => {
     mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false, phone: "+2348000000000" });
 
     await expect(
-      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1"),
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
       message: "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
       statusCode: 422,
