@@ -27,7 +27,8 @@ export interface CreateOrderData {
 
 export interface ListOrdersParams {
   businessId: string;
-  branchId?: string;
+  branchId: string;
+  userId: string;
   customerId?: string;
   status?: OrderStatus;
   page: number;
@@ -352,9 +353,24 @@ export async function listOrders(params: ListOrdersParams) {
     pageSize,
   } = params;
 
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId: params.userId,
+    resourceType: "CUSTOMERS",
+  });
   const where: Prisma.OrderWhereInput = {
     businessId,
-    ...(branchId ? { branchId } : {}),
+    branchId,
+    customer: {
+      is: {
+        businessId,
+        OR: [
+          { ownerBranchId: { in: scope.ownerBranchIds } },
+          { id: { in: scope.resourceIds } },
+        ],
+      },
+    },
     ...(customerId ? { customerId } : {}),
     ...(status ? { status } : {}),
   };
@@ -396,13 +412,29 @@ export async function listOrders(params: ListOrdersParams) {
 export async function getOrderForBusiness(
   id: string,
   businessId: string,
-  branchId?: string,
+  branchId: string,
+  userId: string,
 ) {
+  const scope = await getBranchResourceScope({
+    businessId,
+    branchId,
+    userId,
+    resourceType: "CUSTOMERS",
+  });
   return prisma.order.findFirst({
     where: {
       id,
       businessId,
-      ...(branchId ? { branchId } : {}),
+      branchId,
+      customer: {
+        is: {
+          businessId,
+          OR: [
+            { ownerBranchId: { in: scope.ownerBranchIds } },
+            { id: { in: scope.resourceIds } },
+          ],
+        },
+      },
     },
     include: {
       customer: true,
