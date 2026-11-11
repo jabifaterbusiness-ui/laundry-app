@@ -98,6 +98,7 @@ export async function list(req: Request, res: Response) {
   const result = await listOrders({
     businessId,
     branchId,
+    userId: req.user!.id,
     page: query.page,
     pageSize: query.pageSize,
     ...(query.customerId !== undefined && {
@@ -120,6 +121,7 @@ export async function getOne(req: Request, res: Response) {
     id,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!order) {
