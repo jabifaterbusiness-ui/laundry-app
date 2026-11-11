@@ -68,6 +68,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.branchResourceShare.findMany.mockReset().mockResolvedValue([]);
   prismaMock.branchResourceShare.findFirst.mockReset().mockResolvedValue(null);
+  findFirst.mockResolvedValue({ ownerBranchId: "branch-A" } as never);
 
   transaction.mockImplementation(
     async (callback) => callback(prismaMock as never),
@@ -87,11 +88,9 @@ describe("listCustomers", () => {
     );
   });
 
-  it("includes owning branch details for the customer list and labels unassigned legacy records", async () => {
-    findMany.mockResolvedValue([
-      { id: "legacy-customer", ownerBranchId: null, ownerBranch: null },
-    ] as never);
-    count.mockResolvedValue(1);
+  it("does not return unassigned legacy customers to a branch list", async () => {
+    findMany.mockResolvedValue([]);
+    count.mockResolvedValue(0);
 
     const result = await listCustomers({
       businessId: "biz-1",
@@ -102,11 +101,7 @@ describe("listCustomers", () => {
       status: "all",
     });
 
-    expect(result.data[0]).toMatchObject({
-      id: "legacy-customer",
-      ownerBranchId: null,
-      ownerBranch: null,
-    });
+    expect(result.data).toEqual([]);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         include: { ownerBranch: { select: { id: true, name: true } } },
@@ -211,7 +206,6 @@ describe("getCustomerForBusiness - tenant isolation", () => {
         id: "cust-1",
         businessId: "biz-1",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
@@ -249,7 +243,6 @@ describe("findPossibleDuplicates", () => {
       where: {
         businessId: "biz-1",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
