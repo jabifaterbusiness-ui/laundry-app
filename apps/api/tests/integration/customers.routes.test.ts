@@ -44,6 +44,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -64,6 +65,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     userBranch: {
       findUnique: vi.fn(),
+    },
+    branch: {
+      findFirst: vi.fn(),
     },
     sensitiveAuthorization: {
       findUnique: vi.fn(),
@@ -95,6 +99,8 @@ const customerAccountTransactionCreate = vi.mocked(
   prisma.customerAccountTransaction.create,
 );
 const userBranchFindUnique = vi.mocked(prisma.userBranch.findUnique);
+const branchFindFirst = vi.mocked(prisma.branch.findFirst);
+const customerFindFirstOrThrow = vi.mocked(prisma.customer.findFirstOrThrow);
 const sensitiveAuthorizationFindUnique = vi.mocked(
   prisma.sensitiveAuthorization.findUnique,
 );
@@ -157,6 +163,64 @@ beforeEach(() => {
     revokedAt: null,
     createdAt: new Date(),
   } as never);
+});
+
+describe("Customers routes - legacy ownership review", () => {
+  const LEGACY_CUSTOMER_ID = "11111111-1111-4111-8111-111111111111";
+  const TARGET_BRANCH_ID = "22222222-2222-4222-8222-222222222222";
+
+  it("does not allow branch staff to inspect unassigned legacy customers", async () => {
+    const response = await request(app)
+      .get("/api/v1/customers/legacy-unassigned")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", "branch-A");
+
+    expect(response.status).toBe(403);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("allows a Business Owner to review unassigned customers in their business", async () => {
+    findMany.mockResolvedValue([{ id: LEGACY_CUSTOMER_ID, name: "Legacy Customer" }] as never);
+    count.mockResolvedValue(1);
+
+    const response = await request(app)
+      .get("/api/v1/customers/legacy-unassigned")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A");
+
+    expect(response.status).toBe(200);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { businessId: "biz-A", ownerBranchId: null },
+    }));
+  });
+
+  it("assigns an unassigned customer to an active branch and audits the owner decision", async () => {
+    branchFindFirst.mockResolvedValue({ id: TARGET_BRANCH_ID } as never);
+    findFirst.mockResolvedValue({ id: LEGACY_CUSTOMER_ID } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+    customerFindFirstOrThrow.mockResolvedValue({
+      id: LEGACY_CUSTOMER_ID,
+      ownerBranchId: TARGET_BRANCH_ID,
+      ownerBranch: { id: TARGET_BRANCH_ID, name: "Branch B" },
+    } as never);
+
+    const response = await request(app)
+      .post(`/api/v1/customers/${LEGACY_CUSTOMER_ID}/assign-owner-branch`)
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .send({ branchId: TARGET_BRANCH_ID });
+
+    expect(response.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: LEGACY_CUSTOMER_ID, businessId: "biz-A", ownerBranchId: null },
+      data: { ownerBranchId: TARGET_BRANCH_ID },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "customer.legacy_owner_assigned",
+      entityId: LEGACY_CUSTOMER_ID,
+      businessId: "biz-A",
+    }));
+  });
 });
 
 describe("Customers routes - authentication", () => {
