@@ -11,11 +11,11 @@ import {
 export const communicationsRouter = Router();
 communicationsRouter.use(requireAuth, requireBusinessContext);
 
-communicationsRouter.get("/customer-groups", requirePermission("customers.view"), asyncHandler(getCustomerGroups));
-communicationsRouter.post("/customer-groups", requirePermission("customers.update"), asyncHandler(createCustomerGroup));
-communicationsRouter.put("/customer-groups/:id", requirePermission("customers.update"), asyncHandler(updateCustomerGroupMembers));
-communicationsRouter.delete("/customer-groups/:id", requirePermission("customers.update"), asyncHandler(removeCustomerGroup));
-communicationsRouter.post("/announcements", requirePermission("customers.update"), asyncHandler(sendAnnouncement));
+communicationsRouter.get("/customer-groups", asyncHandler(requireBranchContext), requirePermission("customers.view"), asyncHandler(getCustomerGroups));
+communicationsRouter.post("/customer-groups", asyncHandler(requireBranchContext), requirePermission("customers.update"), asyncHandler(createCustomerGroup));
+communicationsRouter.put("/customer-groups/:id", asyncHandler(requireBranchContext), requirePermission("customers.update"), asyncHandler(updateCustomerGroupMembers));
+communicationsRouter.delete("/customer-groups/:id", asyncHandler(requireBranchContext), requirePermission("customers.update"), asyncHandler(removeCustomerGroup));
+communicationsRouter.post("/announcements", asyncHandler(requireBranchContext), requirePermission("customers.update"), asyncHandler(sendAnnouncement));
 communicationsRouter.get("/deliveries", requirePermission("customers.view"), asyncHandler(requireBranchContext), asyncHandler(getDeliveries));
 communicationsRouter.post("/deliveries/:id/retry", requirePermission("customers.update"), asyncHandler(requireBranchContext), asyncHandler(retryWhatsAppDeliveryController));
 communicationsRouter.get("/status-rules", requirePermission("orders.view"), asyncHandler(listStatusRules));
