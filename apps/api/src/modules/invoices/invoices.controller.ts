@@ -87,6 +87,7 @@ export async function list(req: Request, res: Response) {
   const result = await listInvoices({
     businessId,
     branchId,
+    userId: req.user!.id,
     page: query.page,
     pageSize: query.pageSize,
     ...(query.status !== undefined && {
@@ -109,6 +110,7 @@ export async function getOne(req: Request, res: Response) {
     id,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!invoice) {
@@ -127,6 +129,7 @@ export async function getByOrder(req: Request, res: Response) {
     orderId,
     businessId,
     branchId,
+    req.user!.id,
   );
 
   if (!invoice) {
