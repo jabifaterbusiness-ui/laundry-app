@@ -56,7 +56,6 @@ describe("subscription payment reconciliation", () => {
     origin: "ONLINE",
     providerKey: "paystack",
     paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
   };
 
   beforeEach(() => {
@@ -83,7 +82,6 @@ describe("subscription payment reconciliation", () => {
         intentId: offlineIntent.id,
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
       },
       "owner-1",
       "correlation-1",
@@ -157,7 +155,6 @@ describe("subscription payment reconciliation", () => {
           intentId: offlineIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
         },
       ),
     ).rejects.toMatchObject({ statusCode: 403 });
@@ -175,7 +172,6 @@ describe("subscription payment reconciliation", () => {
           intentId: reconciledIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "BANK_TRANSFER",
-          reason: "Offline payment reconciliation test reason",
         },
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
