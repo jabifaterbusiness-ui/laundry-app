@@ -8,6 +8,7 @@ import {
   listCustomers,
   listLegacyUnassignedCustomers,
   assignLegacyCustomerOwnerBranch,
+  assignLegacyCustomersOwnerBranch,
   setCustomerLifecycleStatus,
   updateCustomerWithOfflineQueue,
   type CreateCustomerInput,
@@ -31,6 +32,8 @@ export function CustomersPage() {
   const [legacySearch, setLegacySearch] = useState("");
   const [legacyPage, setLegacyPage] = useState(1);
   const [legacyBranchSelections, setLegacyBranchSelections] = useState<Record<string, string>>({});
+  const [selectedLegacyCustomerIds, setSelectedLegacyCustomerIds] = useState<string[]>([]);
+  const [legacyBulkBranchId, setLegacyBulkBranchId] = useState("");
   const isBusinessOwner = user?.securityRole === "BUSINESS_OWNER";
 
   const [page, setPage] = useState(1);
@@ -75,6 +78,21 @@ export function CustomersPage() {
       queryClient.invalidateQueries({ queryKey: ["customers", "legacy-unassigned"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       setLegacyBranchSelections({});
+    },
+  });
+  const bulkAssignLegacyMutation = useMutation({
+    mutationFn: (input: { branchId: string; customerIds?: string[]; all?: boolean; sensitiveAuthorization: string }) =>
+      assignLegacyCustomersOwnerBranch(
+        { branchId: input.branchId, ...(input.customerIds ? { customerIds: input.customerIds } : {}), ...(input.all ? { all: true } : {}) },
+        { accessToken, sensitiveAuthorization: input.sensitiveAuthorization },
+      ),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["customers", "legacy-unassigned"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSelectedLegacyCustomerIds([]);
+      setLegacyBulkBranchId("");
+      setLegacyBranchSelections({});
+      setOfflineMessage(`${result.assignedCount} legacy customer${result.assignedCount === 1 ? "" : "s"} assigned to ${result.branchName}.`);
     },
   });
 
@@ -175,6 +193,9 @@ export function CustomersPage() {
   }
   const customers = listQuery.data?.data ?? [];
   const pagination = listQuery.data?.pagination;
+  const visibleLegacyCustomerIds = legacyCustomersQuery.data?.data.map((customer) => customer.id) ?? [];
+  const allVisibleLegacySelected = visibleLegacyCustomerIds.length > 0
+    && visibleLegacyCustomerIds.every((id) => selectedLegacyCustomerIds.includes(id));
 
   return (
     <main>
@@ -184,6 +205,47 @@ export function CustomersPage() {
         <section aria-label="Legacy customer ownership review" style={{ margin: "16px 0 24px", padding: 16, border: "1px solid #d7dee8", borderRadius: 12, background: "#f8fafc" }}>
           <h2>Legacy customer ownership review</h2>
           <p>Customers with missing or ambiguous historical branch ownership stay hidden from branch users until you assign them to the correct branch.</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", margin: "12px 0" }}>
+            <select
+              aria-label="Branch for bulk legacy customer assignment"
+              value={legacyBulkBranchId}
+              onChange={(event) => setLegacyBulkBranchId(event.target.value)}
+              disabled={bulkAssignLegacyMutation.isPending}
+            >
+              <option value="">Select destination branch</option>
+              {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+            <button
+              type="button"
+              disabled={!legacyBulkBranchId || selectedLegacyCustomerIds.length === 0 || bulkAssignLegacyMutation.isPending}
+              onClick={async () => {
+                if (!window.confirm(`Assign ${selectedLegacyCustomerIds.length} selected customer(s) to the chosen branch?`)) return;
+                const sensitiveAuthorization = await requestSensitiveAuthorization();
+                if (!sensitiveAuthorization) return;
+                bulkAssignLegacyMutation.mutate({
+                  branchId: legacyBulkBranchId,
+                  customerIds: selectedLegacyCustomerIds,
+                  sensitiveAuthorization,
+                });
+              }}
+            >
+              Assign selected ({selectedLegacyCustomerIds.length})
+            </button>
+            <button
+              type="button"
+              disabled={!legacyBulkBranchId || !legacyCustomersQuery.data?.pagination.total || bulkAssignLegacyMutation.isPending}
+              onClick={async () => {
+                const total = legacyCustomersQuery.data?.pagination.total ?? 0;
+                if (!window.confirm(`Assign all ${total} unassigned legacy customers in this business to the chosen branch?`)) return;
+                const sensitiveAuthorization = await requestSensitiveAuthorization();
+                if (!sensitiveAuthorization) return;
+                bulkAssignLegacyMutation.mutate({ branchId: legacyBulkBranchId, all: true, sensitiveAuthorization });
+              }}
+            >
+              Assign all unassigned customers
+            </button>
+          </div>
+          {bulkAssignLegacyMutation.isError && <p role="alert">{bulkAssignLegacyMutation.error instanceof Error ? bulkAssignLegacyMutation.error.message : "Unable to assign legacy customers in bulk."}</p>}
           <input
             type="search"
             aria-label="Search unassigned legacy customers"
@@ -198,10 +260,11 @@ export function CustomersPage() {
           {!!legacyCustomersQuery.data?.data.length && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr><th align="left">Customer</th><th align="left">Phone</th><th align="left">Historical orders</th><th align="left">Assign owning branch</th><th align="left">Action</th></tr></thead>
+                <thead><tr><th><input type="checkbox" aria-label="Select all customers on this page" checked={allVisibleLegacySelected} onChange={(event) => setSelectedLegacyCustomerIds((current) => event.target.checked ? Array.from(new Set([...current, ...visibleLegacyCustomerIds])) : current.filter((id) => !visibleLegacyCustomerIds.includes(id)))} /></th><th align="left">Customer</th><th align="left">Phone</th><th align="left">Historical orders</th><th align="left">Assign owning branch</th><th align="left">Action</th></tr></thead>
                 <tbody>
                   {legacyCustomersQuery.data.data.map((customer) => (
                     <tr key={customer.id}>
+                      <td><input type="checkbox" aria-label={`Select ${customer.name}`} checked={selectedLegacyCustomerIds.includes(customer.id)} onChange={(event) => setSelectedLegacyCustomerIds((current) => event.target.checked ? [...new Set([...current, customer.id])] : current.filter((id) => id !== customer.id))} /></td>
                       <td>{customer.name}</td>
                       <td>{customer.phone}</td>
                       <td>{customer._count.orders}</td>
