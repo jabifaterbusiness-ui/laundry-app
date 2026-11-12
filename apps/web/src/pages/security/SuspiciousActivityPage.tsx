@@ -1044,6 +1044,17 @@ export function SuspiciousActivityPage() {
     );
   }, [user?.id, activeBranchId]);
 
+  useEffect(() => {
+    if (!draggingEventId) return;
+    const stopDragging = () => setDraggingEventId(null);
+    window.addEventListener("pointerup", stopDragging);
+    window.addEventListener("pointercancel", stopDragging);
+    return () => {
+      window.removeEventListener("pointerup", stopDragging);
+      window.removeEventListener("pointercancel", stopDragging);
+    };
+  }, [draggingEventId]);
+
   const categoryGroups = useMemo(() => {
     const grouped = new Map<string, ActivityDefinition[]>();
     for (const definition of ACTIVITY_DEFINITIONS) {
@@ -1068,6 +1079,9 @@ export function SuspiciousActivityPage() {
     if (!user?.id || !activeBranchId) {
       setCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
       setDraftCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
+      setEventOrder([...DEFAULT_ACTIVITY_EVENT_ORDER]);
+      setDraftEventOrder([...DEFAULT_ACTIVITY_EVENT_ORDER]);
+      setDraggingEventId(null);
       setIsCustomizingOrder(false);
       return;
     }
@@ -1390,14 +1404,24 @@ export function SuspiciousActivityPage() {
                         moveEventToPosition(draggingEventId, definition.id, category);
                       }
                     }}
-                    onPointerUp={() => setDraggingEventId(null)}
+                    onPointerUp={() => {
+                      if (draggingEventId && lastInCategory) {
+                        moveEventToEdge(draggingEventId, category, "bottom");
+                      }
+                      setDraggingEventId(null);
+                    }}
                     onDragOver={(event) => {
                       if (isCustomizingOrder && draggingEventId) {
                         event.preventDefault();
                         moveEventToPosition(draggingEventId, definition.id, category);
                       }
                     }}
-                    onDrop={() => setDraggingEventId(null)}
+                    onDrop={() => {
+                      if (draggingEventId && lastInCategory) {
+                        moveEventToEdge(draggingEventId, category, "bottom");
+                      }
+                      setDraggingEventId(null);
+                    }}
                   >
                     <button
                       type="button"
