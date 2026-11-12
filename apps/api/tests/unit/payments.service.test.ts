@@ -889,7 +889,15 @@ describe("payments.service", () => {
             OR: expect.arrayContaining([
               { reference: { contains: "Adam", mode: "insensitive" } },
               { invoice: { is: { invoiceNumber: { contains: "Adam" } } } },
-              { invoice: { is: { order: { is: { orderNumber: { contains: "Adam" } } } } },
+              {
+                invoice: {
+                  is: {
+                    order: {
+                      is: { orderNumber: { contains: "Adam" } },
+                    },
+                  },
+                },
+              },
             ]),
           }],
         }),
