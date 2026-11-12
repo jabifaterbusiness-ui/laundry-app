@@ -264,8 +264,8 @@ export async function globalSearch(
       type: "PAYMENT",
       id: payment.id,
       title: payment.reference
-        ? `Payment · ${payment.reference}`
-        : `Payment · ${payment.method} · ₦${payment.amount.toLocaleString("en-NG")}`,
+        ? `${payment.type === "REFUND" ? "Refund" : "Payment"} · ${payment.reference}`
+        : `${payment.type === "REFUND" ? "Refund" : "Payment"} · ${payment.method} · ₦${payment.amount.toLocaleString("en-NG")}`,
       subtitle: `${payment.invoice.customerName} · Invoice #${payment.invoice.invoiceNumber} · ${payment.status}`,
       href: `/payments?paymentId=${encodeURIComponent(payment.id)}`,
     })),
