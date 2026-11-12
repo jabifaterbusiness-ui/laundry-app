@@ -244,7 +244,7 @@ describe("globalSearch", () => {
       },
     );
 
-    expect(results.map((result) => result.type)).toEqual(["ORDER"]);
+    expect(results.map((result) => result.type)).toEqual(["CUSTOMER", "ORDER"]);
 
     expect(invoiceFindMany).not.toHaveBeenCalled();
   });
