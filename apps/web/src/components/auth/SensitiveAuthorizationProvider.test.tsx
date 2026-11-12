@@ -145,10 +145,13 @@ describe("SensitiveAuthorizationProvider", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Verifying..." })).toBeDisabled());
 
     useAuthStore.setState({
+      sensitiveAuthorization: "old-session-sensitive-token",
+      sensitiveAuthorizationExpiresAt: "2099-01-01T00:00:00.000Z",
       user: { id: "user-2", businessId: "business-1" },
     } as never);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(useAuthStore.getState().sensitiveAuthorization).toBeNull();
     expect(document.body.dataset.authorization).toBe("cancelled");
 
     await act(async () => {
