@@ -34,7 +34,10 @@ describe("SensitiveAuthorizationProvider", () => {
 
     useAuthStore.setState({
       accessToken: "access-token",
-      user: { id: "user-1", businessId: "business-1" },
+      user: {
+        id: "user-1", email: "user@example.test", username: null, fullName: "Test User",
+        role: "STAFF", securityRole: "STAFF", businessId: "business-1", branches: [], permissions: [],
+      },
       sensitiveAuthorization: null,
       sensitiveAuthorizationExpiresAt: null,
     });
@@ -147,7 +150,10 @@ describe("SensitiveAuthorizationProvider", () => {
     useAuthStore.setState({
       sensitiveAuthorization: "old-session-sensitive-token",
       sensitiveAuthorizationExpiresAt: "2099-01-01T00:00:00.000Z",
-      user: { id: "user-2", businessId: "business-1" },
+      user: {
+        id: "user-2", email: "other@example.test", username: null, fullName: "Other User",
+        role: "STAFF", securityRole: "STAFF", businessId: "business-1", branches: [], permissions: [],
+      },
     } as never);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
