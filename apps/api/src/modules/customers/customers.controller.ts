@@ -148,6 +148,8 @@ const patch = {
   ...(fields.address !== undefined && { address: fields.address }),
   ...(fields.notes !== undefined && { notes: fields.notes }),
   ...(normalizedPhone !== undefined && { phone: normalizedPhone }),
+  ...(fields.whatsappOptIn !== undefined && { whatsappOptIn: fields.whatsappOptIn }),
+  ...(fields.whatsappOptInSource !== undefined && { whatsappOptInSource: fields.whatsappOptInSource }),
 };
 
 const existingCustomer = await getCustomerForBusiness(id, businessId, branchId, req.user!.id);
