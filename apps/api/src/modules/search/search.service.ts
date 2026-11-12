@@ -175,10 +175,9 @@ export async function globalSearch(
   ]);
 
   return [
-    // When a customer query also finds one or more of that customer's
-    // existing orders, show the order results instead of a customer shortcut
-    // that would start a new order. This keeps name/phone/email searches in
-    // Order Management whenever matching orders exist.
+    // Preserve the customer shortcut even when matching orders exist. The
+    // customer and its individual orders are separate destinations; the user
+    // chooses which one to open from the grouped search suggestions.
     ...customers
       .map((customer) => ({
       type: "CUSTOMER" as const,
