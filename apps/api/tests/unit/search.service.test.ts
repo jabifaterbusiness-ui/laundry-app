@@ -394,7 +394,7 @@ describe("globalSearch customer fallback", () => {
         id: "customer-without-orders",
         title: "Grace",
         subtitle: "08011111111",
-        href: "/orders?customerId=customer-without-orders",
+        href: "/orders?customerId=customer-without-orders&openAccount=1",
       },
     ]);
   });
