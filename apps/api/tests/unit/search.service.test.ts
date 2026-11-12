@@ -91,7 +91,7 @@ describe("globalSearch", () => {
         id: "customer-1",
         title: "John Doe",
         subtitle: "08012345678",
-        href: "/orders?customerId=customer-1",
+        href: "/orders?customerId=customer-1&openAccount=1",
       },
       {
         type: "ORDER",
@@ -175,7 +175,7 @@ describe("globalSearch", () => {
         id: "customer-2",
         title: "Aaron Daniel",
         subtitle: "08059489393 · aaron@example.com",
-        href: "/orders?customerId=customer-2",
+        href: "/orders?customerId=customer-2&openAccount=1",
       },
       {
         type: "ORDER",
