@@ -92,6 +92,8 @@ export function CustomersPage() {
       setSelectedLegacyCustomerIds([]);
       setLegacyBulkBranchId("");
       setLegacyBranchSelections({});
+      setLegacySearch("");
+      setLegacyPage(1);
       setOfflineMessage(`${result.assignedCount} legacy customer${result.assignedCount === 1 ? "" : "s"} assigned to ${result.branchName}.`);
     },
   });
@@ -217,7 +219,7 @@ export function CustomersPage() {
             </select>
             <button
               type="button"
-              disabled={!legacyBulkBranchId || selectedLegacyCustomerIds.length === 0 || bulkAssignLegacyMutation.isPending}
+              disabled={!legacyBulkBranchId || selectedLegacyCustomerIds.length === 0 || selectedLegacyCustomerIds.length > 500 || bulkAssignLegacyMutation.isPending}
               onClick={async () => {
                 if (!window.confirm(`Assign ${selectedLegacyCustomerIds.length} selected customer(s) to the chosen branch?`)) return;
                 const sensitiveAuthorization = await requestSensitiveAuthorization();
@@ -233,10 +235,9 @@ export function CustomersPage() {
             </button>
             <button
               type="button"
-              disabled={!legacyBulkBranchId || !legacyCustomersQuery.data?.pagination.total || bulkAssignLegacyMutation.isPending}
+              disabled={!legacyBulkBranchId || bulkAssignLegacyMutation.isPending}
               onClick={async () => {
-                const total = legacyCustomersQuery.data?.pagination.total ?? 0;
-                if (!window.confirm(`Assign all ${total} unassigned legacy customers in this business to the chosen branch?`)) return;
+                if (!window.confirm("Assign every unassigned legacy customer in this business to the chosen branch, including customers outside the current search and page?")) return;
                 const sensitiveAuthorization = await requestSensitiveAuthorization();
                 if (!sensitiveAuthorization) return;
                 bulkAssignLegacyMutation.mutate({ branchId: legacyBulkBranchId, all: true, sensitiveAuthorization });
