@@ -30,6 +30,7 @@ export interface ListOrdersParams {
   branchId: string;
   userId: string;
   customerId?: string;
+  search?: string;
   status?: OrderStatus;
   page: number;
   pageSize: number;
@@ -348,6 +349,7 @@ export async function listOrders(params: ListOrdersParams) {
     businessId,
     branchId,
     customerId,
+    search,
     status,
     page,
     pageSize,
@@ -373,6 +375,16 @@ export async function listOrders(params: ListOrdersParams) {
     },
     ...(customerId ? { customerId } : {}),
     ...(status ? { status } : {}),
+    ...(search ? {
+      AND: [{
+        OR: [
+          { orderNumber: { contains: search } },
+          { customer: { is: { name: { contains: search, mode: "insensitive" } } } },
+          { customer: { is: { phone: { contains: search } } } },
+          { customer: { is: { email: { contains: search, mode: "insensitive" } } } },
+        ],
+      }],
+    } : {}),
   };
 
   const [data, total] = await Promise.all([
