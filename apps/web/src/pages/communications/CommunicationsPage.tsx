@@ -31,7 +31,7 @@ export function CommunicationsPage() {
   const [customerPage, setCustomerPage] = useState(1);
   const [announcementChannels, setAnnouncementChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [status, setStatus] = useState("READY_FOR_PICKUP");
-  const [ruleEnabled, setRuleEnabled] = useState(true);
+  const [ruleEnabled, setRuleEnabled] = useState(false);
   const [ruleChannel, setRuleChannel] = useState<"WHATSAPP" | "EMAIL" | "BOTH">("WHATSAPP");
   const [whatsappTemplate, setWhatsappTemplate] = useState("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
   const [whatsappTemplateName, setWhatsappTemplateName] = useState("");
