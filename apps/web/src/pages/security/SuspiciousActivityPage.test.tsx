@@ -86,7 +86,7 @@ describe("SuspiciousActivityPage", () => {
 
   it("lets an authorized user reorder activity types globally and remembers the chosen order", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
-    const { container, unmount } = renderPage();
+    const { unmount } = renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Stock Adjusted to top" }));
