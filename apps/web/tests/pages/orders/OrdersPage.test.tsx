@@ -802,6 +802,31 @@ describe("OrdersPage quick customer switching", () => {
     expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
   });
 
+  it("confirms before leaving an edited invoice with unsaved changes", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    renderPage([`/order-management?orderId=${orderA.id}`]);
+
+    await screen.findByRole("region", { name: "Order Management" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
+    await screen.findByRole("heading", { name: /Edit Invoice/i });
+
+    fireEvent.change(screen.getByLabelText(/garment \/ customer note/i), {
+      target: { value: "Unsaved change" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Unsaved changes");
+    fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    expect(screen.getByRole("region", { name: "Order Management" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard & Back" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+    });
+  });
+
   it("returns from a Customer Workstation new-order workspace to that workstation", async () => {
     vi.mocked(getCustomer).mockResolvedValue(customerA);
     renderPage([`/order-management?newOrder=1&customerId=${customerA.id}&returnTo=customer-workstation`]);
