@@ -835,6 +835,24 @@ function OrderManagementContent({
         >
           Transfer Order (TO)
         </button>
+        <button
+          type="button"
+          disabled={
+            mode !== "view" ||
+            !order ||
+            !invoiceQuery.data ||
+            !canViewInvoices
+          }
+          onClick={() =>
+            navigate(
+              `/invoices?invoiceId=${encodeURIComponent(
+                invoiceQuery.data!.id,
+              )}&action=transfer`,
+            )
+          }
+        >
+          Transfer Invoice
+        </button>
         <button type="button" onClick={() => setLayer("history")}>
           History
         </button>
