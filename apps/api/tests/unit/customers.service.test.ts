@@ -675,7 +675,8 @@ describe("mergeCustomer - duplicate account merge", () => {
       { id: "price-2", serviceId: "service-2", branchId: "branch-A", unitPrice: 2200 },
     ] as never);
     prismaMock.customerServicePrice.findFirst
-      .mockResolvedValueOnce(null) // foreign-branch preflight
+      .mockResolvedValueOnce(null) // source foreign-branch preflight
+      .mockResolvedValueOnce(null) // target foreign-branch preflight
       .mockResolvedValueOnce(null) // no target override for service 1
       .mockResolvedValueOnce({ id: "target-price-2" } as never); // retain source conflict
     prismaMock.customerServicePrice.update.mockResolvedValue({ id: "price-1" } as never);
@@ -894,7 +895,8 @@ describe("mergeCustomer - duplicate account merge", () => {
 
     orderFindMany.mockResolvedValue([]);
     customerAccountFindFirst
-      .mockResolvedValueOnce(null as never) // no foreign-branch account
+      .mockResolvedValueOnce(null as never) // source has no foreign-branch account
+      .mockResolvedValueOnce(null as never) // target has no foreign-branch account
       .mockResolvedValueOnce({ id: "source-account" } as never)
       .mockResolvedValueOnce({ id: "target-account" } as never);
     customerAccountTransactionUpdateMany.mockResolvedValue({ count: 2 });
@@ -935,7 +937,8 @@ describe("mergeCustomer - duplicate account merge", () => {
 
     orderFindMany.mockResolvedValue([]);
     customerAccountFindFirst
-      .mockResolvedValueOnce(null as never) // no foreign-branch account
+      .mockResolvedValueOnce(null as never) // source has no foreign-branch account
+      .mockResolvedValueOnce(null as never) // target has no foreign-branch account
       .mockResolvedValueOnce({ id: "source-account" } as never)
       .mockResolvedValueOnce(null);
     customerAccountUpdate.mockResolvedValue({
