@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCustomerSchema,
+  changeCustomerStatusSchema,
   listCustomersQuerySchema,
   normalizePhone,
   updateCustomerSchema,
@@ -92,6 +93,15 @@ describe("updateCustomerSchema", () => {
   it("does not accept isActive - status changes go through activate/deactivate only", () => {
     const result = updateCustomerSchema.parse({ name: "New Name", isActive: false } as never);
     expect(result).not.toHaveProperty("isActive");
+  });
+});
+
+describe("changeCustomerStatusSchema", () => {
+  it("does not allow users to manually assign the system-managed MERGED status", () => {
+    expect(() => changeCustomerStatusSchema.parse({
+      status: "MERGED",
+      reason: "Duplicate account",
+    })).toThrow();
   });
 });
 
