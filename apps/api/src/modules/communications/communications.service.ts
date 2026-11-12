@@ -639,11 +639,16 @@ export async function retryWhatsAppDelivery(
 
   const customer = await prisma.customer.findFirst({
     where: { id: source.customerId, businessId },
-    select: { whatsappOptIn: true, phone: true },
+    select: {
+      whatsappOptIn: true,
+      whatsappOptInAt: true,
+      whatsappOptInSource: true,
+      phone: true,
+    },
   });
-  if (!customer?.whatsappOptIn) {
+  if (!customer?.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
     throw new AppError(
-      "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before retrying.",
       422,
     );
   }
