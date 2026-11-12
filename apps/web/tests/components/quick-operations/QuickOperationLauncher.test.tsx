@@ -164,9 +164,9 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
-  TI: {
-    code: "TI",
-    name: "Transfer Invoice",
+  TO: {
+    code: "TO",
+    name: "Transfer Order",
     description: "Transfer an invoice/order to another customer account.",
     permission: "orders.update",
     requiresConfirmation: true,
@@ -180,9 +180,9 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
-  MA: {
-    code: "MA",
-    name: "Merge Account",
+  MC: {
+    code: "MC",
+    name: "Merge Customer",
     description: "Merge one customer account into another.",
     permission: "customers.update",
     requiresConfirmation: true,
@@ -275,7 +275,7 @@ describe("QuickOperationLauncher", () => {
   beforeEach(() => {
     executeQuickOperationMock.mockReset();
     executeQuickOperationMock.mockResolvedValue({
-      code: "TI",
+      code: "TO",
       result: {},
     });
 
@@ -569,7 +569,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "TI",
+          code: "TO",
           input: {
             orderId: "order-1",
             customerId: "customer-2",
@@ -647,7 +647,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "MA",
+          code: "MC",
           input: {
             customerId: "customer-1",
             targetCustomerId: "customer-2",
