@@ -184,15 +184,28 @@ describe("default order-status notification compliance", () => {
     };
     mocks.orderStatusRuleUpsert.mockResolvedValue(legacyRule);
     mocks.orderStatusRuleUpdate.mockResolvedValue({ ...legacyRule, enabled: false });
-    mocks.orderStatusRuleFindMany.mockResolvedValue([{ ...legacyRule, enabled: false }]);
+    const legacyInProgressRule = {
+      ...legacyRule,
+      id: "in-progress-rule-1",
+      status: "IN_PROGRESS",
+      enabled: true,
+    };
+    mocks.orderStatusRuleFindMany.mockResolvedValue([
+      { ...legacyRule, enabled: false },
+      legacyInProgressRule,
+    ]);
 
     await listOrderStatusRules("business-1");
 
     expect(mocks.orderStatusRuleUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ enabled: false, channel: "WHATSAPP" }),
     }));
-    expect(mocks.orderStatusRuleUpdate).toHaveBeenCalledWith({
+    expect(mocks.orderStatusRuleUpdate).toHaveBeenNthCalledWith(1, {
       where: { id: "ready-rule-1" },
+      data: { enabled: false },
+    });
+    expect(mocks.orderStatusRuleUpdate).toHaveBeenNthCalledWith(2, {
+      where: { id: "in-progress-rule-1" },
       data: { enabled: false },
     });
   });
