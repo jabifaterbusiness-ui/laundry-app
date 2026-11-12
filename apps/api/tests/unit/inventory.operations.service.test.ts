@@ -11,6 +11,7 @@ const { db } = vi.hoisted(() => ({
     inventoryTransferLine: { findMany: vi.fn(), update: vi.fn() },
     inventoryMovement: { create: vi.fn(), findMany: vi.fn() },
     inventoryPurchaseOrder: { findMany: vi.fn() },
+    inventoryGoodsReceiptLine: { findMany: vi.fn() },
     inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     inventoryStocktakeLine: { update: vi.fn() },
     inventoryReservation: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
@@ -33,6 +34,7 @@ const USER = "user-1";
 beforeEach(() => {
   vi.clearAllMocks();
   db.$queryRaw.mockResolvedValue([]);
+  db.inventoryGoodsReceiptLine.findMany.mockResolvedValue([]);
   db.$transaction.mockImplementation(async (input: readonly unknown[] | ((tx: typeof db) => unknown)) =>
     typeof input === "function" ? input(db) : Promise.all(input),
   );
