@@ -169,6 +169,7 @@ export function OrdersPage() {
   const canManageColors = hasPermission(user, "colors.manage");
 
   const [page, setPage] = useState(1);
+  const [orderSearch, setOrderSearch] = useState("");
   const [openFolder, setOpenFolder] = useState<
     | "received"
     | "outstanding"
@@ -230,6 +231,7 @@ export function OrdersPage() {
         page,
         status,
         customerId,
+        search: orderSearch,
         branchId: activeBranchId,
       },
     ],
@@ -240,6 +242,7 @@ export function OrdersPage() {
           pageSize: PAGE_SIZE,
           status: status || undefined,
           customerId: customerId || undefined,
+          search: orderSearch.trim() || undefined,
         },
         { accessToken },
         activeBranchId,
@@ -1618,6 +1621,18 @@ export function OrdersPage() {
   return (
     <main>
       <h1>Orders</h1>
+      <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
+        Search orders
+        <input
+          type="search"
+          name="orders-search"
+          autoComplete="off"
+          placeholder="Order number, customer name, phone or email"
+          value={orderSearch}
+          onChange={(event) => { setOrderSearch(event.target.value); setPage(1); }}
+          style={{ width: "100%", boxSizing: "border-box", marginTop: 6 }}
+        />
+      </label>
 
       {canCreateOrder ? (
         <div>
