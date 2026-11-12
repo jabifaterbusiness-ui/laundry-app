@@ -764,7 +764,7 @@ describe("SuspiciousActivityPage", () => {
 
     expect(
       await screen.findByRole("button", {
-        name: /transfer invoice/i,
+        name: /transfer order/i,
       }),
     ).toBeInTheDocument();
 
@@ -782,7 +782,7 @@ describe("SuspiciousActivityPage", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /transfer invoice/i,
+        name: /transfer order/i,
       }),
     );
 
