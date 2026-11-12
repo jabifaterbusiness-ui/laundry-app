@@ -657,6 +657,17 @@ export function OrdersPage() {
   }, [newOrderFromUrl, customerIdFromUrl, navigate]);
 
   useEffect(() => {
+    // This page can remain mounted in embedded/test navigation harnesses.
+    // Only consume customer deep links while actually on an Orders route;
+    // otherwise a return to Customer Workstation would be intercepted and
+    // redirected straight back into Order Management.
+    if (
+      location.pathname !== "/orders" &&
+      location.pathname !== "/order-management"
+    ) {
+      return;
+    }
+
     const navigationKey = customerIdFromUrl
       ? `${location.key}:${customerIdFromUrl}`
       : null;
@@ -683,6 +694,7 @@ export function OrdersPage() {
     }
   }, [
     location.key,
+    location.pathname,
     customerIdFromUrl,
     newOrderFromUrl,
     returnToFromUrl,
