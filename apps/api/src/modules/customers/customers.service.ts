@@ -41,7 +41,9 @@ export async function listCustomers(params: ListParams) {
             ? "DORMANT"
             : status === "blocked"
               ? "BLOCKED"
-              : "BLACKLISTED";
+              : status === "merged"
+                ? "MERGED"
+                : "BLACKLISTED";
 
       where.lifecycleStatus = lifecycleStatus;
     }
