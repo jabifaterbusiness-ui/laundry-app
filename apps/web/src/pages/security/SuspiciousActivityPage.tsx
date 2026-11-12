@@ -410,6 +410,18 @@ const AUDIT_TECHNICAL_KEYS = new Set([
   "businessId",
   "branchId",
   "branchIds",
+  "userId",
+  "roleId",
+  "permissionId",
+  "serviceId",
+  "inventoryItemId",
+  "supplierId",
+  "purchaseOrderId",
+  "stockMovementId",
+  "transferId",
+  "paymentIntentId",
+  "subscriptionId",
+  "accountId",
   "customerId",
   "orderId",
   "invoiceId",
@@ -478,6 +490,9 @@ function formatAuditValue(value: unknown, key = ""): string {
   }
 
   if (typeof value === "string") {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())) {
+      return "linked record";
+    }
     if (/(At|Date|Timestamp)$/.test(key) && value.trim()) {
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleString();
@@ -688,7 +703,7 @@ function activityRecordLabel(activity: {
     const target = [metadata.targetUserName, metadata.userName, metadata.reference]
       .find((value) => typeof value === "string" && value.trim());
     if (typeof target === "string") return `User ${target.trim()}`;
-    if (typeof metadata.userId === "string") return `User ${metadata.userId}`;
+    if (typeof metadata.userId === "string") return "Affected user";
   }
   return activity.entityType.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
@@ -733,8 +748,26 @@ function activitySummary(activity: {
   const beforeBranchIds = Array.isArray(beforeRecord.branchIds) ? beforeRecord.branchIds : null;
   const afterBranchIds = Array.isArray(afterRecord.branchIds) ? afterRecord.branchIds : null;
   if (beforeBranchIds || afterBranchIds) {
-    const beforeCount = beforeBranchIds?.length ?? 0;
-    const afterCount = afterBranchIds?.length ?? 0;
+    const branchLabels = (value: unknown): string[] => Array.isArray(value)
+      ? value.map((entry) => {
+          if (typeof entry === "string") return entry;
+          const branch = asAuditRecord(entry);
+          return typeof branch?.name === "string" ? branch.name : "";
+        }).filter((name): name is string => Boolean(name) && !/^[0-9a-f-]{36}$/i.test(name))
+      : [];
+    const beforeNames = branchLabels(beforeRecord.branchNames ?? beforeRecord.branches ?? metadata.beforeBranchNames);
+    const afterNames = branchLabels(afterRecord.branchNames ?? afterRecord.branches ?? metadata.afterBranchNames);
+    if (beforeNames.length || afterNames.length) {
+      const removed = beforeNames.filter((name) => !afterNames.includes(name));
+      const added = afterNames.filter((name) => !beforeNames.includes(name));
+      const changes = [
+        removed.length ? `removed access to ${removed.join(", ")}` : "",
+        added.length ? `granted access to ${added.join(", ")}` : "",
+      ].filter(Boolean);
+      if (changes.length) return `${recordTitle} branch access changed: ${changes.join("; ")}.`;
+    }
+    const beforeCount = beforeBranchIds?.length ?? beforeNames.length;
+    const afterCount = afterBranchIds?.length ?? afterNames.length;
     return `${recordTitle} branch access changed from ${beforeCount} to ${afterCount} assigned branches.`;
   }
 
