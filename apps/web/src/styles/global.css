@@ -4419,3 +4419,149 @@ a {
 .platform-business-owner { display: flex; flex-direction: column; gap: 3px; min-width: 150px; }
 .platform-business-owner strong { color: #253047; font-size: 12px; }
 .platform-business-owner small, .platform-subscription-dates { color: #788397; font-size: 10px; }
+
+/* Unusual Activity: clear card-level ordering controls and compact audit detail hierarchy. */
+.suspicious-activity-event-card-wrapper {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.suspicious-activity-event-card-wrapper > .suspicious-activity-event-card {
+  width: 100%;
+  height: 100%;
+}
+
+.suspicious-activity-event-reorder-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.suspicious-activity-event-reorder-actions button {
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--la-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--la-text, #243044);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.suspicious-activity-event-reorder-actions button:not(:disabled):hover {
+  border-color: var(--la-primary, #198f94);
+  background: #f0fbfb;
+}
+
+.suspicious-activity-event-reorder-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.suspicious-activity-event-reorder-actions .suspicious-activity-drag-handle {
+  margin-left: auto;
+  border-color: var(--la-primary, #198f94);
+  background: #f0fbfb;
+  color: var(--la-primary-dark, #126f73);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.suspicious-activity-event-reorder-actions .suspicious-activity-drag-handle:active {
+  cursor: grabbing;
+}
+
+.suspicious-activity-detail-section > .suspicious-activity-technical-details {
+  background: #fff;
+}
+
+.suspicious-activity-nested-details {
+  margin-top: 12px;
+  background: var(--surface, #f7f8fa);
+}
+
+.suspicious-activity-technical-details > summary {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 9px;
+  color: var(--la-text, #243044);
+  font-size: 12px;
+  font-weight: 850;
+  list-style-position: inside;
+}
+
+.suspicious-activity-technical-details[open] > summary {
+  margin-bottom: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--la-border);
+}
+
+.suspicious-activity-technical-details > summary:focus-visible,
+.suspicious-activity-event-reorder-actions button:focus-visible {
+  outline: 3px solid rgba(25, 143, 148, 0.22);
+  outline-offset: 2px;
+}
+
+.suspicious-activity-record {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--la-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(23, 32, 51, 0.045);
+}
+
+.suspicious-activity-record-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.suspicious-activity-record-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.suspicious-activity-record-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+
+.suspicious-activity-record-meta > div {
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  background: var(--surface, #f8fafb);
+}
+
+.suspicious-activity-record-meta dt {
+  margin-bottom: 4px;
+  color: var(--la-text-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.suspicious-activity-record-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--la-text, #243044);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}

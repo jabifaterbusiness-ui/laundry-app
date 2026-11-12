@@ -91,7 +91,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
     expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
     expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
-    fireEvent.click(screen.getByRole("button", { name: "Move Inventory up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Inventory to top" }));
     fireEvent.click(screen.getByRole("button", { name: "Save order" }));
 
     const savedOrder = JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]");
@@ -102,6 +102,85 @@ describe("SuspiciousActivityPage", () => {
     const headings = await screen.findAllByRole("heading", { level: 3 });
     expect(headings[0]).toHaveTextContent("Inventory");
     expect(headings[1]).toHaveTextContent("Backup & recovery");
+  });
+
+  it("moves an individual event type directly to the top or bottom of its category and persists the order", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to top" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to bottom" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
+    expect(quickOperations[0]).not.toBe("quick-void-operation");
+    expect(quickOperations[quickOperations.length - 1]).toBe("quick-void-operation");
+  });
+
+  it("supports pointer dragging event types into an exact position", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+
+    const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
+    const target = container.querySelector('[data-activity-sort-id="quick-manual-update"]');
+    expect(target).not.toBeNull();
+
+    fireEvent.pointerDown(dragHandle, { pointerId: 1, pointerType: "touch" });
+    fireEvent.pointerEnter(target as Element, { pointerId: 1, pointerType: "touch" });
+    fireEvent.pointerUp(target as Element, { pointerId: 1, pointerType: "touch" });
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
+    expect(quickOperations.indexOf("quick-void-operation")).toBeLessThan(
+      quickOperations.indexOf("quick-manual-update"),
+    );
+  });
+
+  it("summarizes permission changes clearly and starts every secondary audit section collapsed", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "permission-user-updated",
+        timestamp: "2026-11-09T00:24:53.000Z",
+        action: "permission.user.updated",
+        entityType: "UserPermission",
+        entityId: "override-1",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          userId: "target-user-1",
+          reference: "Alex Staff",
+          permissionCode: "services.view",
+          reason: "Approved access",
+          before: { allowed: false },
+          after: { allowed: true },
+        },
+        correlationId: "correlation-1",
+      },
+    ]);
+
+    const { container } = renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /permission user updated/i }),
+    );
+
+    expect(
+      screen.getByText(/services\.view for Alex Staff: Not allowed → Allowed/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("User Alex Staff")).toBeInTheDocument();
+
+    const detailSections = Array.from(container.querySelectorAll("details"));
+    expect(detailSections.length).toBeGreaterThanOrEqual(5);
+    expect(detailSections.every((section) => !section.hasAttribute("open"))).toBe(true);
   });
 
   it("blocks users without the suspicious activity permission", () => {
