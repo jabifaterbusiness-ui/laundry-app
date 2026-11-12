@@ -175,6 +175,8 @@ describe("inventory.service", () => {
           unitCost: 0,
           reason: null,
           reference: null,
+          batchNumber: null,
+          expiryDate: null,
           createdById: "user-1",
         },
       });

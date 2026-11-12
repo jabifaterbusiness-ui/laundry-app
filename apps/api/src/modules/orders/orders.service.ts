@@ -89,6 +89,7 @@ async function createOrderWithTx(
           { ownerBranchId: { in: customerScope.ownerBranchIds } },
           { id: { in: customerScope.resourceIds } },
         ],
+        lifecycleStatus: { not: "MERGED" },
       },
       select: {
         id: true,
@@ -534,6 +535,7 @@ async function transferOrderWithTx(
         { ownerBranchId: { in: customerScope.ownerBranchIds } },
         { id: { in: customerScope.resourceIds } },
       ],
+      lifecycleStatus: { not: "MERGED" },
     },
     select: {
       id: true,

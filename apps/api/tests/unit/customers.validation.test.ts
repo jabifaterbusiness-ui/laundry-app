@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCustomerSchema,
+  changeCustomerStatusSchema,
   listCustomersQuerySchema,
   normalizePhone,
   updateCustomerSchema,
@@ -95,6 +96,15 @@ describe("updateCustomerSchema", () => {
   });
 });
 
+describe("changeCustomerStatusSchema", () => {
+  it("does not allow users to manually assign the system-managed MERGED status", () => {
+    expect(() => changeCustomerStatusSchema.parse({
+      status: "MERGED",
+      reason: "Duplicate account",
+    })).toThrow();
+  });
+});
+
 describe("listCustomersQuerySchema", () => {
   it("applies defaults", () => {
     const result = listCustomersQuerySchema.parse({});
@@ -109,6 +119,10 @@ describe("listCustomersQuerySchema", () => {
 
   it("rejects a pageSize above the max", () => {
     expect(() => listCustomersQuerySchema.parse({ pageSize: "500" })).toThrow();
+  });
+
+  it("accepts merged as a customer archive filter", () => {
+    expect(listCustomersQuerySchema.parse({ status: "merged" }).status).toBe("merged");
   });
 
   it("rejects an invalid status", () => {

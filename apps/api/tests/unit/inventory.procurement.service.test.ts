@@ -71,7 +71,7 @@ describe("inventory procurement service", () => {
 
     const result = await receiveInventoryPurchaseOrder(
       { businessId: "biz-A", branchId: "branch-A", userId: "user-A" },
-      { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: "user-A", lines: [{ purchaseOrderLineId: "line-1", quantity: 4 }] },
+      { purchaseOrderId: "po-1", receiptNumber: "GRN-1", receivedById: "user-A", lines: [{ purchaseOrderLineId: "line-1", quantity: 4, batchNumber: "LOT-001", expiryDate: new Date("2027-03-01") }] },
     );
 
     expect(result.status).toBe("PARTIALLY_RECEIVED");
@@ -79,8 +79,13 @@ describe("inventory procurement service", () => {
       where: { id: "line-1" }, data: { quantityReceived: { increment: 4 } },
     });
     expect(db.inventoryStock.update).toHaveBeenCalledWith({ where: { id: "stock-1" }, data: { quantity: 4, averageUnitCost: 250 } });
+    expect(db.inventoryGoodsReceipt.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        lines: { create: [expect.objectContaining({ batchNumber: "LOT-001", expiryDate: new Date("2027-03-01") })] },
+      }),
+    }));
     expect(db.inventoryMovement.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ businessId: "biz-A", branchId: "branch-A", inventoryItemId: "item-1", quantity: 4, type: "RECEIPT", resultingQuantity: 4, reference: "GRN-1" }),
+      data: expect.objectContaining({ businessId: "biz-A", branchId: "branch-A", inventoryItemId: "item-1", quantity: 4, type: "RECEIPT", resultingQuantity: 4, reference: "GRN-1", batchNumber: "LOT-001", expiryDate: new Date("2027-03-01") }),
     });
   });
 

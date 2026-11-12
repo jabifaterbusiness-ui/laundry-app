@@ -836,7 +836,7 @@ describe("InvoicesPage digital receipt shortcut", () => {
     renderPage();
     await selectInvoice();
 
-    screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
+    screen.getByRole("button", { name: "Print Customer Copy (FN+F1)" }).click();
 
     expect(await screen.findByText("LAUNDRY RECEIPT")).toBeInTheDocument();
     expect(screen.getByText("Test Laundry")).toBeInTheDocument();
@@ -921,7 +921,7 @@ describe("InvoicesPage digital receipt shortcut", () => {
 
     renderPage();
     await selectInvoice();
-    screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
+    screen.getByRole("button", { name: "Print Customer Copy (FN+F1)" }).click();
 
     await screen.findByText("LAUNDRY RECEIPT");
     const paidInFull = screen.getByText("PAID IN FULL");
@@ -990,7 +990,7 @@ describe("InvoicesPage digital receipt shortcut", () => {
     renderPage();
     await selectInvoice();
 
-    screen.getByRole("button", { name: "Print Customer Copy (F1)" }).click();
+    screen.getByRole("button", { name: "Print Customer Copy (FN+F1)" }).click();
 
     expect(await screen.findByText("TL")).toBeInTheDocument();
     expect(screen.queryByAltText("Test Laundry logo")).not.toBeInTheDocument();

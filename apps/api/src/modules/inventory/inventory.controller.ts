@@ -243,6 +243,8 @@ export async function createMovement(
       quantity: input.quantity,
       type: input.type,
       ...(input.unitCost !== undefined && { unitCost: input.unitCost }),
+      ...(input.batchNumber !== undefined && { batchNumber: input.batchNumber }),
+      ...(input.expiryDate !== undefined && { expiryDate: input.expiryDate }),
       createdById: req.user!.id,
       ...(input.reason !== undefined && {
         reason: input.reason,
@@ -266,6 +268,8 @@ export async function createMovement(
       type: result.movement.type,
       quantity: result.movement.quantity,
       resultingQuantity: result.movement.resultingQuantity,
+      batchNumber: result.movement.batchNumber,
+      expiryDate: result.movement.expiryDate,
     },
   });
 
@@ -409,6 +413,8 @@ export async function receivePurchaseOrder(req: Request, res: Response) {
       purchaseOrderLineId: line.purchaseOrderLineId,
       quantity: line.quantity,
       ...(line.unitCost !== undefined ? { unitCost: line.unitCost } : {}),
+      ...(line.batchNumber !== undefined ? { batchNumber: line.batchNumber } : {}),
+      ...(line.expiryDate !== undefined ? { expiryDate: line.expiryDate } : {}),
     })),
     ...(input.notes !== undefined ? { notes: input.notes } : {}),
   });

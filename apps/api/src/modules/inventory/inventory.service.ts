@@ -319,7 +319,9 @@ export async function listInventoryStock(
 export type CreateInventoryMovementInput = {
   inventoryItemId: string;
   quantity: number;
-  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
+  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "DAMAGED" | "EXPIRED";
+  batchNumber?: string;
+  expiryDate?: Date;
   reason?: string;
   reference?: string;
   unitCost?: number;
@@ -344,9 +346,13 @@ export async function createInventoryMovement(
   if (input.unitCost !== undefined && (!Number.isSafeInteger(input.unitCost) || input.unitCost < 0 || input.unitCost > 2147483647)) {
     throw new AppError("Movement unit cost must be a non-negative whole number", 422);
   }
-  if ((input.type === "RETURN" || input.type === "WASTE" || input.type === "EXPIRED") && !input.reason?.trim()) {
+  if ((input.type === "RETURN" || input.type === "WASTE" || input.type === "DAMAGED" || input.type === "EXPIRED") && !input.reason?.trim()) {
     throw new AppError(`${input.type} movements require an audit reason`, 422);
   }
+  if (input.type === "EXPIRED" && !input.expiryDate) throw new AppError("Expired-stock movements require the original expiry date", 422);
+  if (input.expiryDate && !input.batchNumber?.trim()) throw new AppError("A batch number is required when an expiry date is recorded", 422);
+  if (input.type === "RECEIPT" && input.expiryDate && input.expiryDate <= new Date()) throw new AppError("Cannot receive stock with an expired date", 422);
+  if (input.type === "EXPIRED" && input.expiryDate && input.expiryDate > new Date()) throw new AppError("The expiry date must not be in the future", 422);
   const result = await prisma.$transaction(async (tx) => {
     if (!scope.userId) throw new AppError("A valid user context is required", 400);
     const itemScope = await getBranchResourceScope({ businessId: scope.businessId, branchId: scope.branchId, userId: scope.userId, resourceType: "INVENTORY" }, tx);
@@ -407,7 +413,7 @@ export async function createInventoryMovement(
     if (resultingQuantity < 0) {
       throw new AppError("Insufficient inventory stock", 422);
     }
-    if (["ISSUE", "WASTE", "EXPIRED"].includes(input.type) && lockedStock.quantity - (lockedStock.reservedQuantity ?? 0) < input.quantity) {
+    if (["ISSUE", "WASTE", "DAMAGED", "EXPIRED"].includes(input.type) && lockedStock.quantity - (lockedStock.reservedQuantity ?? 0) < input.quantity) {
       throw new AppError("Insufficient available inventory stock", 422);
     }
 
@@ -428,6 +434,8 @@ export async function createInventoryMovement(
         type: input.type,
         resultingQuantity,
         unitCost: input.unitCost ?? lockedStock.averageUnitCost ?? 0,
+        batchNumber: input.batchNumber?.trim() || null,
+        expiryDate: input.expiryDate ?? null,
         reason: input.reason?.trim() || null,
         reference: input.reference?.trim() || null,
         createdById: input.createdById,
@@ -549,7 +557,7 @@ export async function listInventoryMovements(
   scope: BranchScope,
   input: {
     inventoryItemId?: string;
-    type?: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "EXPIRED" | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE";
+    type?: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "DAMAGED" | "EXPIRED" | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE";
     page: number;
     pageSize: number;
   },
@@ -707,7 +715,7 @@ export async function listInventoryPurchaseOrders(scope: BranchScope, input: {
 
 export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
   purchaseOrderId: string; receiptNumber: string; receivedById: string; notes?: string;
-  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
+  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number; batchNumber?: string; expiryDate?: Date }>;
 }) {
   // Keep service invariants even when called outside the HTTP/Zod boundary.
   if (!input.lines.length || new Set(input.lines.map((line) => line.purchaseOrderLineId)).size !== input.lines.length) {
@@ -720,6 +728,8 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
     if (line.unitCost !== undefined && (!Number.isSafeInteger(line.unitCost) || line.unitCost < 0 || line.unitCost > 2147483647)) {
       throw new AppError("Receipt unit cost must be a non-negative whole number", 422);
     }
+    if (line.expiryDate && !line.batchNumber?.trim()) throw new AppError("A batch number is required when an expiry date is recorded", 422);
+    if (line.expiryDate && line.expiryDate <= new Date()) throw new AppError("Cannot receive stock with an expired date", 422);
   }
   return prisma.$transaction(async (tx) => {
     // Serialize receipts for the same purchase order. This prevents concurrent
@@ -788,7 +798,8 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
       lines: { create: input.lines.map((line) => {
         const orderLine = order.lines.find((candidate) => candidate.id === line.purchaseOrderLineId)!;
         return { purchaseOrderLineId: line.purchaseOrderLineId, inventoryItemId: orderLine.inventoryItemId,
-          quantity: line.quantity, unitCost: line.unitCost ?? orderLine.unitCost };
+          quantity: line.quantity, unitCost: line.unitCost ?? orderLine.unitCost,
+          batchNumber: line.batchNumber?.trim() || null, expiryDate: line.expiryDate ?? null };
       }) },
     }, include: { lines: true } });
     for (const lineInput of input.lines) {
@@ -808,7 +819,9 @@ export async function receiveInventoryPurchaseOrder(scope: BranchScope, input: {
       await tx.inventoryMovement.create({ data: {
         businessId: scope.businessId, branchId: scope.branchId, inventoryItemId: orderLine.inventoryItemId,
         quantity: lineInput.quantity, type: "RECEIPT", unitCost, resultingQuantity,
-        reason: "Goods received against purchase order", reference: receipt.receiptNumber, createdById: input.receivedById,
+        reason: "Goods received against purchase order", reference: receipt.receiptNumber,
+        batchNumber: lineInput.batchNumber?.trim() || null, expiryDate: lineInput.expiryDate ?? null,
+        createdById: input.receivedById,
       } });
     }
     const updatedLines = await tx.inventoryPurchaseOrderLine.findMany({ where: { purchaseOrderId: order.id } });
@@ -1299,7 +1312,7 @@ export async function getInventoryBranchComparison(scope: BusinessScope) {
 export async function getInventoryReports(scope: BranchScope) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
-  const [stocks, movements, purchaseOrders] = await prisma.$transaction([
+  const [stocks, movements, purchaseOrders, expiryMovements] = await prisma.$transaction([
     prisma.inventoryStock.findMany({
       where: { businessId: scope.businessId, branchId: scope.branchId },
       include: { inventoryItem: true },
@@ -1324,6 +1337,17 @@ export async function getInventoryReports(scope: BranchScope) {
       },
       include: { supplier: true, lines: true, receipts: true },
       orderBy: { createdAt: "desc" },
+      take: 500,
+    }),
+    prisma.inventoryMovement.findMany({
+      where: {
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        type: { in: ["RECEIPT", "RETURN"] },
+        expiryDate: { not: null },
+      },
+      include: { inventoryItem: true },
+      orderBy: { expiryDate: "asc" },
       take: 500,
     }),
   ]);
@@ -1359,10 +1383,26 @@ export async function getInventoryReports(scope: BranchScope) {
     }
     supplierPerformance.set(order.supplierId, row);
   }
+  const now = new Date();
+  const expiryRegister = expiryMovements.map((movement) => {
+    const expiryDate = movement.expiryDate!;
+    const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / 86400000);
+    return {
+      id: movement.id,
+      inventoryItem: movement.inventoryItem,
+      batchNumber: movement.batchNumber,
+      expiryDate,
+      quantityReceived: movement.quantity,
+      receiptNumber: movement.reference ?? "—",
+      receivedAt: movement.createdAt,
+      daysUntilExpiry,
+      status: daysUntilExpiry < 0 ? "EXPIRED" as const : daysUntilExpiry <= 30 ? "DUE_SOON" as const : "IN_DATE" as const,
+    };
+  });
   return {
-    periodDays: 30, totalValuation, valuation,
+    periodDays: 30, totalValuation, valuation, expiryRegister,
     movementTotals, movementCount: movements.length,
-    consumptionQuantity: (movementTotals.ISSUE ?? 0) + (movementTotals.WASTE ?? 0) + (movementTotals.EXPIRED ?? 0),
+    consumptionQuantity: (movementTotals.ISSUE ?? 0) + (movementTotals.WASTE ?? 0) + (movementTotals.DAMAGED ?? 0) + (movementTotals.EXPIRED ?? 0),
     adjustmentQuantity: movementTotals.ADJUSTMENT ?? 0,
     supplierPerformance: [...supplierPerformance.values()].map(({ receiptLeadTimeDays, ...row }) => ({
       ...row,

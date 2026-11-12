@@ -21,6 +21,8 @@ export interface OrderWorkspace {
   customer: Customer;
   activeOrder: Order | null;
   mode: OrderWorkspaceMode;
+  returnTo?: "customer-workstation";
+  isDirty?: boolean;
   draft: OrderWorkspaceDraft;
   updatedAt: number;
 }
@@ -34,6 +36,7 @@ interface OrderWorkspaceState {
     options?: {
       order?: Order | null;
       draft?: Partial<OrderWorkspaceDraft>;
+      returnTo?: "customer-workstation";
     },
   ) => string;
 
@@ -43,7 +46,7 @@ interface OrderWorkspaceState {
   updateWorkspace: (
     workspaceId: string,
     update: Partial<
-      Pick<OrderWorkspace, "customer" | "activeOrder" | "mode">
+      Pick<OrderWorkspace, "customer" | "activeOrder" | "mode" | "isDirty" | "returnTo">
     > & {
       draft?: Partial<OrderWorkspaceDraft>;
     },
@@ -83,6 +86,13 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
 
         if (existing) {
           return {
+            workspaces: options?.returnTo
+              ? state.workspaces.map((workspace) =>
+                  workspace.id === workspaceId
+                    ? { ...workspace, returnTo: options.returnTo }
+                    : workspace,
+                )
+              : state.workspaces,
             activeWorkspaceId: workspaceId,
           };
         }
@@ -92,6 +102,8 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
           customer,
           activeOrder: options?.order ?? null,
           mode: options?.order ? "view" : "new",
+          isDirty: false,
+          ...(options?.returnTo ? { returnTo: options.returnTo } : {}),
           draft: {
             ...DEFAULT_DRAFT,
             customerId: customer.id,
@@ -173,6 +185,12 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
             ...(update.mode
               ? { mode: update.mode }
               : {}),
+            ...(update.isDirty !== undefined
+              ? { isDirty: update.isDirty }
+              : {}),
+            ...(update.returnTo !== undefined
+              ? { returnTo: update.returnTo }
+              : {}),
             ...(update.draft
               ? {
                   draft: {
@@ -196,6 +214,7 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
       set({
         workspaces: workspaces.map((workspace) => ({
           ...workspace,
+          isDirty: workspace.isDirty ?? false,
           mode:
             workspace.mode === "new" || workspace.mode === "view"
               ? workspace.mode

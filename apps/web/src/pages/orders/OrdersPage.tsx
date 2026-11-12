@@ -99,9 +99,28 @@ export function OrdersPage() {
   const customerIdFromUrl = searchParams.get("customerId");
   const openCustomerAccountFromUrl = searchParams.get("openAccount") === "1";
   const returnToFromUrl = searchParams.get("returnTo");
+  const returnToCustomerWorkstation =
+    new URLSearchParams(location.search).get("returnTo") === "customer-workstation";
+  const [workspaceReturnTo, setWorkspaceReturnTo] = useState<"customer-workstation" | null>(
+    returnToCustomerWorkstation ? "customer-workstation" : null,
+  );
+  const workspaceReturnToRef = useRef<"customer-workstation" | null>(
+    returnToCustomerWorkstation ? "customer-workstation" : null,
+  );
+  if (returnToCustomerWorkstation) {
+    workspaceReturnToRef.current = "customer-workstation";
+  }
+
+  useEffect(() => {
+    if (returnToFromUrl === "customer-workstation") {
+      workspaceReturnToRef.current = "customer-workstation";
+      setWorkspaceReturnTo("customer-workstation");
+    }
+  }, [returnToFromUrl]);
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
+  const newOrderFromUrl = searchParams.get("newOrder") === "1";
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
@@ -184,6 +203,7 @@ export function OrdersPage() {
   const [customerId, setCustomerId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [orderFormDirty, setOrderFormDirty] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [switchingCustomer, setSwitchingCustomer] = useState(false);
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -196,7 +216,7 @@ export function OrdersPage() {
     setSwitchingCustomer(true);
     setCustomerSearch("");
     setCustomerPickerOpen(true);
-    navigate("/orders", { replace: true });
+    navigate("/order-management", { replace: true });
   }, [customerPickerFromUrl, navigate]);
 
   useEffect(() => {
@@ -431,11 +451,14 @@ export function OrdersPage() {
         });
       }
 
+      markOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setSelectedOrder(order);
 
-      if (returnToFromUrl === "customer-workstation") {
+      if (workspaceReturnToRef.current === "customer-workstation" || workspaceReturnTo === "customer-workstation") {
+        workspaceReturnToRef.current = null;
+        setWorkspaceReturnTo(null);
         navigate(
           `/customer-workstation?customerId=${encodeURIComponent(
             order.customerId,
@@ -521,6 +544,7 @@ export function OrdersPage() {
       }
 
       setSelectedOrder(order);
+      markOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setEditReason("");
@@ -599,7 +623,8 @@ export function OrdersPage() {
     void (async () => {
       try {
         const customer = await getCustomer(order.customerId, { accessToken });
-        const workspaceId = openWorkspace(customer, { order });
+        markOrderFormDirty(false);
+    const workspaceId = openWorkspace(customer, { order });
         switchWorkspace(workspaceId);
         updateWorkspace(workspaceId, { activeOrder: order, mode: "view" });
         setSelectedOrder(order);
@@ -624,6 +649,25 @@ export function OrdersPage() {
   ]);
 
   useEffect(() => {
+    if (!newOrderFromUrl || customerIdFromUrl) return;
+    setCustomerSearch("");
+    setCustomerPickerOpen(true);
+    setFormOpen(false);
+    navigate("/order-management", { replace: true });
+  }, [newOrderFromUrl, customerIdFromUrl, navigate]);
+
+  useEffect(() => {
+    // This page can remain mounted in embedded/test navigation harnesses.
+    // Only consume customer deep links while actually on an Orders route;
+    // otherwise a return to Customer Workstation would be intercepted and
+    // redirected straight back into Order Management.
+    if (
+      location.pathname !== "/orders" &&
+      location.pathname !== "/order-management"
+    ) {
+      return;
+    }
+
     const navigationKey = customerIdFromUrl
       ? `${location.key}:${customerIdFromUrl}`
       : null;
@@ -642,13 +686,18 @@ export function OrdersPage() {
     openedCustomerFromUrlRef.current = navigationKey;
     if (openCustomerAccountFromUrl) {
       openCustomerAccount(customer);
+      navigate("/order-management", { replace: true });
     } else {
-      openCustomerWorkspace(customer);
+      // openCustomerWorkspace performs navigation and preserves returnTo in
+      // the URL when this flow originated in Customer Workstation.
+      openCustomerWorkspace(customer, newOrderFromUrl, returnToFromUrl === "customer-workstation");
     }
-    navigate("/orders", { replace: true });
   }, [
     location.key,
+    location.pathname,
     customerIdFromUrl,
+    newOrderFromUrl,
+    returnToFromUrl,
     openCustomerAccountFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
@@ -718,7 +767,13 @@ export function OrdersPage() {
       }, 0)
     : null;
 
+  function markOrderFormDirty(value: boolean) {
+    setOrderFormDirty(value);
+    if (activeWorkspaceId) updateWorkspace(activeWorkspaceId, { isDirty: value });
+  }
+
   function closeForm() {
+    markOrderFormDirty(false);
     if (activeWorkspace?.mode === "edit" && activeWorkspaceId) {
       updateWorkspace(activeWorkspaceId, { mode: "view" });
     }
@@ -729,6 +784,11 @@ export function OrdersPage() {
   }
 
   function openCreate() {
+    if (location.pathname !== "/order-management") {
+      navigate("/order-management?newOrder=1");
+      return;
+    }
+    markOrderFormDirty(false);
     setSelectedOrder(null);
     setFormError(null);
 
@@ -746,19 +806,61 @@ export function OrdersPage() {
     setFormOpen(false);
   }
 
-  function openCustomerWorkspace(customer: Customer) {
+  function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstationFromCaller = false) {
+    const shouldReturnToCustomerWorkstation =
+      returnToCustomerWorkstationFromCaller ||
+      returnToFromUrl === "customer-workstation" ||
+      new URLSearchParams(location.search).get("returnTo") === "customer-workstation";
+    if (shouldReturnToCustomerWorkstation) {
+      workspaceReturnToRef.current = "customer-workstation";
+      setWorkspaceReturnTo("customer-workstation");
+    }
+    // Keep the return destination in the URL because route transitions may
+    // remount this page and clear component-local refs.
+    const orderManagementPath = shouldReturnToCustomerWorkstation
+      ? "/order-management?returnTo=customer-workstation"
+      : "/order-management";
+    markOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
     );
 
-    const workspaceId = openWorkspace(customer);
+    const workspaceId = openWorkspace(customer, {
+      ...(shouldReturnToCustomerWorkstation
+        ? { returnTo: "customer-workstation" as const }
+        : {}),
+    });
+    if (shouldReturnToCustomerWorkstation) {
+      updateWorkspace(workspaceId, { returnTo: "customer-workstation" });
+    }
     switchWorkspace(workspaceId);
 
-    if (existingWorkspace) {
+    if (existingWorkspace && !forceNewOrder) {
       setSelectedOrder(existingWorkspace.activeOrder);
       setFormError(null);
       setCustomerPickerOpen(false);
-      setFormOpen(existingWorkspace.mode === "new");
+      setFormOpen(existingWorkspace.mode === "new" || existingWorkspace.mode === "edit");
+      navigate(orderManagementPath);
+      return;
+    }
+    if (existingWorkspace && forceNewOrder) {
+      updateWorkspace(workspaceId, {
+        activeOrder: null,
+        mode: "new",
+        isDirty: false,
+        draft: {
+          customerId: customer.id,
+          lines: [{ serviceId: "", quantity: 1, colors: [] }],
+          garmentNote: "",
+          internalNote: "",
+          expectedReadyAt: "",
+        },
+      });
+      setSelectedOrder(null);
+      setFormError(null);
+      setCustomerPickerOpen(false);
+      setFormOpen(true);
+      navigate(orderManagementPath);
       return;
     }
 
@@ -776,6 +878,7 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
+    navigate(orderManagementPath);
   }
 
   function openCustomerAccount(customer: Customer) {
@@ -841,6 +944,7 @@ export function OrdersPage() {
     if (!existingWorkspace) {
       updateWorkspace(workspaceId, {
         mode: "new",
+        isDirty: false,
         draft: {
           customerId: customer.id,
           lines: [{ serviceId: "", quantity: 1, colors: [] }],
@@ -867,10 +971,12 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
+    navigate("/order-management");
   }
 
   function addLine() {
     if (!activeWorkspaceId) return;
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -884,6 +990,7 @@ export function OrdersPage() {
 
   function removeLine(index: number) {
     if (!activeWorkspaceId) return;
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -898,6 +1005,7 @@ export function OrdersPage() {
     value: OrderLine[typeof field],
   ) {
     if (!activeWorkspaceId) return;
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -1018,6 +1126,7 @@ export function OrdersPage() {
       return;
     }
 
+    markOrderFormDirty(false);
     const customer =
       (activeWorkspace?.customer.id === order.customerId
         ? activeWorkspace.customer
@@ -1029,6 +1138,7 @@ export function OrdersPage() {
       return;
     }
 
+    markOrderFormDirty(false);
     const workspaceId = openWorkspace(customer, { order });
     switchWorkspace(workspaceId);
     updateWorkspace(workspaceId, {
@@ -1187,7 +1297,7 @@ export function OrdersPage() {
 
         <section aria-labelledby="new-order-heading">
           <h2 id="new-order-heading">Order Details</h2>
-          <form onSubmit={submitOrder}>
+          <form onSubmit={submitOrder} onChange={() => markOrderFormDirty(true)}>
             <div>
               <div>
                 <strong>Customer</strong>
@@ -1729,12 +1839,34 @@ export function OrdersPage() {
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
+            isDirty={orderFormDirty || Boolean(activeWorkspace.isDirty)}
             customer={activeWorkspace.customer}
             mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
             onBack={() => {
+              const customerId = activeWorkspace.customer.id;
+              // Read the latest workspace snapshot at click time. The workspace
+              // can be reused and updated after this page's initial URL render.
+              const latestWorkspace = useOrderWorkspaceStore
+                .getState()
+                .workspaces.find((workspace) => workspace.id === activeWorkspace.id);
+              const shouldReturnToCustomerWorkstation =
+                latestWorkspace?.returnTo === "customer-workstation" ||
+                activeWorkspace.returnTo === "customer-workstation" ||
+                workspaceReturnToRef.current === "customer-workstation" ||
+                workspaceReturnTo === "customer-workstation" ||
+                returnToFromUrl === "customer-workstation" ||
+                new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
+                returnToCustomerWorkstation;
+              markOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
-              navigate("/orders");
+              if (shouldReturnToCustomerWorkstation) {
+                workspaceReturnToRef.current = null;
+                setWorkspaceReturnTo(null);
+                navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
+                return;
+              }
+              navigate(location.pathname === "/order-management" ? "/order-management" : "/orders");
             }}
             onSwitchCustomer={() => {
               setSwitchingCustomer(true);

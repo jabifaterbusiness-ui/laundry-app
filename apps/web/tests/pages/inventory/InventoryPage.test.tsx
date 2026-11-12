@@ -150,6 +150,7 @@ function mockSuccessfulQueries() {
       adjustmentQuantity: 0,
       valuation: [],
       movementTotals: {},
+      expiryRegister: [],
       supplierPerformance: [],
     },
   });
@@ -423,6 +424,37 @@ describe("InventoryPage", () => {
     });
   });
 
+  it("shows batch expiry status in branch inventory reports", async () => {
+    mockGetInventoryReports.mockResolvedValue({
+      data: {
+        periodDays: 30,
+        totalValuation: 0,
+        movementCount: 0,
+        consumptionQuantity: 0,
+        adjustmentQuantity: 0,
+        valuation: [],
+        movementTotals: {},
+        expiryRegister: [{
+          id: "expiry-1",
+          inventoryItem: item,
+          batchNumber: "LOT-EXP-01",
+          expiryDate: "2026-11-15T00:00:00.000Z",
+          quantityReceived: 8,
+          receiptNumber: "GRN-EXP-01",
+          receivedAt: "2026-11-01T00:00:00.000Z",
+          daysUntilExpiry: 3,
+          status: "DUE_SOON",
+        }],
+        supplierPerformance: [],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText("Batch expiry register")).toBeInTheDocument();
+    expect(await screen.findByText("LOT-EXP-01")).toBeInTheDocument();
+    expect(screen.getByText("Due within 30 days")).toBeInTheDocument();
+  });
+
   it("creates an inventory item", async () => {
     renderPage();
 
@@ -609,6 +641,8 @@ describe("InventoryPage", () => {
           type: "RECEIPT",
           reason: undefined,
           reference: undefined,
+          batchNumber: undefined,
+          expiryDate: undefined,
         },
         { accessToken: "test-token" },
         "branch-1",
@@ -669,11 +703,58 @@ describe("InventoryPage", () => {
           type: "ISSUE",
           reason: "Laundry production",
           reference: undefined,
+          batchNumber: undefined,
+          expiryDate: undefined,
         },
         { accessToken: "test-token" },
         "branch-1",
       );
     });
+  });
+
+  it("records damaged stock with a reason and batch reference", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
+    const section = screen.getByRole("region", { name: "Stock movement" });
+    fireEvent.change(screen.getByLabelText("Movement"), { target: { value: "DAMAGED" } });
+    fireEvent.change(section.querySelectorAll("select")[1], { target: { value: item.id } });
+    fireEvent.change(section.querySelector<HTMLInputElement>('input[type="number"]')!, { target: { value: "2" } });
+    fireEvent.change(screen.getAllByLabelText("Reason")[0], { target: { value: "Packaging torn during handling" } });
+    fireEvent.change(screen.getByLabelText("Batch / Lot Number"), { target: { value: "LOT-DMG-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Damaged Stock" }));
+
+    await waitFor(() => {
+      expect(mockCreateInventoryMovement).toHaveBeenCalledWith({
+        inventoryItemId: item.id,
+        quantity: 2,
+        type: "DAMAGED",
+        reason: "Packaging torn during handling",
+        reference: undefined,
+        batchNumber: "LOT-DMG-01",
+        expiryDate: undefined,
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+  });
+
+  it("requires an expiry date and batch number for expired stock", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: "Detergent" });
+    const section = screen.getByRole("region", { name: "Stock movement" });
+    fireEvent.change(screen.getByLabelText("Movement"), { target: { value: "EXPIRED" } });
+    fireEvent.change(section.querySelectorAll("select")[1], { target: { value: item.id } });
+    fireEvent.change(section.querySelector<HTMLInputElement>('input[type="number"]')!, { target: { value: "1" } });
+    fireEvent.change(screen.getAllByLabelText("Reason")[0], { target: { value: "Past expiry date" } });
+    fireEvent.change(screen.getByLabelText("Batch / Lot Number"), { target: { value: "LOT-EXP-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Expired Stock" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter the original expiry date");
+
+    fireEvent.change(screen.getByLabelText("Expiry Date"), { target: { value: "2026-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Expired Stock" }));
+    await waitFor(() => expect(mockCreateInventoryMovement).toHaveBeenCalledWith(expect.objectContaining({
+      type: "EXPIRED",
+      batchNumber: "LOT-EXP-01",
+      expiryDate: "2026-01-01",
+    }), { accessToken: "test-token" }, "branch-1"));
   });
 
   it("adjusts stock with a required reason", async () => {

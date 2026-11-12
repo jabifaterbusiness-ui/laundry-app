@@ -39,7 +39,7 @@ export function CustomersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<
-    "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all"
+    "active" | "dormant" | "blocked" | "blacklisted" | "merged" | "inactive" | "all"
   >("active");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null | undefined>(undefined);
   const [statusChange, setStatusChange] = useState<{
@@ -347,6 +347,7 @@ export function CustomersPage() {
           <option value="dormant">Dormant</option>
           <option value="blocked">Blocked</option>
           <option value="blacklisted">Blacklisted</option>
+          <option value="merged">Merged (archived)</option>
           <option value="inactive">Legacy inactive</option>
           <option value="all">All</option>
         </select>
@@ -390,8 +391,9 @@ export function CustomersPage() {
                 <td>{customer.phone}</td>
                 <td>{customer.email ?? "-"}</td>
                 <td>{customer.ownerBranch?.name ?? "Branch details unavailable"}</td>
-                <td>{customer.lifecycleStatus}</td>
+                <td>{customer.lifecycleStatus === "MERGED" ? `Merged into ${customer.mergedIntoCustomer?.name ?? "another customer"}` : customer.lifecycleStatus}</td>
                 <td>
+                  {customer.lifecycleStatus !== "MERGED" ? <>
                   <button
                     type="button"
                     onClick={() => setEditingCustomer(customer)}
@@ -407,6 +409,7 @@ export function CustomersPage() {
                   >
                     Change status
                   </button>
+                  </> : <span aria-label="Merged customer archive">Archived</span>}
                 </td>
               </tr>
             ))}

@@ -20,13 +20,26 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Confirm the order is in the correct branch and status folder. Use the available invoice or receipt action to print or share the customer document.",
    "Move work through the available statuses as garments are received, processed and ready for pickup. Record money actually received through the payment flow and confirm collection before handing over garments."
   ],links:[{label:"Orders",href:"/orders"},{label:"Customers",href:"/customers"},{label:"Payments",href:"/payments"}]},
+  {title:"Merge duplicate customer accounts (MC)",summary:"Combine duplicate customer records safely within one branch.",steps:[
+   "Confirm that both records belong to the same business and the currently selected branch. Customer merging is branch-local; do not attempt to combine records across branches.",
+   "Open the duplicate customer in Order Management or Customer Workstation and choose Merge Customer (MC), or launch MC from Quick Operations.",
+   "Select the destination customer carefully. Review the source and destination names, phone numbers and account details before confirming.",
+   "The merge transfers supported orders, account ledger history, customer-specific pricing, group memberships, campaign and communication history, notification records and automatic customer discounts. Original transaction dates and amounts are retained.",
+   "The source customer is archived with the Merged status and a link to the destination account. It is not permanently deleted. A customer with records or sharing links in another branch cannot be merged from this branch."
+  ],links:[{label:"Customers",href:"/customers"},{label:"Order Management",href:"/order-management"}]},
+  {title:"Transfer an order to another customer (TO)",summary:"Move one order without moving the customer's other orders.",steps:[
+   "Open the order in Order Management, or open the customer's order list in Customer Workstation.",
+   "Choose Transfer Order (TO), select the destination customer in the same business and currently selected branch, then review the order before confirming.",
+   "Only the selected order is transferred. The source customer's other orders and customer account are not merged.",
+   "Use Merge Customer (MC) instead when the intention is to consolidate duplicate customer accounts and their supported linked records."
+  ],links:[{label:"Order Management",href:"/order-management"},{label:"Customers",href:"/customers"}]},
   {title:"Order statuses, cancellation and deletion",summary:"Correct mistakes without damaging financial history.",steps:[
    "Use the order folders to find Received, Outstanding / Unpicked, Ready for Pickup / Completed, Cancelled and All Orders. Available status transitions depend on the current order state and your permissions.",
    "If an order was created by mistake, use the supported cancellation or void workflow and provide the reason/confirmation requested. Do not assume that an order can simply be deleted: orders may be linked to invoices, payments and garment history.",
    "Invoice deletion, payment voiding and refunds are separate controlled actions. They require the relevant permissions and may require a reason or sensitive password re-authentication. Prefer cancellation or a documented correction over erasing history."
   ],links:[{label:"Orders",href:"/orders"},{label:"Invoices",href:"/invoices"}]},
   {title:"Print an order, invoice or receipt",summary:"Produce a paper or digital customer record.",steps:[
-   "Open the relevant order or invoice and use its invoice/receipt or print action. Reprint an existing document with the Reprint Invoice / Receipt quick operation when your permission allows it.",
+   "Open the relevant order or invoice and use its invoice/receipt or print action. In Order Management, use Fn+F1 for the customer copy, Ctrl+F1 for the company copy, and Ctrl+Shift+F1 for the digital receipt. On keyboards where F1 is a secondary key, hold Fn while pressing F1. Reprint an existing document with the Reprint Invoice / Receipt quick operation when your permission allows it.",
    "Receipt appearance follows the logo, colours and header style in Business Settings. Print a sample after changing branding and check paper size and scaling.",
    "A receipt records a transaction; do not mark an invoice paid until the money has actually been received and recorded."
   ],links:[{label:"Invoices & receipts",href:"/invoices"},{label:"Business settings",href:"/business/settings"}]}

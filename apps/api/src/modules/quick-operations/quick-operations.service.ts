@@ -160,8 +160,18 @@ export async function executeQuickOperation(
       };
     }
 
-    case "TI": {
+    case "TO": {
       const parsed = transferInvoiceQuickOperationSchema.parse(input);
+
+      const previousOrder = await getOrderForBusiness(
+        parsed.orderId,
+        context.businessId,
+        context.branchId,
+        context.userId,
+      );
+      if (!previousOrder) {
+        throw new AppError("Order not found", 404);
+      }
 
       const result = await transferOrder(
         parsed.orderId,
@@ -185,6 +195,7 @@ export async function executeQuickOperation(
           operationName: definition.name,
           ...(reason !== undefined ? { reason } : {}),
           orderNumber: result.orderNumber,
+          previousCustomerId: previousOrder.customerId,
           customerId: result.customerId,
         },
       });
@@ -233,7 +244,7 @@ export async function executeQuickOperation(
       };
     }
 
-    case "MA": {
+    case "MC": {
       const parsed = mergeCustomerQuickOperationSchema.parse(input);
 
       const result = await mergeCustomer(
@@ -263,6 +274,12 @@ export async function executeQuickOperation(
             (order) => order.orderNumber,
           ),
           sourceDeactivated: result.sourceDeactivated,
+          sourceArchived: result.sourceArchived,
+          mergedIntoCustomerId: result.mergedIntoCustomerId,
+          mergedServicePriceCount: result.mergedServicePriceCount,
+          retainedServicePriceConflictCount: result.retainedServicePriceConflictCount,
+          mergedGroupMembershipCount: result.mergedGroupMembershipCount,
+          mergedAnnouncementRecipientCount: result.mergedAnnouncementRecipientCount,
         },
       });
 

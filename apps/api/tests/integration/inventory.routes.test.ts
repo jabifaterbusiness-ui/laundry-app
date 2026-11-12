@@ -675,6 +675,8 @@ describe("Inventory routes - branch-scoped stock", () => {
       createdById: "user-1",
       reason: "New stock received",
       reference: "PO-001",
+      batchNumber: "LOT-PO-001",
+      expiryDate: new Date("2027-03-01T00:00:00.000Z"),
     } as never);
 
     const res = await request(app)
@@ -687,6 +689,8 @@ describe("Inventory routes - branch-scoped stock", () => {
         type: "RECEIPT",
         reason: "New stock received",
         reference: "PO-001",
+        batchNumber: "LOT-PO-001",
+        expiryDate: "2027-03-01",
       });
 
     expect(res.status).toBe(201);
@@ -698,7 +702,7 @@ describe("Inventory routes - branch-scoped stock", () => {
         resultingQuantity: 15,
       },
     });
-    expect(prisma.inventoryMovement.create).toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ batchNumber: "LOT-PO-001", expiryDate: new Date("2027-03-01") }) });
     expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
@@ -816,7 +820,7 @@ describe("Inventory routes - branch-scoped stock", () => {
     vi.mocked(prisma.branch.findFirst).mockResolvedValue({
       id: BRANCH_A, businessId: "biz-A", name: "Main Branch",
     } as never);
-    for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
+    for (const type of ["RETURN", "WASTE", "DAMAGED", "EXPIRED"]) {
       const res = await request(app)
         .post("/api/v1/inventory/movements")
         .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
@@ -830,6 +834,33 @@ describe("Inventory routes - branch-scoped stock", () => {
     }
     expect(prisma.inventoryStock.upsert).not.toHaveBeenCalled();
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("requires batch identity for expiry metadata and an expiry date for expired stock", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    const receiptWithoutBatch = await request(app)
+      .post("/api/v1/inventory/movements")
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
+      .send({
+        inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        quantity: 1,
+        type: "RECEIPT",
+        expiryDate: "2027-03-01",
+      });
+    expect(receiptWithoutBatch.status).toBe(422);
+
+    const expiredWithoutDate = await request(app)
+      .post("/api/v1/inventory/movements")
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
+      .send({
+        inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        quantity: 1,
+        type: "EXPIRED",
+        reason: "Past expiry",
+        batchNumber: "LOT-OLD",
+      });
+    expect(expiredWithoutDate.status).toBe(422);
+    expect(prisma.inventoryStock.upsert).not.toHaveBeenCalled();
   });
 
   it("rejects stock requests without X-Branch-Id", async () => {

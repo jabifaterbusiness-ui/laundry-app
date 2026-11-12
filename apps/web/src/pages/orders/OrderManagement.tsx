@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
+import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 import { getCustomer, updateCustomer } from "../../lib/customers-api.js";
 import {
   deleteInvoice,
@@ -34,7 +35,7 @@ import {
 } from "../../lib/orders-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
-import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
+
 
 const STATUSES: OrderStatus[] = [
   "RECEIVED",
@@ -61,6 +62,7 @@ interface OrderManagementProps {
   order: Order | null;
   customer: Customer;
   mode: "view" | "new" | "edit";
+  isDirty?: boolean;
   newOrderContent?: ReactNode;
   onBack: () => void;
   onSwitchCustomer: () => void;
@@ -73,6 +75,7 @@ function OrderManagementContent({
   order,
   customer,
   mode,
+  isDirty = false,
   newOrderContent,
   onBack,
   onSwitchCustomer,
@@ -622,12 +625,14 @@ function OrderManagementContent({
   }
 
   function requestBack() {
-    if (dirty) {
+    if (dirty || isDirty) {
       setWarningOpen(true);
       return;
     }
 
-    if (layer !== "none") {
+    // Inline new/edit workspaces do not use the detail overlay layer.
+    // A stale layer value must never swallow the workspace Back action.
+    if (mode === "view" && layer !== "none") {
       setLayer("none");
       return;
     }
@@ -665,6 +670,14 @@ function OrderManagementContent({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
+
+  function openQuickOperation(code: "MC" | "TO", recordId: string) {
+    const operation = QUICK_OPERATIONS.find((entry) => entry.code === code);
+    if (!operation) return;
+    window.dispatchEvent(new CustomEvent("quick-operation:open", {
+      detail: { ...operation, recordId },
+    }));
+  }
 
   function beginEdit() {
     setPhone(currentCustomer.phone ?? "");
@@ -819,6 +832,13 @@ function OrderManagementContent({
         </button>
         <button
           type="button"
+          disabled={mode !== "view" || !order || !hasPermission(user, "orders.update")}
+          onClick={() => order && openQuickOperation("TO", order.id)}
+        >
+          Transfer Order (TO)
+        </button>
+        <button
+          type="button"
           disabled={
             mode !== "view" ||
             !order ||
@@ -868,7 +888,7 @@ function OrderManagementContent({
             setPrintInvoiceId(invoiceQuery.data!.id);
           }}
         >
-          Print Customer Copy (F1)
+          Print Customer Copy (FN+F1)
         </button>
 
         <button
@@ -915,6 +935,13 @@ function OrderManagementContent({
           onClick={onSwitchCustomer}
         >
           Switch Customer
+        </button>
+        <button
+          type="button"
+          disabled={mode !== "view" || !hasPermission(user, "customers.update")}
+          onClick={() => openQuickOperation("MC", currentCustomer.id)}
+        >
+          Merge Customer (MC)
         </button>
         <button type="button" onClick={() => setLayer("more")}>
           More
@@ -1813,7 +1840,7 @@ function OrderManagementContent({
                 setWarningOpen(false);
                 setDirty(false);
 
-                if (layer !== "none") {
+                if (mode === "view" && layer !== "none") {
                   setLayer("none");
                 } else {
                   onBack();

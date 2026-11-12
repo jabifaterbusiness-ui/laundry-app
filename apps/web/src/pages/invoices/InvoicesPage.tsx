@@ -830,7 +830,7 @@ export function InvoicesPage() {
                 setPrintMode("customer");
               }}
             >
-              Print Customer Copy (F1)
+              Print Customer Copy (FN+F1)
             </button>
 
             <button

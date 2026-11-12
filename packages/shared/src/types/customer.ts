@@ -2,7 +2,8 @@ export type CustomerLifecycleStatus =
   | "ACTIVE"
   | "DORMANT"
   | "BLOCKED"
-  | "BLACKLISTED";
+  | "BLACKLISTED"
+  | "MERGED";
 
 export interface Customer {
   id: string;
@@ -22,6 +23,8 @@ export interface Customer {
   statusReason: string | null;
   statusChangedAt: string | null;
   statusChangedById: string | null;
+  mergedIntoCustomerId?: string | null;
+  mergedIntoCustomer?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }

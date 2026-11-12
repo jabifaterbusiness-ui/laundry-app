@@ -52,7 +52,7 @@ export const listInventoryStockQuerySchema = z.object({
 
 export const listInventoryMovementsQuerySchema = z.object({
   inventoryItemId: z.string().uuid().optional(),
-  type: z.enum(["RECEIPT", "ISSUE", "ADJUSTMENT", "RETURN", "WASTE", "EXPIRED", "TRANSFER_IN", "TRANSFER_OUT", "STOCKTAKE"]).optional(),
+  type: z.enum(["RECEIPT", "ISSUE", "ADJUSTMENT", "RETURN", "WASTE", "DAMAGED", "EXPIRED", "TRANSFER_IN", "TRANSFER_OUT", "STOCKTAKE"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25),
 });
@@ -61,13 +61,27 @@ export const listInventoryMovementsQuerySchema = z.object({
 export const createInventoryMovementSchema = z.object({
   inventoryItemId: z.string().uuid("Invalid inventory item ID"),
   quantity: z.coerce.number().int().positive("Quantity must be a positive whole number"),
-  type: z.enum(["RECEIPT", "ISSUE", "RETURN", "WASTE", "EXPIRED"]),
+  type: z.enum(["RECEIPT", "ISSUE", "RETURN", "WASTE", "DAMAGED", "EXPIRED"]),
+  batchNumber: z.string().trim().max(100).optional(),
+  expiryDate: z.coerce.date().optional(),
   unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
   reason: z.string().trim().max(1000, "Movement reason is too long").optional(),
   reference: z.string().trim().max(200, "Movement reference is too long").optional(),
 }).strict().superRefine((value, context) => {
-  if ((value.type === "RETURN" || value.type === "WASTE" || value.type === "EXPIRED") && !value.reason?.trim()) {
+  if ((value.type === "RETURN" || value.type === "WASTE" || value.type === "DAMAGED" || value.type === "EXPIRED") && !value.reason?.trim()) {
     context.addIssue({ code: "custom", path: ["reason"], message: `${value.type} movements require an audit reason` });
+  }
+  if (value.expiryDate && !value.batchNumber?.trim()) {
+    context.addIssue({ code: "custom", path: ["batchNumber"], message: "A batch number is required when an expiry date is recorded" });
+  }
+  if (value.type === "EXPIRED" && !value.expiryDate) {
+    context.addIssue({ code: "custom", path: ["expiryDate"], message: "Expired-stock movements require the original expiry date" });
+  }
+  if (value.type === "RECEIPT" && value.expiryDate && value.expiryDate <= new Date()) {
+    context.addIssue({ code: "custom", path: ["expiryDate"], message: "Cannot receive stock with an expired date" });
+  }
+  if (value.type === "EXPIRED" && value.expiryDate && value.expiryDate > new Date()) {
+    context.addIssue({ code: "custom", path: ["expiryDate"], message: "The expiry date must not be in the future" });
   }
 });
 
@@ -122,8 +136,19 @@ export const receiveInventoryPurchaseOrderSchema = z.object({
     purchaseOrderLineId: z.string().uuid(),
     quantity: z.coerce.number().int().positive().max(100000000),
     unitCost: z.coerce.number().int().min(0).max(2147483647).optional(),
+    batchNumber: z.string().trim().max(100).optional(),
+    expiryDate: z.coerce.date().optional(),
   }).strict()).min(1).max(200),
-}).strict();
+}).strict().superRefine((value, context) => {
+  value.lines.forEach((line, index) => {
+    if (line.expiryDate && !line.batchNumber?.trim()) {
+      context.addIssue({ code: "custom", path: ["lines", index, "batchNumber"], message: "A batch number is required when an expiry date is recorded" });
+    }
+    if (line.expiryDate && line.expiryDate <= new Date()) {
+      context.addIssue({ code: "custom", path: ["lines", index, "expiryDate"], message: "Cannot receive stock with an expired date" });
+    }
+  });
+});
 
 export const createInventoryTransferSchema = z.object({
   destinationBranchId: z.string().uuid(),

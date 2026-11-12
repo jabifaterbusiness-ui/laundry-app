@@ -10,6 +10,7 @@ const {
   listOfflineSyncOperationsMock,
   useIsMutatingMock,
   getCustomerMock,
+  listCustomersMock,
   getOrderMock,
   exportBackupMock,
   listCloudBackupConnectionsMock,
@@ -25,6 +26,7 @@ const {
   listOfflineSyncOperationsMock: vi.fn(),
   useIsMutatingMock: vi.fn(() => 0),
   getCustomerMock: vi.fn(),
+  listCustomersMock: vi.fn(),
   getOrderMock: vi.fn(),
   exportBackupMock: vi.fn(),
   listCloudBackupConnectionsMock: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock("../../../src/lib/quick-operations-api.js", () => ({
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
   getCustomer: getCustomerMock,
+  listCustomers: listCustomersMock,
 }));
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
@@ -164,9 +167,9 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
-  TI: {
-    code: "TI",
-    name: "Transfer Invoice",
+  TO: {
+    code: "TO",
+    name: "Transfer Order",
     description: "Transfer an invoice/order to another customer account.",
     permission: "orders.update",
     requiresConfirmation: true,
@@ -180,9 +183,9 @@ const operations: Record<string, QuickOperationDefinition> = {
     requiresConfirmation: true,
     sensitive: true,
   },
-  MA: {
-    code: "MA",
-    name: "Merge Account",
+  MC: {
+    code: "MC",
+    name: "Merge Customer",
     description: "Merge one customer account into another.",
     permission: "customers.update",
     requiresConfirmation: true,
@@ -275,7 +278,7 @@ describe("QuickOperationLauncher", () => {
   beforeEach(() => {
     executeQuickOperationMock.mockReset();
     executeQuickOperationMock.mockResolvedValue({
-      code: "TI",
+      code: "TO",
       result: {},
     });
 
@@ -285,6 +288,14 @@ describe("QuickOperationLauncher", () => {
     useIsMutatingMock.mockReturnValue(0);
 
     getCustomerMock.mockReset();
+    listCustomersMock.mockReset();
+    listCustomersMock.mockResolvedValue({
+      data: [
+        { id: "customer-1", name: "Source Customer", phone: "08000000001", lifecycleStatus: "ACTIVE", ownerBranchId: "branch-1" },
+        { id: "customer-2", name: "Target Customer", phone: "08000000002", lifecycleStatus: "ACTIVE", ownerBranchId: "branch-1" },
+      ],
+      pagination: { page: 1, pageSize: 100, total: 2, totalPages: 1 },
+    });
     getCustomerMock.mockResolvedValue({
       id: "customer-2",
       name: "Target Customer",
@@ -471,20 +482,20 @@ describe("QuickOperationLauncher", () => {
   it("renders the selected operation", () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Transfer Invoice")).toBeInTheDocument();
-    expect(screen.getByText("TI")).toBeInTheDocument();
+    expect(screen.getByText("Transfer Order")).toBeInTheDocument();
+    expect(screen.getByText("TO")).toBeInTheDocument();
   });
 
   it("requires confirmation before sensitive execution", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
@@ -492,8 +503,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
-    fireEvent.change(screen.getByLabelText("New Customer ID"), {
-      target: { value: "customer-2" },
+    await screen.findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+      target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Safely stopping the current workflow" },
@@ -549,7 +561,7 @@ describe("QuickOperationLauncher", () => {
   it("executes TI with the correct input after confirmation", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
@@ -557,8 +569,9 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
-    fireEvent.change(screen.getByLabelText("New Customer ID"), {
-      target: { value: "customer-2" },
+    await screen.findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+      target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Invoice was entered on the wrong customer account" },
@@ -569,10 +582,10 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "TI",
+          code: "TO",
           input: {
             orderId: "order-1",
-            customerId: "customer-2",
+            customerId: "customer-1",
           },
           confirmed: true,
           reason: "Invoice was entered on the wrong customer account",
@@ -583,7 +596,7 @@ describe("QuickOperationLauncher", () => {
     });
 
     expect(
-      await screen.findByText("Transfer Invoice completed successfully."),
+      await screen.findByText("Transfer Order completed successfully."),
     ).toBeInTheDocument();
   });
 
@@ -624,10 +637,10 @@ describe("QuickOperationLauncher", () => {
     });
   });
 
-  it("executes MA with source and target customer IDs", async () => {
+  it("executes MC with source and target customer IDs", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.MA}
+        operation={operations.MC}
         onClose={vi.fn()}
       />,
     );
@@ -635,6 +648,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Customer ID"), {
       target: { value: "customer-1" },
     });
+    await screen.findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
@@ -647,7 +661,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "MA",
+          code: "MC",
           input: {
             customerId: "customer-1",
             targetCustomerId: "customer-2",
@@ -1212,7 +1226,7 @@ describe("QuickOperationLauncher", () => {
 
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={onClose}
       />,
     );

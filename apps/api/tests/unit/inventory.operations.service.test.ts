@@ -11,6 +11,7 @@ const { db } = vi.hoisted(() => ({
     inventoryTransferLine: { findMany: vi.fn(), update: vi.fn() },
     inventoryMovement: { create: vi.fn(), findMany: vi.fn() },
     inventoryPurchaseOrder: { findMany: vi.fn() },
+    inventoryGoodsReceiptLine: { findMany: vi.fn() },
     inventoryStocktake: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     inventoryStocktakeLine: { update: vi.fn() },
     inventoryReservation: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
@@ -33,6 +34,7 @@ const USER = "user-1";
 beforeEach(() => {
   vi.clearAllMocks();
   db.$queryRaw.mockResolvedValue([]);
+  db.inventoryGoodsReceiptLine.findMany.mockResolvedValue([]);
   db.$transaction.mockImplementation(async (input: readonly unknown[] | ((tx: typeof db) => unknown)) =>
     typeof input === "function" ? input(db) : Promise.all(input),
   );
@@ -43,7 +45,17 @@ describe("inventory operations", () => {
     const orderedAt = new Date("2026-10-01T09:00:00.000Z");
     const receivedAt = new Date("2026-10-04T09:00:00.000Z");
     db.inventoryStock.findMany.mockResolvedValue([]);
-    db.inventoryMovement.findMany.mockResolvedValue([]);
+    db.inventoryMovement.findMany
+      .mockResolvedValueOnce([{ type: "DAMAGED", quantity: 3 }])
+      .mockResolvedValueOnce([{
+        id: "movement-expiry-1",
+        inventoryItem: { id: ITEM, name: "Detergent" },
+        batchNumber: "LOT-1",
+        expiryDate: new Date(Date.now() + 5 * 86400000),
+        quantity: 4,
+        reference: "GRN-1",
+        createdAt: new Date(),
+      }]);
     db.inventoryPurchaseOrder.findMany.mockResolvedValue([
       {
         supplierId: "supplier-1",
@@ -86,6 +98,24 @@ describe("inventory operations", () => {
         ]),
       }),
     }));
+    expect(db.inventoryMovement.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: {
+        businessId: BUSINESS,
+        branchId: SOURCE,
+        type: { in: ["RECEIPT", "RETURN"] },
+        expiryDate: { not: null },
+      },
+      orderBy: { expiryDate: "asc" },
+    }));
+    expect(report.expiryRegister).toHaveLength(1);
+    expect(report.expiryRegister[0]).toMatchObject({
+      batchNumber: "LOT-1",
+      receiptNumber: "GRN-1",
+      quantityReceived: 4,
+      status: "DUE_SOON",
+    });
+    expect(report.movementTotals).toEqual({ DAMAGED: 3 });
+    expect(report.consumptionQuantity).toBe(3);
     expect(report.supplierPerformance).toEqual([{
       supplierId: "supplier-1",
       supplierName: "Reliable Supplies",
@@ -133,6 +163,8 @@ describe("inventory operations", () => {
       { purchaseOrderLineId: "line-1", quantity: 1.5 },
       { purchaseOrderLineId: "line-1", quantity: 1, unitCost: -1 },
       { purchaseOrderLineId: "line-1", quantity: 1, unitCost: 1.25 },
+      { purchaseOrderLineId: "line-1", quantity: 1, expiryDate: new Date("2027-01-01") },
+      { purchaseOrderLineId: "line-1", quantity: 1, batchNumber: "LOT-OLD", expiryDate: new Date("2020-01-01") },
     ];
     for (const line of invalidLines) {
       await expect(receiveInventoryPurchaseOrder(
@@ -176,14 +208,72 @@ describe("inventory operations", () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it("requires an audit reason for returns, waste and expiry movements", async () => {
-    for (const type of ["RETURN", "WASTE", "EXPIRED"] as const) {
+  it("deducts damaged quantities from available stock and preserves batch trace", async () => {
+    db.inventoryItem.findFirst.mockResolvedValue({ id: ITEM, businessId: BUSINESS, ownerBranchId: SOURCE, isActive: true });
+    db.branch.findFirst.mockResolvedValue({ id: SOURCE, businessId: BUSINESS, isActive: true });
+    db.inventoryStock.upsert.mockResolvedValue({ id: "stock-damaged", quantity: 9, reservedQuantity: 2, averageUnitCost: 125 });
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-damaged", quantity: 9, reservedQuantity: 2, averageUnitCost: 125 });
+    db.inventoryStock.update.mockResolvedValue({ id: "stock-damaged", quantity: 6 });
+    db.inventoryMovement.create.mockResolvedValue({ id: "movement-damaged", type: "DAMAGED" });
+
+    const result = await createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      {
+        inventoryItemId: ITEM,
+        quantity: 3,
+        type: "DAMAGED",
+        reason: "Container leaked in storage",
+        batchNumber: "LOT-DMG-01",
+        expiryDate: new Date("2027-03-01"),
+        createdById: USER,
+      },
+    );
+
+    expect(db.inventoryStock.update).toHaveBeenCalledWith({
+      where: { id: "stock-damaged" },
+      data: { quantity: 6 },
+    });
+    expect(db.inventoryMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: "DAMAGED",
+        quantity: 3,
+        resultingQuantity: 6,
+        reason: "Container leaked in storage",
+        batchNumber: "LOT-DMG-01",
+        expiryDate: new Date("2027-03-01"),
+      }),
+    });
+    expect(result.stock.quantity).toBe(6);
+  });
+
+  it("requires an audit reason for returns, waste, damage and expiry movements", async () => {
+    for (const type of ["RETURN", "WASTE", "DAMAGED", "EXPIRED"] as const) {
       await expect(createInventoryMovement(
         { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { inventoryItemId: ITEM, quantity: 1, type, createdById: USER },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
     expect(db.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("requires batch and a non-future expiry date for expired-stock movements", async () => {
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", batchNumber: "LOT-1" },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", expiryDate: new Date("2025-01-01") },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", batchNumber: "LOT-1", expiryDate: new Date(Date.now() + 86400000) },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "RECEIPT", createdById: USER, batchNumber: "LOT-OLD", expiryDate: new Date("2020-01-01") },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects transfers to the same branch", async () => {

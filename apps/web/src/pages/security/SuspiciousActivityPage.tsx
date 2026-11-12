@@ -196,11 +196,11 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
   },
   {
     id: "quick-transfer-invoice",
-    label: "Transfer Invoice",
+    label: "Transfer Order",
     actions: ["quick_operation.executed"],
-    operationNames: ["Transfer Invoice"],
+    operationNames: ["Transfer Order"],
     risk: "Critical",
-    description: "Invoice transfer executed through a protected quick operation.",
+    description: "Order transfer executed through a protected quick operation.",
   },
   {
     id: "quick-transfer-customer",
@@ -212,9 +212,9 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
   },
   {
     id: "quick-merge-account",
-    label: "Merge Account",
+    label: "Merge Customer",
     actions: ["quick_operation.executed"],
-    operationNames: ["Merge Account"],
+    operationNames: ["Merge Customer"],
     risk: "Critical",
     description: "Customer account merge executed through a protected quick operation.",
   },
