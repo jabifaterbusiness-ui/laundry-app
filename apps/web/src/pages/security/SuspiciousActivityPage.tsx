@@ -159,6 +159,13 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
     description: "Orders or customer ownership transferred.",
   },
   {
+    id: "customer-ownership-assigned",
+    label: "Customer Branch Ownership Assigned",
+    actions: ["customer.legacy_owner_assigned", "customer.legacy_owner_bulk_assigned"],
+    risk: "High",
+    description: "Legacy customer records assigned to a verified business branch.",
+  },
+  {
     id: "stock-adjusted",
     label: "Stock Adjusted",
     actions: ["inventory.stock_adjusted"],
@@ -938,7 +945,7 @@ function getActivityCategory(definition: ActivityDefinition) {
     return "invoices";
   }
 
-  if (action.startsWith("order.customer_")) {
+  if (action.startsWith("customer.") || action.startsWith("order.customer_")) {
     return "customers";
   }
 
