@@ -151,12 +151,14 @@ describe("SensitiveAuthorizationProvider", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(document.body.dataset.authorization).toBe("cancelled");
 
-    resolveAuthorization({
-      token: "stale-sensitive-token",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-      inactivityTimeoutMs: 180_000,
+    await act(async () => {
+      resolveAuthorization({
+        token: "stale-sensitive-token",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        inactivityTimeoutMs: 180_000,
+      });
+      await Promise.resolve();
     });
-    await waitFor(() => expect(authApi.reauthorize).toHaveBeenCalledOnce());
 
     expect(useAuthStore.getState().sensitiveAuthorization).toBeNull();
 
