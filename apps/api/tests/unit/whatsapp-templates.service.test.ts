@@ -39,7 +39,13 @@ describe("approved WhatsApp template pagination", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", mocks.fetch);
-    mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", phone: "2348012345678", whatsappOptIn: true });
+    mocks.customerFindFirst.mockResolvedValue({
+      id: "customer-1",
+      phone: "2348012345678",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
     mocks.webhookEventCreate.mockResolvedValue({});
     mocks.connectionFindUnique.mockResolvedValue({
       wabaId: "123456789",
@@ -142,7 +148,13 @@ describe("approved WhatsApp template pagination", () => {
     ]);
     expect(mocks.customerFindFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "customer-1", businessId: "business-1" },
-      select: { id: true, phone: true, whatsappOptIn: true },
+      select: {
+        id: true,
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     }));
     expect(mocks.webhookEventCreate).toHaveBeenCalled();
   });
@@ -206,8 +218,28 @@ describe("approved WhatsApp template pagination", () => {
     await expect(sendAutomatedWhatsAppTemplate({
       businessId: "business-1", customerId: "customer-1", phone: "2348012345678",
       templateName: "order_update", language: "en", variableValues: ["Ada"],
-    })).rejects.toThrow("has not explicitly opted in");
+    })).rejects.toThrow("recorded WhatsApp consent");
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses automated templates when opt-in has no recorded source or timestamp", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      id: "customer-1",
+      phone: "2348012345678",
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+    });
+
+    await expect(sendAutomatedWhatsAppTemplate({
+      businessId: "business-1",
+      customerId: "customer-1",
+      phone: "2348012345678",
+      templateName: "order_update",
+      language: "en",
+      variableValues: ["Ada"],
+    })).rejects.toThrow("recorded consent source and timestamp");
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("rejects pagination URLs outside the Meta Graph API host", async () => {
