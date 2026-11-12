@@ -86,7 +86,22 @@ describe("WhatsApp notification template route validation", () => {
 
   it("accepts clearing a template fallback", () => {
     expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: false, channel: "WHATSAPP",
+      whatsappTemplateName: null, whatsappTemplateLanguage: null,
+    }).success).toBe(true);
+  });
+
+  it("requires an approved UTILITY fallback before enabling WhatsApp status notifications", () => {
+    expect(statusRuleSchema.safeParse({
       status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      whatsappMessage: "Your order is ready",
+    }).success).toBe(false);
+    expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: true, channel: "BOTH",
+      whatsappTemplateName: "order_ready", whatsappTemplateLanguage: "en",
+    }).success).toBe(true);
+    expect(statusRuleSchema.safeParse({
+      status: "READY_FOR_PICKUP", enabled: false, channel: "WHATSAPP",
       whatsappTemplateName: null, whatsappTemplateLanguage: null,
     }).success).toBe(true);
   });
