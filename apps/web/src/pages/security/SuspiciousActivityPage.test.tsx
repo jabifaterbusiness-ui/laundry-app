@@ -226,6 +226,7 @@ describe("SuspiciousActivityPage", () => {
       { id: branchOne, name: "Main Branch" },
       { id: branchTwo, name: "Airport Branch" },
     ];
+    renderPage();
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "user-updated-1",
@@ -252,6 +253,7 @@ describe("SuspiciousActivityPage", () => {
   });
 
   it("shows bulk legacy customer ownership assignments as a readable security event", async () => {
+    renderPage();
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "legacy-customer-bulk-assigned",
