@@ -27,6 +27,11 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
     setError(null);
 
     try {
+      if (whatsappOptIn && !whatsappOptInSource) {
+        setError("Select how the customer gave consent before saving.");
+        return;
+      }
+
       await onSubmit({
         name,
         phone,
@@ -34,7 +39,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         address: address || undefined,
         notes: notes || undefined,
         whatsappOptIn,
-        ...(whatsappOptIn ? { whatsappOptInSource } : {}),
+        ...(whatsappOptIn && whatsappOptInSource ? { whatsappOptInSource } : {}),
         confirmDuplicate,
       });
     } catch (err) {
