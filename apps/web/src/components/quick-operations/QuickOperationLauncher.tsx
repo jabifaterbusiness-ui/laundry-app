@@ -54,7 +54,7 @@ function isImplemented(code: string) {
 function fieldLabel(code: string) {
   switch (code) {
     case "MU":
-    case "TI":
+    case "TO":
     case "SO":
       return "Order ID";
     case "TC":
@@ -232,7 +232,7 @@ export function QuickOperationLauncher({
 
       case "TO":
         if (!customerId.trim()) {
-          setError("New Customer ID is required.");
+          setError("Target Customer ID is required.");
           return null;
         }
 
