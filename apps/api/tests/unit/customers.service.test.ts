@@ -124,6 +124,42 @@ describe("listCustomers", () => {
     );
   });
 
+  it("filters merged customer archives separately", async () => {
+    findMany.mockResolvedValue([]);
+    count.mockResolvedValue(0);
+
+    await listCustomers({
+      businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
+      page: 1,
+      pageSize: 25,
+      status: "merged",
+    });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ businessId: "biz-1", lifecycleStatus: "MERGED" }),
+    }));
+  });
+
+  it("keeps merged archives out of the legacy inactive filter", async () => {
+    findMany.mockResolvedValue([]);
+    count.mockResolvedValue(0);
+
+    await listCustomers({
+      businessId: "biz-1",
+      branchId: "branch-A",
+      userId: "user-A",
+      page: 1,
+      pageSize: 25,
+      status: "inactive",
+    });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ isActive: false, lifecycleStatus: { not: "MERGED" } }),
+    }));
+  });
+
   it("applies pagination skip/take", async () => {
     findMany.mockResolvedValue([]);
     count.mockResolvedValue(0);
