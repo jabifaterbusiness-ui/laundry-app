@@ -670,10 +670,12 @@ export function OrdersPage() {
     openedCustomerFromUrlRef.current = navigationKey;
     if (openCustomerAccountFromUrl) {
       openCustomerAccount(customer);
+      navigate("/order-management", { replace: true });
     } else {
+      // openCustomerWorkspace performs navigation and preserves returnTo in
+      // the URL when this flow originated in Customer Workstation.
       openCustomerWorkspace(customer, newOrderFromUrl, returnToFromUrl === "customer-workstation");
     }
-    navigate("/order-management", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
@@ -788,10 +790,17 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstation = false) {
-    if (returnToCustomerWorkstation || returnToFromUrl === "customer-workstation") {
+    const shouldReturnToCustomerWorkstation =
+      returnToCustomerWorkstation || returnToFromUrl === "customer-workstation";
+    if (shouldReturnToCustomerWorkstation) {
       workspaceReturnToRef.current = "customer-workstation";
       setWorkspaceReturnTo("customer-workstation");
     }
+    // Keep the return destination in the URL because route transitions may
+    // remount this page and clear component-local refs.
+    const orderManagementPath = shouldReturnToCustomerWorkstation
+      ? "/order-management?returnTo=customer-workstation"
+      : "/order-management";
     markOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
@@ -805,7 +814,7 @@ export function OrdersPage() {
       setFormError(null);
       setCustomerPickerOpen(false);
       setFormOpen(existingWorkspace.mode === "new" || existingWorkspace.mode === "edit");
-      navigate("/order-management");
+      navigate(orderManagementPath);
       return;
     }
     if (existingWorkspace && forceNewOrder) {
@@ -825,7 +834,7 @@ export function OrdersPage() {
       setFormError(null);
       setCustomerPickerOpen(false);
       setFormOpen(true);
-      navigate("/order-management");
+      navigate(orderManagementPath);
       return;
     }
 
@@ -843,7 +852,7 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
-    navigate("/order-management");
+    navigate(orderManagementPath);
   }
 
   function openCustomerAccount(customer: Customer) {
@@ -1812,7 +1821,11 @@ export function OrdersPage() {
               const customerId = activeWorkspace.customer.id;
               markOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
-              if (workspaceReturnToRef.current === "customer-workstation" || workspaceReturnTo === "customer-workstation") {
+              if (
+                workspaceReturnToRef.current === "customer-workstation" ||
+                workspaceReturnTo === "customer-workstation" ||
+                returnToFromUrl === "customer-workstation"
+              ) {
                 workspaceReturnToRef.current = null;
                 setWorkspaceReturnTo(null);
                 navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
