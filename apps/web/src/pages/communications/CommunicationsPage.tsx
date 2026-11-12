@@ -347,24 +347,26 @@ export function CommunicationsPage() {
         <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
       </section>
 
-      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16 }}>
-        <h2>Delivery history</h2>
-        <p>Most recent 200 communication attempts for the selected branch. Business-wide announcement deliveries remain visible across branches.</p>
-        {!activeBranchId && <p role="status">Select an active branch to view delivery history.</p>}
-        {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
-        {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
-          <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
-          <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
-          <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
-          {delivery.retryAttempt > 0 && <small style={{ gridColumn: "1 / -1", color: "#64748b" }}>Retry attempt {delivery.retryAttempt}</small>}
-          {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
-          {delivery.retryAvailable && <span style={{ gridColumn: "1 / -1" }}>
-            <button type="button" disabled={retryDeliveryMutation.isPending} onClick={() => retryDeliveryMutation.mutate(delivery.id)}>
-              {retryDeliveryMutation.isPending ? "Retrying..." : "Retry WhatsApp delivery"}
-            </button>
-          </span>}
-        </div>)}
-      </section>
+      <details style={{ border: "1px solid #d8dee8", borderRadius: 16, padding: "1rem 1.25rem" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, color: "#0f172a" }}>Delivery history · Most recent 200 attempts</summary>
+        <div style={{ paddingTop: 12 }}>
+          <p>Communication attempts for the selected branch. Business-wide announcement deliveries remain visible across branches.</p>
+          {!activeBranchId && <p role="status">Select an active branch to view delivery history.</p>}
+          {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
+          {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
+            <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
+            <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
+            <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
+            {delivery.retryAttempt > 0 && <small style={{ gridColumn: "1 / -1", color: "#64748b" }}>Retry attempt {delivery.retryAttempt}</small>}
+            {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
+            {delivery.retryAvailable && <span style={{ gridColumn: "1 / -1" }}>
+              <button type="button" disabled={retryDeliveryMutation.isPending} onClick={() => retryDeliveryMutation.mutate(delivery.id)}>
+                {retryDeliveryMutation.isPending ? "Retrying..." : "Retry WhatsApp delivery"}
+              </button>
+            </span>}
+          </div>)}
+        </div>
+      </details>
     </main>
   );
 }
