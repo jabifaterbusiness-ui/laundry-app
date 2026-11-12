@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   connectionFindUnique: vi.fn(),
   customerFindFirst: vi.fn(),
   webhookEventCreate: vi.fn(),
+  webhookEventFindFirst: vi.fn(),
   fetch: vi.fn(),
 }));
 
@@ -11,7 +12,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     whatsAppBusinessConnection: { findUnique: mocks.connectionFindUnique },
     customer: { findFirst: mocks.customerFindFirst },
-    whatsAppWebhookEvent: { create: mocks.webhookEventCreate },
+    whatsAppWebhookEvent: { create: mocks.webhookEventCreate, findFirst: mocks.webhookEventFindFirst },
   },
 }));
 vi.mock("../../src/config/index.js", () => ({
@@ -25,7 +26,7 @@ vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
   normalizeWhatsAppRecipient: (value: string) => value.replace(/\\D/g, ""),
 }));
 
-import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
+import { listApprovedWhatsAppTemplates, sendApprovedWhatsAppTemplate, sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
 
 function page(data: unknown[], next?: string) {
   return new Response(JSON.stringify({ data, ...(next ? { paging: { next } } : {}) }), {
@@ -144,6 +145,27 @@ describe("approved WhatsApp template pagination", () => {
       select: { id: true, phone: true, whatsappOptIn: true },
     }));
     expect(mocks.webhookEventCreate).toHaveBeenCalled();
+  });
+
+  it("requires inbox template conversations to belong to the currently connected number", async () => {
+    mocks.webhookEventFindFirst.mockResolvedValue(null);
+    await expect(sendApprovedWhatsAppTemplate({
+      businessId: "business-1",
+      phone: "2348012345678",
+      templateName: "inbox_reply",
+      language: "en",
+      variables: [],
+    })).rejects.toThrow("customer-initiated WhatsApp conversation is required");
+    expect(mocks.webhookEventFindFirst).toHaveBeenCalledWith({
+      where: {
+        businessId: "business-1",
+        phoneNumberId: "987654321",
+        contactPhone: "2348012345678",
+        eventType: "MESSAGE_RECEIVED",
+      },
+      select: { id: true },
+    });
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("sends a marketing template for an opted-in announcement when explicitly selected", async () => {
