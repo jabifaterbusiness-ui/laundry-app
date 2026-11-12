@@ -815,7 +815,7 @@ function OrderManagementContent({
             if (order) onEditOrder(order);
           }}
         >
-          Edit Invoice
+          Edit Order / Invoice
         </button>
         <button
           type="button"
