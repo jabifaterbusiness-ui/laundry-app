@@ -1064,7 +1064,7 @@ export function SuspiciousActivityPage() {
       grouped.set(category, entries);
     }
     const selectedOrder = isCustomizingOrder ? draftEventOrder : eventOrder;
-    const positions = new Map(selectedOrder.map((id, index) => [id, index]));
+    const positions = new Map(selectedOrder.map((id, index) => [id, index] as const));
     return categoryOrder
       .map((category) => ({
         category,
