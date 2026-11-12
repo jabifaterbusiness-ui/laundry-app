@@ -44,6 +44,7 @@ export const createOrderSchema = z
 
 export const listOrdersQuerySchema = z.object({
   customerId: uuidSchema.optional(),
+  search: z.string().trim().max(120).optional(),
   status: z.enum([
     "RECEIVED",
     "IN_PROGRESS",
