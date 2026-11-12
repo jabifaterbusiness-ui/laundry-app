@@ -47,7 +47,7 @@ export interface ApprovedWhatsAppTemplate {
   language: string;
   category: string;
   bodyVariableCount: number;
-  headerFormat: string | null;
+  headerFormat?: string | null;
 }
 export async function getApprovedWhatsAppTemplates(accessToken: string | null) {
   return apiFetch<{ data: ApprovedWhatsAppTemplate[] }>("/whatsapp/inbox/templates", { accessToken });
