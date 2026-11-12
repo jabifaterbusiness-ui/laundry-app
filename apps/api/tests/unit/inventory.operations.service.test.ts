@@ -176,14 +176,30 @@ describe("inventory operations", () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it("requires an audit reason for returns, waste and expiry movements", async () => {
-    for (const type of ["RETURN", "WASTE", "EXPIRED"] as const) {
+  it("requires an audit reason for returns, waste, damage and expiry movements", async () => {
+    for (const type of ["RETURN", "WASTE", "DAMAGED", "EXPIRED"] as const) {
       await expect(createInventoryMovement(
         { businessId: BUSINESS, branchId: SOURCE, userId: USER },
         { inventoryItemId: ITEM, quantity: 1, type, createdById: USER },
       )).rejects.toMatchObject({ statusCode: 422 });
     }
     expect(db.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("requires batch and a non-future expiry date for expired-stock movements", async () => {
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", batchNumber: "LOT-1" },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", expiryDate: new Date("2025-01-01") },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", batchNumber: "LOT-1", expiryDate: new Date(Date.now() + 86400000) },
+    )).rejects.toMatchObject({ statusCode: 422 });
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects transfers to the same branch", async () => {
