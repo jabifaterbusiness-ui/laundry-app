@@ -172,10 +172,23 @@ jobs:
             fi
           done
 
-      - name: Install password-protected reverse proxy
+      - name: Start password-protected staging preview
         shell: bash
         run: |
           set -euo pipefail
+          cleanup() {
+            if [[ -n "${CLOUDFLARED_PID:-}" ]]; then kill "$CLOUDFLARED_PID" 2>/dev/null || true; fi
+            if [[ -n "${SSH_PID:-}" ]]; then kill "$SSH_PID" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
+
+          for name in STAGING_HOST STAGING_USER STAGING_SSH_PRIVATE_KEY STAGING_KNOWN_HOSTS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Required staging connection setting is missing: $name"
+              exit 1
+            fi
+          done
+
           sudo apt-get update
           sudo apt-get install -y nginx apache2-utils
           PREVIEW_PASSWORD="$(openssl rand -hex 18)"
@@ -204,12 +217,7 @@ jobs:
           sudo ln -s /etc/nginx/sites-available/laundryangel-preview /etc/nginx/sites-enabled/laundryangel-preview
           sudo nginx -t
           sudo systemctl restart nginx
-          echo "PREVIEW_PASSWORD=$PREVIEW_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Establish verified SSH tunnel to staging loopback
-        shell: bash
-        run: |
-          set -euo pipefail
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/laundryangel_staging"
           chmod 600 "$HOME/.ssh/laundryangel_staging"
@@ -224,16 +232,12 @@ jobs:
             -o ServerAliveCountMax=3 \
             -L 127.0.0.1:18080:127.0.0.1:18080 \
             "$STAGING_USER@$STAGING_HOST" >/tmp/staging-ssh.log 2>&1 &
-          echo "$!" > /tmp/staging-ssh.pid
+          SSH_PID=$!
           sleep 2
-          kill -0 "$(cat /tmp/staging-ssh.pid)"
+          kill -0 "$SSH_PID"
           HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/)"
           [[ "$HTTP_CODE" == "401" ]]
 
-      - name: Start temporary HTTPS tunnel
-        shell: bash
-        run: |
-          set -euo pipefail
           CLOUDFLARED_VERSION="2026.10.7"
           curl --fail --location --silent --show-error \
             "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-linux-amd64" \
@@ -241,7 +245,7 @@ jobs:
           echo "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872  /tmp/cloudflared" | sha256sum --check --status
           sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared tunnel --no-autoupdate --url http://127.0.0.1:18081 >/tmp/cloudflared.log 2>&1 &
-          echo "$!" > /tmp/cloudflared.pid
+          CLOUDFLARED_PID=$!
           PREVIEW_URL=""
           for attempt in $(seq 1 60); do
             PREVIEW_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n 1 || true)"
@@ -253,11 +257,7 @@ jobs:
             echo "::error::Cloudflare temporary HTTPS tunnel did not provide a URL."
             exit 1
           fi
-          echo "PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
 
-      - name: Publish temporary preview access details
-        shell: bash
-        run: |
           {
             echo "## LaundryAngel staging preview"
             echo
@@ -270,21 +270,10 @@ jobs:
             echo "Do not share these details publicly."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Keep preview available for browser acceptance
-        shell: bash
-        run: |
-          set -euo pipefail
           for remaining in $(seq 1 3300); do
-            if ! kill -0 "$(cat /tmp/cloudflared.pid)" 2>/dev/null; then
-              echo "::error::Temporary HTTPS tunnel stopped unexpectedly."
+            if ! kill -0 "$CLOUDFLARED_PID" 2>/dev/null || ! kill -0 "$SSH_PID" 2>/dev/null; then
+              echo "::error::The temporary preview tunnel stopped unexpectedly."
               exit 1
             fi
             sleep 1
           done
-
-      - name: Stop temporary tunnels
-        if: always()
-        shell: bash
-        run: |
-          if [[ -f /tmp/cloudflared.pid ]]; then kill "$(cat /tmp/cloudflared.pid)" 2>/dev/null || true; fi
-          if [[ -f /tmp/staging-ssh.pid ]]; then kill "$(cat /tmp/staging-ssh.pid)" 2>/dev/null || true; fi
