@@ -30,9 +30,9 @@ const IMPLEMENTED_OPERATIONS = [
   "MCB",
   "MLB",
   "MU",
-  "TI",
+  "TO",
   "TC",
-  "MA",
+  "MC",
   "VO",
   "RF",
   "RI",
@@ -58,7 +58,7 @@ function fieldLabel(code: string) {
     case "SO":
       return "Order ID";
     case "TC":
-    case "MA":
+    case "MC":
     case "SC":
       return "Customer ID";
     case "VO":
@@ -230,7 +230,7 @@ export function QuickOperationLauncher({
           status,
         };
 
-      case "TI":
+      case "TO":
         if (!customerId.trim()) {
           setError("New Customer ID is required.");
           return null;
@@ -242,7 +242,7 @@ export function QuickOperationLauncher({
         };
 
       case "TC":
-      case "MA":
+      case "MC":
         if (!customerId.trim()) {
           setError("Target Customer ID is required.");
           return null;
@@ -521,7 +521,7 @@ export function QuickOperationLauncher({
 
         await executeQuickOperation(
           {
-            code: activeOperation.code,
+            code: activeOperation.code === "TO" ? "TI" : activeOperation.code === "MC" ? "MA" : activeOperation.code,
             input: {
               pendingOfflineOperationCount:
                 pendingOfflineOperations.length,
