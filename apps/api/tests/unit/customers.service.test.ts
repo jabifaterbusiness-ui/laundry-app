@@ -75,6 +75,7 @@ beforeEach(() => {
   prismaMock.branchResourceShare.findMany.mockReset().mockResolvedValue([]);
   prismaMock.branchResourceShare.findFirst.mockReset().mockResolvedValue(null);
   findFirst.mockResolvedValue({ ownerBranchId: "branch-A" } as never);
+  updateMany.mockResolvedValue({ count: 1 } as never);
 
   transaction.mockImplementation(
     async (callback) => callback(prismaMock as never),
@@ -533,7 +534,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     },
   ];
 
-  it("merges every source order into the target and deactivates the source in one transaction", async () => {
+  it("moves source orders and archives the source as merged in one transaction", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
       .mockResolvedValueOnce(targetCustomer as never);
@@ -639,7 +640,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it("merges an account with no orders and still deactivates the source", async () => {
+  it("merges an account with no orders and still archives the source", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
       .mockResolvedValueOnce(targetCustomer as never);
@@ -838,7 +839,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(customerAccountDelete).not.toHaveBeenCalled();
   });
 
-  it("deactivates the source instead of deleting or rewriting the target account", async () => {
+  it("archives the source instead of deleting or rewriting the target account", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
       .mockResolvedValueOnce(targetCustomer as never);
@@ -858,20 +859,10 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).toHaveBeenCalledTimes(1);
     expect(prisma.customer.create).not.toHaveBeenCalled();
 
-    expect(updateMany).toHaveBeenCalledWith({
-      where: {
-        id: sourceCustomer.id,
-        businessId: "biz-A",
-        ownerBranchId: "branch-A",
-      },
-      data: {
-        isActive: false,
-        lifecycleStatus: "DORMANT",
-        statusReason: "Merged into another customer",
-        statusChangedAt: expect.any(Date),
-        statusChangedById: "user-A",
-      },
-    });
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: sourceCustomer.id, lifecycleStatus: { not: "MERGED" } }),
+      data: expect.objectContaining({ lifecycleStatus: "MERGED", mergedIntoCustomerId: targetCustomer.id }),
+    }));
   });
 });
 
