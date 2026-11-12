@@ -106,7 +106,12 @@ beforeEach(() => {
   mocks.communicationDeliveryFindMany.mockResolvedValue([]);
   mocks.communicationDeliveryCreate.mockResolvedValue({ id: "retry-delivery-1" });
   mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
-  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true, phone: "+2348000000000" });
+  mocks.customerFindFirst.mockResolvedValue({
+    whatsappOptIn: true,
+    whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+    whatsappOptInSource: "CUSTOMER_WRITTEN",
+    phone: "+2348000000000",
+  });
   mocks.customerFindMany.mockResolvedValue([]);
   mocks.customerGroupFindMany.mockResolvedValue([]);
   mocks.branchResourceShareFindMany.mockResolvedValue([]);
@@ -256,7 +261,11 @@ describe("automatic WhatsApp order notifications", () => {
       emailSubject: "Order update",
       emailMessage: "Your order is ready.",
     });
-    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
+    mocks.customerFindFirst.mockResolvedValue({
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
     mocks.communicationDeliveryCreate.mockResolvedValue({ id: "delivery-1" });
     mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
     mocks.sendWhatsAppText.mockResolvedValue({ id: "wamid-order-1" });
@@ -456,7 +465,12 @@ describe("retryWhatsAppDelivery", () => {
     });
     expect(mocks.customerFindFirst).toHaveBeenCalledWith({
       where: { id: CUSTOMER_ID, businessId: "business-1" },
-      select: { whatsappOptIn: true, phone: true },
+      select: {
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+        phone: true,
+      },
     });
     expect(mocks.communicationDeliveryCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -558,9 +572,30 @@ describe("retryWhatsAppDelivery", () => {
     expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
   });
 
+  it("rejects a retry when the legacy opt-in has no recorded source or timestamp", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+      phone: "+2348000000000",
+    });
+
+    await expect(
+      retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
+    ).rejects.toMatchObject({
+      message: "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before retrying.",
+      statusCode: 422,
+    });
+
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.communicationDeliveryCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects a retry when the customer's phone number no longer matches the original destination", async () => {
     mocks.customerFindFirst.mockResolvedValue({
       whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
       phone: "+2348999999999",
     });
 
@@ -581,7 +616,7 @@ describe("retryWhatsAppDelivery", () => {
     await expect(
       retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1"),
     ).rejects.toMatchObject({
-      message: "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      message: "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before retrying.",
       statusCode: 422,
     });
 
