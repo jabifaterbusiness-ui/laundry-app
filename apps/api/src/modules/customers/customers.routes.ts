@@ -15,6 +15,7 @@ import {
   update,
   listLegacyUnassigned,
   assignLegacyOwnerBranch,
+  assignLegacyOwnersBulk,
 } from "./customers.controller.js";
 import {
   getAccount,
@@ -34,6 +35,7 @@ customersRouter.get("/", requirePermission("customers.view"), asyncHandler(list)
 
 // Business Owner review queue for records whose historical branch ownership is ambiguous.
 customersRouter.get("/legacy-unassigned", asyncHandler(listLegacyUnassigned));
+customersRouter.post("/legacy-unassigned/assign", asyncHandler(requireSensitiveAuthorization), asyncHandler(assignLegacyOwnersBulk));
 customersRouter.post("/:id/assign-owner-branch", asyncHandler(requireSensitiveAuthorization), asyncHandler(assignLegacyOwnerBranch));
 
 customersRouter.get(
