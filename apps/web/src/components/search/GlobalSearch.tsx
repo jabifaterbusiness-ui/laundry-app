@@ -19,6 +19,7 @@ const RESULT_GROUPS: {
   { type: "CUSTOMER", label: "Customers" },
   { type: "ORDER", label: "Orders" },
   { type: "INVOICE", label: "Invoices" },
+  { type: "PAYMENT", label: "Payments" },
 ];
 
 function groupResults(results: GlobalSearchResult[]) {
