@@ -773,6 +773,35 @@ describe("createOrder", () => {
     );
   });
 
+  it("searches order number and customer name, phone, and email without leaving branch scope", async () => {
+    orderFindMany.mockResolvedValue([]);
+    orderCount.mockResolvedValue(0);
+
+    await listOrders({
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      userId: "user-A",
+      search: "Adam",
+      page: 1,
+      pageSize: 25,
+    });
+
+    expect(orderFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        AND: [{
+          OR: [
+            { orderNumber: { contains: "Adam" } },
+            { customer: { is: { name: { contains: "Adam", mode: "insensitive" } } } },
+            { customer: { is: { phone: { contains: "Adam" } } } },
+            { customer: { is: { email: { contains: "Adam", mode: "insensitive" } } } },
+          ],
+        }],
+      }),
+    }));
+  });
+
   it("returns pagination metadata", async () => {
     orderFindMany.mockResolvedValue([]);
     orderCount.mockResolvedValue(47);
