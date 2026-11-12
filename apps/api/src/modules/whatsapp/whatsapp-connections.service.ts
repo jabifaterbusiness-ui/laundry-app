@@ -154,7 +154,7 @@ export async function completeWhatsAppEmbeddedSignup(input: {
         encryptedAccessToken: encryptWhatsAppAccessToken(accessToken), tokenExpiresAt: expiresAt,
         status: "CONNECTED", connectedAt: new Date(), lastVerifiedAt: new Date(), lastError: null,
       },
-      select: { id: true, wabaId: true, phoneNumberId: true, displayPhoneNumber: true, verifiedName: true, status: true, connectedAt: true, tokenExpiresAt: true },
+      select: { id: true, wabaId: true, phoneNumberId: true, displayPhoneNumber: true, verifiedName: true, status: true, connectedAt: true, tokenExpiresAt: true, receiptTemplateName: true, receiptTemplateLanguage: true },
     });
     return connection;
   } catch (error) {
