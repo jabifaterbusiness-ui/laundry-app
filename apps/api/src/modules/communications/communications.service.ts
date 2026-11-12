@@ -121,9 +121,13 @@ async function deliverMessage(input: {
   if (input.channel === "WHATSAPP") {
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { whatsappOptIn: true },
+      select: {
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
-    if (!customer?.whatsappOptIn) {
+    if (!customer?.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
       return recordMissingDestination({
         businessId: input.businessId, customerId: input.customerId,
         ...(input.orderId ? { orderId: input.orderId } : {}),
@@ -132,7 +136,7 @@ async function deliverMessage(input: {
         ...(input.retryOfId ? { retryOfId: input.retryOfId } : {}),
         ...(input.retryAttempt !== undefined ? { retryAttempt: input.retryAttempt } : {}),
         retryPayload: getWhatsAppRetryPayload(input),
-        reason: "Customer has not explicitly opted in to WhatsApp messages. Record consent before sending business-initiated messages.",
+        reason: "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending business-initiated messages.",
       });
     }
   }
