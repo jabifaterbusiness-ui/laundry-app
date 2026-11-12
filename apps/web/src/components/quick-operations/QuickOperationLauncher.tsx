@@ -160,7 +160,7 @@ export function QuickOperationLauncher({
   const [recordId, setRecordId] = useState(initialRecordId);
   const [customerId, setCustomerId] = useState("");
   const [targetCustomerSearch, setTargetCustomerSearch] = useState("");
-  const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string }>>([]);
+  const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string; ownerBranchId: string | null }>>([]);
   const [targetCustomersLoading, setTargetCustomersLoading] = useState(false);
   const [targetCustomersError, setTargetCustomersError] = useState<string | null>(null);
   const [sourceOrderCustomerId, setSourceOrderCustomerId] = useState<string | null>(null);
@@ -222,8 +222,8 @@ export function QuickOperationLauncher({
         if (!active) return;
         const sourceCustomerId = operation.code === "MC" ? recordId : sourceOrderCustomerId;
         setTargetCustomers(response.data
-          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.id !== sourceCustomerId)
-          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone })));
+          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.ownerBranchId === activeBranchId && customer.id !== sourceCustomerId)
+          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, ownerBranchId: customer.ownerBranchId })));
       })
       .catch((error: unknown) => {
         if (!active) return;
