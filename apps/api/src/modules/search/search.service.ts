@@ -60,7 +60,7 @@ export async function globalSearch(
       ),
     ]);
 
-  const [customers, orders, invoices] = await Promise.all([
+  const [customers, orders, invoices, payments] = await Promise.all([
     canViewCustomers
       ? prisma.customer.findMany({
           where: {
