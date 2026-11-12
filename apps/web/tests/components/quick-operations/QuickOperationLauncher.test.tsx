@@ -569,7 +569,7 @@ describe("QuickOperationLauncher", () => {
       target: { value: "order-1" },
     });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
-      target: { value: "customer-2" },
+      target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Invoice was entered on the wrong customer account" },
@@ -583,7 +583,7 @@ describe("QuickOperationLauncher", () => {
           code: "TI",
           input: {
             orderId: "order-1",
-            customerId: "customer-2",
+            customerId: "customer-1",
           },
           confirmed: true,
           reason: "Invoice was entered on the wrong customer account",
