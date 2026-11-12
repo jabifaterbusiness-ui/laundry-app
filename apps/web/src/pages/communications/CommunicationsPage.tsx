@@ -281,8 +281,8 @@ export function CommunicationsPage() {
         </div>
         <label>WhatsApp message<textarea rows={3} value={whatsappTemplate} onChange={(event) => setWhatsappTemplate(event.target.value)} /></label>
         <label>Approved WhatsApp template fallback (outside the 24-hour window)
-          <select value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
-            const selected = approvedTemplatesQuery.data?.data.find((item) => `${item.name}|${item.language}` === event.target.value);
+          <select required={ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH")} value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.headerFormat !== "IMAGE" && `${item.name}|${item.language}` === event.target.value);
             setWhatsappTemplateName(selected?.name ?? "");
             setWhatsappTemplateLanguage(selected?.language ?? "");
           }}>
@@ -299,7 +299,8 @@ export function CommunicationsPage() {
         </small>
         <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
         <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
-        <button type="button" disabled={ruleMutation.isPending} onClick={() => ruleMutation.mutate()}>Save status notification</button>
+        {ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH") && !whatsappTemplateName && <small role="alert" style={{ display: "block", color: "#b45309" }}>Select an approved UTILITY template. Free-form messages cannot be sent after the customer's 24-hour reply window closes.</small>}
+        <button type="button" disabled={ruleMutation.isPending || (ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH") && (!whatsappTemplateName || !whatsappTemplateLanguage))} onClick={() => ruleMutation.mutate()}>Save status notification</button>
         <h3>Configured rules</h3>
         {(rulesQuery.data?.data ?? []).map((rule) => <div key={rule.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
           <span><strong>{rule.status.replaceAll("_", " ")}</strong> · {rule.channel} · {rule.enabled ? "Enabled" : "Disabled"}</span>
