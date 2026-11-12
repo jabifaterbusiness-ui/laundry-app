@@ -410,6 +410,7 @@ describe("InventoryPage", () => {
     expect(await screen.findByText("Stock Movement History")).toBeInTheDocument();
     const movementReason = await screen.findByText("Supplier delivery");
     expect(movementReason).not.toBeVisible();
+    expect(screen.getByLabelText("Filter movement history by item")).not.toBeVisible();
     fireEvent.click(screen.getByText("Stock Movement History"));
     expect(movementReason).toBeVisible();
     expect(screen.getByText("PO-1001")).toBeVisible();
