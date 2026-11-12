@@ -183,7 +183,8 @@ describe("PaymentsPage void workflow", () => {
       { accessToken: "token" },
       "branch-1",
     );
-    expect(within(selectedPayment).getByText("INV-00001")).toBeInTheDocument();
+    // The region renders before its React Query request resolves; wait for the detail.
+    expect(await within(selectedPayment).findByText("INV-00001")).toBeInTheDocument();
     expect(within(selectedPayment).getByText("John Doe")).toBeInTheDocument();
     expect(within(selectedPayment).getByText("₦5,000")).toBeInTheDocument();
     expect(within(selectedPayment).getByText("CASH")).toBeInTheDocument();
