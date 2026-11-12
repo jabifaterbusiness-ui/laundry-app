@@ -948,7 +948,7 @@ export function SuspiciousActivityPage() {
   const activityQuery = useQuery({
     queryKey: ["audit", "suspicious-activity", user?.businessId, user?.id, activeBranchId],
     queryFn: () => listSuspiciousActivity(accessToken ?? "", 100),
-    enabled: Boolean(accessToken && canView),
+    enabled: Boolean(accessToken && activeBranchId && canView),
   });
 
   const activities = useMemo(
