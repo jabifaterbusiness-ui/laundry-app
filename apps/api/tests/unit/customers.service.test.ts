@@ -717,6 +717,24 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
+  it("rejects a target customer owned by another branch before moving any records", async () => {
+    findFirst
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-B" } as never);
+
+    await expect(
+      mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
+    ).rejects.toMatchObject({
+      message: "Both customers must belong to the currently selected branch to be merged",
+      statusCode: 409,
+    });
+
+    expect(orderFindMany).not.toHaveBeenCalled();
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(customerAccountFindFirst).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it("rejects merging ledgers when the target customer's account mode differs", async () => {
     findFirst
       .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
