@@ -417,8 +417,32 @@ export async function listPayments(params: ListPaymentsParams) {
           { invoice: { is: { customerName: { contains: search, mode: "insensitive" } } } },
           { invoice: { is: { order: { is: { orderNumber: { contains: search } } } } } },
           { invoice: { is: { order: { is: { customer: { is: { name: { contains: search, mode: "insensitive" } } } } } } },
-          { invoice: { is: { order: { is: { customer: { is: { phone: { contains: search } } } } } } },
-          { invoice: { is: { order: { is: { customer: { is: { email: { contains: search, mode: "insensitive" } } } } } } },
+          {
+            invoice: {
+              is: {
+                order: {
+                  is: {
+                    customer: {
+                      is: { phone: { contains: search } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            invoice: {
+              is: {
+                order: {
+                  is: {
+                    customer: {
+                      is: { email: { contains: search, mode: "insensitive" } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         ],
       }],
     } : {}),
