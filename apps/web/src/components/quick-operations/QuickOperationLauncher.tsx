@@ -781,18 +781,18 @@ export function QuickOperationLauncher({
                 </div>
               ) : null}
 
-              {activeOperation.code === "TI" ? (
+              {activeOperation.code === "TO" ? (
                 <Field
-                  label="New Customer ID"
+                  label="Target Customer ID"
                   value={customerId}
                   onChange={setCustomerId}
-                  placeholder="Enter customer ID"
+                  placeholder="Enter target customer ID"
                   disabled={isSubmitting}
                 />
               ) : null}
 
               {activeOperation.code === "TC" ||
-              activeOperation.code === "MA" ? (
+              activeOperation.code === "MC" ? (
                 <Field
                   label="Target Customer ID"
                   value={customerId}
