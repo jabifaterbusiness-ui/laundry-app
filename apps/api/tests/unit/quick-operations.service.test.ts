@@ -690,7 +690,7 @@ describe("quick-operations.service", () => {
     });
   });
 
-  describe("MA - Merge Account", () => {
+  describe("MA - Merge Customer", () => {
     it("merges a customer within the authenticated business and records the merge audit", async () => {
       const result = {
         customer: {
@@ -752,7 +752,7 @@ describe("quick-operations.service", () => {
         correlationId: "corr-123",
         metadata: {
           operationCode: "MA",
-          operationName: "Merge Account",
+          operationName: "Merge Customer",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
           mergedOrderCount: 1,
