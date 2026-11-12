@@ -174,36 +174,42 @@ export async function globalSearch(
       : Promise.resolve([]),
   ]);
 
-  return [
-    // Preserve the customer shortcut even when matching orders exist. The
-    // customer and its individual orders are separate destinations; the user
-    // chooses which one to open from the grouped search suggestions.
-    ...customers
-      .map((customer) => ({
-      type: "CUSTOMER" as const,
+  // Keep result types balanced so a long list of customer matches cannot
+  // push every matching order or invoice out of the dropdown.
+  const groupedResults: GlobalSearchResult[][] = [
+    customers.map((customer) => ({
+      type: "CUSTOMER",
       id: customer.id,
       title: customer.name,
       subtitle: [customer.phone, customer.email].filter(Boolean).join(" · "),
-      // Customer search must open the customer workspace, not silently
-      // jump into whichever order happens to be newest in this branch.
       href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
     })),
-
-    ...orders.map((order) => ({
-      type: "ORDER" as const,
+    orders.map((order) => ({
+      type: "ORDER",
       id: order.id,
       title: `Order #${order.orderNumber}`,
       subtitle: `${order.customer.name} · ${order.status}`,
       href: `/orders?orderId=${encodeURIComponent(order.id)}`,
     })),
-
-    ...invoices.map((invoice) => ({
-      type: "INVOICE" as const,
+    invoices.map((invoice) => ({
+      type: "INVOICE",
       id: invoice.id,
       title: `Invoice #${invoice.invoiceNumber}`,
       subtitle: `${invoice.customerName} · ${invoice.status}`,
-      // InvoicesPage reads invoiceId from the URL and opens that exact invoice.
       href: `/invoices?invoiceId=${encodeURIComponent(invoice.id)}`,
     })),
-  ].slice(0, input.limit);
+  ];
+  const results: GlobalSearchResult[] = [];
+  for (let index = 0; results.length < input.limit; index += 1) {
+    let added = false;
+    for (const group of groupedResults) {
+      const result = group[index];
+      if (result && results.length < input.limit) {
+        results.push(result);
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  return results;
 }
