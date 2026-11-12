@@ -738,7 +738,7 @@ describe("SuspiciousActivityPage", () => {
         actorName: "Jane Manager",
         metadata: {
           operationCode: "TI",
-          operationName: "Transfer Invoice",
+          operationName: "Transfer Order",
           reason: "Wrong customer account",
         },
         correlationId: null,
