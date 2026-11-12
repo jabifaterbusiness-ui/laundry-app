@@ -830,21 +830,10 @@ function OrderManagementContent({
         </button>
         <button
           type="button"
-          disabled={
-            mode !== "view" ||
-            !order ||
-            !invoiceQuery.data ||
-            !canViewInvoices
-          }
-          onClick={() =>
-            navigate(
-              `/invoices?invoiceId=${encodeURIComponent(
-                invoiceQuery.data!.id,
-              )}&action=transfer`,
-            )
-          }
+          disabled={mode !== "view" || !order || !hasPermission(user, "orders.update")}
+          onClick={() => order && openQuickOperation("TO", order.id)}
         >
-          Transfer Invoice
+          Transfer Order (TO)
         </button>
         <button type="button" onClick={() => setLayer("history")}>
           History
@@ -926,13 +915,6 @@ function OrderManagementContent({
           onClick={onSwitchCustomer}
         >
           Switch Customer
-        </button>
-        <button
-          type="button"
-          disabled={mode !== "view" || !order || !hasPermission(user, "orders.update")}
-          onClick={() => order && openQuickOperation("TO", order.id)}
-        >
-          Transfer Order (TO)
         </button>
         <button
           type="button"
