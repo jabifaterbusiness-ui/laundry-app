@@ -182,6 +182,8 @@ describe("whatsapp.provider", () => {
     mocks.customerFindFirst.mockResolvedValue({
       phone: "2348099999999",
       whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
     await expect(sendWhatsAppReceipt({
       businessId: "business-1",
