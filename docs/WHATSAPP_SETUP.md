@@ -59,3 +59,30 @@ The first live test should connect a separate test business, send an approved te
 - Limitations to validate: media preview support is limited to allowlisted image/video/audio/PDF formats up to 10 MB; template component coverage is currently BODY text parameters; order-status and unpicked-order notifications use approved UTILITY fallbacks; announcements require an approved MARKETING fallback with three BODY variables and a 1,024-character message limit; inbox polling refreshes every 15 seconds.
 - External setup still needed: a new v4 Configuration ID, stable token-encryption key, webhook verification/app-secret configuration, and an exact HTTPS app origin. Domain registration/verification remains a separate deferred task. Meta App Review and Advanced Access are required before unrelated customer businesses can onboard in production.
 - Before merge/deploy: run API unit/integration tests, web typecheck/build, inspect the full PR diff, and complete Meta test-business send/receive/status verification.
+
+
+## Recipient compatibility, consent, and receipt templates
+
+- Recipients may use ordinary consumer WhatsApp or WhatsApp Business. They do not need a Business account. The phone number must be registered and reachable on WhatsApp.
+- The laundry business must connect its own WhatsApp Business Platform number through Meta Embedded Signup.
+- Business-initiated messages require recorded customer opt-in. Do not infer consent merely because a phone number is on WhatsApp.
+- Free-form messages are available only during the 24-hour customer-service window after the customer messages the business. Outside that window, an approved Meta template is required.
+- To send the actual receipt image outside the 24-hour window, create and approve a Meta **UTILITY** template with an **IMAGE** header and exactly four BODY variables. In LaundryAngel's WhatsApp connection panel, select this template as the receipt template. The BODY variables are populated in this order:
+  1. Customer name
+  2. Invoice number
+  3. Invoice total
+  4. Outstanding balance
+- The image header is populated with the generated receipt image. Text-only templates are not accepted as receipt templates because they cannot carry the actual receipt image.
+
+## Platform environment readiness
+
+The API reports which server-side values are missing. Configure these only in the production/staging API secret store; never enter secret values in the browser or commit them to the repository:
+
+- `WHATSAPP_API_VERSION`
+- `WHATSAPP_APP_ID`
+- `WHATSAPP_APP_SECRET`
+- `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID`
+- `WHATSAPP_TOKEN_ENCRYPTION_KEY`
+- `WHATSAPP_VERIFY_TOKEN`
+
+The Meta app must have Embedded Signup enabled, the correct configuration ID, the required WhatsApp permissions, and a webhook subscription pointing to the LaundryAngel API webhook. A code change cannot replace Meta-side app configuration or server secrets.
