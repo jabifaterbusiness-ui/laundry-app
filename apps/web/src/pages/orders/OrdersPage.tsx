@@ -615,12 +615,19 @@ export function OrdersPage() {
     }
 
     openedCustomerFromUrlRef.current = navigationKey;
-    openCustomerWorkspace(customer);
+    if (openCustomerAccountFromUrl) {
+      openCustomerAccount(customer);
+    } else {
+      openCustomerWorkspace(customer);
+    }
+    navigate("/orders", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
+    openCustomerAccountFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
+    navigate,
   ]);
 
   const services = servicesQuery.data?.data ?? [];
