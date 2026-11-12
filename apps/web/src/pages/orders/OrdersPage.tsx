@@ -102,9 +102,13 @@ export function OrdersPage() {
   const [workspaceReturnTo, setWorkspaceReturnTo] = useState<"customer-workstation" | null>(
     returnToFromUrl === "customer-workstation" ? "customer-workstation" : null,
   );
+  const workspaceReturnToRef = useRef<"customer-workstation" | null>(
+    returnToFromUrl === "customer-workstation" ? "customer-workstation" : null,
+  );
 
   useEffect(() => {
     if (returnToFromUrl === "customer-workstation") {
+      workspaceReturnToRef.current = "customer-workstation";
       setWorkspaceReturnTo("customer-workstation");
     }
   }, [returnToFromUrl]);
@@ -447,7 +451,8 @@ export function OrdersPage() {
       setFormError(null);
       setSelectedOrder(order);
 
-      if (workspaceReturnTo === "customer-workstation") {
+      if (workspaceReturnToRef.current === "customer-workstation" || workspaceReturnTo === "customer-workstation") {
+        workspaceReturnToRef.current = null;
         setWorkspaceReturnTo(null);
         navigate(
           `/customer-workstation?customerId=${encodeURIComponent(
@@ -1802,7 +1807,8 @@ export function OrdersPage() {
               const customerId = activeWorkspace.customer.id;
               markOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
-              if (workspaceReturnTo === "customer-workstation") {
+              if (workspaceReturnToRef.current === "customer-workstation" || workspaceReturnTo === "customer-workstation") {
+                workspaceReturnToRef.current = null;
                 setWorkspaceReturnTo(null);
                 navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
                 return;
