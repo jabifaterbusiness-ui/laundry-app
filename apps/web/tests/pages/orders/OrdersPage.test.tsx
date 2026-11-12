@@ -845,6 +845,12 @@ describe("OrdersPage quick customer switching", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "← Back" }));
 
+    // Distinguish a swallowed Back click from a route change that is later
+    // overwritten by another navigation effect.
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+    });
+
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
         `/customer-workstation?customerId=${customerA.id}`,
