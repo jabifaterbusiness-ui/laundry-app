@@ -254,6 +254,10 @@ describe("inventory operations", () => {
       { businessId: BUSINESS, branchId: SOURCE, userId: USER },
       { inventoryItemId: ITEM, quantity: 1, type: "EXPIRED", createdById: USER, reason: "Expired product", batchNumber: "LOT-1", expiryDate: new Date(Date.now() + 86400000) },
     )).rejects.toMatchObject({ statusCode: 422 });
+    await expect(createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      { inventoryItemId: ITEM, quantity: 1, type: "RECEIPT", createdById: USER, batchNumber: "LOT-OLD", expiryDate: new Date("2020-01-01") },
+    )).rejects.toMatchObject({ statusCode: 422 });
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
