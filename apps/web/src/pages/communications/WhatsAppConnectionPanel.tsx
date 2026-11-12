@@ -4,7 +4,9 @@ import {
   completeWhatsAppConnection,
   disconnectWhatsAppConnection,
   getWhatsAppConnection,
+  saveWhatsAppReceiptTemplate,
 } from "../../lib/communications-api.js";
+import { getApprovedWhatsAppTemplates } from "../../lib/whatsapp-inbox-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 
 declare global {
@@ -24,6 +26,7 @@ export function WhatsAppConnectionPanel() {
   const queryClient = useQueryClient();
   const [sdkReady, setSdkReady] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [receiptTemplateSelection, setReceiptTemplateSelection] = useState("");
   const codeRef = useRef<string | null>(null);
   const assetRef = useRef<SignupAsset | null>(null);
   const submittedRef = useRef(false);
@@ -32,6 +35,38 @@ export function WhatsAppConnectionPanel() {
     queryKey: ["whatsapp", "connection"],
     queryFn: () => getWhatsAppConnection({ accessToken }),
     enabled: Boolean(accessToken),
+  });
+
+  const approvedTemplatesQuery = useQuery({
+    queryKey: ["whatsapp", "templates"],
+    queryFn: () => getApprovedWhatsAppTemplates(accessToken),
+    enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
+  });
+
+  useEffect(() => {
+    const connection = connectionQuery.data?.connection;
+    setReceiptTemplateSelection(
+      connection?.receiptTemplateName && connection.receiptTemplateLanguage
+        ? `${connection.receiptTemplateName}|${connection.receiptTemplateLanguage}`
+        : "",
+    );
+  }, [connectionQuery.data?.connection?.receiptTemplateName, connectionQuery.data?.connection?.receiptTemplateLanguage]);
+
+  const receiptTemplateMutation = useMutation({
+    mutationFn: () => {
+      const selected = approvedTemplatesQuery.data?.data.find((template) =>
+        `${template.name}|${template.language}` === receiptTemplateSelection,
+      );
+      return saveWhatsAppReceiptTemplate({
+        templateName: selected?.name ?? null,
+        language: selected?.language ?? null,
+      }, { accessToken });
+    },
+    onSuccess: async () => {
+      setFeedback("WhatsApp receipt template settings saved.");
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection"] });
+    },
+    onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save the receipt template."),
   });
 
   const connectMutation = useMutation({
@@ -194,6 +229,42 @@ export function WhatsAppConnectionPanel() {
           )}
         </div>
       )}
+      {connection ? (
+        <div style={{ marginTop: 14, padding: 14, border: "1px solid #dbeafe", borderRadius: 12, background: "#fff" }}>
+          <h3 style={{ margin: "0 0 6px" }}>Receipt delivery outside the 24-hour reply window</h3>
+          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+            Choose an approved UTILITY template with an IMAGE header and four body variables. LaundryAngel will attach the actual receipt image and fill the variables in this order: customer name, invoice number, total amount, and balance due.
+          </p>
+          <label style={{ display: "block" }}>
+            Approved receipt template
+            <select
+              value={receiptTemplateSelection}
+              onChange={(event) => setReceiptTemplateSelection(event.target.value)}
+              style={{ display: "block", width: "100%", marginTop: 6, padding: 9 }}
+            >
+              <option value="">Choose a receipt template</option>
+              {(approvedTemplatesQuery.data?.data ?? [])
+                .filter((template) => template.category === "UTILITY" && template.headerFormat === "IMAGE" && template.bodyVariableCount === 4)
+                .map((template) => (
+                  <option key={template.id} value={`${template.name}|${template.language}`}>
+                    {template.name} · {template.language}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {approvedTemplatesQuery.isLoading && <small>Loading approved templates…</small>}
+          {approvedTemplatesQuery.isError && <p role="alert">Unable to load approved templates from Meta. Check the business connection and try again.</p>}
+          {!receiptTemplateSelection && <small style={{ display: "block", color: "#b45309", marginTop: 6 }}>No receipt template is configured. WhatsApp receipts can only be sent within the 24-hour reply window until one is selected.</small>}
+          <button
+            type="button"
+            disabled={receiptTemplateMutation.isPending || approvedTemplatesQuery.isLoading || !receiptTemplateSelection}
+            onClick={() => receiptTemplateMutation.mutate()}
+            style={{ marginTop: 10, border: 0, borderRadius: 9, padding: "9px 14px", background: "#0f766e", color: "#fff", fontWeight: 700 }}
+          >
+            {receiptTemplateMutation.isPending ? "Saving…" : "Save receipt template"}
+          </button>
+        </div>
+      ) : null}
       {feedback && <p role="status" style={{ marginBottom: 0, marginTop: 12, color: "#334155", fontSize: 13 }}>{feedback}</p>}
     </section>
   );
