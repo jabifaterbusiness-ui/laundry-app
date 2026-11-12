@@ -4508,3 +4508,60 @@ a {
   outline: 3px solid rgba(25, 143, 148, 0.22);
   outline-offset: 2px;
 }
+
+.suspicious-activity-record {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--la-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(23, 32, 51, 0.045);
+}
+
+.suspicious-activity-record-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.suspicious-activity-record-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.suspicious-activity-record-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+
+.suspicious-activity-record-meta > div {
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--la-border);
+  border-radius: 10px;
+  background: var(--surface, #f8fafb);
+}
+
+.suspicious-activity-record-meta dt {
+  margin-bottom: 4px;
+  color: var(--la-text-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.suspicious-activity-record-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--la-text, #243044);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
