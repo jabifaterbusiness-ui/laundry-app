@@ -793,6 +793,7 @@ describe("createOrder", () => {
         AND: [{
           OR: [
             { orderNumber: { contains: "Adam" } },
+            { invoice: { is: { invoiceNumber: { contains: "Adam" } } } },
             { customer: { is: { name: { contains: "Adam", mode: "insensitive" } } } },
             { customer: { is: { phone: { contains: "Adam" } } } },
             { customer: { is: { email: { contains: "Adam", mode: "insensitive" } } } },
