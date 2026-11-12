@@ -719,7 +719,7 @@ describe("InventoryPage", () => {
     fireEvent.change(screen.getByLabelText("Movement"), { target: { value: "DAMAGED" } });
     fireEvent.change(section.querySelectorAll("select")[1], { target: { value: item.id } });
     fireEvent.change(section.querySelector<HTMLInputElement>('input[type="number"]')!, { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Packaging torn during handling" } });
+    fireEvent.change(screen.getAllByLabelText("Reason")[0], { target: { value: "Packaging torn during handling" } });
     fireEvent.change(screen.getByLabelText("Batch / Lot Number"), { target: { value: "LOT-DMG-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Damaged Stock" }));
 
@@ -743,7 +743,7 @@ describe("InventoryPage", () => {
     fireEvent.change(screen.getByLabelText("Movement"), { target: { value: "EXPIRED" } });
     fireEvent.change(section.querySelectorAll("select")[1], { target: { value: item.id } });
     fireEvent.change(section.querySelector<HTMLInputElement>('input[type="number"]')!, { target: { value: "1" } });
-    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Past expiry date" } });
+    fireEvent.change(screen.getAllByLabelText("Reason")[0], { target: { value: "Past expiry date" } });
     fireEvent.change(screen.getByLabelText("Batch / Lot Number"), { target: { value: "LOT-EXP-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Expired Stock" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter the original expiry date");
