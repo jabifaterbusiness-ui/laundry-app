@@ -96,6 +96,7 @@ export function OrdersPage() {
     );
 
   const customerIdFromUrl = searchParams.get("customerId");
+  const openCustomerAccountFromUrl = searchParams.get("openAccount") === "1";
   const returnToFromUrl = searchParams.get("returnTo");
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
@@ -722,6 +723,16 @@ export function OrdersPage() {
       mode: "view",
       activeOrder: null,
     });
+    setSelectedOrder(null);
+    setFormError(null);
+    setCustomerPickerOpen(false);
+    setFormOpen(false);
+  }
+
+  function openCustomerAccount(customer: Customer) {
+    const workspaceId = openWorkspace(customer);
+    switchWorkspace(workspaceId);
+    updateWorkspace(workspaceId, { mode: "view", activeOrder: null });
     setSelectedOrder(null);
     setFormError(null);
     setCustomerPickerOpen(false);
