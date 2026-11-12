@@ -40,7 +40,7 @@ describe("listSuspiciousActivity", () => {
     findMany.mockResolvedValue(records);
 
     await expect(
-      listSuspiciousActivity("business-1", 100),
+      listSuspiciousActivity("business-1", "branch-1", 100),
     ).resolves.toEqual(records);
 
     expect(findMany).toHaveBeenCalledOnce();
@@ -49,6 +49,7 @@ describe("listSuspiciousActivity", () => {
 
     expect(call.where).toEqual({
       businessId: "business-1",
+      branchId: "branch-1",
       action: {
         in: [...SUSPICIOUS_ACTIVITY_ACTIONS],
       },
@@ -60,7 +61,7 @@ describe("listSuspiciousActivity", () => {
   it("uses the complete suspicious activity action catalogue", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1");
+    await listSuspiciousActivity("business-1", "branch-1");
 
     const call = findMany.mock.calls[0]![0];
 
@@ -99,10 +100,10 @@ describe("listSuspiciousActivity", () => {
   it("clamps the requested limit to the safe range", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1", 0);
+    await listSuspiciousActivity("business-1", "branch-1", 0);
     expect(findMany.mock.calls[0]![0].take).toBe(1);
 
-    await listSuspiciousActivity("business-1", 999);
+    await listSuspiciousActivity("business-1", "branch-1", 999);
     expect(findMany.mock.calls[1]![0].take).toBe(200);
   });
 
