@@ -160,14 +160,19 @@ export async function sendWhatsAppConversationReply(input: {
 
   const connection = await prisma.whatsAppBusinessConnection.findUnique({
     where: { businessId: input.businessId },
-    select: { status: true },
+    select: { status: true, phoneNumberId: true },
   });
   if (!connection || connection.status !== "CONNECTED") {
     throw new AppError("Connect this business's WhatsApp number before replying", 409);
   }
 
   const lastInbound = await prisma.whatsAppWebhookEvent.findFirst({
-    where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+    where: {
+      businessId: input.businessId,
+      phoneNumberId: connection.phoneNumberId,
+      contactPhone: recipient,
+      eventType: "MESSAGE_RECEIVED",
+    },
     orderBy: { receivedAt: "desc" },
     select: { payload: true, receivedAt: true },
   });
