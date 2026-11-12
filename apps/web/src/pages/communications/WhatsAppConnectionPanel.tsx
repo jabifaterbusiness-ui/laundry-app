@@ -45,6 +45,15 @@ export function WhatsAppConnectionPanel() {
   });
 
   useEffect(() => {
+    codeRef.current = null;
+    assetRef.current = null;
+    submittedRef.current = false;
+    setSdkReady(false);
+    setFeedback("");
+    setReceiptTemplateSelection("");
+  }, [businessId]);
+
+  useEffect(() => {
     const connection = connectionQuery.data?.connection;
     setReceiptTemplateSelection(
       connection?.receiptTemplateName && connection.receiptTemplateLanguage
@@ -66,8 +75,6 @@ export function WhatsAppConnectionPanel() {
     onSuccess: async () => {
       setFeedback("WhatsApp receipt template settings saved.");
       await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection", businessId] });
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "templates", businessId] });
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "approved-templates", businessId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save the receipt template."),
   });
@@ -80,7 +87,9 @@ export function WhatsAppConnectionPanel() {
       codeRef.current = null;
       assetRef.current = null;
       submittedRef.current = false;
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection"] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "templates", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "approved-templates", businessId] });
     },
     onError: (error) => {
       submittedRef.current = false;
@@ -92,7 +101,9 @@ export function WhatsAppConnectionPanel() {
     mutationFn: () => disconnectWhatsAppConnection({ accessToken }),
     onSuccess: async () => {
       setFeedback("WhatsApp account disconnected from this business.");
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection"] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "templates", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "approved-templates", businessId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to disconnect WhatsApp."),
   });
