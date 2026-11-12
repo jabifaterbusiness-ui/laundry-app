@@ -128,6 +128,10 @@ describe("whatsapp.provider", () => {
     await expect(sendWhatsAppReceipt({
       businessId: "business-1", customerId: "customer-1", to: "2348012345678", image: IMAGE,
     })).rejects.toThrow("has not explicitly opted in");
+    expect(mocks.customerFindFirst).toHaveBeenCalledWith({
+      where: { id: "customer-1", businessId: "business-1" },
+      select: { phone: true, whatsappOptIn: true },
+    });
     expect(mocks.fetchMock).not.toHaveBeenCalled();
     expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
   });
