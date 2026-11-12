@@ -107,6 +107,7 @@ export async function list(req: Request, res: Response) {
     ...(query.customerId !== undefined && {
       customerId: query.customerId,
     }),
+    ...(query.search !== undefined && { search: query.search }),
   });
 
   res.status(200).json(result);
