@@ -115,3 +115,39 @@ export function saveSuspiciousActivityCategoryOrder(
 ) {
   localStorage.setItem(categoryOrderKey(userId, branchId), JSON.stringify(order));
 }
+
+const EVENT_ORDER_PREFIX = "laundry-app:suspicious-activity-events";
+
+function eventOrderKey(userId: string, branchId: string) {
+  return `${EVENT_ORDER_PREFIX}:${userId}:${branchId}`;
+}
+
+export function loadSuspiciousActivityEventOrder(
+  userId: string,
+  branchId: string,
+  defaultOrder: readonly string[],
+): string[] {
+  try {
+    const raw = localStorage.getItem(eventOrderKey(userId, branchId));
+    if (!raw) return [...defaultOrder];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+      return [...defaultOrder];
+    }
+
+    const available = new Set(defaultOrder);
+    const saved = parsed.filter((item): item is string => available.has(item));
+    return [...new Set([...saved, ...defaultOrder.filter((item) => !saved.includes(item))])];
+  } catch {
+    return [...defaultOrder];
+  }
+}
+
+export function saveSuspiciousActivityEventOrder(
+  userId: string,
+  branchId: string,
+  order: readonly string[],
+) {
+  localStorage.setItem(eventOrderKey(userId, branchId), JSON.stringify(order));
+}
