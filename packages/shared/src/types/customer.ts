@@ -24,6 +24,7 @@ export interface Customer {
   statusChangedAt: string | null;
   statusChangedById: string | null;
   mergedIntoCustomerId?: string | null;
+  mergedIntoCustomer?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }
