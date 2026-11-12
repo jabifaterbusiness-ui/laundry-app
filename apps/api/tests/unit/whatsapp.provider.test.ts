@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   inboundFindFirst: vi.fn(),
   customerFindFirst: vi.fn(),
+  connectionFindUnique: vi.fn(),
 }));
 
 vi.stubGlobal("fetch", mocks.fetchMock);
@@ -24,6 +25,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     whatsAppWebhookEvent: { findFirst: mocks.inboundFindFirst },
     customer: { findFirst: mocks.customerFindFirst },
+    whatsAppBusinessConnection: { findUnique: mocks.connectionFindUnique },
   },
 }));
 vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
@@ -37,6 +39,7 @@ const IMAGE = Buffer.from("fake-png");
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.customerFindFirst.mockResolvedValue({ phone: "2348012345678", whatsappOptIn: true });
+  mocks.connectionFindUnique.mockResolvedValue({ phoneNumberId: "phone-number-id-123", status: "CONNECTED" });
 
   mocks.fetchMock
     .mockResolvedValueOnce({
@@ -120,6 +123,18 @@ describe("whatsapp.provider", () => {
     await expect(sendWhatsAppText({
       businessId: "business-1", to: "2348012345678", body: "Your order is ready",
     })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
+    expect(mocks.connectionFindUnique).toHaveBeenCalledWith({
+      where: { businessId: "business-1" },
+      select: { phoneNumberId: true, status: true },
+    });
+    expect(mocks.inboundFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "business-1",
+        phoneNumberId: "phone-number-id-123",
+        contactPhone: "2348012345678",
+        eventType: "MESSAGE_RECEIVED",
+      },
+    }));
     expect(mocks.fetchMock).not.toHaveBeenCalled();
   });
 
