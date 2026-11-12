@@ -9,6 +9,12 @@ const report: InventoryReport = {
   consumptionQuantity: 3,
   adjustmentQuantity: 1,
   movementTotals: { ISSUE: 3, ADJUSTMENT: 1 },
+  expiryRegister: [{
+    id: "expiry-1",
+    inventoryItem: { id: "item-1", name: "Detergent" } as InventoryReport["valuation"][number]["inventoryItem"],
+    batchNumber: "LOT-1", expiryDate: "2026-11-20T00:00:00.000Z", quantityReceived: 5,
+    receiptNumber: "GRN-1", receivedAt: "2026-11-01T00:00:00.000Z", daysUntilExpiry: 8, status: "DUE_SOON",
+  }],
   valuation: [{
     inventoryItem: {
       id: "item-1",
@@ -50,6 +56,7 @@ describe("inventory report CSV export", () => {
     expect(csv).toContain('"Detergent, ""Premium"""');
     expect(csv).toContain(",25,250");
     expect(csv).toContain("Reliable Supplies,3,1,1,1,3,1000");
+    expect(csv).toContain("LOT-1,GRN-1,5,2026-11-20,8,DUE_SOON");
     expect(csv.charCodeAt(0)).toBe(0xfeff);
   });
 
