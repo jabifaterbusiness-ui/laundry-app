@@ -194,6 +194,60 @@ describe("Customers routes - legacy ownership review", () => {
     }));
   });
 
+  it("bulk assigns only the selected unassigned customers within the authenticated business", async () => {
+    branchFindFirst.mockResolvedValue({ id: TARGET_BRANCH_ID, name: "Branch B" } as never);
+    updateMany.mockResolvedValue({ count: 2 });
+
+    const response = await request(app)
+      .post("/api/v1/customers/legacy-unassigned/assign")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .set("x-sensitive-authorization", "test-sensitive-token")
+      .send({
+        branchId: TARGET_BRANCH_ID,
+        customerIds: [LEGACY_CUSTOMER_ID, "33333333-3333-4333-8333-333333333333"],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      assignedCount: 2,
+      branchId: TARGET_BRANCH_ID,
+      branchName: "Branch B",
+      assignmentScope: "SELECTED",
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        businessId: "biz-A",
+        ownerBranchId: null,
+        id: { in: [LEGACY_CUSTOMER_ID, "33333333-3333-4333-8333-333333333333"] },
+      },
+      data: { ownerBranchId: TARGET_BRANCH_ID },
+    });
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "customer.legacy_owner_bulk_assigned",
+      businessId: "biz-A",
+    }));
+  });
+
+  it("assigns all remaining unassigned customers without accepting a client-supplied business ID", async () => {
+    branchFindFirst.mockResolvedValue({ id: TARGET_BRANCH_ID, name: "Branch B" } as never);
+    updateMany.mockResolvedValue({ count: 17 });
+
+    const response = await request(app)
+      .post("/api/v1/customers/legacy-unassigned/assign")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .set("x-sensitive-authorization", "test-sensitive-token")
+      .send({ branchId: TARGET_BRANCH_ID, all: true, businessId: "biz-B" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.assignedCount).toBe(17);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { businessId: "biz-A", ownerBranchId: null },
+      data: { ownerBranchId: TARGET_BRANCH_ID },
+    });
+  });
+
   it("assigns an unassigned customer to an active branch and audits the owner decision", async () => {
     branchFindFirst.mockResolvedValue({ id: TARGET_BRANCH_ID } as never);
     findFirst.mockResolvedValue({ id: LEGACY_CUSTOMER_ID } as never);
