@@ -516,6 +516,9 @@ describe("FinancePage", () => {
     });
     expect(whatsappCheckbox).toBeDisabled();
     expect(
+      within(section).getByRole("checkbox", { name: "Daily WhatsApp" }),
+    ).toBeDisabled();
+    expect(
       within(section).getAllByText(/WhatsApp financial-statement delivery is temporarily unavailable/i),
     ).toHaveLength(2);
 
