@@ -391,8 +391,9 @@ export function CustomersPage() {
                 <td>{customer.phone}</td>
                 <td>{customer.email ?? "-"}</td>
                 <td>{customer.ownerBranch?.name ?? "Branch details unavailable"}</td>
-                <td>{customer.lifecycleStatus}</td>
+                <td>{customer.lifecycleStatus === "MERGED" ? `Merged into ${customer.mergedIntoCustomer?.name ?? "another customer"}` : customer.lifecycleStatus}</td>
                 <td>
+                  {customer.lifecycleStatus !== "MERGED" ? <>
                   <button
                     type="button"
                     onClick={() => setEditingCustomer(customer)}
@@ -408,6 +409,7 @@ export function CustomersPage() {
                   >
                     Change status
                   </button>
+                  </> : <span aria-label="Merged customer archive">Archived</span>}
                 </td>
               </tr>
             ))}
