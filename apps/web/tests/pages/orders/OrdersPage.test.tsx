@@ -499,10 +499,10 @@ describe("OrdersPage quick customer switching", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /new order/i })).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(listOrders).toHaveBeenCalledWith(
+      expect(listOrders).toHaveBeenLastCalledWith(
         expect.objectContaining({ customerId: customerA.id }),
         { accessToken: "test-token" },
-        "branch-A",
+        "branch-a",
       );
     });
   });
