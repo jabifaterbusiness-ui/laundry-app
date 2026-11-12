@@ -45,7 +45,17 @@ describe("inventory operations", () => {
     const orderedAt = new Date("2026-10-01T09:00:00.000Z");
     const receivedAt = new Date("2026-10-04T09:00:00.000Z");
     db.inventoryStock.findMany.mockResolvedValue([]);
-    db.inventoryMovement.findMany.mockResolvedValue([{ type: "DAMAGED", quantity: 3 }]);
+    db.inventoryMovement.findMany
+      .mockResolvedValueOnce([{ type: "DAMAGED", quantity: 3 }])
+      .mockResolvedValueOnce([{
+        id: "movement-expiry-1",
+        inventoryItem: { id: ITEM, name: "Detergent" },
+        batchNumber: "LOT-1",
+        expiryDate: new Date(Date.now() + 5 * 86400000),
+        quantity: 4,
+        reference: "GRN-1",
+        createdAt: new Date(),
+      }]);
     db.inventoryPurchaseOrder.findMany.mockResolvedValue([
       {
         supplierId: "supplier-1",
@@ -88,8 +98,13 @@ describe("inventory operations", () => {
         ]),
       }),
     }));
-    expect(db.inventoryGoodsReceiptLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { expiryDate: { not: null }, goodsReceipt: { is: { businessId: BUSINESS, branchId: SOURCE } } },
+    expect(db.inventoryMovement.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: {
+        businessId: BUSINESS,
+        branchId: SOURCE,
+        type: { in: ["RECEIPT", "RETURN"] },
+        expiryDate: { not: null },
+      },
       orderBy: { expiryDate: "asc" },
     }));
     expect(report.expiryRegister).toHaveLength(1);
