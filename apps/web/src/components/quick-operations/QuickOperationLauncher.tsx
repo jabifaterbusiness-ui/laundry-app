@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useIsMutating } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
-import { getCustomer } from "../../lib/customers-api.js";
+import { getCustomer, listCustomers } from "../../lib/customers-api.js";
 import { getOrder } from "../../lib/orders-api.js";
 import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { listOfflineSyncOperations } from "../../lib/offline-sync-queue.js";
@@ -159,6 +159,11 @@ export function QuickOperationLauncher({
 
   const [recordId, setRecordId] = useState(initialRecordId);
   const [customerId, setCustomerId] = useState("");
+  const [targetCustomerSearch, setTargetCustomerSearch] = useState("");
+  const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string }>>([]);
+  const [targetCustomersLoading, setTargetCustomersLoading] = useState(false);
+  const [targetCustomersError, setTargetCustomersError] = useState<string | null>(null);
+  const [sourceOrderCustomerId, setSourceOrderCustomerId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -177,6 +182,10 @@ export function QuickOperationLauncher({
   useEffect(() => {
     setRecordId(initialRecordId);
     setCustomerId("");
+    setTargetCustomerSearch("");
+    setTargetCustomers([]);
+    setTargetCustomersError(null);
+    setSourceOrderCustomerId(null);
     setQuantity("1");
     setAmount("");
     setReason("");
@@ -192,6 +201,52 @@ export function QuickOperationLauncher({
     setError(null);
     setSuccess(null);
   }, [operation, initialRecordId]);
+
+  useEffect(() => {
+    if (!operation || (operation.code !== "MC" && operation.code !== "TO") || !accessToken || !activeBranchId) {
+      setTargetCustomers([]);
+      setTargetCustomersLoading(false);
+      return;
+    }
+
+    let active = true;
+    setTargetCustomersLoading(true);
+    setTargetCustomersError(null);
+    listCustomers({
+      page: 1,
+      pageSize: 100,
+      search: targetCustomerSearch.trim() || undefined,
+      status: "all",
+    }, { accessToken })
+      .then((response) => {
+        if (!active) return;
+        const sourceCustomerId = operation.code === "MC" ? recordId : sourceOrderCustomerId;
+        setTargetCustomers(response.data
+          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.id !== sourceCustomerId)
+          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone })));
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setTargetCustomersError(error instanceof Error ? error.message : "Unable to load destination customers.");
+      })
+      .finally(() => {
+        if (active) setTargetCustomersLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [operation?.code, accessToken, activeBranchId, targetCustomerSearch, recordId, sourceOrderCustomerId]);
+
+  useEffect(() => {
+    if (operation?.code !== "TO" || !recordId.trim() || !accessToken || !activeBranchId) {
+      setSourceOrderCustomerId(null);
+      return;
+    }
+    let active = true;
+    getOrder(recordId.trim(), { accessToken }, activeBranchId)
+      .then((order) => { if (active) setSourceOrderCustomerId(order.customerId); })
+      .catch(() => { if (active) setSourceOrderCustomerId(null); });
+    return () => { active = false; };
+  }, [operation?.code, recordId, accessToken, activeBranchId]);
 
   useEffect(() => {
     if (!operation) return;
@@ -781,18 +836,39 @@ export function QuickOperationLauncher({
                 </div>
               ) : null}
 
-              {activeOperation.code === "TO" ? (
-                <Field
-                  label="Target Customer ID"
-                  value={customerId}
-                  onChange={setCustomerId}
-                  placeholder="Enter target customer ID"
-                  disabled={isSubmitting}
-                />
-              ) : null}
-
-              {activeOperation.code === "TC" ||
-              activeOperation.code === "MC" ? (
+              {activeOperation.code === "TO" || activeOperation.code === "MC" ? (
+                <div style={{ marginTop: 14 }}>
+                  <label style={labelStyle}>Find destination customer</label>
+                  <input
+                    aria-label="Find destination customer"
+                    value={targetCustomerSearch}
+                    onChange={(event) => setTargetCustomerSearch(event.target.value)}
+                    placeholder="Search by customer name, phone or email"
+                    disabled={isSubmitting}
+                    style={inputStyle}
+                  />
+                  <label style={{ ...labelStyle, marginTop: 12 }}>Target Customer</label>
+                  <select
+                    aria-label="Target Customer ID"
+                    value={customerId}
+                    onChange={(event) => setCustomerId(event.target.value)}
+                    disabled={isSubmitting || targetCustomersLoading}
+                    style={inputStyle}
+                  >
+                    <option value="">Select a customer in this branch</option>
+                    {targetCustomers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name} — {customer.phone}
+                      </option>
+                    ))}
+                  </select>
+                  {targetCustomersLoading ? <p role="status">Loading branch customers…</p> : null}
+                  {targetCustomersError ? <p role="alert">{targetCustomersError}</p> : null}
+                  {!targetCustomersLoading && !targetCustomersError && targetCustomers.length === 0 ? (
+                    <p>No other eligible customers found in this branch.</p>
+                  ) : null}
+                </div>
+              ) : activeOperation.code === "TC" ? (
                 <Field
                   label="Target Customer ID"
                   value={customerId}
