@@ -311,6 +311,42 @@ describe("updateCustomer - tenant isolation", () => {
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { name: "New Name" } });
   });
 
+  it("repairs a legacy opt-in that has no recorded source or timestamp", async () => {
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-legacy",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348012345678",
+        whatsappOptIn: true,
+        whatsappOptInAt: null,
+        whatsappOptInSource: null,
+      } as never)
+      .mockResolvedValueOnce({
+        id: "cust-legacy",
+        ownerBranchId: "branch-A",
+        whatsappOptIn: true,
+        whatsappOptInAt: new Date(),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+      } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-legacy", "biz-1", "branch-A", "user-A", {
+      whatsappOptIn: true,
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-legacy", businessId: "biz-1" },
+      data: expect.objectContaining({
+        whatsappOptIn: true,
+        whatsappOptInAt: expect.any(Date),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      }),
+    });
+  });
+
   it("records opt-out only when a previously opted-in customer withdraws consent", async () => {
     findFirst.mockResolvedValue({ whatsappOptIn: true } as never);
     updateMany.mockResolvedValue({ count: 1 });
@@ -347,6 +383,32 @@ describe("updateCustomer - tenant isolation", () => {
         phone: "2348022222222",
         whatsappOptIn: false,
       },
+    });
+  });
+
+  it("preserves existing WhatsApp consent when only phone formatting changes", async () => {
+    const consentAt = new Date("2026-09-01T00:00:00.000Z");
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-1",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348011111111",
+        whatsappOptIn: true,
+        whatsappOptInAt: consentAt,
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      } as never)
+      .mockResolvedValueOnce({ id: "cust-1", phone: "+234 801 111 1111", whatsappOptIn: true } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", {
+      phone: "+234 801 111 1111",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-1", businessId: "biz-1" },
+      data: { phone: "+234 801 111 1111" },
     });
   });
 

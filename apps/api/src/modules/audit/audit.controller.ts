@@ -10,7 +10,11 @@ export async function suspiciousActivity(req: Request, res: Response) {
   const rawLimit = Number(req.query.limit ?? 100);
   const limit = Number.isFinite(rawLimit) ? rawLimit : 100;
 
+  if (!req.branchId) {
+    throw new AppError("Branch context required", 400);
+  }
+
   res.status(200).json(
-    await listSuspiciousActivity(req.user.businessId, limit),
+    await listSuspiciousActivity(req.user.businessId, req.branchId, limit),
   );
 }

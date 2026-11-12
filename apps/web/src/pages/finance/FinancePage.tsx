@@ -235,12 +235,12 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
           hour: Number(deliveryHour),
           minute: Number(deliveryMinute),
           emailEnabled: deliveryEmailEnabled,
-          whatsappEnabled: deliveryWhatsappEnabled,
+          whatsappEnabled: false,
           dailyEnabled: dailyDeliveryEnabled,
           dailyHour: Number(dailyDeliveryHour),
           dailyMinute: Number(dailyDeliveryMinute),
           dailyEmailEnabled: dailyDeliveryEmailEnabled,
-          dailyWhatsappEnabled: dailyDeliveryWhatsappEnabled,
+          dailyWhatsappEnabled: false,
         },
         { accessToken },
       );
@@ -251,12 +251,12 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
       setDeliveryHour(String(config.hour));
       setDeliveryMinute(String(config.minute));
       setDeliveryEmailEnabled(config.emailEnabled);
-      setDeliveryWhatsappEnabled(config.whatsappEnabled);
+      setDeliveryWhatsappEnabled(false);
       setDailyDeliveryEnabled(config.dailyEnabled);
       setDailyDeliveryHour(String(config.dailyHour));
       setDailyDeliveryMinute(String(config.dailyMinute));
       setDailyDeliveryEmailEnabled(config.dailyEmailEnabled);
-      setDailyDeliveryWhatsappEnabled(config.dailyWhatsappEnabled);
+      setDailyDeliveryWhatsappEnabled(false);
       setDeliveryMessage("Delivery settings saved.");
       await queryClient.invalidateQueries({
         queryKey: ["finance", "delivery-config"],
@@ -679,6 +679,7 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
 
                 <fieldset disabled={!canManageReports}>
                   <legend>Delivery channels</legend>
+                  <p role="note">WhatsApp financial-statement delivery is temporarily unavailable. It requires a dedicated staff-recipient consent process and an approved statement template. Email delivery remains available.</p>
 
                   <p>
                     <label>
@@ -697,7 +698,8 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                     <label>
                       <input
                         type="checkbox"
-                        checked={deliveryWhatsappEnabled}
+                        checked={false}
+                        disabled
                         onChange={(event) =>
                           setDeliveryWhatsappEnabled(event.target.checked)
                         }
@@ -768,6 +770,7 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
 
                 <fieldset disabled={!canManageReports}>
                   <legend>Daily delivery channels</legend>
+                  <p role="note">WhatsApp financial-statement delivery is temporarily unavailable. It requires a dedicated staff-recipient consent process and an approved statement template. Email delivery remains available.</p>
 
                   <p>
                     <label>
@@ -787,7 +790,8 @@ enabled: Boolean(accessToken && canManageReports && !permissionsRefreshing),
                     <label>
                       <input
                         type="checkbox"
-                        checked={dailyDeliveryWhatsappEnabled}
+                        checked={false}
+                        disabled
                         aria-label="Daily WhatsApp"
                         onChange={(event) =>
                           setDailyDeliveryWhatsappEnabled(event.target.checked)

@@ -17,6 +17,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     invoice: {
       findMany: vi.fn(),
     },
+    payment: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -27,6 +30,7 @@ vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
 const customerFindMany = vi.mocked(prisma.customer.findMany);
 const orderFindMany = vi.mocked(prisma.order.findMany);
 const invoiceFindMany = vi.mocked(prisma.invoice.findMany);
+const paymentFindMany = vi.mocked(prisma.payment.findMany);
 const permissionCheck = vi.mocked(hasPermission);
 
 const BUSINESS_A = "11111111-1111-4111-8111-111111111111";
@@ -42,6 +46,58 @@ describe("globalSearch", () => {
     customerFindMany.mockResolvedValue([]);
     orderFindMany.mockResolvedValue([]);
     invoiceFindMany.mockResolvedValue([]);
+    paymentFindMany.mockResolvedValue([]);
+  });
+
+  it("returns payment matches within the active branch and customer visibility scope", async () => {
+    paymentFindMany.mockResolvedValue([
+      {
+        id: "payment-1",
+        amount: 12500,
+        method: "TRANSFER",
+        status: "POSTED",
+        type: "PAYMENT",
+        reference: "BANK-REF-42",
+        invoice: {
+          invoiceNumber: "00042",
+          customerName: "Ada Laundry",
+        },
+      },
+    ] as never);
+
+    const results = await globalSearch(
+      USER_A,
+      "STAFF",
+      BUSINESS_A,
+      BRANCH_A,
+      { q: "BANK-REF-42", limit: 10 },
+    );
+
+    expect(paymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: BUSINESS_A,
+          branchId: BRANCH_A,
+          invoice: expect.objectContaining({
+            is: expect.objectContaining({
+              branchId: BRANCH_A,
+            }),
+          }),
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              reference: { contains: "BANK-REF-42", mode: "insensitive" },
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(results).toContainEqual({
+      type: "PAYMENT",
+      id: "payment-1",
+      title: "Payment · BANK-REF-42",
+      subtitle: "Ada Laundry · Invoice #00042 · POSTED",
+      href: "/payments?paymentId=payment-1",
+    });
   });
 
   it("returns customer, matching order, and matching invoice results together", async () => {
@@ -109,7 +165,7 @@ describe("globalSearch", () => {
       },
     ]);
 
-    expect(permissionCheck).toHaveBeenCalledTimes(3);
+    expect(permissionCheck).toHaveBeenCalledTimes(4);
   });
 
   it("returns the customer account and matching order for customer email searches", async () => {
@@ -210,7 +266,7 @@ describe("globalSearch", () => {
   it("only returns categories the user can view", async () => {
     permissionCheck.mockImplementation(
       async (_userId, _businessId, _role, permissionCode) =>
-        permissionCode !== "invoices.view",
+        permissionCode !== "invoices.view" && permissionCode !== "payments.view",
     );
 
     customerFindMany.mockResolvedValue([
@@ -247,6 +303,7 @@ describe("globalSearch", () => {
     expect(results.map((result) => result.type)).toEqual(["CUSTOMER", "ORDER"]);
 
     expect(invoiceFindMany).not.toHaveBeenCalled();
+    expect(paymentFindMany).not.toHaveBeenCalled();
   });
 
   it("returns no results when the user cannot view any searchable module", async () => {
@@ -267,6 +324,7 @@ describe("globalSearch", () => {
     expect(customerFindMany).not.toHaveBeenCalled();
     expect(orderFindMany).not.toHaveBeenCalled();
     expect(invoiceFindMany).not.toHaveBeenCalled();
+    expect(paymentFindMany).not.toHaveBeenCalled();
   });
 
   it("searches orders and invoices within the authenticated business and branch", async () => {
@@ -291,6 +349,15 @@ describe("globalSearch", () => {
     );
 
     expect(invoiceFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: BUSINESS_A,
+          branchId: BRANCH_A,
+        }),
+      }),
+    );
+
+    expect(paymentFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           businessId: BUSINESS_A,
@@ -337,6 +404,10 @@ describe("globalSearch", () => {
         take: 5,
       }),
     );
+
+    expect(paymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 5 }),
+    );
   });
 
   it("trims the search query before querying", async () => {
@@ -377,6 +448,7 @@ describe("globalSearch customer fallback", () => {
     ] as never);
     orderFindMany.mockResolvedValue([]);
     invoiceFindMany.mockResolvedValue([]);
+    paymentFindMany.mockResolvedValue([]);
   });
 
   it("keeps a customer shortcut when the search has no matching existing orders", async () => {

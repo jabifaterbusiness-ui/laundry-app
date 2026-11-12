@@ -6,6 +6,7 @@ import { decryptWhatsAppAccessToken } from "../../whatsapp/whatsapp-token-crypto
 
 export interface SendWhatsAppReceiptInput {
   businessId?: string;
+  customerId?: string;
   to: string;
   image: Buffer;
   caption?: string;
@@ -25,9 +26,16 @@ export function normalizeWhatsAppRecipient(value: string): string {
 
 async function assertWhatsAppServiceWindow(businessId: string | undefined, recipient: string) {
   if (!businessId) return; // Legacy platform sender is retained for internal migration only.
+  const connection = await prisma.whatsAppBusinessConnection.findUnique({
+    where: { businessId },
+    select: { phoneNumberId: true, status: true },
+  });
+  if (!connection || connection.status !== "CONNECTED") {
+    throw new Error("Connect this business's WhatsApp Business Account before sending messages");
+  }
   const contactPhone = normalizeWhatsAppRecipient(recipient);
   const inbound = await prisma.whatsAppWebhookEvent.findFirst({
-    where: { businessId, contactPhone, eventType: "MESSAGE_RECEIVED" },
+    where: { businessId, phoneNumberId: connection.phoneNumberId, contactPhone, eventType: "MESSAGE_RECEIVED" },
     orderBy: { receivedAt: "desc" },
     select: { payload: true, receivedAt: true },
   });
@@ -85,15 +93,26 @@ async function persistBusinessOutbound(input: { businessId?: string; to: string;
 }
 export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Promise<{ id: string }> {
   if (input.businessId) {
-    const recipient = normalizeWhatsAppRecipient(input.to);
-    const phoneVariants = [recipient, `+${recipient}`];
-    if (recipient.startsWith("234") && recipient.length === 13) phoneVariants.push(`0${recipient.slice(3)}`);
+    if (!input.customerId) {
+      throw new Error("A customer ID is required to verify WhatsApp receipt consent.");
+    }
     const customer = await prisma.customer.findFirst({
-      where: { businessId: input.businessId, phone: { in: phoneVariants } },
-      select: { whatsappOptIn: true },
+      where: { id: input.customerId, businessId: input.businessId },
+      select: {
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
-    if (!customer?.whatsappOptIn) {
-      throw new Error("This customer has not explicitly opted in to WhatsApp receipts. Record their consent before sending.");
+    if (!customer) {
+      throw new Error("Customer not found in this business.");
+    }
+    if (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
+      throw new Error("This customer has not explicitly opted in with a recorded consent source and timestamp. Record their consent before sending.");
+    }
+    if (normalizeWhatsAppRecipient(customer.phone) !== normalizeWhatsAppRecipient(input.to)) {
+      throw new Error("The WhatsApp receipt destination does not match the selected customer.");
     }
   }
   await assertWhatsAppServiceWindow(input.businessId, input.to);

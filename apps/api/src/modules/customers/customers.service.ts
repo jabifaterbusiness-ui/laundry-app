@@ -329,7 +329,9 @@ async function updateCustomerWithDb(
   if (data.address !== undefined) patch.address = data.address;
   if (data.notes !== undefined) patch.notes = data.notes;
 
-  const phoneChanged = data.phone !== undefined && data.phone !== existing.phone;
+  const phoneChanged = data.phone !== undefined &&
+    normalizePhone(data.phone).replace(/\D/g, "") !==
+      normalizePhone(existing.phone).replace(/\D/g, "");
   if (phoneChanged && data.whatsappOptIn !== true) {
     // Consent belongs to the phone number that was originally verified.
     // A changed destination must opt in again before business-initiated sends.
@@ -338,7 +340,8 @@ async function updateCustomerWithDb(
     // timestamp as historical evidence; only invalidate its current validity.
   }
 
-  if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged)) {
+  const consentRecordIncomplete = !existing.whatsappOptInAt || !existing.whatsappOptInSource;
+  if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged || consentRecordIncomplete)) {
     patch.whatsappOptIn = true;
     patch.whatsappOptInAt = new Date();
     patch.whatsappOptInSource = data.whatsappOptInSource ?? null;

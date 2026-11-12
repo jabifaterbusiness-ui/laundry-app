@@ -104,21 +104,37 @@ export async function sendApprovedWhatsAppTemplate(input: {
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { id: true, phone: true, whatsappOptIn: true },
+      select: {
+        id: true,
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
     if (!customer) throw new AppError("Customer not found in this business", 404);
     recipient = normalizeWhatsAppRecipient(customer.phone);
     customerId = customer.id;
-    if (input.requireInboundConversation === false && !customer.whatsappOptIn) {
-      throw new AppError("Customer has not explicitly opted in to business-initiated WhatsApp messages", 422);
+    if (
+      (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource)
+    ) {
+      throw new AppError("Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending a business-initiated template.", 422);
     }
+  }
+  if (input.requireInboundConversation !== false && !customerId) {
+    throw new AppError("A saved customer with recorded WhatsApp consent is required before sending an inbox template", 422);
   }
   if (input.requireInboundConversation === false && !customerId) {
     throw new AppError("A saved customer with recorded WhatsApp consent is required for automated template delivery", 422);
   }
   if (input.requireInboundConversation !== false) {
     const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
-      where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+      where: {
+        businessId: input.businessId,
+        phoneNumberId: connection.phoneNumberId,
+        contactPhone: recipient,
+        eventType: "MESSAGE_RECEIVED",
+      },
       select: { id: true },
     });
     if (!priorInbound) {
@@ -184,6 +200,21 @@ export async function sendAutomatedWhatsAppTemplate(input: {
   templateCategory?: "UTILITY" | "MARKETING";
   headerImageId?: string;
 }) {
+  // Reject missing or incomplete consent before making even a template-catalogue request to Meta.
+  const customer = await prisma.customer.findFirst({
+    where: { id: input.customerId, businessId: input.businessId },
+    select: {
+      id: true,
+      whatsappOptIn: true,
+      whatsappOptInAt: true,
+      whatsappOptInSource: true,
+    },
+  });
+  if (!customer) throw new AppError("Customer not found in this business", 404);
+  if (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
+    throw new AppError("Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending a business-initiated template.", 422);
+  }
+
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
   const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
   if (!template) throw new AppError("The configured WhatsApp notification template is not approved or is no longer available", 422);

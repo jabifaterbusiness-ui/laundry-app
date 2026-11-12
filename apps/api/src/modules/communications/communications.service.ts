@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
-import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { normalizeWhatsAppRecipient, sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
 import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
@@ -37,17 +37,50 @@ function getWhatsAppRetryPayload(input: {
 }
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
 
+async function disableLegacyWhatsAppRuleWithoutTemplate(rule: {
+  id: string;
+  enabled: boolean;
+  channel: string;
+  whatsappTemplateName: string | null;
+  whatsappTemplateLanguage: string | null;
+  whatsappMessage: string | null;
+  emailSubject: string | null;
+  emailMessage: string | null;
+}) {
+  if (rule.enabled && (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)) {
+    if (rule.channel === "BOTH") {
+      // Preserve the email half of a legacy BOTH rule while disabling the
+      // non-compliant WhatsApp path until its approved template is selected.
+      return prisma.orderStatusNotificationRule.update({
+        where: { id: rule.id },
+        data: { channel: "EMAIL" },
+      });
+    }
+    if (rule.channel === "WHATSAPP") {
+      return prisma.orderStatusNotificationRule.update({
+        where: { id: rule.id },
+        data: { enabled: false },
+      });
+    }
+  }
+  return rule;
+}
+
 async function ensureDefaultReadyRule(businessId: string) {
-  return prisma.orderStatusNotificationRule.upsert({
+  const rule = await prisma.orderStatusNotificationRule.upsert({
     where: { businessId_status: { businessId, status: "READY_FOR_PICKUP" } },
     create: {
-      businessId, status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      businessId, status: "READY_FOR_PICKUP", enabled: false, channel: "WHATSAPP",
       whatsappMessage: DEFAULT_READY_WHATSAPP_MESSAGE,
       emailSubject: "Your laundry is ready for pickup",
       emailMessage: "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.",
     },
     update: {},
   });
+
+  // Existing businesses may already have the legacy default enabled without
+  // an approved template. Keep it disabled until a compliant fallback is set.
+  return disableLegacyWhatsAppRuleWithoutTemplate(rule);
 }
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
@@ -91,9 +124,13 @@ async function deliverMessage(input: {
   if (input.channel === "WHATSAPP") {
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { whatsappOptIn: true },
+      select: {
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
-    if (!customer?.whatsappOptIn) {
+    if (!customer?.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
       return recordMissingDestination({
         businessId: input.businessId, customerId: input.customerId,
         ...(input.orderId ? { orderId: input.orderId } : {}),
@@ -102,7 +139,7 @@ async function deliverMessage(input: {
         ...(input.retryOfId ? { retryOfId: input.retryOfId } : {}),
         ...(input.retryAttempt !== undefined ? { retryAttempt: input.retryAttempt } : {}),
         retryPayload: getWhatsAppRetryPayload(input),
-        reason: "Customer has not explicitly opted in to WhatsApp messages. Record consent before sending business-initiated messages.",
+        reason: "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending business-initiated messages.",
       });
     }
   }
@@ -187,7 +224,10 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
     : await prisma.orderStatusNotificationRule.findFirst({
         where: { businessId: input.businessId, status: input.status },
       });
-  const rule = configuredRule?.enabled ? configuredRule : null;
+  const safeConfiguredRule = configuredRule
+    ? await disableLegacyWhatsAppRuleWithoutTemplate(configuredRule)
+    : null;
+  const rule = safeConfiguredRule?.enabled ? safeConfiguredRule : null;
   if (!rule) return [];
   const values = {
     customerName: order.customer.name,
@@ -231,7 +271,11 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
 
 export async function listOrderStatusRules(businessId: string) {
   await ensureDefaultReadyRule(businessId);
-  return prisma.orderStatusNotificationRule.findMany({ where: { businessId }, orderBy: { status: "asc" } });
+  const rules = await prisma.orderStatusNotificationRule.findMany({
+    where: { businessId },
+    orderBy: { status: "asc" },
+  });
+  return Promise.all(rules.map(disableLegacyWhatsAppRuleWithoutTemplate));
 }
 export async function saveOrderStatusRule(input: {
   businessId: string; status: string; enabled: boolean; channel: "WHATSAPP" | "EMAIL" | "BOTH";
@@ -598,15 +642,20 @@ export async function retryWhatsAppDelivery(
 
   const customer = await prisma.customer.findFirst({
     where: { id: source.customerId, businessId },
-    select: { whatsappOptIn: true, phone: true },
+    select: {
+      whatsappOptIn: true,
+      whatsappOptInAt: true,
+      whatsappOptInSource: true,
+      phone: true,
+    },
   });
-  if (!customer?.whatsappOptIn) {
+  if (!customer?.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
     throw new AppError(
-      "Customer has not explicitly opted in to WhatsApp messages. Record consent before retrying.",
+      "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before retrying.",
       422,
     );
   }
-  if (customer.phone !== source.destination) {
+  if (normalizeWhatsAppRecipient(customer.phone) !== normalizeWhatsAppRecipient(source.destination)) {
     throw new AppError(
       "Customer phone number has changed since this message was created. Confirm consent for the current number before retrying.",
       422,
@@ -716,7 +765,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
       retryOfId: true,
       retryAttempt: true,
       retryPayload: true,
-      customer: { select: { id: true, name: true, phone: true, whatsappOptIn: true } },
+      customer: { select: { id: true, name: true, phone: true, whatsappOptIn: true, whatsappOptInAt: true, whatsappOptInSource: true } },
       order: { select: { id: true, orderNumber: true } },
       campaign: { select: { id: true, title: true } },
       retries: { select: { id: true }, take: 1 },
@@ -726,7 +775,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
   });
 
   return deliveries.map(({ retryPayload, retries, ...delivery }) => {
-    const { phone, whatsappOptIn, ...customer } = delivery.customer;
+    const { phone, whatsappOptIn, whatsappOptInAt, whatsappOptInSource, ...customer } = delivery.customer;
     return {
       ...delivery,
       customer,
@@ -736,7 +785,9 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
         retryPayload !== null &&
         retries.length === 0 &&
         whatsappOptIn &&
-        phone === delivery.destination,
+        whatsappOptInAt !== null &&
+        whatsappOptInSource !== null &&
+        normalizeWhatsAppRecipient(phone) === normalizeWhatsAppRecipient(delivery.destination),
     };
   });
 }

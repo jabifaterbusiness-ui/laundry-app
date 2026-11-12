@@ -19,7 +19,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({
     accessToken: "access-token",
     activeBranchId: "branch-main",
-    user: { id: "user-1", permissions: ["customers.create"] },
+    user: { id: "user-1", email: "staff@example.com", permissions: ["customers.create"] },
   }),
 }));
 vi.mock("../../../src/lib/permissions.js", () => ({ hasPermission: hasPermissionMock }));
@@ -49,6 +49,80 @@ describe("GlobalSearch", () => {
     fireEvent.click(screen.getByRole("option", { name: /Order #00042/ }));
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-42");
     expect(screen.getByRole("searchbox", { name: "Global search" })).toHaveValue("");
+  });
+
+  it("opens the selected customer's Order Management account", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "CUSTOMER",
+      id: "customer-42",
+      title: "Ada Laundry",
+      subtitle: "08012345678",
+      href: "/orders?customerId=customer-42&openAccount=1",
+    }]);
+
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), {
+      target: { value: "Ada Laundry" },
+    });
+
+    const customer = await screen.findByRole("option", { name: /Ada Laundry/ });
+    fireEvent.click(customer);
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/orders?customerId=customer-42&openAccount=1",
+    );
+  });
+
+  it("shows payment results and opens the exact payment record", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "PAYMENT",
+      id: "payment-42",
+      title: "Payment · BANK-REF-42",
+      subtitle: "Ada Laundry · Invoice #00042 · POSTED",
+      href: "/payments?paymentId=payment-42",
+    }]);
+
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), {
+      target: { value: "BANK-REF-42" },
+    });
+
+    const payment = await screen.findByRole("option", { name: /Payment · BANK-REF-42/ });
+    expect(screen.getByText("Payments")).toBeInTheDocument();
+    fireEvent.click(payment);
+    expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42");
+  });
+
+  it("opens an exact payment reference with Enter even when a customer result is also present", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "CUSTOMER", id: "customer-1", title: "Bank Reference Services", subtitle: "08012345678", href: "/orders?customerId=customer-1&openAccount=1" },
+      { type: "PAYMENT", id: "payment-42", title: "Payment · BANK-REF-42", subtitle: "Ada Laundry · Invoice #00042 · POSTED", href: "/payments?paymentId=payment-42" },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "BANK-REF-42" } });
+    await screen.findByRole("option", { name: /Payment · BANK-REF-42/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42");
+  });
+
+  it("does not guess when an exact order number also matches an invoice number", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "ORDER", id: "order-22", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-22" },
+      { type: "INVOICE", id: "invoice-22", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-22" },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+    await screen.findByRole("option", { name: /Invoice #00022/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("option", { name: /Order #00022/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Invoice #00022/ })).toBeInTheDocument();
   });
 
   it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
@@ -101,6 +175,57 @@ describe("GlobalSearch", () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
     });
+  });
+
+  it("opens an exact payment reference when Enter is pressed before search completes", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "PAYMENT";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve; }));
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "BANK-REF-42" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([{
+      type: "PAYMENT",
+      id: "payment-42",
+      title: "Payment · BANK-REF-42",
+      subtitle: "Ada Laundry · Invoice #00042 · POSTED",
+      href: "/payments?paymentId=payment-42",
+    }]);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42"));
+  });
+
+  it("does not guess or offer customer creation for ambiguous identifiers after pending Enter", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "ORDER" | "INVOICE";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve; }));
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([
+      { type: "ORDER", id: "order-22", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-22" },
+      { type: "INVOICE", id: "invoice-22", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-22" },
+    ]);
+
+    await waitFor(() => expect(screen.getByRole("option", { name: /Invoice #00022/ })).toBeInTheDocument());
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("option", { name: /Add New Customer/ })).not.toBeInTheDocument();
   });
 
   it("chooses the exact order number when broader matches are also returned", async () => {
@@ -187,6 +312,8 @@ describe("GlobalSearch", () => {
   it("clears and disables search while sensitive password authorization is open", async () => {
     render(<GlobalSearch />);
     const input = screen.getByRole("searchbox", { name: "Global search" });
+    expect(input).toHaveAttribute("autocomplete", "off");
+    expect(input).toHaveAttribute("data-lpignore", "true");
     fireEvent.change(input, { target: { value: "staff@example.com" } });
     expect(input).toHaveValue("staff@example.com");
 

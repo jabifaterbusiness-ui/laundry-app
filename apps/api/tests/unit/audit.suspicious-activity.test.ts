@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 describe("listSuspiciousActivity", () => {
-  it("queries only the requested business and suspicious actions", async () => {
+  it("queries the active branch plus business-wide events, limited to suspicious actions", async () => {
     const records = [
       {
         id: "audit-1",
@@ -40,7 +40,7 @@ describe("listSuspiciousActivity", () => {
     findMany.mockResolvedValue(records);
 
     await expect(
-      listSuspiciousActivity("business-1", 100),
+      listSuspiciousActivity("business-1", "branch-1", 100),
     ).resolves.toEqual(records);
 
     expect(findMany).toHaveBeenCalledOnce();
@@ -49,6 +49,7 @@ describe("listSuspiciousActivity", () => {
 
     expect(call.where).toEqual({
       businessId: "business-1",
+      OR: [{ branchId: "branch-1" }, { branchId: null }],
       action: {
         in: [...SUSPICIOUS_ACTIVITY_ACTIONS],
       },
@@ -60,7 +61,7 @@ describe("listSuspiciousActivity", () => {
   it("uses the complete suspicious activity action catalogue", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1");
+    await listSuspiciousActivity("business-1", "branch-1");
 
     const call = findMany.mock.calls[0]![0];
 
@@ -99,17 +100,17 @@ describe("listSuspiciousActivity", () => {
   it("clamps the requested limit to the safe range", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1", 0);
+    await listSuspiciousActivity("business-1", "branch-1", 0);
     expect(findMany.mock.calls[0]![0].take).toBe(1);
 
-    await listSuspiciousActivity("business-1", 999);
+    await listSuspiciousActivity("business-1", "branch-1", 999);
     expect(findMany.mock.calls[1]![0].take).toBe(200);
   });
 
   it("selects only fields needed by the protected activity centre", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1");
+    await listSuspiciousActivity("business-1", "branch-1");
 
     const call = findMany.mock.calls[0]![0];
 

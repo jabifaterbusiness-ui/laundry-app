@@ -13,6 +13,15 @@ export const financialStatementConfigSchema = z.object({
   dailyEmailEnabled: z.boolean(),
   dailyWhatsappEnabled: z.boolean(),
 }).superRefine((value, ctx) => {
+  if (value.whatsappEnabled || value.dailyWhatsappEnabled) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [value.whatsappEnabled ? "whatsappEnabled" : "dailyWhatsappEnabled"],
+      message:
+        "WhatsApp delivery for financial statements is unavailable until a dedicated staff-recipient consent and approved statement-template workflow is implemented. Use email delivery instead.",
+    });
+  }
+
   if (
     value.enabled &&
     !value.emailEnabled &&

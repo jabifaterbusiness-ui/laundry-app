@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { within,  render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, within, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -22,6 +22,7 @@ const mockedSensitiveAuthorization = vi.mocked(sensitiveAuthorization);
 
 function renderPage(
   role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF",
+  initialEntries: string[] = ["/payments"],
 ) {
   useAuthStore.setState({
     user: {
@@ -46,7 +47,7 @@ function renderPage(
   });
 
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <PaymentsPage />
       </QueryClientProvider>
@@ -111,6 +112,7 @@ beforeEach(() => {
   useAuthStore.getState().clearSession();
 
   mockedPaymentsApi.listPayments.mockResolvedValue(paymentsResponse);
+  mockedPaymentsApi.getPayment.mockResolvedValue(postedPayment);
   mockedPaymentsApi.getInvoicePaymentSummary.mockResolvedValue(
     summaryResponse,
   );
@@ -172,6 +174,43 @@ beforeEach(() => {
 });
 
 describe("PaymentsPage void workflow", () => {
+  it("opens and displays the exact payment selected from Universal Search", async () => {
+    renderPage("BUSINESS_OWNER", ["/payments?paymentId=payment-1"]);
+
+    const selectedPayment = await screen.findByRole("region", { name: "Selected payment record" });
+    expect(mockedPaymentsApi.getPayment).toHaveBeenCalledWith(
+      "payment-1",
+      { accessToken: "token" },
+      "branch-1",
+    );
+    // The region renders before its React Query request resolves; wait for the detail.
+    expect(await within(selectedPayment).findByText("INV-00001")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("John Doe")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("₦5,000")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("CASH")).toBeInTheDocument();
+  });
+
+  it("passes customer email and other payment search terms to the server", async () => {
+    renderPage("BUSINESS_OWNER");
+
+    const search = screen.getByRole("searchbox", { name: "Search payments" });
+    fireEvent.change(search, { target: { value: "john@example.com" } });
+
+    await waitFor(() => {
+      expect(mockedPaymentsApi.listPayments).toHaveBeenLastCalledWith(
+        {
+          page: 1,
+          pageSize: 25,
+          status: undefined,
+          search: "john@example.com",
+        },
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+
   it("shows the customer account balance for Pay from Account", async () => {
     const user = userEvent.setup();
     renderPage("BUSINESS_OWNER");

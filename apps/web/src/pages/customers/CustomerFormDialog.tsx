@@ -17,7 +17,11 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
   const [address, setAddress] = useState(customer?.address ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(customer?.whatsappOptIn ?? false);
-  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"]>(customer?.whatsappOptInSource as CreateCustomerInput["whatsappOptInSource"] ?? "CUSTOMER_VERBAL");
+  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(
+    customer?.whatsappOptIn
+      ? (customer.whatsappOptInSource as CreateCustomerInput["whatsappOptInSource"] | null) ?? ""
+      : "",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<Pick<Customer, "id" | "name" | "phone">[] | null>(null);
@@ -27,6 +31,11 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
     setError(null);
 
     try {
+      if (whatsappOptIn && !whatsappOptInSource) {
+        setError("Select how the customer gave consent before saving.");
+        return;
+      }
+
       await onSubmit({
         name,
         phone,
@@ -34,7 +43,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         address: address || undefined,
         notes: notes || undefined,
         whatsappOptIn,
-        ...(whatsappOptIn ? { whatsappOptInSource } : {}),
+        ...(whatsappOptIn && whatsappOptInSource ? { whatsappOptInSource } : {}),
         confirmDuplicate,
       });
     } catch (err) {
@@ -66,7 +75,22 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         </label>
         <label>
           Phone
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="(555) 123-4567" />
+          <input
+            value={phone}
+            onChange={(e) => {
+              const nextPhone = e.target.value;
+              setPhone(nextPhone);
+              const digits = (value: string) => value.replace(/\D/g, "");
+              if (customer && digits(nextPhone) !== digits(customer.phone)) {
+                // Consent applies to the number the customer agreed to use.
+                // A changed destination must be explicitly opted in again.
+                setWhatsappOptIn(false);
+                setWhatsappOptInSource("");
+              }
+            }}
+            required
+            placeholder="(555) 123-4567"
+          />
         </label>
         <label>
           Email (optional)
@@ -83,13 +107,30 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         <fieldset style={{ border: "1px solid #dbe3ee", borderRadius: 10, padding: 12, marginTop: 12 }}>
           <legend>WhatsApp message consent</legend>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <input type="checkbox" checked={whatsappOptIn} onChange={(e) => setWhatsappOptIn(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={whatsappOptIn}
+              onChange={(e) => {
+                const phoneChanged = customer
+                  ? phone.replace(/\D/g, "") !== customer.phone.replace(/\D/g, "")
+                  : false;
+                if (!customer?.whatsappOptIn || phoneChanged) {
+                  setWhatsappOptInSource("");
+                }
+                setWhatsappOptIn(e.target.checked);
+              }}
+            />
             <span>Customer has explicitly agreed to receive WhatsApp messages from this business, including order updates and receipts.</span>
           </label>
           {whatsappOptIn && (
             <label>
               How did the customer give consent?
-              <select value={whatsappOptInSource} onChange={(e) => setWhatsappOptInSource(e.target.value as NonNullable<CreateCustomerInput["whatsappOptInSource"]>)}>
+              <select
+                value={whatsappOptInSource}
+                required={whatsappOptIn}
+                onChange={(e) => setWhatsappOptInSource(e.target.value as CreateCustomerInput["whatsappOptInSource"] | "")}
+              >
+                <option value="">Select how consent was given</option>
                 <option value="CUSTOMER_VERBAL">Verbal agreement</option>
                 <option value="CUSTOMER_WRITTEN">Written agreement</option>
                 <option value="CUSTOMER_WEBSITE">Website / online form</option>

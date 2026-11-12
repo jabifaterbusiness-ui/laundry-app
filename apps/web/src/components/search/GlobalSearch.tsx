@@ -19,6 +19,7 @@ const RESULT_GROUPS: {
   { type: "CUSTOMER", label: "Customers" },
   { type: "ORDER", label: "Orders" },
   { type: "INVOICE", label: "Invoices" },
+  { type: "PAYMENT", label: "Payments" },
 ];
 
 function groupResults(results: GlobalSearchResult[]) {
@@ -28,22 +29,27 @@ function groupResults(results: GlobalSearchResult[]) {
   })).filter((group) => group.results.length > 0);
 }
 
-function findExactOrderMatch(
+function findExactIdentifierMatches(
   results: GlobalSearchResult[],
   query: string,
 ) {
   const normalizedQuery = query
     .trim()
-    .replace(/^order\s*/i, "")
+    .replace(/^(order|invoice|payment|refund)\s*/i, "")
     .replace(/^#\s*/, "")
     .toUpperCase();
 
-  if (!normalizedQuery) return undefined;
+  if (!normalizedQuery) return [];
 
-  return results.find((result) => {
-    if (result.type !== "ORDER") return false;
-    const orderNumber = result.title.match(/^Order\s*#\s*(.+)$/i)?.[1];
-    return orderNumber?.trim().toUpperCase() === normalizedQuery;
+  return results.filter((result) => {
+    const identifier = result.type === "ORDER"
+      ? result.title.match(/^Order\s*#\s*(.+)$/i)?.[1]
+      : result.type === "INVOICE"
+        ? result.title.match(/^Invoice\s*#\s*(.+)$/i)?.[1]
+        : result.type === "PAYMENT" && /^(Payment|Refund)\s*·\s*/i.test(result.title)
+          ? result.title.replace(/^(Payment|Refund)\s*·\s*/i, "")
+          : undefined;
+    return identifier?.trim().toUpperCase() === normalizedQuery;
   });
 }
 
@@ -63,9 +69,10 @@ export function GlobalSearch() {
   const [authorizationInProgress, setAuthorizationInProgress] = useState(false);
   const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
-  const exactOrderMatch = findExactOrderMatch(results, query);
+  const exactIdentifierMatches = findExactIdentifierMatches(results, query);
+  const exactIdentifierMatch = exactIdentifierMatches.length === 1 ? exactIdentifierMatches[0] : undefined;
   const hasOrderCandidate = results.some((result) => result.type === "ORDER");
-  const orderMatchAvailable = Boolean(exactOrderMatch);
+  const orderMatchAvailable = results.some((result) => result.type === "ORDER") && exactIdentifierMatches.some((result) => result.type === "ORDER");
   // Keep every result type visible. Order matches used to be available only
   // to the Enter-key shortcut, which made the dropdown appear invoice-only.
   const groups = groupResults(results);
@@ -92,7 +99,7 @@ export function GlobalSearch() {
     setError(null);
     setCompletedQuery("");
     pendingEnterRef.current = false;
-  }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
+  }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.email, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
     const clearForAuthorization = () => {
@@ -155,8 +162,14 @@ export function GlobalSearch() {
           if (pendingEnterRef.current) {
             pendingEnterRef.current = false;
             const submittedResult =
-              findExactOrderMatch(nextResults, trimmedQuery) ??
-              nextResults.find((result) => result.type !== "ORDER");
+              (() => {
+                const exactMatches = findExactIdentifierMatches(nextResults, trimmedQuery);
+                return exactMatches.length === 1
+                  ? exactMatches[0]
+                  : exactMatches.length > 1
+                    ? undefined
+                    : nextResults.find((result) => result.type !== "ORDER");
+              })();
 
             if (submittedResult) {
               setQuery("");
@@ -170,7 +183,7 @@ export function GlobalSearch() {
                   : submittedResult.href,
               );
             } else if (
-              !nextResults.some((result) => result.type === "ORDER") &&
+              nextResults.length === 0 &&
               canCreateCustomer &&
               searchQuickOperations(trimmedQuery).filter((operation) =>
                 hasPermission(userRef.current, operation.permission),
@@ -251,11 +264,12 @@ export function GlobalSearch() {
         return;
       }
 
-      // Enter opens an exact order-number match first; otherwise it follows
-      // the first visible customer or invoice result.
-      const firstResult =
-        exactOrderMatch ??
-        results.find((result) => result.type !== "ORDER");
+      // Enter opens an exact typed identifier only when it identifies one
+      // record. If order/invoice/payment identifiers overlap, leave the
+      // separate results visible so the user can choose the intended record.
+      const firstResult = exactIdentifierMatches.length > 0
+        ? exactIdentifierMatch
+        : results.find((result) => result.type !== "ORDER");
 
       if (firstResult) {
         selectResult(firstResult);

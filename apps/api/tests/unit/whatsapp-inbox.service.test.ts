@@ -34,7 +34,7 @@ describe("WhatsApp tenant inbox", () => {
     mocks.eventUpdateMany.mockResolvedValue({ count: 1 });
     mocks.customerFindMany.mockResolvedValue([]);
     mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", name: "Ada", phone: "2348012345678" });
-    mocks.connectionFindUnique.mockResolvedValue({ status: "CONNECTED" });
+    mocks.connectionFindUnique.mockResolvedValue({ status: "CONNECTED", phoneNumberId: "phone-number-id-123" });
     mocks.sendText.mockResolvedValue({ id: "wamid-outbound" });
   });
 
@@ -76,6 +76,18 @@ describe("WhatsApp tenant inbox", () => {
       receivedAt: new Date(Date.now() - 60_000),
     });
     const result = await sendWhatsAppConversationReply({ businessId: "business-1", customerId: "customer-1", phone: "2348012345678", body: "Thanks for messaging us" });
+    expect(mocks.connectionFindUnique).toHaveBeenCalledWith({
+      where: { businessId: "business-1" },
+      select: { status: true, phoneNumberId: true },
+    });
+    expect(mocks.eventFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "business-1",
+        phoneNumberId: "phone-number-id-123",
+        contactPhone: "2348012345678",
+        eventType: "MESSAGE_RECEIVED",
+      },
+    }));
     expect(mocks.sendText).toHaveBeenCalledWith({ businessId: "business-1", to: "2348012345678", body: "Thanks for messaging us" });
     expect(result.status).toBe("SENT");
   });

@@ -66,6 +66,7 @@ export type SuspiciousActivityRecord = {
 
 export async function listSuspiciousActivity(
   businessId: string,
+  branchId: string,
   limit = 100,
 ): Promise<SuspiciousActivityRecord[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
@@ -73,6 +74,7 @@ export async function listSuspiciousActivity(
   const records = await prisma.auditLog.findMany({
     where: {
       businessId,
+      OR: [{ branchId }, { branchId: null }],
       action: {
         in: [...SUSPICIOUS_ACTIVITY_ACTIONS],
       },

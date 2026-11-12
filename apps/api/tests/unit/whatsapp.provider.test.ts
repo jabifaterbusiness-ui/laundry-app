@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   inboundFindFirst: vi.fn(),
   customerFindFirst: vi.fn(),
+  connectionFindUnique: vi.fn(),
 }));
 
 vi.stubGlobal("fetch", mocks.fetchMock);
@@ -24,6 +25,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     whatsAppWebhookEvent: { findFirst: mocks.inboundFindFirst },
     customer: { findFirst: mocks.customerFindFirst },
+    whatsAppBusinessConnection: { findUnique: mocks.connectionFindUnique },
   },
 }));
 vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
@@ -36,7 +38,13 @@ const IMAGE = Buffer.from("fake-png");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
+  mocks.customerFindFirst.mockResolvedValue({
+    phone: "2348012345678",
+    whatsappOptIn: true,
+    whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+    whatsappOptInSource: "CUSTOMER_WRITTEN",
+  });
+  mocks.connectionFindUnique.mockResolvedValue({ phoneNumberId: "phone-number-id-123", status: "CONNECTED" });
 
   mocks.fetchMock
     .mockResolvedValueOnce({
@@ -120,14 +128,69 @@ describe("whatsapp.provider", () => {
     await expect(sendWhatsAppText({
       businessId: "business-1", to: "2348012345678", body: "Your order is ready",
     })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
+    expect(mocks.connectionFindUnique).toHaveBeenCalledWith({
+      where: { businessId: "business-1" },
+      select: { phoneNumberId: true, status: true },
+    });
+    expect(mocks.inboundFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessId: "business-1",
+        phoneNumberId: "phone-number-id-123",
+        contactPhone: "2348012345678",
+        eventType: "MESSAGE_RECEIVED",
+      },
+    }));
     expect(mocks.fetchMock).not.toHaveBeenCalled();
   });
 
   it("blocks business-initiated WhatsApp receipts when the customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
     await expect(sendWhatsAppReceipt({
-      businessId: "business-1", to: "2348012345678", image: IMAGE,
+      businessId: "business-1", customerId: "customer-1", to: "2348012345678", image: IMAGE,
     })).rejects.toThrow("has not explicitly opted in");
+    expect(mocks.customerFindFirst).toHaveBeenCalledWith({
+      where: { id: "customer-1", businessId: "business-1" },
+      select: {
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
+    });
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+    expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("blocks receipts when legacy opt-in has no recorded source or timestamp", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      phone: "2348012345678",
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+    });
+
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1",
+      customerId: "customer-1",
+      to: "2348012345678",
+      image: IMAGE,
+    })).rejects.toThrow("recorded consent source and timestamp");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a receipt destination that does not belong to the consented customer", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      phone: "2348099999999",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1",
+      customerId: "customer-1",
+      to: "2348012345678",
+      image: IMAGE,
+    })).rejects.toThrow("does not match the selected customer");
     expect(mocks.fetchMock).not.toHaveBeenCalled();
     expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
   });
@@ -135,7 +198,7 @@ describe("whatsapp.provider", () => {
   it("blocks tenant receipt images outside the 24-hour customer-service window", async () => {
     mocks.inboundFindFirst.mockResolvedValue(null);
     await expect(sendWhatsAppReceipt({
-      businessId: "business-1", to: "2348012345678", image: IMAGE,
+      businessId: "business-1", customerId: "customer-1", to: "2348012345678", image: IMAGE,
     })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
     expect(mocks.fetchMock).not.toHaveBeenCalled();
   });

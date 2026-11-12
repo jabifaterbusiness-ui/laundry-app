@@ -90,6 +90,8 @@ vi.mock(
   () => templateMock,
 );
 
+import { financialStatementConfigSchema } from "../../../src/modules/reports/financial-statement-delivery.validation.js";
+
 import {
   processMonthlyFinancialStatements,
   startFinancialStatementScheduler,
@@ -97,6 +99,36 @@ import {
 } from "../../../src/modules/reports/financial-statement-scheduler.service.js";
 
 describe("financial statement scheduler", () => {
+  it("rejects monthly and daily WhatsApp delivery until staff consent is supported", () => {
+    const baseConfig = {
+      enabled: true,
+      dayOfMonth: 1,
+      hour: 8,
+      minute: 0,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      dailyEnabled: true,
+      dailyHour: 8,
+      dailyMinute: 0,
+      dailyEmailEnabled: true,
+      dailyWhatsappEnabled: false,
+    };
+
+    expect(financialStatementConfigSchema.safeParse(baseConfig).success).toBe(true);
+    expect(
+      financialStatementConfigSchema.safeParse({
+        ...baseConfig,
+        whatsappEnabled: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      financialStatementConfigSchema.safeParse({
+        ...baseConfig,
+        dailyWhatsappEnabled: true,
+      }).success,
+    ).toBe(false);
+  });
+
   const now = new Date("2026-09-01T07:59:00.000Z");
 
   const business = {
@@ -357,7 +389,7 @@ describe("financial statement scheduler", () => {
     );
   });
 
-  it("delivers WhatsApp when WhatsApp delivery is enabled", async () => {
+  it("does not attempt unsupported staff WhatsApp statement delivery", async () => {
     prismaMock.business.findMany.mockResolvedValue([
       {
         ...business,
@@ -393,15 +425,8 @@ describe("financial statement scheduler", () => {
     );
 
     expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
-
-    expect(whatsappMock.sendWhatsAppReceipt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "+2348012345678",
-        image: expect.any(Buffer),
-        caption:
-          "Laundry Angel — Monthly Financial Statement — August 2026",
-      }),
-    );
+    expect(whatsappMock.sendWhatsAppReceipt).not.toHaveBeenCalled();
+    expect(prismaMock.financialStatementDelivery.upsert).not.toHaveBeenCalled();
   });
 
   it("does not resend a delivery already marked SENT", async () => {

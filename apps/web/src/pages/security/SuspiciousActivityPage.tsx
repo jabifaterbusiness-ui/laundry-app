@@ -925,15 +925,30 @@ export function SuspiciousActivityPage() {
   const [draftCategoryOrder, setDraftCategoryOrder] = useState(categoryOrder);
   const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
 
+  useEffect(() => {
+    const nextReadState = user?.id && activeBranchId
+      ? loadSuspiciousActivityReadState(user.id, activeBranchId).lastSeenEventIds
+      : {};
+    const nextCategoryOrder = user?.id && activeBranchId
+      ? loadSuspiciousActivityCategoryOrder(user.id, activeBranchId, DEFAULT_ACTIVITY_CATEGORY_ORDER)
+      : [...DEFAULT_ACTIVITY_CATEGORY_ORDER];
+
+    setReadState(nextReadState);
+    setCategoryOrder(nextCategoryOrder);
+    setDraftCategoryOrder(nextCategoryOrder);
+    setIsCustomizingOrder(false);
+    setSelectedEventId(null);
+  }, [user?.businessId, user?.id, activeBranchId]);
+
   const canView = hasPermission(
     user,
     "security.suspicious_activity.view",
   );
 
   const activityQuery = useQuery({
-    queryKey: ["audit", "suspicious-activity"],
+    queryKey: ["audit", "suspicious-activity", user?.businessId, user?.id, activeBranchId],
     queryFn: () => listSuspiciousActivity(accessToken ?? "", 100),
-    enabled: Boolean(accessToken && canView),
+    enabled: Boolean(accessToken && activeBranchId && canView),
   });
 
   const activities = useMemo(
@@ -981,20 +996,6 @@ export function SuspiciousActivityPage() {
     });
   }, [activities, selectedDefinition]);
 
-  useEffect(() => {
-    if (!user?.id || !activeBranchId) {
-      setReadState({});
-      return;
-    }
-
-    setReadState(
-      loadSuspiciousActivityReadState(
-        user.id,
-        activeBranchId,
-      ).lastSeenEventIds,
-    );
-  }, [user?.id, activeBranchId]);
-
   const categoryGroups = useMemo(() => {
     const grouped = new Map<string, ActivityDefinition[]>();
     for (const definition of ACTIVITY_DEFINITIONS) {
@@ -1008,22 +1009,6 @@ export function SuspiciousActivityPage() {
       .filter((group) => group.definitions.length > 0);
   }, [categoryOrder]);
 
-  useEffect(() => {
-    if (!user?.id || !activeBranchId) {
-      setCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
-      setDraftCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
-      setIsCustomizingOrder(false);
-      return;
-    }
-    const savedOrder = loadSuspiciousActivityCategoryOrder(
-      user.id,
-      activeBranchId,
-      DEFAULT_ACTIVITY_CATEGORY_ORDER,
-    );
-    setCategoryOrder(savedOrder);
-    setDraftCategoryOrder(savedOrder);
-    setIsCustomizingOrder(false);
-  }, [user?.id, activeBranchId]);
 
   function moveCategory(category: string, direction: -1 | 1) {
     setDraftCategoryOrder((current) => {

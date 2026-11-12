@@ -19,6 +19,7 @@ function money(value: number) { return `₦${value.toLocaleString("en-NG")}`; }
 
 export function CommunicationsPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const businessId = useAuthStore((state) => state.user?.businessId);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
@@ -31,7 +32,7 @@ export function CommunicationsPage() {
   const [customerPage, setCustomerPage] = useState(1);
   const [announcementChannels, setAnnouncementChannels] = useState<CommunicationChannel[]>(["WHATSAPP"]);
   const [status, setStatus] = useState("READY_FOR_PICKUP");
-  const [ruleEnabled, setRuleEnabled] = useState(true);
+  const [ruleEnabled, setRuleEnabled] = useState(false);
   const [ruleChannel, setRuleChannel] = useState<"WHATSAPP" | "EMAIL" | "BOTH">("WHATSAPP");
   const [whatsappTemplate, setWhatsappTemplate] = useState("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
   const [whatsappTemplateName, setWhatsappTemplateName] = useState("");
@@ -48,33 +49,70 @@ export function CommunicationsPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const customersQuery = useQuery({
-    queryKey: ["customers", "communications", activeBranchId, customerPage],
+    queryKey: ["customers", "communications", businessId, activeBranchId, customerPage],
     queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
   const connectionQuery = useQuery({
-    queryKey: ["whatsapp", "connection"],
+    queryKey: ["whatsapp", "connection", businessId],
     queryFn: () => getWhatsAppConnection({ accessToken }),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && businessId),
   });
   const approvedTemplatesQuery = useQuery({
-    queryKey: ["whatsapp", "templates"],
+    queryKey: ["whatsapp", "templates", businessId],
     queryFn: () => getApprovedWhatsAppTemplates(accessToken),
-    enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
+    enabled: Boolean(accessToken && businessId && connectionQuery.data?.connection?.status === "CONNECTED"),
   });
   const groupsQuery = useQuery({
-    queryKey: ["communications", "customer-groups"],
+    queryKey: ["communications", "customer-groups", businessId, activeBranchId],
     queryFn: () => listCustomerGroups({ accessToken }),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
   const rulesQuery = useQuery({
-    queryKey: ["communications", "status-rules"],
+    queryKey: ["communications", "status-rules", businessId],
     queryFn: () => listStatusRules({ accessToken }),
+    enabled: Boolean(accessToken && businessId),
   });
   const deliveriesQuery = useQuery({
-    queryKey: ["communications", "deliveries", activeBranchId],
+    queryKey: ["communications", "deliveries", businessId, activeBranchId],
     queryFn: () => listCommunicationDeliveries({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
+  useEffect(() => {
+    setTitle("");
+    setAnnouncementMessage("");
+    setAnnouncementTemplateName("");
+    setAnnouncementTemplateLanguage("");
+    setAudience("ALL_CUSTOMERS");
+    setGroupId("");
+    setCustomerIds([]);
+    setCustomerPage(1);
+    setAnnouncementChannels(["WHATSAPP"]);
+    setStatus("READY_FOR_PICKUP");
+    setRuleEnabled(false);
+    setRuleChannel("WHATSAPP");
+    setWhatsappTemplate("Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.");
+    setWhatsappTemplateName("");
+    setWhatsappTemplateLanguage("");
+    setEmailSubject("Order update from {{companyName}}");
+    setEmailTemplate("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
+    setThresholdMonths(2);
+    setReminderTemplateName("");
+    setReminderTemplateLanguage("");
+    setRemindersEnabled(true);
+    setSelectedOrderIds([]);
+    setReminderMessage(DEFAULT_REMINDER);
+    setReminderChannels(["WHATSAPP"]);
+    setFeedback(null);
+  }, [businessId]);
+
+  useEffect(() => {
+    setCustomerIds([]);
+    setCustomerPage(1);
+    setSelectedOrderIds([]);
+    setGroupId("");
+  }, [businessId, activeBranchId]);
+
   useEffect(() => {
     const rule = rulesQuery.data?.data.find((item) => item.status === status);
     if (rule) {
@@ -94,12 +132,12 @@ export function CommunicationsPage() {
       setEmailSubject("");
       setEmailTemplate("");
     }
-  }, [status, rulesQuery.data]);
+  }, [businessId, status, rulesQuery.data]);
 
   const reminderConfigQuery = useQuery({
-    queryKey: ["communications", "reminder-config", activeBranchId],
+    queryKey: ["communications", "reminder-config", businessId, activeBranchId],
     queryFn: () => getReminderConfig({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
 
   useEffect(() => {
@@ -113,12 +151,14 @@ export function CommunicationsPage() {
     reminderConfigQuery.data?.enabled,
     reminderConfigQuery.data?.whatsappTemplateName,
     reminderConfigQuery.data?.whatsappTemplateLanguage,
+    businessId,
+    activeBranchId,
   ]);
 
   const unpickedQuery = useQuery({
-    queryKey: ["communications", "unpicked-orders", activeBranchId],
+    queryKey: ["communications", "unpicked-orders", businessId, activeBranchId],
     queryFn: () => listUnpickedOrders({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
 
   const announcementMutation = useMutation({
@@ -134,7 +174,7 @@ export function CommunicationsPage() {
     onSuccess: async (result) => {
       setFeedback(`Announcement processed for ${result.recipientCount} customers. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
       setTitle(""); setAnnouncementMessage(""); setCustomerIds([]);
-      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries", businessId, activeBranchId] });
     },
     onError: (error) => setFeedback(error instanceof ApiError ? error.message : "Unable to send announcement."),
   });
@@ -148,13 +188,13 @@ export function CommunicationsPage() {
     }, { accessToken }),
     onSuccess: async () => {
       setFeedback(`Notification rule saved for ${status.replaceAll("_", " ")}.`);
-      await queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "status-rules", businessId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save notification rule."),
   });
   const removeRuleMutation = useMutation({
     mutationFn: (id: string) => deleteStatusRule(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["communications", "status-rules", businessId] }),
   });
   const configMutation = useMutation({
     mutationFn: () => saveReminderConfig({
@@ -164,8 +204,8 @@ export function CommunicationsPage() {
     }, { accessToken, branchId: activeBranchId }),
     onSuccess: async () => {
       setFeedback("Unpicked-order reminder settings saved.");
-      await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config"] });
-      await queryClient.invalidateQueries({ queryKey: ["communications", "unpicked-orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "reminder-config", businessId, activeBranchId] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "unpicked-orders", businessId, activeBranchId] });
     },
   });
   const retryDeliveryMutation = useMutation({
@@ -176,7 +216,7 @@ export function CommunicationsPage() {
         : result.status === "FAILED"
           ? "WhatsApp retry failed. Check the delivery error details."
           : "This WhatsApp delivery already has a retry attempt.");
-      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries", businessId, activeBranchId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to retry this WhatsApp delivery."),
   });
@@ -185,7 +225,7 @@ export function CommunicationsPage() {
     onSuccess: async (result) => {
       setFeedback(`Reminder processed for ${result.orderCount} orders. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
       setSelectedOrderIds([]);
-      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
+      await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries", businessId, activeBranchId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send reminders."),
   });

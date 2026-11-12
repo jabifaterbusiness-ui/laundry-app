@@ -26,6 +26,7 @@ function renderPage(
     "invoices.view",
     "invoices.manage",
   ],
+  initialEntries: string[] = ["/invoices"],
 ) {
   useAuthStore.setState({
     user: {
@@ -51,7 +52,7 @@ function renderPage(
   });
 
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <SensitiveAuthorizationProvider>
           <InvoicesPage />
@@ -257,6 +258,31 @@ beforeEach(() => {
 });
 
 describe("InvoicesPage invoice correction workflow", () => {
+  it("opens the exact invoice from a universal-search deep link, even when it is not in the current list", async () => {
+    const exactInvoice = { ...invoice, id: "invoice-exact", invoiceNumber: "INV-EXACT-900" };
+    mockedInvoicesApi.listInvoices.mockResolvedValue({
+      data: [invoice],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    });
+    mockedInvoicesApi.getInvoice.mockResolvedValue(exactInvoice);
+
+    renderPage(
+      ["invoices.view", "invoices.manage"],
+      ["/invoices?invoiceId=invoice-exact"],
+    );
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.getInvoice).toHaveBeenCalledWith(
+        "invoice-exact",
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Invoice INV-EXACT-900" }),
+    ).toBeInTheDocument();
+  });
+
   async function selectInvoice() {
     expect(await screen.findByText("INV-00001")).toBeInTheDocument();
 

@@ -173,6 +173,9 @@ describe("receipt-delivery.service", () => {
         name: true,
         email: true,
         phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
       },
     });
 
@@ -213,6 +216,9 @@ describe("receipt-delivery.service", () => {
       name: "John Doe",
       email: null,
       phone: "08000000000",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
@@ -237,6 +243,7 @@ describe("receipt-delivery.service", () => {
 
     expect(sendWhatsAppReceiptMock).toHaveBeenCalledWith({
       businessId: INPUT.businessId,
+      customerId: "customer-A",
       to: "08000000000",
       image: Buffer.from("receipt-png"),
     });
@@ -250,6 +257,9 @@ describe("receipt-delivery.service", () => {
       name: "John Doe",
       email: null,
       phone: "08000000000",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
     sendWhatsAppReceiptMock.mockRejectedValue(
@@ -275,12 +285,39 @@ describe("receipt-delivery.service", () => {
     }));
   });
 
+  it("rejects WhatsApp receipts when legacy opt-in has no recorded consent metadata", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A",
+      name: "John Doe",
+      email: null,
+      phone: "08000000000",
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+    });
+    getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+
+    await expect(
+      resendDigitalReceipt({ ...INPUT, channel: "WHATSAPP" }),
+    ).rejects.toMatchObject({
+      message: "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending this receipt.",
+      statusCode: 422,
+    });
+
+    expect(renderCustomerReceiptImageMock).not.toHaveBeenCalled();
+    expect(sendWhatsAppReceiptMock).not.toHaveBeenCalled();
+    expect(sendAutomatedWhatsAppTemplateMock).not.toHaveBeenCalled();
+  });
+
   it("returns 503 when WhatsApp delivery fails", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
       name: "John Doe",
       email: null,
       phone: "08000000000",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
@@ -327,6 +364,9 @@ describe("receipt-delivery.service", () => {
       name: "John Doe",
       email: null,
       phone: "08000000000",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
