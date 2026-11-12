@@ -654,6 +654,7 @@ describe("mergeCustomer - duplicate account merge", () => {
       mergedOrderCount: 1,
       mergedOrders: orders,
       mergedServicePriceCount: 0,
+      retainedServicePriceConflictCount: 0,
       mergedGroupMembershipCount: 0,
       mergedAnnouncementRecipientCount: 0,
       sourceDeactivated: true,
