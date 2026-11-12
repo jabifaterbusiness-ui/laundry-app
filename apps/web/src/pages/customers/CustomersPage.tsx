@@ -39,7 +39,7 @@ export function CustomersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<
-    "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all"
+    "active" | "dormant" | "blocked" | "blacklisted" | "merged" | "inactive" | "all"
   >("active");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null | undefined>(undefined);
   const [statusChange, setStatusChange] = useState<{
@@ -347,6 +347,7 @@ export function CustomersPage() {
           <option value="dormant">Dormant</option>
           <option value="blocked">Blocked</option>
           <option value="blacklisted">Blacklisted</option>
+          <option value="merged">Merged (archived)</option>
           <option value="inactive">Legacy inactive</option>
           <option value="all">All</option>
         </select>
