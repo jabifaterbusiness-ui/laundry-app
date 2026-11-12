@@ -215,6 +215,33 @@ describe("SuspiciousActivityPage", () => {
     expect(screen.getByText(new RegExp(branchTwo))).not.toBeVisible();
   });
 
+  it("shows bulk legacy customer ownership assignments as a readable security event", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "legacy-customer-bulk-assigned",
+        timestamp: "2026-11-12T15:00:00.000Z",
+        action: "customer.legacy_owner_bulk_assigned",
+        entityType: "Customer",
+        entityId: null,
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          assignmentScope: "ALL_UNASSIGNED",
+          assignedCount: 4,
+          ownerBranchId: "branch-2",
+          ownerBranchName: "Branch Two",
+        },
+        correlationId: "correlation-customer-bulk-1",
+      },
+    ]);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /customer branch ownership assigned/i }),
+    );
+
+    expect(await screen.findByText("4 legacy customers assigned to Branch Two.")).toBeInTheDocument();
+  });
+
   it("blocks users without the suspicious activity permission", () => {
     mockUser.permissions = [];
 
