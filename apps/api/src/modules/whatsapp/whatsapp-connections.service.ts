@@ -38,12 +38,21 @@ export async function getWhatsAppConnectionStatus(businessId: string) {
       lastVerifiedAt: true, lastError: true,
     },
   });
+  const requiredSettings = [
+    ["WHATSAPP_API_VERSION", config.receiptDelivery.whatsappApiVersion],
+    ["WHATSAPP_APP_ID", config.receiptDelivery.whatsappAppId],
+    ["WHATSAPP_APP_SECRET", config.receiptDelivery.whatsappAppSecret],
+    ["WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID", config.receiptDelivery.whatsappEmbeddedSignupConfigId],
+    ["WHATSAPP_TOKEN_ENCRYPTION_KEY", config.receiptDelivery.whatsappTokenEncryptionKey],
+    ["WHATSAPP_VERIFY_TOKEN", config.receiptDelivery.whatsappVerifyToken],
+  ] as const;
+  const missingConfiguration = requiredSettings
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
   return {
-    configured: Boolean(
-      config.receiptDelivery.whatsappApiVersion && config.receiptDelivery.whatsappAppId &&
-      config.receiptDelivery.whatsappAppSecret && config.receiptDelivery.whatsappEmbeddedSignupConfigId &&
-      config.receiptDelivery.whatsappTokenEncryptionKey && config.receiptDelivery.whatsappVerifyToken
-    ),
+    configured: missingConfiguration.length === 0,
+    missingConfiguration,
     appId: config.receiptDelivery.whatsappAppId ?? null,
     configurationId: config.receiptDelivery.whatsappEmbeddedSignupConfigId ?? null,
     apiVersion: config.receiptDelivery.whatsappApiVersion ?? null,
