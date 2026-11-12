@@ -133,6 +133,8 @@ describe("inventory operations", () => {
       { purchaseOrderLineId: "line-1", quantity: 1.5 },
       { purchaseOrderLineId: "line-1", quantity: 1, unitCost: -1 },
       { purchaseOrderLineId: "line-1", quantity: 1, unitCost: 1.25 },
+      { purchaseOrderLineId: "line-1", quantity: 1, expiryDate: new Date("2027-01-01") },
+      { purchaseOrderLineId: "line-1", quantity: 1, batchNumber: "LOT-OLD", expiryDate: new Date("2020-01-01") },
     ];
     for (const line of invalidLines) {
       await expect(receiveInventoryPurchaseOrder(
