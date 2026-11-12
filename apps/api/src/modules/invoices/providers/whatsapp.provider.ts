@@ -26,9 +26,16 @@ export function normalizeWhatsAppRecipient(value: string): string {
 
 async function assertWhatsAppServiceWindow(businessId: string | undefined, recipient: string) {
   if (!businessId) return; // Legacy platform sender is retained for internal migration only.
+  const connection = await prisma.whatsAppBusinessConnection.findUnique({
+    where: { businessId },
+    select: { phoneNumberId: true, status: true },
+  });
+  if (!connection || connection.status !== "CONNECTED") {
+    throw new Error("Connect this business's WhatsApp Business Account before sending messages");
+  }
   const contactPhone = normalizeWhatsAppRecipient(recipient);
   const inbound = await prisma.whatsAppWebhookEvent.findFirst({
-    where: { businessId, contactPhone, eventType: "MESSAGE_RECEIVED" },
+    where: { businessId, phoneNumberId: connection.phoneNumberId, contactPhone, eventType: "MESSAGE_RECEIVED" },
     orderBy: { receivedAt: "desc" },
     select: { payload: true, receivedAt: true },
   });
