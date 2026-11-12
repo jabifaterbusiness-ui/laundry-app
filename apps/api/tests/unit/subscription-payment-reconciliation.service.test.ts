@@ -30,8 +30,19 @@ import {
   getSubscriptionPaymentIntent,
   reconcileOfflineSubscriptionPayment,
 } from "../../src/modules/subscriptions/subscription-payment-reconciliation.service.js";
+import {
+  reconcileOfflineSubscriptionPaymentSchema,
+} from "../../src/modules/subscriptions/subscription-payment-reconciliation.validation.js";
 
 describe("subscription payment reconciliation", () => {
+  it("accepts reconciliation without an offline-payment reason", () => {
+    expect(reconcileOfflineSubscriptionPaymentSchema.safeParse({
+      intentId: "00000000-0000-4000-8000-000000000020",
+      providerKey: "paystack",
+      paymentMethodKey: "CARD",
+    }).success).toBe(true);
+  });
+
   const offlineIntent = {
     id: "00000000-0000-4000-8000-000000000020",
     businessId: "business-1",
