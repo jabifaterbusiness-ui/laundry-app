@@ -98,13 +98,18 @@ export async function sendWhatsAppReceipt(input: SendWhatsAppReceiptInput): Prom
     }
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { phone: true, whatsappOptIn: true },
+      select: {
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
     if (!customer) {
       throw new Error("Customer not found in this business.");
     }
-    if (!customer.whatsappOptIn) {
-      throw new Error("This customer has not explicitly opted in to WhatsApp receipts. Record their consent before sending.");
+    if (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource) {
+      throw new Error("This customer has not explicitly opted in with a recorded consent source and timestamp. Record their consent before sending.");
     }
     if (normalizeWhatsAppRecipient(customer.phone) !== normalizeWhatsAppRecipient(input.to)) {
       throw new Error("The WhatsApp receipt destination does not match the selected customer.");
