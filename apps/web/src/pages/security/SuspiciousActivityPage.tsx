@@ -764,6 +764,17 @@ function activitySummary(
     return `${permissionLabel} access was updated for ${targetLabel}.`;
   }
 
+  if (definition.id === "customer-ownership-assigned") {
+    const assignedCount = typeof metadata.assignedCount === "number" ? metadata.assignedCount : 1;
+    const branchName = typeof metadata.ownerBranchName === "string" && metadata.ownerBranchName.trim()
+      ? metadata.ownerBranchName.trim()
+      : "the selected branch";
+    if (assignedCount > 1) {
+      return `${assignedCount.toLocaleString("en-NG")} legacy customers assigned to ${branchName}.`;
+    }
+    return `${recordTitle} assigned to ${branchName}.`;
+  }
+
   const beforeBranchIds = Array.isArray(beforeRecord.branchIds) ? beforeRecord.branchIds : null;
   const afterBranchIds = Array.isArray(afterRecord.branchIds) ? afterRecord.branchIds : null;
   if (beforeBranchIds || afterBranchIds) {
