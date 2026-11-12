@@ -11,7 +11,7 @@ export type InventoryUnit =
   | "OTHER";
 
 export type InventoryMovementType =
-  | "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "EXPIRED"
+  | "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RETURN" | "WASTE" | "DAMAGED" | "EXPIRED"
   | "TRANSFER_IN" | "TRANSFER_OUT" | "STOCKTAKE";
 
 export interface InventoryItem {
@@ -50,6 +50,9 @@ export interface InventoryMovement {
   inventoryItemId: string;
   quantity: number;
   type: InventoryMovementType;
+  unitCost: number;
+  batchNumber: string | null;
+  expiryDate: string | null;
   resultingQuantity: number;
   reason: string | null;
   reference: string | null;
@@ -112,7 +115,9 @@ export interface UpdateInventoryItemInput {
 export interface CreateInventoryMovementInput {
   inventoryItemId: string;
   quantity: number;
-  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "EXPIRED";
+  type: "RECEIPT" | "ISSUE" | "RETURN" | "WASTE" | "DAMAGED" | "EXPIRED";
+  batchNumber?: string;
+  expiryDate?: string;
   reason?: string;
   reference?: string;
 }
@@ -284,7 +289,7 @@ export interface CreateInventoryPurchaseOrderInput {
 }
 export interface ReceiveInventoryPurchaseOrderInput {
   receiptNumber: string; notes?: string;
-  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number }>;
+  lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number; batchNumber?: string; expiryDate?: string }>;
 }
 export async function listInventorySuppliers(params: { search?: string; page?: number; pageSize?: number } = {}, auth: AuthOptions) {
   return apiFetch<{ suppliers: InventorySupplier[]; pagination: Pagination }>(`/inventory/suppliers${buildQuery(params)}`, { accessToken: auth.accessToken });
