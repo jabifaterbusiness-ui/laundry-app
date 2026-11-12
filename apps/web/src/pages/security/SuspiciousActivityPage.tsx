@@ -925,13 +925,28 @@ export function SuspiciousActivityPage() {
   const [draftCategoryOrder, setDraftCategoryOrder] = useState(categoryOrder);
   const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
 
+  useEffect(() => {
+    const nextReadState = user?.id && activeBranchId
+      ? loadSuspiciousActivityReadState(user.id, activeBranchId).lastSeenEventIds
+      : {};
+    const nextCategoryOrder = user?.id && activeBranchId
+      ? loadSuspiciousActivityCategoryOrder(user.id, activeBranchId, DEFAULT_ACTIVITY_CATEGORY_ORDER)
+      : [...DEFAULT_ACTIVITY_CATEGORY_ORDER];
+
+    setReadState(nextReadState);
+    setCategoryOrder(nextCategoryOrder);
+    setDraftCategoryOrder(nextCategoryOrder);
+    setIsCustomizingOrder(false);
+    setSelectedEventId(null);
+  }, [user?.id, activeBranchId]);
+
   const canView = hasPermission(
     user,
     "security.suspicious_activity.view",
   );
 
   const activityQuery = useQuery({
-    queryKey: ["audit", "suspicious-activity"],
+    queryKey: ["audit", "suspicious-activity", user?.businessId, user?.id, activeBranchId],
     queryFn: () => listSuspiciousActivity(accessToken ?? "", 100),
     enabled: Boolean(accessToken && canView),
   });
