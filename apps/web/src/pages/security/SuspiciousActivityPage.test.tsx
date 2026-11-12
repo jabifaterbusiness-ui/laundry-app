@@ -98,10 +98,11 @@ describe("SuspiciousActivityPage", () => {
     expect(savedOrder[0]).toBe("stock-adjusted");
     unmount();
 
-    renderPage();
-    const firstActivity = await screen.findAllByText(/Stock Adjusted/);
-    expect(firstActivity.length).toBeGreaterThan(0);
-    expect(container.querySelector('[data-activity-sort-id="stock-adjusted"]')).not.toBeNull();
+    const reloaded = renderPage();
+    await screen.findByRole("button", { name: /Stock Adjusted/ });
+    expect(
+      reloaded.container.querySelector(".suspicious-activity-event-grid [data-activity-sort-id]"),
+    ).toHaveAttribute("data-activity-sort-id", "stock-adjusted");
   });
 
   it("moves an individual event type directly to the top or bottom of the global list and persists the order", async () => {
@@ -117,7 +118,6 @@ describe("SuspiciousActivityPage", () => {
     const savedOrder = JSON.parse(
       localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
     ) as string[];
-    expect(savedOrder[0]).toBe("quick-void-operation");
     expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
   });
 
