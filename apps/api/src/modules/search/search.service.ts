@@ -182,7 +182,7 @@ export async function globalSearch(
       id: customer.id,
       title: customer.name,
       subtitle: [customer.phone, customer.email].filter(Boolean).join(" · "),
-      href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
+      href: `/orders?customerId=${encodeURIComponent(customer.id)}&openAccount=1`,
     })),
     orders.map((order) => ({
       type: "ORDER",
