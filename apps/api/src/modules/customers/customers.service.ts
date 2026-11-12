@@ -338,7 +338,8 @@ async function updateCustomerWithDb(
     // timestamp as historical evidence; only invalidate its current validity.
   }
 
-  if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged)) {
+  const consentRecordIncomplete = !existing.whatsappOptInAt || !existing.whatsappOptInSource;
+  if (data.whatsappOptIn === true && (!existing.whatsappOptIn || phoneChanged || consentRecordIncomplete)) {
     patch.whatsappOptIn = true;
     patch.whatsappOptInAt = new Date();
     patch.whatsappOptInSource = data.whatsappOptInSource ?? null;
