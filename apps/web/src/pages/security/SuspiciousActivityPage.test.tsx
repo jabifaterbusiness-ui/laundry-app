@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { SuspiciousActivityPage } from "./SuspiciousActivityPage.js";
@@ -15,6 +15,7 @@ let mockUser = {
 };
 
 let mockAccessToken = "token";
+let mockBranchId = "branch-1";
 
 vi.mock("../../lib/audit-api.js", () => ({
   listSuspiciousActivity: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("../../state/auth-store.js", () => ({
     selector({
       user: mockUser,
       accessToken: mockAccessToken,
-      activeBranchId: "branch-1",
+      activeBranchId: mockBranchId,
     }),
 }));
 
@@ -57,7 +58,7 @@ function renderPage() {
     },
   });
 
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <SuspiciousActivityPage />
@@ -65,6 +66,7 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
 }
 
 describe("SuspiciousActivityPage", () => {
@@ -81,6 +83,7 @@ describe("SuspiciousActivityPage", () => {
     };
 
     mockAccessToken = "token";
+    mockBranchId = "branch-1";
     localStorage.clear();
   });
 
@@ -102,6 +105,35 @@ describe("SuspiciousActivityPage", () => {
     const headings = await screen.findAllByRole("heading", { level: 3 });
     expect(headings[0]).toHaveTextContent("Inventory");
     expect(headings[1]).toHaveTextContent("Backup & recovery");
+  });
+
+  it("reloads the saved section order and activity query when the active branch changes", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    localStorage.setItem(
+      "laundry-app:suspicious-activity-order:manager-1:branch-1",
+      JSON.stringify(["inventory"]),
+    );
+    localStorage.setItem(
+      "laundry-app:suspicious-activity-order:manager-1:branch-2",
+      JSON.stringify(["permissions"]),
+    );
+
+    const view = renderPage();
+    expect(await screen.findByRole("heading", { name: "Inventory" })).toBeInTheDocument();
+
+    mockBranchId = "branch-2";
+    view.rerender(
+      <QueryClientProvider client={view.queryClient}>
+        <MemoryRouter>
+          <SuspiciousActivityPage />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Permissions" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Permissions");
+    await waitFor(() => expect(mockedListSuspiciousActivity).toHaveBeenCalledTimes(2));
   });
 
   it("blocks users without the suspicious activity permission", () => {
