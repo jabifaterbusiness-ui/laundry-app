@@ -224,13 +224,17 @@ export function OrdersPage() {
   }, [activeWorkspaceId]);
 
 
+  const orderListCustomerId = activeWorkspace?.mode === "view"
+    ? activeWorkspace.customer.id
+    : customerId;
+
   const ordersQuery = useQuery({
     queryKey: [
       "orders",
       {
         page,
         status,
-        customerId,
+        customerId: orderListCustomerId,
         search: orderSearch,
         branchId: activeBranchId,
       },
@@ -241,7 +245,7 @@ export function OrdersPage() {
           page,
           pageSize: PAGE_SIZE,
           status: status || undefined,
-          customerId: customerId || undefined,
+          customerId: orderListCustomerId || undefined,
           search: orderSearch.trim() || undefined,
         },
         { accessToken },
@@ -710,35 +714,18 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer) {
-    const existingWorkspace = workspaces.find(
-      (workspace) => workspace.customer.id === customer.id,
-    );
-
     const workspaceId = openWorkspace(customer);
     switchWorkspace(workspaceId);
-
-    if (existingWorkspace) {
-      setSelectedOrder(existingWorkspace.activeOrder);
-      setFormError(null);
-      setCustomerPickerOpen(false);
-      setFormOpen(existingWorkspace.mode === "new");
-      return;
-    }
-
+    // A customer search result opens the customer's Order Management account,
+    // not a blank New Order form. The order list is scoped to this customer.
     updateWorkspace(workspaceId, {
-      mode: "new",
-      draft: {
-        customerId: customer.id,
-        lines: [{ serviceId: "", quantity: 1, colors: [] }],
-        garmentNote: "",
-        internalNote: "",
-        expectedReadyAt: "",
-      },
+      mode: "view",
+      activeOrder: null,
     });
     setSelectedOrder(null);
     setFormError(null);
     setCustomerPickerOpen(false);
-    setFormOpen(true);
+    setFormOpen(false);
   }
 
   function selectCustomerForNewOrder(customer: Customer) {
@@ -1620,7 +1607,7 @@ export function OrdersPage() {
 
   return (
     <main>
-      <h1>Orders</h1>
+      <h1>{activeWorkspace?.mode === "view" ? `Order Management · ${activeWorkspace.customer.name}` : "Orders"}</h1>
       <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
         Search orders
         <input
