@@ -784,7 +784,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
         whatsappOptIn &&
         whatsappOptInAt !== null &&
         whatsappOptInSource !== null &&
-        phone === delivery.destination,
+        normalizeWhatsAppRecipient(phone) === normalizeWhatsAppRecipient(delivery.destination),
     };
   });
 }
