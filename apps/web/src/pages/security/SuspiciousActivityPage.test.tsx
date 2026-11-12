@@ -226,7 +226,6 @@ describe("SuspiciousActivityPage", () => {
       { id: branchOne, name: "Main Branch" },
       { id: branchTwo, name: "Airport Branch" },
     ];
-    renderPage();
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "user-updated-1",
@@ -244,8 +243,9 @@ describe("SuspiciousActivityPage", () => {
         correlationId: "correlation-user-1",
       },
     ]);
+    renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /user updated/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^user updated\b/i }));
 
     expect(await screen.findByText(/Alex Staff branch access changed: removed access to Main Branch; retained access to Airport Branch/i)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(branchOne))).not.toBeVisible();
@@ -253,7 +253,6 @@ describe("SuspiciousActivityPage", () => {
   });
 
   it("shows bulk legacy customer ownership assignments as a readable security event", async () => {
-    renderPage();
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "legacy-customer-bulk-assigned",
@@ -272,6 +271,7 @@ describe("SuspiciousActivityPage", () => {
         correlationId: "correlation-customer-bulk-1",
       },
     ]);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: /customer branch ownership assigned/i }),
