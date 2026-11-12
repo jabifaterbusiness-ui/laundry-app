@@ -659,18 +659,13 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(orderUpdateMany).not.toHaveBeenCalled();
 
     expect(updateMany).toHaveBeenCalledWith({
-      where: {
-        id: sourceCustomer.id,
-        businessId: "biz-A",
-        ownerBranchId: "branch-A",
-      },
-      data: {
+      where: expect.objectContaining({ id: sourceCustomer.id, lifecycleStatus: { not: "MERGED" } }),
+      data: expect.objectContaining({
         isActive: false,
-        lifecycleStatus: "DORMANT",
-        statusReason: "Merged into another customer",
-        statusChangedAt: expect.any(Date),
-        statusChangedById: "user-A",
-      },
+        lifecycleStatus: "MERGED",
+        mergedIntoCustomerId: targetCustomer.id,
+        statusReason: `Merged into customer ${targetCustomer.id}`,
+      }),
     });
 
     expect(result.mergedOrderCount).toBe(0);
@@ -747,29 +742,21 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects merging ledgers when the target customer's account mode differs", async () => {
+  it("rejects a source customer with a service price owned by another branch", async () => {
     findFirst
-      .mockResolvedValueOnce({ ...sourceCustomer, ownerBranchId: "branch-B" } as never)
-      .mockResolvedValueOnce({ ...targetCustomer, ownerBranchId: "branch-A" } as never);
-    prismaMock.branchResourceShare.findFirst.mockImplementation((args) => Promise.resolve(
-      args?.select?.customerAccountMode
-        ? { customerAccountMode: "SEPARATE" }
-        : { id: "edit-share", accessLevel: "EDIT" },
-    ) as never);
-    orderFindMany.mockResolvedValue([]);
-    customerAccountFindFirst
-      .mockResolvedValueOnce({ id: "source-account", branchId: "branch-A" } as never)
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(sourceCustomer as never)
+      .mockResolvedValueOnce(targetCustomer as never);
+    prismaMock.customerServicePrice.findFirst.mockResolvedValue({ id: "foreign-price" } as never);
 
     await expect(
       mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
     ).rejects.toMatchObject({
-      message: "Both customers must belong to the currently selected branch to be merged",
+      message: "Source customer has records or sharing links in another branch and cannot be merged here",
       statusCode: 409,
     });
 
+    expect(orderFindMany).not.toHaveBeenCalled();
     expect(customerAccountUpdate).not.toHaveBeenCalled();
-    expect(customerAccountTransactionUpdateMany).not.toHaveBeenCalled();
     expect(updateMany).not.toHaveBeenCalled();
   });
 
