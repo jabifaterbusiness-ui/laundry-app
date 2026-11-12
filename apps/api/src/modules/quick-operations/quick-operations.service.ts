@@ -163,6 +163,16 @@ export async function executeQuickOperation(
     case "TO": {
       const parsed = transferInvoiceQuickOperationSchema.parse(input);
 
+      const previousOrder = await getOrderForBusiness(
+        parsed.orderId,
+        context.businessId,
+        context.branchId,
+        context.userId,
+      );
+      if (!previousOrder) {
+        throw new AppError("Order not found", 404);
+      }
+
       const result = await transferOrder(
         parsed.orderId,
         context.businessId,
@@ -185,6 +195,7 @@ export async function executeQuickOperation(
           operationName: definition.name,
           ...(reason !== undefined ? { reason } : {}),
           orderNumber: result.orderNumber,
+          previousCustomerId: previousOrder.customerId,
           customerId: result.customerId,
         },
       });
