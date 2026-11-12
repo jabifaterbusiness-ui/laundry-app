@@ -42,6 +42,7 @@ describe("CustomerFormDialog duplicate protection", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New Ada" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Existing Ada (08012345678)");
     expect(onSubmit).toHaveBeenNthCalledWith(1, expect.objectContaining({
