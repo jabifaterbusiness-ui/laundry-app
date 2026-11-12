@@ -576,7 +576,7 @@ export function QuickOperationLauncher({
 
         await executeQuickOperation(
           {
-            code: activeOperation.code === "TO" ? "TI" : activeOperation.code === "MC" ? "MA" : activeOperation.code,
+            code: activeOperation.code,
             input: {
               pendingOfflineOperationCount:
                 pendingOfflineOperations.length,
@@ -601,7 +601,7 @@ export function QuickOperationLauncher({
       if (activeOperation.code === "SO") {
         await executeQuickOperation(
           {
-            code: activeOperation.code === "TO" ? "TI" : activeOperation.code === "MC" ? "MA" : activeOperation.code,
+            code: activeOperation.code,
             input,
             confirmed,
           },
@@ -619,7 +619,7 @@ export function QuickOperationLauncher({
       if (activeOperation.code === "SC") {
         await executeQuickOperation(
           {
-            code: activeOperation.code === "TO" ? "TI" : activeOperation.code === "MC" ? "MA" : activeOperation.code,
+            code: activeOperation.code,
             input,
             confirmed,
           },
@@ -636,7 +636,7 @@ export function QuickOperationLauncher({
 
       const response = await executeQuickOperation(
         {
-          code: activeOperation.code === "TO" ? "TI" : activeOperation.code === "MC" ? "MA" : activeOperation.code,
+          code: activeOperation.code,
           input,
           confirmed,
           ...(reason.trim()
