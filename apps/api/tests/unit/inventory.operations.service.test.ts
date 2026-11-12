@@ -88,6 +88,17 @@ describe("inventory operations", () => {
         ]),
       }),
     }));
+    expect(db.inventoryGoodsReceiptLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { expiryDate: { not: null }, goodsReceipt: { is: { businessId: BUSINESS, branchId: SOURCE } } },
+      orderBy: { expiryDate: "asc" },
+    }));
+    expect(report.expiryRegister).toHaveLength(1);
+    expect(report.expiryRegister[0]).toMatchObject({
+      batchNumber: "LOT-1",
+      receiptNumber: "GRN-1",
+      quantityReceived: 4,
+      status: "DUE_SOON",
+    });
     expect(report.movementTotals).toEqual({ DAMAGED: 3 });
     expect(report.consumptionQuantity).toBe(3);
     expect(report.supplierPerformance).toEqual([{
