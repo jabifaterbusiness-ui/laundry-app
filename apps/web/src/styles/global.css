@@ -4565,3 +4565,50 @@ a {
   font-weight: 650;
   line-height: 1.5;
 }
+
+
+/* Unusual Activity: clear global drop targets and compact category labels. */
+.suspicious-activity-event-card-wrapper {
+  position: relative;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.suspicious-activity-event-card-wrapper.suspicious-activity-event-card-drop-target::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-primary, #db2777);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #db2777) 16%, transparent);
+  pointer-events: none;
+}
+
+.suspicious-activity-event-card-wrapper.suspicious-activity-event-card-dragging {
+  opacity: 0.58;
+  transform: scale(0.985);
+}
+
+.suspicious-activity-event-category {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-subtle, #f1f5f9);
+  color: var(--text-muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.suspicious-activity-drag-handle {
+  touch-action: none;
+  cursor: grab;
+}
+
+.suspicious-activity-drag-handle:active {
+  cursor: grabbing;
+}
