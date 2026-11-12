@@ -14,6 +14,7 @@ function buildQuery(params: ListInvoicesParams): string {
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
   if (params.status) query.set("status", params.status);
   if (params.customerId) query.set("customerId", params.customerId);
+  if (params.search?.trim()) query.set("search", params.search.trim());
 
   const qs = query.toString();
   return qs ? `?${qs}` : "";
