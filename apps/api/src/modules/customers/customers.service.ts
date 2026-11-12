@@ -501,6 +501,13 @@ export async function transferCustomer(
       tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
     );
 
+    // Customer consolidation is intentionally branch-local. A customer
+    // shared into this branch is not eligible: both records must be owned
+    // by the currently selected branch, within the authenticated business.
+    if (customer.ownerBranchId !== branchId || targetCustomer.ownerBranchId !== branchId) {
+      throw new AppError("Both customers must belong to the currently selected branch to be merged", 409);
+    }
+
     const orders = await tx.order.findMany({
       where: { businessId, branchId, customerId: customer.id },
       select: { id: true, orderNumber: true, branchId: true },
