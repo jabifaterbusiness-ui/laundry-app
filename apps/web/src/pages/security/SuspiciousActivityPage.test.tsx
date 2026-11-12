@@ -15,7 +15,7 @@ let mockUser = {
 };
 
 let mockAccessToken = "token";
-let mockBranchId = "branch-1";
+let mockBranchId: string | null = "branch-1";
 
 vi.mock("../../lib/audit-api.js", () => ({
   listSuspiciousActivity: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("../../state/auth-store.js", () => ({
     selector: (state: {
       user: typeof mockUser;
       accessToken: string;
-      activeBranchId: string;
+      activeBranchId: string | null;
     }) => unknown,
   ) =>
     selector({
@@ -134,6 +134,26 @@ describe("SuspiciousActivityPage", () => {
     expect(await screen.findByRole("heading", { name: "Permissions" })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Permissions");
     await waitFor(() => expect(mockedListSuspiciousActivity).toHaveBeenCalledTimes(2));
+  });
+
+  it("waits for an active branch before requesting branch-scoped activity", async () => {
+    mockBranchId = null;
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const view = renderPage();
+
+    expect(mockedListSuspiciousActivity).not.toHaveBeenCalled();
+
+    mockBranchId = "branch-1";
+    view.rerender(
+      <QueryClientProvider client={view.queryClient}>
+        <MemoryRouter>
+          <SuspiciousActivityPage />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(mockedListSuspiciousActivity).toHaveBeenCalledTimes(1));
   });
 
   it("blocks users without the suspicious activity permission", () => {
