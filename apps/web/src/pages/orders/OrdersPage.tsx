@@ -1744,6 +1744,7 @@ export function OrdersPage() {
               workspaces={orderFormWorkspaces}
               activeWorkspaceId={activeOrderFormWorkspaceId}
               onOpenCustomer={() => {
+                setSwitchingCustomer(true);
                 setCustomerSearch("");
                 setCustomerPickerOpen(true);
               }}
@@ -1965,6 +1966,7 @@ export function OrdersPage() {
             onClick={() => {
               setCustomerPickerOpen(false);
               setCustomerSearch("");
+              setSwitchingCustomer(false);
               if (activeWorkspace) {
                 setFormOpen(true);
               }
