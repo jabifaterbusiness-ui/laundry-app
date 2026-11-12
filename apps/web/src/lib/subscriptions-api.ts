@@ -151,7 +151,6 @@ export async function reconcileOfflineSubscriptionPayment(
     intentId: string;
     providerKey: string;
     paymentMethodKey: string;
-    reason: string;
   },
 ): Promise<SubscriptionPaymentIntent> {
   return apiFetch<SubscriptionPaymentIntent>(
