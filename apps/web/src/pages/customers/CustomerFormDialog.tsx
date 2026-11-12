@@ -98,7 +98,14 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         <fieldset style={{ border: "1px solid #dbe3ee", borderRadius: 10, padding: 12, marginTop: 12 }}>
           <legend>WhatsApp message consent</legend>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <input type="checkbox" checked={whatsappOptIn} onChange={(e) => setWhatsappOptIn(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={whatsappOptIn}
+              onChange={(e) => {
+                setWhatsappOptIn(e.target.checked);
+                setWhatsappOptInSource("");
+              }}
+            />
             <span>Customer has explicitly agreed to receive WhatsApp messages from this business, including order updates and receipts.</span>
           </label>
           {whatsappOptIn && (
