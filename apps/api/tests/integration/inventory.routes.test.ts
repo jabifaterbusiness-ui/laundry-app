@@ -675,6 +675,8 @@ describe("Inventory routes - branch-scoped stock", () => {
       createdById: "user-1",
       reason: "New stock received",
       reference: "PO-001",
+      batchNumber: "LOT-PO-001",
+      expiryDate: new Date("2027-03-01T00:00:00.000Z"),
     } as never);
 
     const res = await request(app)
@@ -687,6 +689,8 @@ describe("Inventory routes - branch-scoped stock", () => {
         type: "RECEIPT",
         reason: "New stock received",
         reference: "PO-001",
+        batchNumber: "LOT-PO-001",
+        expiryDate: "2027-03-01",
       });
 
     expect(res.status).toBe(201);
@@ -698,7 +702,7 @@ describe("Inventory routes - branch-scoped stock", () => {
         resultingQuantity: 15,
       },
     });
-    expect(prisma.inventoryMovement.create).toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).toHaveBeenCalledWith({ data: expect.objectContaining({ batchNumber: "LOT-PO-001", expiryDate: new Date("2027-03-01") }) });
     expect(userBranchFindUnique).toHaveBeenCalled();
   });
 
