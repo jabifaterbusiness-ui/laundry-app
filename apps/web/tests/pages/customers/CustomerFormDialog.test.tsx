@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Customer } from "@laundry-app/shared";
+import type { CreateCustomerInput } from "../../../src/lib/customers-api.js";
 import { CustomerFormDialog } from "../../../src/pages/customers/CustomerFormDialog.js";
 
 function optedInCustomer() {
@@ -18,7 +19,7 @@ function optedInCustomer() {
 
 describe("CustomerFormDialog WhatsApp consent", () => {
   it("requires fresh consent when the customer's phone number changes", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onSubmit = vi.fn(async (_input: CreateCustomerInput) => undefined);
     render(
       <CustomerFormDialog
         customer={optedInCustomer()}
