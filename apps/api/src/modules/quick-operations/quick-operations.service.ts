@@ -160,7 +160,7 @@ export async function executeQuickOperation(
       };
     }
 
-    case "TI": {
+    case "TO": {
       const parsed = transferInvoiceQuickOperationSchema.parse(input);
 
       const result = await transferOrder(
@@ -233,7 +233,7 @@ export async function executeQuickOperation(
       };
     }
 
-    case "MA": {
+    case "MC": {
       const parsed = mergeCustomerQuickOperationSchema.parse(input);
 
       const result = await mergeCustomer(
