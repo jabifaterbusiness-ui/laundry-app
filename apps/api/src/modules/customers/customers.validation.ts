@@ -110,6 +110,7 @@ export const listCustomersQuerySchema = z.object({
     "dormant",
     "blocked",
     "blacklisted",
+    "merged",
     "inactive",
     "all",
   ]).default("active"),
