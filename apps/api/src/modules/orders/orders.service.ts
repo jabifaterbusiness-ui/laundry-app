@@ -379,6 +379,7 @@ export async function listOrders(params: ListOrdersParams) {
       AND: [{
         OR: [
           { orderNumber: { contains: search } },
+          { invoice: { is: { invoiceNumber: { contains: search } } } },
           { customer: { is: { name: { contains: search, mode: "insensitive" } } } },
           { customer: { is: { phone: { contains: search } } } },
           { customer: { is: { email: { contains: search, mode: "insensitive" } } } },
