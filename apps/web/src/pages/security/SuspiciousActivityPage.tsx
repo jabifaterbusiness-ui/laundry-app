@@ -708,10 +708,11 @@ function activityRecordLabel(activity: {
   return activity.entityType.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
 
-function activitySummary(activity: {
-  entityType: string;
-  metadata: unknown;
-}, definition: ActivityDefinition) {
+function activitySummary(
+  activity: { entityType: string; metadata: unknown },
+  definition: ActivityDefinition,
+  branchNames: Map<string, string> = new Map(),
+) {
   const metadata = asAuditRecord(activity.metadata) ?? {};
   const before = metadata.before ?? (
     metadata.beforeStatus !== undefined ? { status: metadata.beforeStatus } : undefined
@@ -750,7 +751,7 @@ function activitySummary(activity: {
   if (beforeBranchIds || afterBranchIds) {
     const branchLabels = (value: unknown): string[] => Array.isArray(value)
       ? value.map((entry) => {
-          if (typeof entry === "string") return entry;
+          if (typeof entry === "string") return branchNames.get(entry) ?? entry;
           const branch = asAuditRecord(entry);
           return typeof branch?.name === "string" ? branch.name : "";
         }).filter((name): name is string => Boolean(name) && !/^[0-9a-f-]{36}$/i.test(name))
@@ -760,9 +761,11 @@ function activitySummary(activity: {
     if (beforeNames.length || afterNames.length) {
       const removed = beforeNames.filter((name) => !afterNames.includes(name));
       const added = afterNames.filter((name) => !beforeNames.includes(name));
+      const retained = beforeNames.filter((name) => afterNames.includes(name));
       const changes = [
         removed.length ? `removed access to ${removed.join(", ")}` : "",
         added.length ? `granted access to ${added.join(", ")}` : "",
+        retained.length ? `retained access to ${retained.join(", ")}` : "",
       ].filter(Boolean);
       if (changes.length) return `${recordTitle} branch access changed: ${changes.join("; ")}.`;
     }
@@ -1034,6 +1037,11 @@ export function SuspiciousActivityPage() {
         reason: getReason(activity.metadata),
       })),
     [activityQuery.data],
+  );
+
+  const branchNameMap = useMemo(
+    () => new Map((user?.branches ?? []).map((branch) => [branch.id, branch.name] as const)),
+    [user?.branches],
   );
 
   const selectedDefinition = useMemo(
@@ -1548,7 +1556,7 @@ export function SuspiciousActivityPage() {
                         <span>{selectedDefinition.risk}</span>
                       </header>
                       <p className="suspicious-activity-record-summary">
-                        {activitySummary(activity, selectedDefinition)}
+                        {activitySummary(activity, selectedDefinition, branchNameMap)}
                       </p>
 
                       <dl className="suspicious-activity-record-meta">
