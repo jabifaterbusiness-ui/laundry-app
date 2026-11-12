@@ -445,6 +445,7 @@ export function OrdersPage() {
       setSelectedOrder(order);
 
       if (returnToFromUrl === "customer-workstation") {
+        setWorkspaceReturnTo(null);
         navigate(
           `/customer-workstation?customerId=${encodeURIComponent(
             order.customerId,
