@@ -92,7 +92,7 @@ export function GlobalSearch() {
     setError(null);
     setCompletedQuery("");
     pendingEnterRef.current = false;
-  }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
+  }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.email, user?.businessId, accessToken, activeBranchId]);
 
   useEffect(() => {
     const clearForAuthorization = () => {
