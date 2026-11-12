@@ -154,6 +154,10 @@ export async function globalSearch(
             OR: [
               { invoiceNumber: { contains: query } },
               { customerName: { contains: query, mode: "insensitive" } },
+              { order: { is: { orderNumber: { contains: query } } } },
+              { order: { is: { customer: { is: { name: { contains: query, mode: "insensitive" } } } } } },
+              { order: { is: { customer: { is: { phone: { contains: query } } } } } },
+              { order: { is: { customer: { is: { email: { contains: query, mode: "insensitive" } } } } } },
             ],
           },
           orderBy: {
@@ -176,7 +180,6 @@ export async function globalSearch(
     // that would start a new order. This keeps name/phone/email searches in
     // Order Management whenever matching orders exist.
     ...customers
-      .filter((customer) => !orders.some((order) => order.customerId === customer.id))
       .map((customer) => ({
       type: "CUSTOMER" as const,
       id: customer.id,
