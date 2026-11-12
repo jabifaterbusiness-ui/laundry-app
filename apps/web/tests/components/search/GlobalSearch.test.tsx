@@ -73,6 +73,26 @@ describe("GlobalSearch", () => {
     );
   });
 
+  it("shows payment results and opens the exact payment record", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "PAYMENT",
+      id: "payment-42",
+      title: "Payment · BANK-REF-42",
+      subtitle: "Ada Laundry · Invoice #00042 · POSTED",
+      href: "/payments?paymentId=payment-42",
+    }]);
+
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), {
+      target: { value: "BANK-REF-42" },
+    });
+
+    const payment = await screen.findByRole("option", { name: /Payment · BANK-REF-42/ });
+    expect(screen.getByText("Payments")).toBeInTheDocument();
+    fireEvent.click(payment);
+    expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42");
+  });
+
   it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
     globalSearchMock.mockResolvedValue([
       { type: "CUSTOMER", id: "customer-1", title: "Adam", subtitle: "08012345678", href: "/orders?customerId=customer-1" },
