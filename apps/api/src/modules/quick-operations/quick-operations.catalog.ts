@@ -18,8 +18,8 @@ export const QUICK_OPERATIONS: QuickOperationDefinition[] = [
   },
   {
     code: "TI",
-    name: "Transfer Invoice",
-    description: "Transfer an invoice/order to another customer account.",
+    name: "Transfer Order",
+    description: "Transfer an order to another customer account.",
     permission: "orders.update",
     requiresConfirmation: true,
     sensitive: true,
@@ -34,8 +34,8 @@ export const QUICK_OPERATIONS: QuickOperationDefinition[] = [
   },
   {
     code: "MA",
-    name: "Merge Account",
-    description: "Safely merge duplicate customer accounts while preserving history.",
+    name: "Merge Customer",
+    description: "Merge duplicate customer accounts within the active branch while preserving history.",
     permission: "customers.update",
     requiresConfirmation: true,
     sensitive: true,
