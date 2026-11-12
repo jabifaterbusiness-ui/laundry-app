@@ -26,9 +26,11 @@ export function SensitiveAuthorizationProvider({
   const userId = useAuthStore((state) => state.user?.id);
   const businessId = useAuthStore((state) => state.user?.businessId);
   const sessionKey = [userId ?? "", businessId ?? "", accessToken ?? ""].join(":");
+  const identityKey = [userId ?? "", businessId ?? ""].join(":");
   const sessionKeyRef = useRef(sessionKey);
   sessionKeyRef.current = sessionKey;
   const previousSessionKeyRef = useRef(sessionKey);
+  const previousIdentityKeyRef = useRef(identityKey);
   const sensitiveAuthorization = useAuthStore(
     (state) => state.sensitiveAuthorization,
   );
@@ -113,6 +115,12 @@ export function SensitiveAuthorizationProvider({
       setResolveRequest(null);
     }
   }, [resolveRequest]);
+
+  useEffect(() => {
+    if (previousIdentityKeyRef.current === identityKey) return;
+    previousIdentityKeyRef.current = identityKey;
+    clearSensitiveAuthorization();
+  }, [identityKey, clearSensitiveAuthorization]);
 
   useEffect(() => {
     if (previousSessionKeyRef.current === sessionKey) return;
