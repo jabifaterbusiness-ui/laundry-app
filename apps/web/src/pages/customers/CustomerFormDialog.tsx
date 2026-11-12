@@ -17,7 +17,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
   const [address, setAddress] = useState(customer?.address ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(customer?.whatsappOptIn ?? false);
-  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(customer?.whatsappOptInSource ?? "");
+  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(customer?.whatsappOptIn ? customer.whatsappOptInSource ?? "" : "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<Pick<Customer, "id" | "name" | "phone">[] | null>(null);
@@ -102,8 +102,13 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
               type="checkbox"
               checked={whatsappOptIn}
               onChange={(e) => {
+                const phoneChanged = customer
+                  ? phone.replace(/\D/g, "") !== customer.phone.replace(/\D/g, "")
+                  : false;
+                if (!customer?.whatsappOptIn || phoneChanged) {
+                  setWhatsappOptInSource("");
+                }
                 setWhatsappOptIn(e.target.checked);
-                setWhatsappOptInSource("");
               }}
             />
             <span>Customer has explicitly agreed to receive WhatsApp messages from this business, including order updates and receipts.</span>
