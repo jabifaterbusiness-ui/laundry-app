@@ -119,6 +119,7 @@ export function SensitiveAuthorizationProvider({
       setSensitiveAuthorization(authorization);
       closeDialog(authorization.token);
     } catch (requestError) {
+      setPassword("");
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -168,6 +169,7 @@ export function SensitiveAuthorizationProvider({
 
             <input
               id="sensitive-authorization-password"
+              name="sensitive-authorization-password"
               type="password"
               autoComplete="current-password"
               value={password}
