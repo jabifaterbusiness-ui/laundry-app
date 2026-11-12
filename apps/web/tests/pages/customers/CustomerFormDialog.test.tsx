@@ -79,6 +79,28 @@ describe("CustomerFormDialog WhatsApp consent", () => {
     });
   });
 
+  it("requires a fresh consent source when a previously opted-out customer opts in again", () => {
+    render(
+      <CustomerFormDialog
+        customer={optedInCustomer()}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const consent = screen.getByRole("checkbox", {
+      name: /customer has explicitly agreed to receive whatsapp messages/i,
+    });
+    fireEvent.click(consent);
+    expect(consent).not.toBeChecked();
+    fireEvent.click(consent);
+    expect(consent).toBeChecked();
+
+    const source = screen.getByLabelText("How did the customer give consent?");
+    expect(source).toHaveValue("");
+    expect(source).toBeRequired();
+  });
+
   it("preserves consent when only phone-number formatting changes", () => {
     render(
       <CustomerFormDialog
