@@ -503,6 +503,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
+    await screen.findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-1" },
     });
@@ -568,6 +569,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
+    await screen.findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-1" },
     });
@@ -646,6 +648,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Customer ID"), {
       target: { value: "customer-1" },
     });
+    await screen.findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
