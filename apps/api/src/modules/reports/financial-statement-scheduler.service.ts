@@ -208,7 +208,6 @@ async function ensureOwnerRecipients(
 }
 
 async function deliverOne(
-  businessId: string,
   statementId: string,
   recipientId: string,
   channel: "EMAIL" | "WHATSAPP",
@@ -360,7 +359,6 @@ async function processBusiness(
     if (config.emailEnabled && recipient.user.email) {
       try {
         await deliverOne(
-          business.id,
           statement.id,
           recipient.id,
           "EMAIL",
@@ -389,7 +387,6 @@ async function processBusiness(
     ) {
       try {
         await deliverOne(
-          business.id,
           statement.id,
           recipient.id,
           "WHATSAPP",
