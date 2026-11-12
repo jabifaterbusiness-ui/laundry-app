@@ -71,7 +71,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
             onChange={(e) => {
               const nextPhone = e.target.value;
               setPhone(nextPhone);
-              const digits = (value: string) => value.replace(/\\D/g, "");
+              const digits = (value: string) => value.replace(/\D/g, "");
               if (customer && digits(nextPhone) !== digits(customer.phone)) {
                 // Consent applies to the number the customer agreed to use.
                 // A changed destination must be explicitly opted in again.
