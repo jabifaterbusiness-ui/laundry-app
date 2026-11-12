@@ -90,6 +90,7 @@ export interface WhatsAppBusinessConnection {
 }
 export interface WhatsAppConnectionStatus {
   configured: boolean;
+  missingConfiguration: string[];
   appId: string | null;
   configurationId: string | null;
   apiVersion: string | null;
