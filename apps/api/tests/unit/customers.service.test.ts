@@ -754,6 +754,42 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(result.mergedAnnouncementRecipientCount).toBe(2);
   });
 
+  it("does not transfer WhatsApp consent to a different phone number during merge", async () => {
+    const sourceWithConsent = {
+      ...sourceCustomer,
+      phone: "2348011111111",
+      email: "source@example.com",
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-01-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    };
+    const targetWithDifferentPhone = {
+      ...targetCustomer,
+      phone: "2348022222222",
+      email: null,
+      whatsappOptIn: false,
+      whatsappOptOutAt: null,
+    };
+    findFirst
+      .mockResolvedValueOnce(sourceWithConsent as never)
+      .mockResolvedValueOnce(targetWithDifferentPhone as never);
+    orderFindMany.mockResolvedValue([]);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await mergeCustomer(
+      sourceCustomer.id,
+      "biz-A",
+      "branch-A",
+      "user-A",
+      targetCustomer.id,
+    );
+
+    expect(prismaMock.customer.update).toHaveBeenCalledWith({
+      where: { id: targetCustomer.id },
+      data: { email: "source@example.com" },
+    });
+  });
+
   it("rejects a source customer with orders in another branch before moving any records", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
