@@ -237,6 +237,11 @@ jobs:
           kill -0 "$SSH_PID"
           HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/)"
           [[ "$HTTP_CODE" == "401" ]]
+          UPSTREAM_CODE="$(curl --silent --show-error --user "preview:$PREVIEW_PASSWORD" --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18081/)"
+          if [[ ! "$UPSTREAM_CODE" =~ ^[23] ]]; then
+            echo "::error::Staging preview upstream returned HTTP $UPSTREAM_CODE."
+            exit 1
+          fi
 
           CLOUDFLARED_VERSION="2026.10.7"
           curl --fail --location --silent --show-error \
