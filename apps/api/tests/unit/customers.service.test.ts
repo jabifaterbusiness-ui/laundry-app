@@ -734,7 +734,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     await expect(
       mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
     ).rejects.toMatchObject({
-      message: "Customer accounts belong to different branches and cannot be merged together",
+      message: "Both customers must belong to the currently selected branch to be merged",
       statusCode: 409,
     });
 
