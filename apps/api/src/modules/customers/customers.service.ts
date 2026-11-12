@@ -13,7 +13,7 @@ interface ListParams {
   page: number;
   pageSize: number;
   search?: string;
-  status: "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all";
+  status: "active" | "dormant" | "blocked" | "blacklisted" | "merged" | "inactive" | "all";
 }
 
 export async function listCustomers(params: ListParams) {
@@ -32,6 +32,7 @@ export async function listCustomers(params: ListParams) {
   if (status !== "all") {
     if (status === "inactive") {
       where.isActive = false;
+      where.lifecycleStatus = { not: "MERGED" };
     } else {
       const lifecycleStatus =
         status === "active"
@@ -567,19 +568,39 @@ export async function mergeCustomer(
       tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
     );
 
-    // Customer consolidation is intentionally branch-local. A customer
-    // shared into this branch is not eligible: both records must be owned
-    // by the currently selected branch, within the authenticated business.
     if (customer.ownerBranchId !== branchId || targetCustomer.ownerBranchId !== branchId) {
       throw new AppError("Both customers must belong to the currently selected branch to be merged", 409);
     }
+    if (customer.lifecycleStatus === "MERGED") {
+      throw new AppError("This customer has already been merged into another account", 409);
+    }
+    if (targetCustomer.lifecycleStatus === "MERGED") {
+      throw new AppError("Choose an active customer record, not an already merged account", 409);
+    }
 
-    const [otherBranchOrder, otherBranchAccount, externalShare] = await Promise.all([
+    // Do not consolidate a record that is still referenced by another branch.
+    // The check is inside the serializable transaction and happens before any
+    // source-linked record is changed.
+    const [
+      otherBranchOrder,
+      otherBranchAccount,
+      otherBranchServicePrice,
+      otherBranchDiscount,
+      externalShare,
+    ] = await Promise.all([
       tx.order.findFirst({
         where: { businessId, customerId: customer.id, branchId: { not: branchId } },
         select: { id: true },
       }),
       tx.customerAccount.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.customerServicePrice.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.priceAdjustment.findFirst({
         where: { businessId, customerId: customer.id, branchId: { not: branchId } },
         select: { id: true },
       }),
@@ -594,8 +615,17 @@ export async function mergeCustomer(
         select: { id: true },
       }),
     ]);
-    if (otherBranchOrder || otherBranchAccount || externalShare) {
-      throw new AppError("Source customer is used or shared by another branch and cannot be merged here", 409);
+    if (
+      otherBranchOrder ||
+      otherBranchAccount ||
+      otherBranchServicePrice ||
+      otherBranchDiscount ||
+      externalShare
+    ) {
+      throw new AppError(
+        "Source customer has records or sharing links in another branch and cannot be merged here",
+        409,
+      );
     }
 
     const orders = await tx.order.findMany({
@@ -608,6 +638,78 @@ export async function mergeCustomer(
         where: { businessId, branchId, customerId: customer.id },
         data: { customerId: targetCustomer.id },
       });
+    }
+
+    // Merge branch-scoped price overrides. If the target already has an
+    // override for the same service/branch, the source override becomes the
+    // canonical value; otherwise its original row is reassigned intact.
+    const sourcePrices = await tx.customerServicePrice.findMany({
+      where: { businessId, customerId: customer.id },
+    });
+    for (const sourcePrice of sourcePrices) {
+      const targetPrice = await tx.customerServicePrice.findFirst({
+        where: {
+          businessId,
+          customerId: targetCustomer.id,
+          serviceId: sourcePrice.serviceId,
+          branchId: sourcePrice.branchId,
+        },
+        select: { id: true },
+      });
+      if (targetPrice) {
+        await tx.customerServicePrice.update({
+          where: { id: targetPrice.id },
+          data: { unitPrice: sourcePrice.unitPrice },
+        });
+        await tx.customerServicePrice.delete({ where: { id: sourcePrice.id } });
+      } else {
+        await tx.customerServicePrice.update({
+          where: { id: sourcePrice.id },
+          data: { customerId: targetCustomer.id },
+        });
+      }
+    }
+
+    // Preserve customer-group membership without violating the unique
+    // (groupId, customerId) key when both records belong to the same group.
+    const sourceGroupMemberships = await tx.customerGroupMember.findMany({
+      where: { businessId, customerId: customer.id },
+      select: { id: true, groupId: true },
+    });
+    for (const membership of sourceGroupMemberships) {
+      const existing = await tx.customerGroupMember.findFirst({
+        where: { groupId: membership.groupId, customerId: targetCustomer.id },
+        select: { id: true },
+      });
+      if (existing) {
+        await tx.customerGroupMember.delete({ where: { id: membership.id } });
+      } else {
+        await tx.customerGroupMember.update({
+          where: { id: membership.id },
+          data: { customerId: targetCustomer.id },
+        });
+      }
+    }
+
+    // Campaign recipient uniqueness is also per campaign/customer. Keep the
+    // existing target recipient when both accounts were already included.
+    const sourceRecipients = await tx.announcementRecipient.findMany({
+      where: { customerId: customer.id },
+      select: { id: true, campaignId: true },
+    });
+    for (const recipient of sourceRecipients) {
+      const existing = await tx.announcementRecipient.findFirst({
+        where: { campaignId: recipient.campaignId, customerId: targetCustomer.id },
+        select: { id: true },
+      });
+      if (existing) {
+        await tx.announcementRecipient.delete({ where: { id: recipient.id } });
+      } else {
+        await tx.announcementRecipient.update({
+          where: { id: recipient.id },
+          data: { customerId: targetCustomer.id },
+        });
+      }
     }
 
     const sourceAccount = await getEditableCustomerAccountForBranch(
@@ -632,48 +734,102 @@ export async function mergeCustomer(
       });
     }
 
-    const sourceDeactivated = true;
+    // Delivery rows are historical records, not disposable notifications.
+    // Repoint them to the canonical customer while retaining all delivery
+    // timestamps, destinations, statuses, provider IDs and retry metadata.
+    await tx.communicationDelivery.updateMany({
+      where: { businessId, customerId: customer.id },
+      data: { customerId: targetCustomer.id },
+    });
+    await tx.orderStatusNotificationDelivery.updateMany({
+      where: { businessId, customerId: customer.id },
+      data: { customerId: targetCustomer.id },
+    });
+    await tx.priceAdjustment.updateMany({
+      where: { businessId, customerId: customer.id },
+      data: { customerId: targetCustomer.id },
+    });
 
-    if (sourceDeactivated) {
-      const previousStatus = customer.lifecycleStatus;
-      const shouldMoveToDormant = previousStatus === "ACTIVE";
-      const statusChangedAt = new Date();
-      await tx.customer.updateMany({
-        where: { id: customer.id, businessId, ownerBranchId: branchId },
-        data: {
-          isActive: false,
-          ...(shouldMoveToDormant ? {
-            lifecycleStatus: "DORMANT",
-            statusReason: "Merged into another customer",
-            statusChangedAt,
-            statusChangedById: userId,
-          } : {}),
-        },
-      });
-      if (shouldMoveToDormant) {
-        await tx.customerStatusHistory.create({
-          data: {
-            customerId: customer.id,
-            businessId,
-            previousStatus,
-            newStatus: "DORMANT",
-            reason: "Merged into another customer",
-            changedById: userId,
-          },
-        });
-      }
+    // Retain the source profile as the archive, while filling missing target
+    // profile fields from it. Explicit target contact/consent choices win.
+    const targetProfileUpdate: Record<string, unknown> = {};
+    if (!targetCustomer.email && customer.email) targetProfileUpdate.email = customer.email;
+    if (!targetCustomer.address && customer.address) targetProfileUpdate.address = customer.address;
+    if (!targetCustomer.notes && customer.notes) targetProfileUpdate.notes = customer.notes;
+    else if (customer.notes?.trim() && targetCustomer.notes?.trim() !== customer.notes.trim()) {
+      targetProfileUpdate.notes = [targetCustomer.notes?.trim(), customer.notes.trim()]
+        .filter(Boolean).join("\n\n[Notes retained from merged customer]\n");
     }
+    if (!targetCustomer.customerInstructions && customer.customerInstructions) {
+      targetProfileUpdate.customerInstructions = customer.customerInstructions;
+    } else if (
+      customer.customerInstructions?.trim() &&
+      targetCustomer.customerInstructions?.trim() !== customer.customerInstructions.trim()
+    ) {
+      targetProfileUpdate.customerInstructions = [
+        targetCustomer.customerInstructions?.trim(),
+        customer.customerInstructions.trim(),
+      ].filter(Boolean).join("\n\n[Instructions retained from merged customer]\n");
+    }
+    if (
+      !targetCustomer.whatsappOptIn &&
+      !targetCustomer.whatsappOptOutAt &&
+      customer.whatsappOptIn
+    ) {
+      targetProfileUpdate.whatsappOptIn = true;
+      targetProfileUpdate.whatsappOptInAt = customer.whatsappOptInAt;
+      targetProfileUpdate.whatsappOptInSource = customer.whatsappOptInSource;
+    }
+    if (Object.keys(targetProfileUpdate).length > 0) {
+      await tx.customer.update({
+        where: { id: targetCustomer.id },
+        data: targetProfileUpdate,
+      });
+    }
+
+    const previousStatus = customer.lifecycleStatus;
+    const statusChangedAt = new Date();
+    await tx.customer.updateMany({
+      where: {
+        id: customer.id,
+        businessId,
+        ownerBranchId: branchId,
+        lifecycleStatus: { not: "MERGED" },
+      },
+      data: {
+        isActive: false,
+        lifecycleStatus: "MERGED",
+        statusReason: `Merged into customer ${targetCustomer.id}`,
+        statusChangedAt,
+        statusChangedById: userId,
+        mergedIntoCustomerId: targetCustomer.id,
+      },
+    });
+    await tx.customerStatusHistory.create({
+      data: {
+        customerId: customer.id,
+        businessId,
+        previousStatus,
+        newStatus: "MERGED",
+        reason: `Merged into customer ${targetCustomer.id}`,
+        changedById: userId,
+      },
+    });
 
     return {
       customer,
       targetCustomer,
       mergedOrderCount: orders.length,
       mergedOrders: orders,
-      sourceDeactivated,
+      mergedServicePriceCount: sourcePrices.length,
+      mergedGroupMembershipCount: sourceGroupMemberships.length,
+      mergedAnnouncementRecipientCount: sourceRecipients.length,
+      sourceDeactivated: true,
+      sourceArchived: true,
+      mergedIntoCustomerId: targetCustomer.id,
     };
   }, { isolationLevel: "Serializable" });
 }
-
 
 /**
  * Atomically assigns a selected set of unassigned legacy customers, or
