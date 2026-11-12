@@ -119,7 +119,10 @@ describe("listCustomers", () => {
     expect(result.data).toEqual([]);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: { ownerBranch: { select: { id: true, name: true } } },
+        include: {
+          ownerBranch: { select: { id: true, name: true } },
+          mergedIntoCustomer: { select: { id: true, name: true } },
+        },
       }),
     );
   });
