@@ -7,7 +7,7 @@ export interface ListCustomersParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  status?: "active" | "dormant" | "blocked" | "blacklisted" | "inactive" | "all";
+  status?: "active" | "dormant" | "blocked" | "blacklisted" | "merged" | "inactive" | "all";
 }
 
 export interface CreateCustomerInput {
