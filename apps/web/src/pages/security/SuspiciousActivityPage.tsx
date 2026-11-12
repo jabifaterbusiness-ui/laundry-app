@@ -409,6 +409,7 @@ const AUDIT_TECHNICAL_KEYS = new Set([
   "id",
   "businessId",
   "branchId",
+  "branchIds",
   "customerId",
   "orderId",
   "invoiceId",
@@ -714,20 +715,27 @@ function activitySummary(activity: {
     : null;
 
   if (definition.id === "permission-user-updated") {
-    const permissionCode = typeof metadata.permissionCode === "string"
-      ? metadata.permissionCode
-      : "Permission";
+    const rawPermission = typeof metadata.permissionName === "string"
+      ? metadata.permissionName
+      : typeof metadata.permissionCode === "string"
+        ? metadata.permissionCode
+        : "Permission";
+    const permissionLabel = rawPermission.replace(/[._-]+/g, " ").replace(/\\s+/g, " ").trim();
     const targetUser = [metadata.targetUserName, metadata.userName, metadata.reference]
       .find((value) => typeof value === "string" && value.trim());
-    const targetLabel = typeof targetUser === "string"
-      ? targetUser.trim()
-      : typeof metadata.userId === "string"
-        ? `user ${metadata.userId}`
-        : "the selected user";
+    const targetLabel = typeof targetUser === "string" ? targetUser.trim() : "the affected user";
     if (typeof beforeRecord.allowed === "boolean" && typeof afterRecord.allowed === "boolean") {
-      return `${permissionCode} for ${targetLabel}: ${beforeRecord.allowed ? "Allowed" : "Not allowed"} → ${afterRecord.allowed ? "Allowed" : "Not allowed"}.`;
+      return `${permissionLabel} access for ${targetLabel} changed from ${beforeRecord.allowed ? "allowed" : "not allowed"} to ${afterRecord.allowed ? "allowed" : "not allowed"}.`;
     }
-    return `${permissionCode} was updated for ${targetLabel}.`;
+    return `${permissionLabel} access was updated for ${targetLabel}.`;
+  }
+
+  const beforeBranchIds = Array.isArray(beforeRecord.branchIds) ? beforeRecord.branchIds : null;
+  const afterBranchIds = Array.isArray(afterRecord.branchIds) ? afterRecord.branchIds : null;
+  if (beforeBranchIds || afterBranchIds) {
+    const beforeCount = beforeBranchIds?.length ?? 0;
+    const afterCount = afterBranchIds?.length ?? 0;
+    return `${recordTitle} branch access changed from ${beforeCount} to ${afterCount} assigned branches.`;
   }
 
   const totalChange = changes.find((change) =>
