@@ -442,7 +442,7 @@ export function OrdersPage() {
         });
       }
 
-      setOrderFormDirty(false);
+      markOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setSelectedOrder(order);
@@ -534,7 +534,7 @@ export function OrdersPage() {
       }
 
       setSelectedOrder(order);
-      setOrderFormDirty(false);
+      markOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setEditReason("");
@@ -613,7 +613,7 @@ export function OrdersPage() {
     void (async () => {
       try {
         const customer = await getCustomer(order.customerId, { accessToken });
-        setOrderFormDirty(false);
+        markOrderFormDirty(false);
     const workspaceId = openWorkspace(customer, { order });
         switchWorkspace(workspaceId);
         updateWorkspace(workspaceId, { activeOrder: order, mode: "view" });
@@ -742,8 +742,13 @@ export function OrdersPage() {
       }, 0)
     : null;
 
+  function markOrderFormDirty(value: boolean) {
+    setOrderFormDirty(value);
+    if (activeWorkspaceId) updateWorkspace(activeWorkspaceId, { isDirty: value });
+  }
+
   function closeForm() {
-    setOrderFormDirty(false);
+    markOrderFormDirty(false);
     if (activeWorkspace?.mode === "edit" && activeWorkspaceId) {
       updateWorkspace(activeWorkspaceId, { mode: "view" });
     }
@@ -758,7 +763,7 @@ export function OrdersPage() {
       navigate("/order-management?newOrder=1");
       return;
     }
-    setOrderFormDirty(false);
+    markOrderFormDirty(false);
     setSelectedOrder(null);
     setFormError(null);
 
@@ -777,7 +782,7 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer, forceNewOrder = false) {
-    setOrderFormDirty(false);
+    markOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
     );
@@ -797,7 +802,8 @@ export function OrdersPage() {
       updateWorkspace(workspaceId, {
         activeOrder: null,
         mode: "new",
-        draft: {
+        isDirty: false,
+        draft:
           customerId: customer.id,
           lines: [{ serviceId: "", quantity: 1, colors: [] }],
           garmentNote: "",
@@ -893,6 +899,7 @@ export function OrdersPage() {
     if (!existingWorkspace) {
       updateWorkspace(workspaceId, {
         mode: "new",
+        isDirty: false,
         draft: {
           customerId: customer.id,
           lines: [{ serviceId: "", quantity: 1, colors: [] }],
@@ -924,7 +931,7 @@ export function OrdersPage() {
 
   function addLine() {
     if (!activeWorkspaceId) return;
-    setOrderFormDirty(true);
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -938,7 +945,7 @@ export function OrdersPage() {
 
   function removeLine(index: number) {
     if (!activeWorkspaceId) return;
-    setOrderFormDirty(true);
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -953,7 +960,7 @@ export function OrdersPage() {
     value: OrderLine[typeof field],
   ) {
     if (!activeWorkspaceId) return;
-    setOrderFormDirty(true);
+    markOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -1074,7 +1081,7 @@ export function OrdersPage() {
       return;
     }
 
-    setOrderFormDirty(false);
+    markOrderFormDirty(false);
     const customer =
       (activeWorkspace?.customer.id === order.customerId
         ? activeWorkspace.customer
@@ -1086,7 +1093,7 @@ export function OrdersPage() {
       return;
     }
 
-    setOrderFormDirty(false);
+    markOrderFormDirty(false);
     const workspaceId = openWorkspace(customer, { order });
     switchWorkspace(workspaceId);
     updateWorkspace(workspaceId, {
@@ -1245,7 +1252,7 @@ export function OrdersPage() {
 
         <section aria-labelledby="new-order-heading">
           <h2 id="new-order-heading">Order Details</h2>
-          <form onSubmit={submitOrder} onChange={() => setOrderFormDirty(true)}>
+          <form onSubmit={submitOrder} onChange={() => markOrderFormDirty(true)}>
             <div>
               <div>
                 <strong>Customer</strong>
@@ -1787,13 +1794,13 @@ export function OrdersPage() {
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
-            isDirty={orderFormDirty}
+            isDirty={orderFormDirty || Boolean(activeWorkspace.isDirty)}
             customer={activeWorkspace.customer}
             mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
             onBack={() => {
               const customerId = activeWorkspace.customer.id;
-              setOrderFormDirty(false);
+              markOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
               if (workspaceReturnTo === "customer-workstation") {
                 setWorkspaceReturnTo(null);
