@@ -832,6 +832,11 @@ describe("OrdersPage quick customer switching", () => {
     renderPage([`/order-management?newOrder=1&customerId=${customerA.id}&returnTo=customer-workstation`]);
 
     expect(await screen.findByRole("heading", { name: /new order/i })).toBeInTheDocument();
+    expect(
+      useOrderWorkspaceStore.getState().workspaces.find(
+        (workspace) => workspace.customer.id === customerA.id,
+      )?.returnTo,
+    ).toBe("customer-workstation");
     // Verify the return destination survives the customer lookup and workspace navigation.
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
