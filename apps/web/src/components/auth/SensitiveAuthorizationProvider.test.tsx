@@ -34,6 +34,7 @@ describe("SensitiveAuthorizationProvider", () => {
 
     useAuthStore.setState({
       accessToken: "access-token",
+      user: { id: "user-1", businessId: "business-1" },
       sensitiveAuthorization: null,
       sensitiveAuthorizationExpiresAt: null,
     });
@@ -118,6 +119,50 @@ describe("SensitiveAuthorizationProvider", () => {
 
     window.removeEventListener("sensitive-authorization:started", started);
     window.removeEventListener("sensitive-authorization:finished", finished);
+  });
+
+  it("clears the password and rejects an authorization result from a changed session", async () => {
+    let resolveAuthorization!: (value: {
+      token: string;
+      expiresAt: string;
+      inactivityTimeoutMs: number;
+    }) => void;
+    vi.mocked(authApi.reauthorize).mockImplementation(
+      () => new Promise((resolve) => { resolveAuthorization = resolve; }),
+    );
+
+    render(
+      <SensitiveAuthorizationProvider>
+        <TestConsumer />
+      </SensitiveAuthorizationProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Protect action" }));
+    const passwordInput = screen.getByLabelText("Password");
+    fireEvent.change(passwordInput, { target: { value: "old-session-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Authorize" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Verifying..." })).toBeDisabled());
+
+    useAuthStore.setState({
+      user: { id: "user-2", businessId: "business-1" },
+    } as never);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.body.dataset.authorization).toBe("cancelled");
+
+    resolveAuthorization({
+      token: "stale-sensitive-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      inactivityTimeoutMs: 180_000,
+    });
+    await waitFor(() => expect(authApi.reauthorize).toHaveBeenCalledOnce());
+
+    expect(useAuthStore.getState().sensitiveAuthorization).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Protect action" }));
+    expect(screen.getByLabelText("Password")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   });
 
   it("cancels without authorizing the action", async () => {
