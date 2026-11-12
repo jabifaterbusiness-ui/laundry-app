@@ -118,7 +118,12 @@ export async function sendApprovedWhatsAppTemplate(input: {
   }
   if (input.requireInboundConversation !== false) {
     const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
-      where: { businessId: input.businessId, contactPhone: recipient, eventType: "MESSAGE_RECEIVED" },
+      where: {
+        businessId: input.businessId,
+        phoneNumberId: connection.phoneNumberId,
+        contactPhone: recipient,
+        eventType: "MESSAGE_RECEIVED",
+      },
       select: { id: true },
     });
     if (!priorInbound) {
