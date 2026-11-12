@@ -671,13 +671,14 @@ export function OrdersPage() {
     if (openCustomerAccountFromUrl) {
       openCustomerAccount(customer);
     } else {
-      openCustomerWorkspace(customer, newOrderFromUrl);
+      openCustomerWorkspace(customer, newOrderFromUrl, returnToFromUrl === "customer-workstation");
     }
     navigate("/order-management", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
     newOrderFromUrl,
+    returnToFromUrl,
     openCustomerAccountFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
@@ -786,8 +787,8 @@ export function OrdersPage() {
     setFormOpen(false);
   }
 
-  function openCustomerWorkspace(customer: Customer, forceNewOrder = false) {
-    if (returnToFromUrl === "customer-workstation") {
+  function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstation = false) {
+    if (returnToCustomerWorkstation || returnToFromUrl === "customer-workstation") {
       workspaceReturnToRef.current = "customer-workstation";
       setWorkspaceReturnTo("customer-workstation");
     }
