@@ -316,6 +316,27 @@ describe("automatic WhatsApp order notifications", () => {
     });
   });
 
+  it("blocks automatic notifications when legacy opt-in has no source or timestamp", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+    });
+
+    const result = await notifyOrderStatus({
+      orderId: "order-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      status: "READY_FOR_PICKUP",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ status: "FAILED", channel: "WHATSAPP" }),
+    ]);
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.sendAutomatedWhatsAppTemplate).not.toHaveBeenCalled();
+  });
+
   it("records the notification as blocked when the customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
 
