@@ -112,6 +112,14 @@ beforeEach(() => {
   renderCustomerReceiptImageMock.mockResolvedValue(
     Buffer.from("receipt-png"),
   );
+  connectionFindUniqueMock.mockResolvedValue({
+    receiptTemplateName: "laundry_receipt",
+    receiptTemplateLanguage: "en",
+  });
+  uploadWhatsAppTemplateImageMock.mockResolvedValue("media-receipt-1");
+  sendAutomatedWhatsAppTemplateMock.mockResolvedValue({
+    providerMessageId: "wamid.template-receipt",
+  });
 });
 
 describe("receipt-delivery.service", () => {
