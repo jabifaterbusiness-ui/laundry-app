@@ -104,13 +104,22 @@ export async function sendApprovedWhatsAppTemplate(input: {
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
       where: { id: input.customerId, businessId: input.businessId },
-      select: { id: true, phone: true, whatsappOptIn: true },
+      select: {
+        id: true,
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
     if (!customer) throw new AppError("Customer not found in this business", 404);
     recipient = normalizeWhatsAppRecipient(customer.phone);
     customerId = customer.id;
-    if (input.requireInboundConversation === false && !customer.whatsappOptIn) {
-      throw new AppError("Customer has not explicitly opted in to business-initiated WhatsApp messages", 422);
+    if (
+      input.requireInboundConversation === false &&
+      (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource)
+    ) {
+      throw new AppError("Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before business-initiated delivery.", 422);
     }
   }
   if (input.requireInboundConversation === false && !customerId) {
