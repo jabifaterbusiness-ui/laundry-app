@@ -51,6 +51,27 @@ describe("GlobalSearch", () => {
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
 
+  it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "CUSTOMER", id: "customer-1", title: "Adam", subtitle: "08012345678", href: "/orders?customerId=customer-1" },
+      { type: "ORDER", id: "order-1", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-1" },
+      { type: "INVOICE", id: "invoice-1", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-1" },
+    ]);
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+
+    const customer = await screen.findByRole("option", { name: /Adam/ });
+    const order = screen.getByRole("option", { name: /Order #00022/ });
+    const invoice = screen.getByRole("option", { name: /Invoice #00022/ });
+    expect(customer).toBeInTheDocument();
+    expect(order).toBeInTheDocument();
+    expect(invoice).toBeInTheDocument();
+
+    fireEvent.click(invoice);
+    expect(navigateMock).toHaveBeenCalledWith("/invoices?invoiceId=invoice-1");
+  });
+
   it("opens the order when Enter is pressed before the debounced search finishes", async () => {
     let resolveSearch!: (results: Array<{
       type: "ORDER";
