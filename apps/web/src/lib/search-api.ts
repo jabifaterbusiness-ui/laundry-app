@@ -1,6 +1,6 @@
 import { apiFetch } from "./api-client.js";
 
-export type GlobalSearchResultType = "CUSTOMER" | "ORDER" | "INVOICE";
+export type GlobalSearchResultType = "CUSTOMER" | "ORDER" | "INVOICE" | "PAYMENT";
 
 export interface GlobalSearchResult {
   type: GlobalSearchResultType;
