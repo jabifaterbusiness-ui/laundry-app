@@ -193,6 +193,7 @@ export function OrdersPage() {
 
   useEffect(() => {
     if (!customerPickerFromUrl) return;
+    setSwitchingCustomer(true);
     setCustomerSearch("");
     setCustomerPickerOpen(true);
     navigate("/orders", { replace: true });
