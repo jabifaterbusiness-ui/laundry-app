@@ -836,6 +836,33 @@ describe("Inventory routes - branch-scoped stock", () => {
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
   });
 
+  it("requires batch identity for expiry metadata and an expiry date for expired stock", async () => {
+    allowBranch("user-1", BRANCH_A, "biz-A");
+    const receiptWithoutBatch = await request(app)
+      .post("/api/v1/inventory/movements")
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
+      .send({
+        inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        quantity: 1,
+        type: "RECEIPT",
+        expiryDate: "2027-03-01",
+      });
+    expect(receiptWithoutBatch.status).toBe(422);
+
+    const expiredWithoutDate = await request(app)
+      .post("/api/v1/inventory/movements")
+      .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
+      .send({
+        inventoryItemId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        quantity: 1,
+        type: "EXPIRED",
+        reason: "Past expiry",
+        batchNumber: "LOT-OLD",
+      });
+    expect(expiredWithoutDate.status).toBe(422);
+    expect(prisma.inventoryStock.upsert).not.toHaveBeenCalled();
+  });
+
   it("rejects stock requests without X-Branch-Id", async () => {
     const res = await request(app)
       .get("/api/v1/inventory/stock")
