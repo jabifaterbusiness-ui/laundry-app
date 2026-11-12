@@ -86,6 +86,13 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
 
         if (existing) {
           return {
+            workspaces: options?.returnTo
+              ? state.workspaces.map((workspace) =>
+                  workspace.id === workspaceId
+                    ? { ...workspace, returnTo: options.returnTo }
+                    : workspace,
+                )
+              : state.workspaces,
             activeWorkspaceId: workspaceId,
           };
         }
