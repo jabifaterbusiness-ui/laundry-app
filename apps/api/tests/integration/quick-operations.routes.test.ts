@@ -42,8 +42,33 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
     },
+    customerStatusHistory: { create: vi.fn().mockResolvedValue({ id: "status-history-1" }) },
+    customerServicePrice: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn(),
+    },
+    priceAdjustment: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    customerGroupMember: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    announcementRecipient: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    communicationDelivery: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    orderStatusNotificationDelivery: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     branchResourceShare: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -1932,10 +1957,13 @@ describe("Quick Operations routes - MA", () => {
         id: CUSTOMER_A,
         businessId: "biz-A",
         ownerBranchId: BRANCH_A,
+        lifecycleStatus: { not: "MERGED" },
       },
-      data: {
+      data: expect.objectContaining({
         isActive: false,
-      },
+        lifecycleStatus: "MERGED",
+        mergedIntoCustomerId: CUSTOMER_B,
+      }),
     });
 
     expect(recordAuditEvent).toHaveBeenCalledWith(
@@ -1958,7 +1986,7 @@ describe("Quick Operations routes - MA", () => {
     );
   });
 
-  it("does not allow MA to target a customer outside the authenticated business", async () => {
+  it("does not allow MC to target a customer outside the authenticated business", async () => {
     allowBranch("user-1", BRANCH_A, "biz-A");
 
     customerFindFirst
