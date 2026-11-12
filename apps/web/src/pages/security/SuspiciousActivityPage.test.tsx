@@ -91,7 +91,6 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
     expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
     expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
-    fireEvent.click(screen.getByRole("button", { name: "Customize section order" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Inventory up" }));
     fireEvent.click(screen.getByRole("button", { name: "Save order" }));
 
@@ -267,7 +266,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(customerButton);
 
     const customerId = screen.getByRole("button", {
-      name: "customer-123",
+      name: "Customer",
     });
     fireEvent.click(customerId);
 
@@ -300,7 +299,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(migrationEventButton);
 
     const migrationJobId = screen.getByRole("button", {
-      name: "migration-job-123",
+      name: "Migration Job",
     });
 
     fireEvent.click(migrationJobId);
