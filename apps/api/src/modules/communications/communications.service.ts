@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
-import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { normalizeWhatsAppRecipient, sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
 import { sendAutomatedWhatsAppTemplate } from "../whatsapp/whatsapp-templates.service.js";
@@ -652,7 +652,7 @@ export async function retryWhatsAppDelivery(
       422,
     );
   }
-  if (customer.phone !== source.destination) {
+  if (normalizeWhatsAppRecipient(customer.phone) !== normalizeWhatsAppRecipient(source.destination)) {
     throw new AppError(
       "Customer phone number has changed since this message was created. Confirm consent for the current number before retrying.",
       422,
