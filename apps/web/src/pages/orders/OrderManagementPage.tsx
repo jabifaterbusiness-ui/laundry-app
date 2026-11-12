@@ -11,6 +11,8 @@ import type { Order } from "@laundry-app/shared";
 
 export function OrderManagementPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const userId = useAuthStore((state) => state.user?.id);
+  const businessId = useAuthStore((state) => state.user?.businessId);
   const activeBranchId = useAuthStore((state) => state.activeBranchId);
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,22 +24,28 @@ export function OrderManagementPage() {
   const [authorizedContext, setAuthorizedContext] = useState<{
     orderId: string;
     locationKey: string;
+    userId: string;
+    businessId: string;
+    branchId: string;
   } | null>(null);
   const isAuthorizedForCurrentLocation =
     authorizedContext?.orderId === orderId &&
-    authorizedContext.locationKey === location.key;
+    authorizedContext.locationKey === location.key &&
+    authorizedContext.userId === userId &&
+    authorizedContext.businessId === businessId &&
+    authorizedContext.branchId === activeBranchId;
   const [authorizationError, setAuthorizationError] = useState<string | null>(null);
 
   const orderQuery = useQuery({
-    queryKey: ["order-management-page", orderId, activeBranchId],
+    queryKey: ["order-management-page", businessId, userId, orderId, activeBranchId],
     queryFn: () => getOrder(orderId!, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId && orderId && isAuthorizedForCurrentLocation),
+    enabled: Boolean(accessToken && userId && businessId && activeBranchId && orderId && isAuthorizedForCurrentLocation),
   });
 
   const customerQuery = useQuery({
-    queryKey: ["order-management-page-customer", orderQuery.data?.customerId],
+    queryKey: ["order-management-page-customer", businessId, activeBranchId, orderQuery.data?.customerId],
     queryFn: () => getCustomer(orderQuery.data!.customerId, { accessToken }),
-    enabled: Boolean(accessToken && isAuthorizedForCurrentLocation && orderQuery.data?.customerId),
+    enabled: Boolean(accessToken && businessId && activeBranchId && isAuthorizedForCurrentLocation && orderQuery.data?.customerId),
   });
 
   useEffect(() => {
@@ -47,13 +55,24 @@ export function OrderManagementPage() {
   useEffect(() => {
     if (
       !orderId ||
-      isAuthorizedForCurrentLocation ||
-      authorizationRequestedForRef.current === `${location.key}:${orderId}`
+      !userId ||
+      !businessId ||
+      !activeBranchId ||
+      isAuthorizedForCurrentLocation
     ) {
       return;
     }
 
-    authorizationRequestedForRef.current = `${location.key}:${orderId}`;
+    const authorizationKey = [
+      location.key,
+      orderId,
+      userId,
+      businessId,
+      activeBranchId,
+    ].join(":");
+    if (authorizationRequestedForRef.current === authorizationKey) return;
+
+    authorizationRequestedForRef.current = authorizationKey;
     let active = true;
     setAuthorizationError(null);
 
@@ -64,7 +83,13 @@ export function OrderManagementPage() {
           navigate("/orders", { replace: true });
           return;
         }
-        setAuthorizedContext({ orderId, locationKey: location.key });
+        setAuthorizedContext({
+          orderId,
+          locationKey: location.key,
+          userId,
+          businessId,
+          branchId: activeBranchId,
+        });
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -76,7 +101,15 @@ export function OrderManagementPage() {
     return () => {
       active = false;
     };
-  }, [orderId, location.key, isAuthorizedForCurrentLocation, navigate]);
+  }, [
+    orderId,
+    location.key,
+    userId,
+    businessId,
+    activeBranchId,
+    isAuthorizedForCurrentLocation,
+    navigate,
+  ]);
 
   if (!orderId) {
     return (
