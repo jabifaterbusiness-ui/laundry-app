@@ -1,10 +1,8 @@
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
-import { sendWhatsAppReceipt } from "../invoices/providers/whatsapp.provider.js";
 import { generateBusinessFinancialStatement } from "./business-financial-statement.persistence.service.js";
 import { renderFinancialStatementEmail } from "./templates/financial-statement-email.js";
-import { renderFinancialStatementImage } from "./templates/financial-statement-image.js";
 import { logger } from "../../lib/logger.js";
 import { getPlatformConfig } from "../platform/platform-config.service.js";
 
@@ -40,6 +38,8 @@ type LocalDateParts = {
 
 const MAX_DELIVERY_ATTEMPTS = 5;
 const DELIVERY_RETRY_INTERVAL_MS = 15 * 60 * 1000;
+// Staff financial statements must not use the customer receipt WhatsApp workflow.
+const FINANCIAL_STATEMENT_WHATSAPP_ENABLED = false;
 
 function localParts(date: Date, timezone: string): LocalDateParts {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -276,12 +276,11 @@ async function deliverOne(
             subject: `${input.businessName} — Monthly Financial Statement — ${input.periodLabel}`,
             html: renderFinancialStatementEmail(input),
           })
-        : await sendWhatsAppReceipt({
-            businessId,
-            to: destination,
-            image: await renderFinancialStatementImage(input),
-            caption: `${input.businessName} — Monthly Financial Statement — ${input.periodLabel}`,
-          });
+        : (() => {
+            throw new Error(
+              "WhatsApp financial-statement delivery is unavailable until staff consent and an approved statement template are implemented.",
+            );
+          })();
 
     await prisma.financialStatementDelivery.update({
       where: { id: delivery.id },
@@ -383,6 +382,7 @@ async function processBusiness(
     }
 
     if (
+      FINANCIAL_STATEMENT_WHATSAPP_ENABLED &&
       platformConfig.whatsappMessagingEnabled &&
       config.whatsappEnabled &&
       recipient.whatsappNumber
