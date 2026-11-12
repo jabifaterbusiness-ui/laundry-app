@@ -181,6 +181,19 @@ describe("approved WhatsApp template pagination", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it("refuses inbox templates sent to an unsaved phone number", async () => {
+    await expect(sendApprovedWhatsAppTemplate({
+      businessId: "business-1",
+      phone: "2348012345678",
+      templateName: "inbox_reply",
+      language: "en",
+      variables: [],
+    })).rejects.toThrow("saved customer with recorded WhatsApp consent");
+    expect(mocks.customerFindFirst).not.toHaveBeenCalled();
+    expect(mocks.webhookEventFindFirst).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it("requires recorded customer consent before sending an inbox template", async () => {
     mocks.customerFindFirst.mockResolvedValue({
       id: "customer-1",
