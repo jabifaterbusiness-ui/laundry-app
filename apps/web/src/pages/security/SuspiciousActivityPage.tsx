@@ -427,7 +427,6 @@ const AUDIT_TECHNICAL_KEYS = new Set([
   "userIds",
   "orderIds",
   "serviceIds",
-  "branchIds",
   "createdById",
   "updatedById",
   "deletedById",
