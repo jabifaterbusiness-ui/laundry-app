@@ -1055,6 +1055,22 @@ export function SuspiciousActivityPage() {
   const [dragOverEventId, setDragOverEventId] = useState<string | null>(null);
   const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
 
+  useEffect(() => {
+    if (!draggingEventId) return;
+
+    const finishPointerDrag = () => {
+      setDraggingEventId(null);
+      setDragOverEventId(null);
+    };
+
+    window.addEventListener("pointerup", finishPointerDrag);
+    window.addEventListener("pointercancel", finishPointerDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishPointerDrag);
+      window.removeEventListener("pointercancel", finishPointerDrag);
+    };
+  }, [draggingEventId]);
+
   const canView = hasPermission(
     user,
     "security.suspicious_activity.view",
