@@ -61,6 +61,7 @@ interface OrderManagementProps {
   order: Order | null;
   customer: Customer;
   mode: "view" | "new" | "edit";
+  isDirty?: boolean;
   newOrderContent?: ReactNode;
   onBack: () => void;
   onSwitchCustomer: () => void;
@@ -73,6 +74,7 @@ function OrderManagementContent({
   order,
   customer,
   mode,
+  isDirty = false,
   newOrderContent,
   onBack,
   onSwitchCustomer,
@@ -622,7 +624,7 @@ function OrderManagementContent({
   }
 
   function requestBack() {
-    if (dirty) {
+    if (dirty || isDirty) {
       setWarningOpen(true);
       return;
     }
