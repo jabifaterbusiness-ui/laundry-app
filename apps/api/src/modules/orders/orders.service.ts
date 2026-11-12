@@ -89,6 +89,7 @@ async function createOrderWithTx(
           { ownerBranchId: { in: customerScope.ownerBranchIds } },
           { id: { in: customerScope.resourceIds } },
         ],
+        lifecycleStatus: { not: "MERGED" },
       },
       select: {
         id: true,
