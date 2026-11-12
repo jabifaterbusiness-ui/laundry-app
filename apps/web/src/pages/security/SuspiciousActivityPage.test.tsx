@@ -89,19 +89,20 @@ describe("SuspiciousActivityPage", () => {
     const { unmount } = renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
-    const moveBackupUp = screen.getByRole("button", { name: "Move Backup & recovery up" });
-    for (let index = 0; index < 7; index += 1) {
-      fireEvent.click(moveBackupUp);
-    }
+    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
+    expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
+    fireEvent.click(screen.getByRole("button", { name: "Customize section order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Inventory up" }));
     fireEvent.click(screen.getByRole("button", { name: "Save order" }));
 
-    expect(JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]")[0]).toBe("backup");
+    const savedOrder = JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]");
+    expect(savedOrder.slice(0, 2)).toEqual(["inventory", "backup"]);
     unmount();
 
     renderPage();
     const headings = await screen.findAllByRole("heading", { level: 3 });
-    expect(headings[0]).toHaveTextContent("Backup & recovery");
-    expect(headings[1]).toHaveTextContent("Inventory");
+    expect(headings[0]).toHaveTextContent("Inventory");
+    expect(headings[1]).toHaveTextContent("Backup & recovery");
   });
 
   it("blocks users without the suspicious activity permission", () => {
