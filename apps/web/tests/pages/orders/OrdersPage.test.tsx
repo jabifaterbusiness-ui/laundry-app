@@ -537,6 +537,9 @@ describe("OrdersPage quick customer switching", () => {
         name: /new order/i,
       }),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+    });
 
     expect(
       screen.getByRole("button", { name: /Jane Doe\s+—\s+New order/i }),
@@ -799,6 +802,20 @@ describe("OrdersPage quick customer switching", () => {
     expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
   });
 
+  it("returns from a Customer Workstation new-order workspace to that workstation", async () => {
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    renderPage([`/order-management?newOrder=1&customerId=${customerA.id}&returnTo=customer-workstation`]);
+
+    expect(await screen.findByRole("heading", { name: /new order/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        `/customer-workstation?customerId=${customerA.id}`,
+      );
+    });
+  });
+
   it("opens the customer picker when returning from Order Management to switch customers", async () => {
     renderPage(["/orders?customerPicker=1"]);
 
@@ -829,6 +846,9 @@ describe("OrdersPage quick customer switching", () => {
         name: /^new order$/i,
       }),
     ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+    });
 
     expect(
       vi.mocked(createOrderWithOfflineQueue),
