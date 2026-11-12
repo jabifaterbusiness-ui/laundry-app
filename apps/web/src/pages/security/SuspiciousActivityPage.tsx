@@ -1353,7 +1353,7 @@ export function SuspiciousActivityPage() {
                   </button>
                 ) : (
                   <>
-                    <span>Move sections into the order you prefer.</span>
+                    <span>Move an operation directly to the top or bottom, or drag it into position.</span>
                     <button type="button" onClick={saveCategoryOrder}>Save order</button>
                     <button type="button" onClick={() => {
                       setDraftCategoryOrder(categoryOrder);
@@ -1379,8 +1379,8 @@ export function SuspiciousActivityPage() {
                     <h3>{getCategoryLabel(category)}</h3>
                     {isCustomizingOrder ? (
                       <div>
-                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to top`} disabled={categoryIndex === 0} onClick={() => moveCategoryToEdge(category, "top")}>Move to top</button>
-                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to bottom`} disabled={categoryIndex === draftCategoryOrder.length - 1} onClick={() => moveCategoryToEdge(category, "bottom")}>Move to bottom</button>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to top`} disabled={categoryIndex === 0} onClick={() => moveCategoryToEdge(category, "top")}>Move up</button>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to bottom`} disabled={categoryIndex === draftCategoryOrder.length - 1} onClick={() => moveCategoryToEdge(category, "bottom")}>Move down</button>
                       </div>
                     ) : null}
                   </header>
@@ -1473,7 +1473,7 @@ export function SuspiciousActivityPage() {
                           disabled={firstInCategory}
                           onClick={() => moveEventToEdge(definition.id, category, "top")}
                         >
-                          Move to top
+                          Move up
                         </button>
                         <button
                           type="button"
@@ -1481,7 +1481,7 @@ export function SuspiciousActivityPage() {
                           disabled={lastInCategory}
                           onClick={() => moveEventToEdge(definition.id, category, "bottom")}
                         >
-                          Move to bottom
+                          Move down
                         </button>
                         <button
                           type="button"
