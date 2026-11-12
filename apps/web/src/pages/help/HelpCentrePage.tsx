@@ -26,7 +26,7 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Invoice deletion, payment voiding and refunds are separate controlled actions. They require the relevant permissions and may require a reason or sensitive password re-authentication. Prefer cancellation or a documented correction over erasing history."
   ],links:[{label:"Orders",href:"/orders"},{label:"Invoices",href:"/invoices"}]},
   {title:"Print an order, invoice or receipt",summary:"Produce a paper or digital customer record.",steps:[
-   "Open the relevant order or invoice and use its invoice/receipt or print action. Reprint an existing document with the Reprint Invoice / Receipt quick operation when your permission allows it.",
+   "Open the relevant order or invoice and use its invoice/receipt or print action. In Order Management, use Fn+F1 for the customer copy, Ctrl+F1 for the company copy, and Ctrl+Shift+F1 for the digital receipt. On keyboards where F1 is a secondary key, hold Fn while pressing F1. Reprint an existing document with the Reprint Invoice / Receipt quick operation when your permission allows it.",
    "Receipt appearance follows the logo, colours and header style in Business Settings. Print a sample after changing branding and check paper size and scaling.",
    "A receipt records a transaction; do not mark an invoice paid until the money has actually been received and recorded."
   ],links:[{label:"Invoices & receipts",href:"/invoices"},{label:"Business settings",href:"/business/settings"}]}
