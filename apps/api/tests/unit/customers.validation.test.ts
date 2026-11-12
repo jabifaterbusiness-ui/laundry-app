@@ -111,6 +111,10 @@ describe("listCustomersQuerySchema", () => {
     expect(() => listCustomersQuerySchema.parse({ pageSize: "500" })).toThrow();
   });
 
+  it("accepts merged as a customer archive filter", () => {
+    expect(listCustomersQuerySchema.parse({ status: "merged" }).status).toBe("merged");
+  });
+
   it("rejects an invalid status", () => {
     expect(() => listCustomersQuerySchema.parse({ status: "deleted" })).toThrow();
   });
