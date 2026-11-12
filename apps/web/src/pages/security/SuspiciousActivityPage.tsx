@@ -980,6 +980,7 @@ export function SuspiciousActivityPage() {
   });
   const [draftEventOrder, setDraftEventOrder] = useState(eventOrder);
   const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
+  const [dragOverEventId, setDragOverEventId] = useState<string | null>(null);
   const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
 
   const canView = hasPermission(
@@ -1054,7 +1055,10 @@ export function SuspiciousActivityPage() {
 
   useEffect(() => {
     if (!draggingEventId) return;
-    const stopDragging = () => setDraggingEventId(null);
+    const stopDragging = () => {
+      setDraggingEventId(null);
+      setDragOverEventId(null);
+    };
     window.addEventListener("pointerup", stopDragging);
     window.addEventListener("pointercancel", stopDragging);
     return () => {
@@ -1063,25 +1067,14 @@ export function SuspiciousActivityPage() {
     };
   }, [draggingEventId]);
 
-  const categoryGroups = useMemo(() => {
-    const grouped = new Map<string, ActivityDefinition[]>();
-    for (const definition of ACTIVITY_DEFINITIONS) {
-      const category = getActivityCategory(definition);
-      const entries = grouped.get(category) ?? [];
-      entries.push(definition);
-      grouped.set(category, entries);
-    }
+  const orderedDefinitions = useMemo(() => {
     const selectedOrder = isCustomizingOrder ? draftEventOrder : eventOrder;
     const positions = new Map(selectedOrder.map((id, index) => [id, index] as const));
-    return categoryOrder
-      .map((category) => ({
-        category,
-        definitions: (grouped.get(category) ?? []).sort(
-          (left, right) => (positions.get(left.id) ?? 0) - (positions.get(right.id) ?? 0),
-        ),
-      }))
-      .filter((group) => group.definitions.length > 0);
-  }, [categoryOrder, eventOrder, draftEventOrder, isCustomizingOrder]);
+    return [...ACTIVITY_DEFINITIONS].sort(
+      (left, right) => (positions.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+        - (positions.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }, [eventOrder, draftEventOrder, isCustomizingOrder]);
 
   useEffect(() => {
     if (!user?.id || !activeBranchId) {
@@ -1111,49 +1104,21 @@ export function SuspiciousActivityPage() {
     setIsCustomizingOrder(false);
   }, [user?.id, activeBranchId]);
 
-  function moveCategoryToEdge(category: string, edge: "top" | "bottom") {
-    setDraftCategoryOrder((current) => {
-      const remaining = current.filter((item) => item !== category);
-      return edge === "top" ? [category, ...remaining] : [...remaining, category];
-    });
-  }
-
-  function moveEventToEdge(eventId: string, category: string, edge: "top" | "bottom") {
+  function moveEventToEdge(eventId: string, edge: "top" | "bottom") {
     setDraftEventOrder((current) => {
-      const categoryIds = new Set(
-        ACTIVITY_DEFINITIONS
-          .filter((definition) => getActivityCategory(definition) === category)
-          .map((definition) => definition.id),
-      );
-      const categoryItems = current.filter((id) => categoryIds.has(id) && id !== eventId);
-      const reordered = edge === "top"
-        ? [eventId, ...categoryItems]
-        : [...categoryItems, eventId];
-      let index = 0;
-      return current.map((id) => categoryIds.has(id) ? reordered[index++]! : id);
+      const remaining = current.filter((id) => id !== eventId);
+      return edge === "top" ? [eventId, ...remaining] : [...remaining, eventId];
     });
   }
 
-  function moveEventToPosition(sourceId: string, targetId: string, category: string) {
+  function moveEventToPosition(sourceId: string, targetId: string) {
     if (!sourceId || sourceId === targetId) return;
-    const sourceDefinition = ACTIVITY_DEFINITIONS.find((definition) => definition.id === sourceId);
-    const targetDefinition = ACTIVITY_DEFINITIONS.find((definition) => definition.id === targetId);
-    if (!sourceDefinition || !targetDefinition || getActivityCategory(sourceDefinition) !== category || getActivityCategory(targetDefinition) !== category) {
-      return;
-    }
     setDraftEventOrder((current) => {
-      const categoryIds = new Set(
-        ACTIVITY_DEFINITIONS
-          .filter((definition) => getActivityCategory(definition) === category)
-          .map((definition) => definition.id),
-      );
-      const categoryItems = current.filter((id) => categoryIds.has(id));
-      const remaining = categoryItems.filter((id) => id !== sourceId);
+      const remaining = current.filter((id) => id !== sourceId);
       const targetIndex = remaining.indexOf(targetId);
       if (targetIndex < 0) return current;
       remaining.splice(targetIndex, 0, sourceId);
-      let index = 0;
-      return current.map((id) => categoryIds.has(id) ? remaining[index++]! : id);
+      return remaining;
     });
   }
 
@@ -1355,13 +1320,14 @@ export function SuspiciousActivityPage() {
                     setDraftCategoryOrder(categoryOrder);
                     setDraftEventOrder(eventOrder);
                     setDraggingEventId(null);
+                    setDragOverEventId(null);
                     setIsCustomizingOrder(true);
                   }}>
-                    Customize section order
+                    Customize activity order
                   </button>
                 ) : (
                   <>
-                    <span>Move an operation directly to the top or bottom, or drag it into position.</span>
+                    <span>Move any activity to the top or bottom, or drag it to an exact position anywhere in this list.</span>
                     <button type="button" onClick={saveCategoryOrder}>Save order</button>
                     <button type="button" onClick={() => {
                       setDraftCategoryOrder(categoryOrder);
@@ -1375,145 +1341,146 @@ export function SuspiciousActivityPage() {
             </div>
 
             <div className="suspicious-activity-category-list">
-              {(isCustomizingOrder
-                ? draftCategoryOrder.map((category) => ({
-                    category,
-                    definitions: categoryGroups.find((group) => group.category === category)?.definitions ?? [],
-                  })).filter((group) => group.definitions.length > 0)
-                : categoryGroups
-              ).map(({ category, definitions }, categoryIndex) => (
-                <section className="suspicious-activity-category-section" key={category}>
-                  <header className="suspicious-activity-category-heading">
-                    <h3>{getCategoryLabel(category)}</h3>
-                    {isCustomizingOrder ? (
-                      <div>
-                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to top`} disabled={categoryIndex === 0} onClick={() => moveCategoryToEdge(category, "top")}>Move up</button>
-                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} to bottom`} disabled={categoryIndex === draftCategoryOrder.length - 1} onClick={() => moveCategoryToEdge(category, "bottom")}>Move down</button>
-                      </div>
-                    ) : null}
-                  </header>
-                  <div className="suspicious-activity-event-grid">
-                    {definitions.map((definition, definitionIndex) => {
-                const activitySummary = activityCounts.get(definition.id);
-                const count = activitySummary?.count ?? 0;
-                const latestActivityId = activitySummary?.latestActivityId ?? null;
-                const lastSeenActivityId = readState[definition.id];
-                const unread = Boolean(latestActivityId) && latestActivityId !== lastSeenActivityId;
-                const selected = definition.id === selectedEventId;
-                const firstInCategory = definitionIndex === 0;
-                const lastInCategory = definitionIndex === definitions.length - 1;
-                return (
-                  <div
-                    key={definition.id}
-                    className="suspicious-activity-event-card-wrapper"
-                    data-activity-sort-id={definition.id}
-                    onPointerEnter={() => {
-                      if (isCustomizingOrder && draggingEventId) {
-                        moveEventToPosition(draggingEventId, definition.id, category);
-                      }
-                    }}
-                    onPointerUp={() => {
-                      if (draggingEventId && lastInCategory) {
-                        moveEventToEdge(draggingEventId, category, "bottom");
-                      }
-                      setDraggingEventId(null);
-                    }}
-                    onDragOver={(event) => {
-                      if (isCustomizingOrder && draggingEventId) {
-                        event.preventDefault();
-                        moveEventToPosition(draggingEventId, definition.id, category);
-                      }
-                    }}
-                    onDrop={() => {
-                      if (draggingEventId && lastInCategory) {
-                        moveEventToEdge(draggingEventId, category, "bottom");
-                      }
-                      setDraggingEventId(null);
-                    }}
-                  >
-                    <button
-                      type="button"
+              <div className="suspicious-activity-event-grid">
+                {orderedDefinitions.map((definition, definitionIndex) => {
+                  const category = getActivityCategory(definition);
+                  const activitySummary = activityCounts.get(definition.id);
+                  const count = activitySummary?.count ?? 0;
+                  const latestActivityId = activitySummary?.latestActivityId ?? null;
+                  const lastSeenActivityId = readState[definition.id];
+                  const unread = Boolean(latestActivityId) && latestActivityId !== lastSeenActivityId;
+                  const selected = definition.id === selectedEventId;
+                  const isDropTarget = dragOverEventId === definition.id && draggingEventId !== definition.id;
+                  return (
+                    <div
+                      key={definition.id}
                       className={[
-                        "suspicious-activity-event-card",
-                        `suspicious-activity-event-card-${category}`,
-                        definition.risk === "Critical"
-                          ? "suspicious-activity-event-card-critical"
-                          : "suspicious-activity-event-card-high",
-                        selected ? "suspicious-activity-event-card-selected" : "",
+                        "suspicious-activity-event-card-wrapper",
+                        isDropTarget ? "suspicious-activity-event-card-drop-target" : "",
+                        draggingEventId === definition.id ? "suspicious-activity-event-card-dragging" : "",
                       ].filter(Boolean).join(" ")}
-                      aria-pressed={selected}
-                      onClick={() => {
-                        if (isCustomizingOrder) return;
-                        markEventAsSeen(definition);
-                        setSelectedEventId((current) =>
-                          current === definition.id ? null : definition.id,
-                        );
+                      data-activity-sort-id={definition.id}
+                      onPointerEnter={() => {
+                        if (isCustomizingOrder && draggingEventId && draggingEventId !== definition.id) {
+                          setDragOverEventId(definition.id);
+                          moveEventToPosition(draggingEventId, definition.id);
+                        }
+                      }}
+                      onPointerMove={(event) => {
+                        if (!isCustomizingOrder || !draggingEventId) return;
+                        const edge = 96;
+                        if (event.clientY < edge) window.scrollBy({ top: -18, behavior: "auto" });
+                        else if (event.clientY > window.innerHeight - edge) window.scrollBy({ top: 18, behavior: "auto" });
+                      }}
+                      onPointerUp={() => {
+                        setDraggingEventId(null);
+                        setDragOverEventId(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (isCustomizingOrder && draggingEventId && draggingEventId !== definition.id) {
+                          event.preventDefault();
+                          setDragOverEventId(definition.id);
+                          moveEventToPosition(draggingEventId, definition.id);
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setDraggingEventId(null);
+                        setDragOverEventId(null);
                       }}
                     >
-                      <div className="suspicious-activity-event-card-top">
-                        <span className="suspicious-activity-event-icon">
-                          {definition.risk === "Critical" ? "!" : "•"}
-                        </span>
-                        <span
-                          className={[
-                            "suspicious-activity-event-badge",
-                            unread ? "suspicious-activity-event-badge-unread" : "",
-                          ].filter(Boolean).join(" ")}
-                          aria-label={unread ? `${count} new ${definition.label} events` : `${count} ${definition.label} events`}
-                        >
-                          {count}
-                        </span>
-                      </div>
-                      <div className="suspicious-activity-event-card-body">
-                        <strong>{definition.label}</strong>
-                        <span>{definition.description}</span>
-                      </div>
-                      <div className="suspicious-activity-event-card-footer">
-                        <span>{definition.risk}</span>
-                        <span>{selected ? "Viewing" : isCustomizingOrder ? "Rearrange" : "View records"}</span>
-                      </div>
-                    </button>
-                    {isCustomizingOrder ? (
-                      <div className="suspicious-activity-event-reorder-actions">
-                        <button
-                          type="button"
-                          aria-label={`Move ${definition.label} to top`}
-                          disabled={firstInCategory}
-                          onClick={() => moveEventToEdge(definition.id, category, "top")}
-                        >
-                          Move up
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Move ${definition.label} to bottom`}
-                          disabled={lastInCategory}
-                          onClick={() => moveEventToEdge(definition.id, category, "bottom")}
-                        >
-                          Move down
-                        </button>
-                        <button
-                          type="button"
-                          className="suspicious-activity-drag-handle"
-                          aria-label={`Drag ${definition.label} to reposition`}
-                          onPointerDown={(event) => {
-                            event.preventDefault();
-                            setDraggingEventId(definition.id);
-                          }}
-                          onPointerUp={() => setDraggingEventId(null)}
-                          onPointerCancel={() => setDraggingEventId(null)}
-                          onDragStart={() => setDraggingEventId(definition.id)}
-                          draggable
-                        >
-                          Drag to position
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-                    })}
-                  </div>
-                </section>
-              ))}
+                      <button
+                        type="button"
+                        className={[
+                          "suspicious-activity-event-card",
+                          `suspicious-activity-event-card-${category}`,
+                          definition.risk === "Critical"
+                            ? "suspicious-activity-event-card-critical"
+                            : "suspicious-activity-event-card-high",
+                          selected ? "suspicious-activity-event-card-selected" : "",
+                        ].filter(Boolean).join(" ")}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          if (isCustomizingOrder) return;
+                          markEventAsSeen(definition);
+                          setSelectedEventId((current) =>
+                            current === definition.id ? null : definition.id,
+                          );
+                        }}
+                      >
+                        <div className="suspicious-activity-event-card-top">
+                          <span className="suspicious-activity-event-icon">
+                            {definition.risk === "Critical" ? "!" : "•"}
+                          </span>
+                          <span
+                            className={[
+                              "suspicious-activity-event-badge",
+                              unread ? "suspicious-activity-event-badge-unread" : "",
+                            ].filter(Boolean).join(" ")}
+                            aria-label={unread ? `${count} new ${definition.label} events` : `${count} ${definition.label} events`}
+                          >
+                            {count}
+                          </span>
+                        </div>
+                        <div className="suspicious-activity-event-card-body">
+                          <strong>{definition.label}</strong>
+                          <span>{definition.description}</span>
+                          <small className="suspicious-activity-event-category">{getCategoryLabel(category)}</small>
+                        </div>
+                        <div className="suspicious-activity-event-card-footer">
+                          <span>{definition.risk}</span>
+                          <span>{selected ? "Viewing" : isCustomizingOrder ? "Rearrange" : "View records"}</span>
+                        </div>
+                      </button>
+                      {isCustomizingOrder ? (
+                        <div className="suspicious-activity-event-reorder-actions">
+                          <button
+                            type="button"
+                            aria-label={`Move ${definition.label} to top`}
+                            disabled={definitionIndex === 0}
+                            onClick={() => moveEventToEdge(definition.id, "top")}
+                          >
+                            Move up
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move ${definition.label} to bottom`}
+                            disabled={definitionIndex === orderedDefinitions.length - 1}
+                            onClick={() => moveEventToEdge(definition.id, "bottom")}
+                          >
+                            Move down
+                          </button>
+                          <button
+                            type="button"
+                            className="suspicious-activity-drag-handle"
+                            aria-label={`Drag ${definition.label} to reposition`}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              setDraggingEventId(definition.id);
+                              setDragOverEventId(definition.id);
+                            }}
+                            onPointerCancel={() => {
+                              setDraggingEventId(null);
+                              setDragOverEventId(null);
+                            }}
+                            onDragStart={() => {
+                              setDraggingEventId(definition.id);
+                              setDragOverEventId(definition.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingEventId(null);
+                              setDragOverEventId(null);
+                            }}
+                            draggable
+                          >
+                            Drag to position
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
 
