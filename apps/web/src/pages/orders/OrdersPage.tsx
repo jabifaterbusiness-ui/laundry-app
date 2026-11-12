@@ -99,12 +99,17 @@ export function OrdersPage() {
   const customerIdFromUrl = searchParams.get("customerId");
   const openCustomerAccountFromUrl = searchParams.get("openAccount") === "1";
   const returnToFromUrl = searchParams.get("returnTo");
+  const returnToCustomerWorkstation =
+    new URLSearchParams(location.search).get("returnTo") === "customer-workstation";
   const [workspaceReturnTo, setWorkspaceReturnTo] = useState<"customer-workstation" | null>(
-    returnToFromUrl === "customer-workstation" ? "customer-workstation" : null,
+    returnToCustomerWorkstation ? "customer-workstation" : null,
   );
   const workspaceReturnToRef = useRef<"customer-workstation" | null>(
-    returnToFromUrl === "customer-workstation" ? "customer-workstation" : null,
+    returnToCustomerWorkstation ? "customer-workstation" : null,
   );
+  if (returnToCustomerWorkstation) {
+    workspaceReturnToRef.current = "customer-workstation";
+  }
 
   useEffect(() => {
     if (returnToFromUrl === "customer-workstation") {
@@ -1824,7 +1829,8 @@ export function OrdersPage() {
               if (
                 workspaceReturnToRef.current === "customer-workstation" ||
                 workspaceReturnTo === "customer-workstation" ||
-                returnToFromUrl === "customer-workstation"
+                returnToFromUrl === "customer-workstation" ||
+                returnToCustomerWorkstation
               ) {
                 workspaceReturnToRef.current = null;
                 setWorkspaceReturnTo(null);
