@@ -177,16 +177,16 @@ describe("PaymentsPage void workflow", () => {
   it("opens and displays the exact payment selected from Universal Search", async () => {
     renderPage("BUSINESS_OWNER", ["/payments?paymentId=payment-1"]);
 
-    expect(await screen.findByRole("region", { name: "Selected payment record" })).toBeInTheDocument();
+    const selectedPayment = await screen.findByRole("region", { name: "Selected payment record" });
     expect(mockedPaymentsApi.getPayment).toHaveBeenCalledWith(
       "payment-1",
       { accessToken: "token" },
       "branch-1",
     );
-    expect(screen.getByText("INV-00001")).toBeInTheDocument();
-    expect(screen.getByText("John Doe")).toBeInTheDocument();
-    expect(screen.getByText("₦5,000")).toBeInTheDocument();
-    expect(screen.getByText("CASH")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("INV-00001")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("John Doe")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("₦5,000")).toBeInTheDocument();
+    expect(within(selectedPayment).getByText("CASH")).toBeInTheDocument();
   });
 
   it("passes customer email and other payment search terms to the server", async () => {
