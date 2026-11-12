@@ -61,7 +61,7 @@ describe("GlobalSearch", () => {
     const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00022" } });
 
-    const customer = await screen.findByRole("option", { name: /Adam/ });
+    const customer = await screen.findByRole("option", { name: /Adam\s+08012345678/ });
     const order = screen.getByRole("option", { name: /Order #00022/ });
     const invoice = screen.getByRole("option", { name: /Invoice #00022/ });
     expect(customer).toBeInTheDocument();
