@@ -90,6 +90,8 @@ vi.mock(
   () => templateMock,
 );
 
+import { financialStatementConfigSchema } from "../../../src/modules/reports/financial-statement-delivery.validation.js";
+
 import {
   processMonthlyFinancialStatements,
   startFinancialStatementScheduler,
@@ -97,6 +99,36 @@ import {
 } from "../../../src/modules/reports/financial-statement-scheduler.service.js";
 
 describe("financial statement scheduler", () => {
+  it("rejects monthly and daily WhatsApp delivery until staff consent is supported", () => {
+    const baseConfig = {
+      enabled: true,
+      dayOfMonth: 1,
+      hour: 8,
+      minute: 0,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      dailyEnabled: true,
+      dailyHour: 8,
+      dailyMinute: 0,
+      dailyEmailEnabled: true,
+      dailyWhatsappEnabled: false,
+    };
+
+    expect(financialStatementConfigSchema.safeParse(baseConfig).success).toBe(true);
+    expect(
+      financialStatementConfigSchema.safeParse({
+        ...baseConfig,
+        whatsappEnabled: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      financialStatementConfigSchema.safeParse({
+        ...baseConfig,
+        dailyWhatsappEnabled: true,
+      }).success,
+    ).toBe(false);
+  });
+
   const now = new Date("2026-09-01T07:59:00.000Z");
 
   const business = {
