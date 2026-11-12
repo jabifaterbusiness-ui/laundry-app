@@ -184,6 +184,25 @@ describe("GlobalSearch", () => {
     expect(screen.queryByText("MCB")).not.toBeInTheDocument();
   });
 
+  it("clears and disables search while sensitive password authorization is open", async () => {
+    render(<GlobalSearch />);
+    const input = screen.getByRole("textbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "staff@example.com" } });
+    expect(input).toHaveValue("staff@example.com");
+
+    act(() => {
+      window.dispatchEvent(new Event("sensitive-authorization:started"));
+    });
+    expect(input).toHaveValue("");
+    expect(input).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(new Event("sensitive-authorization:finished"));
+    });
+    expect(input).toHaveValue("");
+    expect(input).toBeEnabled();
+  });
+
   it("clears the search query when the current route changes", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "CUSTOMER", id: "customer-1", title: "Ada Laundry",
