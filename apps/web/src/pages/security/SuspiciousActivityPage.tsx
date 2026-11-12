@@ -5,6 +5,8 @@ import { hasPermission } from "../../lib/permissions.js";
 import { listSuspiciousActivity } from "../../lib/audit-api.js";
 import {
   loadSuspiciousActivityReadState,
+  loadSuspiciousActivityCategoryOrder,
+  saveSuspiciousActivityCategoryOrder,
   markSuspiciousActivityEventSeen,
 } from "../../lib/suspicious-activity-persistence.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -308,6 +310,19 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
     risk: "High",
     description: "Database migration analysis events.",
   },
+];
+
+const DEFAULT_ACTIVITY_CATEGORY_ORDER = [
+  "security",
+  "users",
+  "permissions",
+  "financial",
+  "invoices",
+  "customers",
+  "inventory",
+  "backup",
+  "operations",
+  "system",
 ];
 
 function formatTimestamp(value: string) {
@@ -865,6 +880,19 @@ export function SuspiciousActivityPage() {
     ).lastSeenEventIds;
   });
 
+  const [categoryOrder, setCategoryOrder] = useState(() => {
+    if (typeof window === "undefined" || !user?.id || !activeBranchId) {
+      return [...DEFAULT_ACTIVITY_CATEGORY_ORDER];
+    }
+    return loadSuspiciousActivityCategoryOrder(
+      user.id,
+      activeBranchId,
+      DEFAULT_ACTIVITY_CATEGORY_ORDER,
+    );
+  });
+  const [draftCategoryOrder, setDraftCategoryOrder] = useState(categoryOrder);
+  const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
+
   const canView = hasPermission(
     user,
     "security.suspicious_activity.view",
@@ -934,6 +962,54 @@ export function SuspiciousActivityPage() {
       ).lastSeenEventIds,
     );
   }, [user?.id, activeBranchId]);
+
+  const categoryGroups = useMemo(() => {
+    const grouped = new Map<string, ActivityDefinition[]>();
+    for (const definition of ACTIVITY_DEFINITIONS) {
+      const category = getActivityCategory(definition);
+      const entries = grouped.get(category) ?? [];
+      entries.push(definition);
+      grouped.set(category, entries);
+    }
+    return categoryOrder
+      .map((category) => ({ category, definitions: grouped.get(category) ?? [] }))
+      .filter((group) => group.definitions.length > 0);
+  }, [categoryOrder]);
+
+  useEffect(() => {
+    if (!user?.id || !activeBranchId) {
+      setCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
+      setDraftCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
+      setIsCustomizingOrder(false);
+      return;
+    }
+    const savedOrder = loadSuspiciousActivityCategoryOrder(
+      user.id,
+      activeBranchId,
+      DEFAULT_ACTIVITY_CATEGORY_ORDER,
+    );
+    setCategoryOrder(savedOrder);
+    setDraftCategoryOrder(savedOrder);
+    setIsCustomizingOrder(false);
+  }, [user?.id, activeBranchId]);
+
+  function moveCategory(category: string, direction: -1 | 1) {
+    setDraftCategoryOrder((current) => {
+      const index = current.indexOf(category);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  }
+
+  function saveCategoryOrder() {
+    if (!user?.id || !activeBranchId) return;
+    saveSuspiciousActivityCategoryOrder(user.id, activeBranchId, draftCategoryOrder);
+    setCategoryOrder(draftCategoryOrder);
+    setIsCustomizingOrder(false);
+  }
 
   const activityCounts = useMemo(() => {
     return new Map(
@@ -1116,11 +1192,48 @@ export function SuspiciousActivityPage() {
                 <p className="dashboard-panel-eyebrow">Event centre</p>
                 <h2>Unusual activity</h2>
               </div>
-              <span>{ACTIVITY_DEFINITIONS.length} event types</span>
+              <div className="suspicious-activity-order-actions">
+                <span>{ACTIVITY_DEFINITIONS.length} event types</span>
+                {!isCustomizingOrder ? (
+                  <button type="button" onClick={() => {
+                    setDraftCategoryOrder(categoryOrder);
+                    setIsCustomizingOrder(true);
+                  }}>
+                    Customize section order
+                  </button>
+                ) : (
+                  <>
+                    <span>Move sections into the order you prefer.</span>
+                    <button type="button" onClick={saveCategoryOrder}>Save order</button>
+                    <button type="button" onClick={() => {
+                      setDraftCategoryOrder(categoryOrder);
+                      setIsCustomizingOrder(false);
+                    }}>Cancel</button>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="suspicious-activity-event-grid">
-              {ACTIVITY_DEFINITIONS.map((definition) => {
+            <div className="suspicious-activity-category-list">
+              {(isCustomizingOrder
+                ? draftCategoryOrder.map((category) => ({
+                    category,
+                    definitions: categoryGroups.find((group) => group.category === category)?.definitions ?? [],
+                  })).filter((group) => group.definitions.length > 0)
+                : categoryGroups
+              ).map(({ category, definitions }, categoryIndex) => (
+                <section className="suspicious-activity-category-section" key={category}>
+                  <header className="suspicious-activity-category-heading">
+                    <h3>{getCategoryLabel(category)}</h3>
+                    {isCustomizingOrder ? (
+                      <div>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} up`} disabled={categoryIndex === 0} onClick={() => moveCategory(category, -1)}>Move up</button>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} down`} disabled={categoryIndex === draftCategoryOrder.length - 1} onClick={() => moveCategory(category, 1)}>Move down</button>
+                      </div>
+                    ) : null}
+                  </header>
+                  <div className="suspicious-activity-event-grid">
+                    {definitions.map((definition) => {
                 const activitySummary = activityCounts.get(definition.id);
                 const count = activitySummary?.count ?? 0;
                 const latestActivityId =
@@ -1130,8 +1243,6 @@ export function SuspiciousActivityPage() {
                   Boolean(latestActivityId) &&
                   latestActivityId !== lastSeenActivityId;
                 const selected = definition.id === selectedEventId;
-                const category = getActivityCategory(definition);
-
                 return (
                   <button
                     key={definition.id}
@@ -1177,7 +1288,6 @@ export function SuspiciousActivityPage() {
                     </div>
 
                     <div className="suspicious-activity-event-card-body">
-                      <p>{getCategoryLabel(category)}</p>
                       <strong>{definition.label}</strong>
                       <span>{definition.description}</span>
                     </div>
@@ -1188,7 +1298,10 @@ export function SuspiciousActivityPage() {
                     </div>
                   </button>
                 );
-              })}
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           </section>
 
