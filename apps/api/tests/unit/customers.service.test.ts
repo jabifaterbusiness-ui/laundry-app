@@ -649,7 +649,12 @@ describe("mergeCustomer - duplicate account merge", () => {
     });
 
     expect(result).toEqual({
-      customer: sourceCustomer,
+      customer: expect.objectContaining({
+        id: sourceCustomer.id,
+        isActive: false,
+        lifecycleStatus: "MERGED",
+        mergedIntoCustomerId: targetCustomer.id,
+      }),
       targetCustomer,
       mergedOrderCount: 1,
       mergedOrders: orders,
