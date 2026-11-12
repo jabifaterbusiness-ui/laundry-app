@@ -183,7 +183,7 @@ export function GlobalSearch() {
                   : submittedResult.href,
               );
             } else if (
-              !nextResults.some((result) => result.type === "ORDER") &&
+              nextResults.length === 0 &&
               canCreateCustomer &&
               searchQuickOperations(trimmedQuery).filter((operation) =>
                 hasPermission(userRef.current, operation.permission),
