@@ -60,6 +60,7 @@ export function GlobalSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedQuery, setCompletedQuery] = useState("");
+  const [authorizationInProgress, setAuthorizationInProgress] = useState(false);
   const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
   const exactOrderMatch = findExactOrderMatch(results, query);
@@ -92,6 +93,37 @@ export function GlobalSearch() {
     setCompletedQuery("");
     pendingEnterRef.current = false;
   }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
+
+  useEffect(() => {
+    const clearForAuthorization = () => {
+      setAuthorizationInProgress(true);
+      setQuery("");
+      setResults([]);
+      setIsOpen(false);
+      setIsLoading(false);
+      setError(null);
+      setCompletedQuery("");
+      pendingEnterRef.current = false;
+      requestIdRef.current += 1;
+    };
+    const restoreAfterAuthorization = () => {
+      setAuthorizationInProgress(false);
+      setQuery("");
+      setResults([]);
+      setIsOpen(false);
+      setIsLoading(false);
+      setError(null);
+      setCompletedQuery("");
+      pendingEnterRef.current = false;
+      requestIdRef.current += 1;
+    };
+    window.addEventListener("sensitive-authorization:started", clearForAuthorization);
+    window.addEventListener("sensitive-authorization:finished", restoreAfterAuthorization);
+    return () => {
+      window.removeEventListener("sensitive-authorization:started", clearForAuthorization);
+      window.removeEventListener("sensitive-authorization:finished", restoreAfterAuthorization);
+    };
+  }, []);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -272,6 +304,7 @@ export function GlobalSearch() {
       }}
     >
       <input
+        disabled={authorizationInProgress}
         type="search"
         name="global-search"
         autoComplete="off"
