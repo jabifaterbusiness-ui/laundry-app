@@ -789,7 +789,6 @@ export function OrdersPage() {
   }
 
   async function switchCustomerWorkspace(customer: Customer) {
-    setSwitchingCustomer(false);
     setCustomerPickerOpen(false);
     setFormError(null);
 
@@ -800,6 +799,7 @@ export function OrdersPage() {
       switchWorkspace(existingWorkspace.id);
       setSelectedOrder(existingWorkspace.activeOrder);
       setFormOpen(existingWorkspace.mode === "new" || existingWorkspace.mode === "edit");
+      setSwitchingCustomer(false);
       return;
     }
 
@@ -818,8 +818,10 @@ export function OrdersPage() {
       });
       setSelectedOrder(latestOrder);
       setFormOpen(!latestOrder && canCreateOrder);
+      setSwitchingCustomer(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to switch customer.");
+      setSwitchingCustomer(false);
     }
   }
 
@@ -1178,7 +1180,8 @@ export function OrdersPage() {
     const showOrderForm = formOpen || Boolean(
       activeWorkspace
       && (activeWorkspace.mode === "new" || activeWorkspace.mode === "edit")
-      && !customerPickerOpen,
+      && !customerPickerOpen
+      && !switchingCustomer,
     );
     const newOrderContent = showOrderForm ? (
 
