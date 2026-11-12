@@ -1009,22 +1009,6 @@ export function SuspiciousActivityPage() {
       .filter((group) => group.definitions.length > 0);
   }, [categoryOrder]);
 
-  useEffect(() => {
-    if (!user?.id || !activeBranchId) {
-      setCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
-      setDraftCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
-      setIsCustomizingOrder(false);
-      return;
-    }
-    const savedOrder = loadSuspiciousActivityCategoryOrder(
-      user.id,
-      activeBranchId,
-      DEFAULT_ACTIVITY_CATEGORY_ORDER,
-    );
-    setCategoryOrder(savedOrder);
-    setDraftCategoryOrder(savedOrder);
-    setIsCustomizingOrder(false);
-  }, [user?.id, activeBranchId]);
 
   function moveCategory(category: string, direction: -1 | 1) {
     setDraftCategoryOrder((current) => {
