@@ -406,7 +406,7 @@ describe("quick-operations.service", () => {
         correlationId: "corr-123",
         metadata: {
           operationCode: "TI",
-          operationName: "Transfer Invoice",
+          operationName: "Transfer Order",
           orderNumber: "00042",
           customerId: "22222222-2222-4222-8222-222222222222",
           reason: "test quick operation reason",
