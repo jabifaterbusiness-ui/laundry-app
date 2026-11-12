@@ -794,11 +794,11 @@ export function OrdersPage() {
     setFormOpen(false);
   }
 
-  function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstation = false) {
+  function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstationFromCaller = false) {
     const shouldReturnToCustomerWorkstation =
-      returnToCustomerWorkstation ||
+      returnToCustomerWorkstationFromCaller ||
       returnToFromUrl === "customer-workstation" ||
-      returnToCustomerWorkstation;
+      new URLSearchParams(location.search).get("returnTo") === "customer-workstation";
     if (shouldReturnToCustomerWorkstation) {
       workspaceReturnToRef.current = "customer-workstation";
       setWorkspaceReturnTo("customer-workstation");
