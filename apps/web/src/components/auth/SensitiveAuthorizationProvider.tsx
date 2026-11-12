@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,9 +29,13 @@ export function SensitiveAuthorizationProvider({
   const sessionKey = [userId ?? "", businessId ?? "", accessToken ?? ""].join(":");
   const identityKey = [userId ?? "", businessId ?? ""].join(":");
   const sessionKeyRef = useRef(sessionKey);
-  sessionKeyRef.current = sessionKey;
   const previousSessionKeyRef = useRef(sessionKey);
   const previousIdentityKeyRef = useRef(identityKey);
+
+  useLayoutEffect(() => {
+    sessionKeyRef.current = sessionKey;
+  }, [sessionKey]);
+
   const sensitiveAuthorization = useAuthStore(
     (state) => state.sensitiveAuthorization,
   );
