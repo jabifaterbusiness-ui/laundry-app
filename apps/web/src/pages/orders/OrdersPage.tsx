@@ -207,7 +207,7 @@ export function OrdersPage() {
     setSwitchingCustomer(true);
     setCustomerSearch("");
     setCustomerPickerOpen(true);
-    navigate("/orders", { replace: true });
+    navigate("/order-management", { replace: true });
   }, [customerPickerFromUrl, navigate]);
 
   useEffect(() => {
@@ -667,8 +667,8 @@ export function OrdersPage() {
       openCustomerAccount(customer);
     } else {
       openCustomerWorkspace(customer, newOrderFromUrl);
-      navigate("/order-management", { replace: true });
     }
+    navigate("/order-management", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
