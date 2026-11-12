@@ -582,7 +582,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "TI",
+          code: "TO",
           input: {
             orderId: "order-1",
             customerId: "customer-1",
@@ -661,7 +661,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "MA",
+          code: "MC",
           input: {
             customerId: "customer-1",
             targetCustomerId: "customer-2",
