@@ -10,6 +10,7 @@ const {
   listOfflineSyncOperationsMock,
   useIsMutatingMock,
   getCustomerMock,
+  listCustomersMock,
   getOrderMock,
   exportBackupMock,
   listCloudBackupConnectionsMock,
@@ -25,6 +26,7 @@ const {
   listOfflineSyncOperationsMock: vi.fn(),
   useIsMutatingMock: vi.fn(() => 0),
   getCustomerMock: vi.fn(),
+  listCustomersMock: vi.fn(),
   getOrderMock: vi.fn(),
   exportBackupMock: vi.fn(),
   listCloudBackupConnectionsMock: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock("../../../src/lib/quick-operations-api.js", () => ({
 
 vi.mock("../../../src/lib/customers-api.js", () => ({
   getCustomer: getCustomerMock,
+  listCustomers: listCustomersMock,
 }));
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
@@ -285,6 +288,14 @@ describe("QuickOperationLauncher", () => {
     useIsMutatingMock.mockReturnValue(0);
 
     getCustomerMock.mockReset();
+    listCustomersMock.mockReset();
+    listCustomersMock.mockResolvedValue({
+      data: [
+        { id: "customer-1", name: "Source Customer", phone: "08000000001", lifecycleStatus: "ACTIVE" },
+        { id: "customer-2", name: "Target Customer", phone: "08000000002", lifecycleStatus: "ACTIVE" },
+      ],
+      pagination: { page: 1, pageSize: 100, total: 2, totalPages: 1 },
+    });
     getCustomerMock.mockResolvedValue({
       id: "customer-2",
       name: "Target Customer",
@@ -493,7 +504,7 @@ describe("QuickOperationLauncher", () => {
       target: { value: "order-1" },
     });
     fireEvent.change(screen.getByLabelText("Target Customer ID"), {
-      target: { value: "customer-2" },
+      target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Safely stopping the current workflow" },
