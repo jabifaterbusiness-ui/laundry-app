@@ -1541,7 +1541,7 @@ describe("Quick Operations routes - SC", () => {
           { id: { in: [] } },
         ],
       },
-      include: { ownerBranch: { select: { id: true, name: true } } },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
     });
   });
 
@@ -1600,7 +1600,7 @@ describe("Quick Operations routes - SC", () => {
           { id: { in: [] } },
         ],
       },
-      include: { ownerBranch: { select: { id: true, name: true } } },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
     });
 
     expect(customerUpdateMany).not.toHaveBeenCalled();
