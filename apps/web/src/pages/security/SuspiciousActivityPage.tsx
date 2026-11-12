@@ -838,7 +838,7 @@ function getActivityCategory(definition: ActivityDefinition) {
     return "financial";
   }
 
-  if (action.startsWith("invoice.")) {
+  if (action.startsWith("invoice.") || action === "order.invoice_edited") {
     return "invoices";
   }
 
