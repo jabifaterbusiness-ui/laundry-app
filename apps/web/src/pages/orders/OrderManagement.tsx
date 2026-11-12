@@ -630,7 +630,9 @@ function OrderManagementContent({
       return;
     }
 
-    if (layer !== "none") {
+    // Inline new/edit workspaces do not use the detail overlay layer.
+    // A stale layer value must never swallow the workspace Back action.
+    if (mode === "view" && layer !== "none") {
       setLayer("none");
       return;
     }
@@ -1838,7 +1840,7 @@ function OrderManagementContent({
                 setWarningOpen(false);
                 setDirty(false);
 
-                if (layer !== "none") {
+                if (mode === "view" && layer !== "none") {
                   setLayer("none");
                 } else {
                   onBack();
