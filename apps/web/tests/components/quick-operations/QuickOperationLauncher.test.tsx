@@ -471,20 +471,20 @@ describe("QuickOperationLauncher", () => {
   it("renders the selected operation", () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Transfer Invoice")).toBeInTheDocument();
-    expect(screen.getByText("TI")).toBeInTheDocument();
+    expect(screen.getByText("Transfer Order")).toBeInTheDocument();
+    expect(screen.getByText("TO")).toBeInTheDocument();
   });
 
   it("requires confirmation before sensitive execution", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
@@ -492,7 +492,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
-    fireEvent.change(screen.getByLabelText("New Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
@@ -549,7 +549,7 @@ describe("QuickOperationLauncher", () => {
   it("executes TI with the correct input after confirmation", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={vi.fn()}
       />,
     );
@@ -557,7 +557,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Order ID"), {
       target: { value: "order-1" },
     });
-    fireEvent.change(screen.getByLabelText("New Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
@@ -583,7 +583,7 @@ describe("QuickOperationLauncher", () => {
     });
 
     expect(
-      await screen.findByText("Transfer Invoice completed successfully."),
+      await screen.findByText("Transfer Order completed successfully."),
     ).toBeInTheDocument();
   });
 
@@ -624,10 +624,10 @@ describe("QuickOperationLauncher", () => {
     });
   });
 
-  it("executes MA with source and target customer IDs", async () => {
+  it("executes MC with source and target customer IDs", async () => {
     render(
       <QuickOperationLauncher
-        operation={operations.MA}
+        operation={operations.MC}
         onClose={vi.fn()}
       />,
     );
@@ -647,7 +647,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "MC",
+          code: "MA",
           input: {
             customerId: "customer-1",
             targetCustomerId: "customer-2",
@@ -1212,7 +1212,7 @@ describe("QuickOperationLauncher", () => {
 
     render(
       <QuickOperationLauncher
-        operation={operations.TI}
+        operation={operations.TO}
         onClose={onClose}
       />,
     );
