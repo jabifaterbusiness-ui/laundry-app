@@ -369,6 +369,11 @@ describe("quick-operations.service", () => {
         customerId: "22222222-2222-4222-8222-222222222222",
       };
 
+      getOrderForBusinessMock.mockResolvedValue({
+        id: "11111111-1111-4111-8111-111111111111",
+        orderNumber: "00042",
+        customerId: "11111111-1111-4111-8111-111111111112",
+      });
       transferOrderMock.mockResolvedValue(result);
 
       const response = await executeQuickOperation(
@@ -408,6 +413,7 @@ describe("quick-operations.service", () => {
           operationCode: "TO",
           operationName: "Transfer Order",
           orderNumber: "00042",
+          previousCustomerId: "11111111-1111-4111-8111-111111111112",
           customerId: "22222222-2222-4222-8222-222222222222",
           reason: "test quick operation reason",
         },
