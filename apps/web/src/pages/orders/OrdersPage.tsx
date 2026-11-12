@@ -99,6 +99,15 @@ export function OrdersPage() {
   const customerIdFromUrl = searchParams.get("customerId");
   const openCustomerAccountFromUrl = searchParams.get("openAccount") === "1";
   const returnToFromUrl = searchParams.get("returnTo");
+  const [workspaceReturnTo, setWorkspaceReturnTo] = useState<"customer-workstation" | null>(
+    returnToFromUrl === "customer-workstation" ? "customer-workstation" : null,
+  );
+
+  useEffect(() => {
+    if (returnToFromUrl === "customer-workstation") {
+      setWorkspaceReturnTo("customer-workstation");
+    }
+  }, [returnToFromUrl]);
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
@@ -1733,8 +1742,14 @@ export function OrdersPage() {
             mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
             onBack={() => {
+              const customerId = activeWorkspace.customer.id;
               closeWorkspace(activeWorkspace.id);
-              navigate("/orders");
+              if (workspaceReturnTo === "customer-workstation") {
+                setWorkspaceReturnTo(null);
+                navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
+                return;
+              }
+              navigate(location.pathname === "/order-management" ? "/order-management" : "/orders");
             }}
             onSwitchCustomer={() => {
               setSwitchingCustomer(true);
