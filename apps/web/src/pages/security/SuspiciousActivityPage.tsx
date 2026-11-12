@@ -200,7 +200,7 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
     actions: ["quick_operation.executed"],
     operationNames: ["Transfer Order"],
     risk: "Critical",
-    description: "Invoice transfer executed through a protected quick operation.",
+    description: "Order transfer executed through a protected quick operation.",
   },
   {
     id: "quick-transfer-customer",
