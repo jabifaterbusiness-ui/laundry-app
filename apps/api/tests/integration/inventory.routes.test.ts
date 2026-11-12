@@ -816,7 +816,7 @@ describe("Inventory routes - branch-scoped stock", () => {
     vi.mocked(prisma.branch.findFirst).mockResolvedValue({
       id: BRANCH_A, businessId: "biz-A", name: "Main Branch",
     } as never);
-    for (const type of ["RETURN", "WASTE", "EXPIRED"]) {
+    for (const type of ["RETURN", "WASTE", "DAMAGED", "EXPIRED"]) {
       const res = await request(app)
         .post("/api/v1/inventory/movements")
         .set("Authorization", `Bearer ${OWNER_A}`).set("X-Branch-Id", BRANCH_A)
