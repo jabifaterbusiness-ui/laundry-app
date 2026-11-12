@@ -278,7 +278,9 @@ describe("InvoicesPage invoice correction workflow", () => {
         "branch-1",
       );
     });
-    expect(await screen.findByText("INV-EXACT-900")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Invoice INV-EXACT-900" }),
+    ).toBeInTheDocument();
   });
 
   async function selectInvoice() {
