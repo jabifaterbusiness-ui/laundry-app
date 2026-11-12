@@ -714,6 +714,12 @@ describe("quick-operations.service", () => {
           },
         ],
         sourceDeactivated: true,
+        sourceArchived: true,
+        mergedIntoCustomerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        mergedServicePriceCount: 2,
+        retainedServicePriceConflictCount: 1,
+        mergedGroupMembershipCount: 1,
+        mergedAnnouncementRecipientCount: 3,
       };
 
       mergeCustomerMock.mockResolvedValue(result);
@@ -759,6 +765,12 @@ describe("quick-operations.service", () => {
           mergedOrderIds: ["11111111-1111-4111-8111-111111111111"],
           mergedOrderNumbers: ["00042"],
           sourceDeactivated: true,
+          sourceArchived: true,
+          mergedIntoCustomerId: result.targetCustomer.id,
+          mergedServicePriceCount: 2,
+          retainedServicePriceConflictCount: 1,
+          mergedGroupMembershipCount: 1,
+          mergedAnnouncementRecipientCount: 3,
         },
       });
     });
