@@ -369,6 +369,11 @@ export interface InventoryReport {
   consumptionQuantity: number; adjustmentQuantity: number;
   valuation: Array<{ inventoryItem: InventoryItem; quantity: number; reservedQuantity: number; availableQuantity: number; averageUnitCost: number; totalValue: number }>;
   movementTotals: Record<string, number>;
+  expiryRegister: Array<{
+    id: string; inventoryItem: InventoryItem; batchNumber: string | null; expiryDate: string;
+    quantityReceived: number; receiptNumber: string; receivedAt: string; daysUntilExpiry: number;
+    status: "EXPIRED" | "DUE_SOON" | "IN_DATE";
+  }>;
   supplierPerformance: Array<{
     supplierId: string; supplierName: string; orderCount: number; orderedValue: number;
     receivedOrderCount: number; partiallyReceivedOrderCount: number; openOrderCount: number;
