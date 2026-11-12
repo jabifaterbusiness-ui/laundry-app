@@ -181,6 +181,34 @@ describe("SuspiciousActivityPage", () => {
     expect(detailSections.every((section) => !section.hasAttribute("open"))).toBe(true);
   });
 
+  it("summarizes branch access changes without exposing raw branch UUIDs", async () => {
+    const branchOne = "bc2c2b26-34a9-4c7f-bc6a-98a3fd7c2d01";
+    const branchTwo = "d2b2f66a-8a88-4d8d-9c63-6c11a4f02e12";
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "user-updated-1",
+        timestamp: "2026-11-11T11:44:09.000Z",
+        action: "user.updated",
+        entityType: "User",
+        entityId: "user-target-1",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          name: "Alex Staff",
+          before: { branchIds: [branchOne, branchTwo] },
+          after: { branchIds: [branchTwo] },
+        },
+        correlationId: "correlation-user-1",
+      },
+    ]);
+
+    fireEvent.click(await screen.findByRole("button", { name: /user updated/i }));
+
+    expect(await screen.findByText(/User Alex Staff branch access changed from 2 to 1 assigned branches/i)).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(branchOne))).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(branchTwo))).not.toBeInTheDocument();
+  });
+
   it("blocks users without the suspicious activity permission", () => {
     mockUser.permissions = [];
 
