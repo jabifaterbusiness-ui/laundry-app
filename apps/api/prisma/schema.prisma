@@ -3013,6 +3013,8 @@ model WhatsAppBusinessConnection {
   connectedAt           DateTime @default(now())
   lastVerifiedAt        DateTime?
   lastError             String?  @db.Text
+  receiptTemplateName   String?
+  receiptTemplateLanguage String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
