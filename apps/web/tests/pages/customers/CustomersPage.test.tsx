@@ -103,7 +103,7 @@ describe("CustomersPage", () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select Legacy Jane" }));
-    await screen.findByRole("option", { name: "Branch Two" });
+    await screen.findAllByRole("option", { name: "Branch Two" });
     fireEvent.change(screen.getByLabelText("Branch for bulk legacy customer assignment"), {
       target: { value: "branch-2" },
     });
@@ -139,7 +139,7 @@ describe("CustomersPage", () => {
     renderPage();
 
     await screen.findByText("Legacy Jane");
-    await screen.findByRole("option", { name: "Branch Two" });
+    await screen.findAllByRole("option", { name: "Branch Two" });
     fireEvent.change(screen.getByLabelText("Branch for bulk legacy customer assignment"), {
       target: { value: "branch-2" },
     });
