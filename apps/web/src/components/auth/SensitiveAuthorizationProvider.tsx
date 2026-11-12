@@ -121,7 +121,7 @@ export function SensitiveAuthorizationProvider({
     }
   }, [resolveRequest]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (previousIdentityKeyRef.current === identityKey) return;
     previousIdentityKeyRef.current = identityKey;
     clearSensitiveAuthorization();
