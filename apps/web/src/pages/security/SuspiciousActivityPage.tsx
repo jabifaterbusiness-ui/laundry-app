@@ -1450,6 +1450,9 @@ export function SuspiciousActivityPage() {
                         else if (event.clientY > window.innerHeight - edge) window.scrollBy({ top: 18, behavior: "auto" });
                       }}
                       onPointerUp={() => {
+                        if (draggingEventId && definitionIndex === orderedDefinitions.length - 1) {
+                          moveEventToEdge(draggingEventId, "bottom");
+                        }
                         setDraggingEventId(null);
                         setDragOverEventId(null);
                       }}
@@ -1462,6 +1465,9 @@ export function SuspiciousActivityPage() {
                       }}
                       onDrop={(event) => {
                         event.preventDefault();
+                        if (draggingEventId && definitionIndex === orderedDefinitions.length - 1) {
+                          moveEventToEdge(draggingEventId, "bottom");
+                        }
                         setDraggingEventId(null);
                         setDragOverEventId(null);
                       }}
@@ -1531,8 +1537,7 @@ export function SuspiciousActivityPage() {
                             type="button"
                             className="suspicious-activity-drag-handle"
                             aria-label={`Drag ${definition.label} to reposition`}
-                            onPointerDown={(event) => {
-                              event.preventDefault();
+                            onPointerDown={() => {
                               setDraggingEventId(definition.id);
                               setDragOverEventId(definition.id);
                             }}
