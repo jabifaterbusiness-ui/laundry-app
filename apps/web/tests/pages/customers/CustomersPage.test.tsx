@@ -76,6 +76,8 @@ function renderPage() {
 
 describe("CustomersPage", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
     mockAuthState.user.securityRole = undefined;
   });
 
