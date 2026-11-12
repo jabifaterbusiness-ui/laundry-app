@@ -194,9 +194,17 @@ describe("default order-status notification compliance", () => {
       status: "IN_PROGRESS",
       enabled: true,
     };
+    const legacyBothRule = {
+      ...legacyRule,
+      id: "both-rule-1",
+      status: "IN_PROGRESS",
+      channel: "BOTH",
+      enabled: true,
+    };
     mocks.orderStatusRuleFindMany.mockResolvedValue([
       { ...legacyRule, enabled: false },
       legacyInProgressRule,
+      legacyBothRule,
     ]);
 
     await listOrderStatusRules("business-1");
@@ -211,6 +219,10 @@ describe("default order-status notification compliance", () => {
     expect(mocks.orderStatusRuleUpdate).toHaveBeenNthCalledWith(2, {
       where: { id: "in-progress-rule-1" },
       data: { enabled: false },
+    });
+    expect(mocks.orderStatusRuleUpdate).toHaveBeenNthCalledWith(3, {
+      where: { id: "both-rule-1" },
+      data: { channel: "EMAIL" },
     });
   });
 });
