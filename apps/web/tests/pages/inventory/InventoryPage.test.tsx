@@ -150,6 +150,7 @@ function mockSuccessfulQueries() {
       adjustmentQuantity: 0,
       valuation: [],
       movementTotals: {},
+      expiryRegister: [],
       supplierPerformance: [],
     },
   });
