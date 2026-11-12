@@ -12,6 +12,7 @@ let mockUser = {
   role: "Branch Manager",
   securityRole: "BRANCH_MANAGER" as const,
   permissions: ["security.suspicious_activity.view"],
+  branches: [] as Array<{ id: string; name: string }>,
 };
 
 let mockAccessToken = "token";
@@ -78,6 +79,7 @@ describe("SuspiciousActivityPage", () => {
       role: "Branch Manager",
       securityRole: "BRANCH_MANAGER",
       permissions: ["security.suspicious_activity.view"],
+      branches: [],
     };
 
     mockAccessToken = "token";
@@ -184,6 +186,10 @@ describe("SuspiciousActivityPage", () => {
   it("summarizes branch access changes without exposing raw branch UUIDs", async () => {
     const branchOne = "bc2c2b26-34a9-4c7f-bc6a-98a3fd7c2d01";
     const branchTwo = "d2b2f66a-8a88-4d8d-9c63-6c11a4f02e12";
+    mockUser.branches = [
+      { id: branchOne, name: "Main Branch" },
+      { id: branchTwo, name: "Airport Branch" },
+    ];
     mockedListSuspiciousActivity.mockResolvedValue([
       {
         id: "user-updated-1",
@@ -204,7 +210,7 @@ describe("SuspiciousActivityPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /user updated/i }));
 
-    expect(await screen.findByText(/Alex Staff branch access changed from 2 to 1 assigned branches/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Alex Staff branch access changed: removed access to Main Branch; retained access to Airport Branch/i)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(branchOne))).not.toBeVisible();
     expect(screen.getByText(new RegExp(branchTwo))).not.toBeVisible();
   });
