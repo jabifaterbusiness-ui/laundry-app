@@ -17,7 +17,11 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
   const [address, setAddress] = useState(customer?.address ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(customer?.whatsappOptIn ?? false);
-  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(customer?.whatsappOptIn ? customer.whatsappOptInSource ?? "" : "");
+  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(
+    customer?.whatsappOptIn
+      ? (customer.whatsappOptInSource as CreateCustomerInput["whatsappOptInSource"] | null) ?? ""
+      : "",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<Pick<Customer, "id" | "name" | "phone">[] | null>(null);
