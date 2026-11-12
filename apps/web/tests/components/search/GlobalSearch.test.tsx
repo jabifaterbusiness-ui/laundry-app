@@ -51,6 +51,28 @@ describe("GlobalSearch", () => {
     expect(screen.getByRole("searchbox", { name: "Global search" })).toHaveValue("");
   });
 
+  it("opens the selected customer's Order Management account", async () => {
+    globalSearchMock.mockResolvedValue([{
+      type: "CUSTOMER",
+      id: "customer-42",
+      title: "Ada Laundry",
+      subtitle: "08012345678",
+      href: "/orders?customerId=customer-42&openAccount=1",
+    }]);
+
+    render(<GlobalSearch />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), {
+      target: { value: "Ada Laundry" },
+    });
+
+    const customer = await screen.findByRole("option", { name: /Ada Laundry/ });
+    fireEvent.click(customer);
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/orders?customerId=customer-42&openAccount=1",
+    );
+  });
+
   it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
     globalSearchMock.mockResolvedValue([
       { type: "CUSTOMER", id: "customer-1", title: "Adam", subtitle: "08012345678", href: "/orders?customerId=customer-1" },
