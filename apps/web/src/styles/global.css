@@ -3744,6 +3744,72 @@ a {
   font-weight: 800;
 }
 
+.suspicious-activity-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--la-text-muted);
+  font-size: 13px;
+}
+
+.suspicious-activity-order-actions button,
+.suspicious-activity-category-heading button {
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--la-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--la-text, #243044);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.suspicious-activity-order-actions button:hover,
+.suspicious-activity-category-heading button:not(:disabled):hover {
+  border-color: var(--la-primary, #198f94);
+  background: #f0fbfb;
+}
+
+.suspicious-activity-category-list {
+  display: grid;
+  gap: 22px;
+}
+
+.suspicious-activity-category-section {
+  min-width: 0;
+}
+
+.suspicious-activity-category-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--la-border);
+}
+
+.suspicious-activity-category-heading h3 {
+  margin: 0;
+  color: var(--la-text, #243044);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.suspicious-activity-category-heading > div {
+  display: flex;
+  gap: 6px;
+}
+
+.suspicious-activity-category-heading button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .suspicious-activity-event-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
