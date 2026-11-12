@@ -666,6 +666,14 @@ function OrderManagementContent({
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  function openQuickOperation(code: "MC" | "TO", recordId: string) {
+    const operation = QUICK_OPERATIONS.find((entry) => entry.code === code);
+    if (!operation) return;
+    window.dispatchEvent(new CustomEvent("quick-operation:open", {
+      detail: { ...operation, recordId },
+    }));
+  }
+
   function beginEdit() {
     setPhone(currentCustomer.phone ?? "");
     setEmail(currentCustomer.email ?? "");
@@ -915,6 +923,20 @@ function OrderManagementContent({
           onClick={onSwitchCustomer}
         >
           Switch Customer
+        </button>
+        <button
+          type="button"
+          disabled={mode !== "view" || !order || !hasPermission(user, "orders.update")}
+          onClick={() => order && openQuickOperation("TO", order.id)}
+        >
+          Transfer Order (TO)
+        </button>
+        <button
+          type="button"
+          disabled={mode !== "view" || !hasPermission(user, "customers.update")}
+          onClick={() => openQuickOperation("MC", currentCustomer.id)}
+        >
+          Merge Customer (MC)
         </button>
         <button type="button" onClick={() => setLayer("more")}>
           More
