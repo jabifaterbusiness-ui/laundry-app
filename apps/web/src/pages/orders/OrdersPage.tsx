@@ -111,6 +111,7 @@ export function OrdersPage() {
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
+  const newOrderFromUrl = searchParams.get("newOrder") === "1";
 
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
@@ -446,7 +447,7 @@ export function OrdersPage() {
       setFormError(null);
       setSelectedOrder(order);
 
-      if (returnToFromUrl === "customer-workstation") {
+      if (workspaceReturnTo === "customer-workstation") {
         setWorkspaceReturnTo(null);
         navigate(
           `/customer-workstation?customerId=${encodeURIComponent(
@@ -638,6 +639,14 @@ export function OrdersPage() {
   ]);
 
   useEffect(() => {
+    if (!newOrderFromUrl || customerIdFromUrl) return;
+    setCustomerSearch("");
+    setCustomerPickerOpen(true);
+    setFormOpen(false);
+    navigate("/order-management", { replace: true });
+  }, [newOrderFromUrl, customerIdFromUrl, navigate]);
+
+  useEffect(() => {
     const navigationKey = customerIdFromUrl
       ? `${location.key}:${customerIdFromUrl}`
       : null;
@@ -657,12 +666,13 @@ export function OrdersPage() {
     if (openCustomerAccountFromUrl) {
       openCustomerAccount(customer);
     } else {
-      openCustomerWorkspace(customer);
+      openCustomerWorkspace(customer, newOrderFromUrl);
+      navigate("/order-management", { replace: true });
     }
-    navigate("/orders", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
+    newOrderFromUrl,
     openCustomerAccountFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
@@ -744,6 +754,10 @@ export function OrdersPage() {
   }
 
   function openCreate() {
+    if (location.pathname !== "/order-management") {
+      navigate("/order-management?newOrder=1");
+      return;
+    }
     setOrderFormDirty(false);
     setSelectedOrder(null);
     setFormError(null);
@@ -762,7 +776,7 @@ export function OrdersPage() {
     setFormOpen(false);
   }
 
-  function openCustomerWorkspace(customer: Customer) {
+  function openCustomerWorkspace(customer: Customer, forceNewOrder = false) {
     setOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
@@ -771,11 +785,31 @@ export function OrdersPage() {
     const workspaceId = openWorkspace(customer);
     switchWorkspace(workspaceId);
 
-    if (existingWorkspace) {
+    if (existingWorkspace && !forceNewOrder) {
       setSelectedOrder(existingWorkspace.activeOrder);
       setFormError(null);
       setCustomerPickerOpen(false);
-      setFormOpen(existingWorkspace.mode === "new");
+      setFormOpen(existingWorkspace.mode === "new" || existingWorkspace.mode === "edit");
+      navigate("/order-management");
+      return;
+    }
+    if (existingWorkspace && forceNewOrder) {
+      updateWorkspace(workspaceId, {
+        activeOrder: null,
+        mode: "new",
+        draft: {
+          customerId: customer.id,
+          lines: [{ serviceId: "", quantity: 1, colors: [] }],
+          garmentNote: "",
+          internalNote: "",
+          expectedReadyAt: "",
+        },
+      });
+      setSelectedOrder(null);
+      setFormError(null);
+      setCustomerPickerOpen(false);
+      setFormOpen(true);
+      navigate("/order-management");
       return;
     }
 
@@ -793,6 +827,7 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
+    navigate("/order-management");
   }
 
   function openCustomerAccount(customer: Customer) {
@@ -884,6 +919,7 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
+    navigate("/order-management");
   }
 
   function addLine() {
