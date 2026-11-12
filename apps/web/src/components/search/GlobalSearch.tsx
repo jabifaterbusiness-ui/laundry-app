@@ -272,6 +272,10 @@ export function GlobalSearch() {
       }}
     >
       <input
+        type="search"
+        name="global-search"
+        autoComplete="off"
+        data-lpignore="true"
         aria-label="Global search"
         placeholder="Search name, phone, email, order/invoice number, or an operation..."
         value={query}
