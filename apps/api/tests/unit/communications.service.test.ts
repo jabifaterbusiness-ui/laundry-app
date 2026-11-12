@@ -634,6 +634,23 @@ describe("retryWhatsAppDelivery", () => {
     expect(mocks.communicationDeliveryCreate).not.toHaveBeenCalled();
   });
 
+  it("allows retry when the customer's phone number only has formatting changes", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      whatsappOptIn: true,
+      whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+      phone: "+234 800 000 0000",
+    });
+
+    const result = await retryWhatsAppDelivery(DELIVERY_ID, "business-1", "branch-1", "user-1");
+
+    expect(mocks.sendWhatsAppText).toHaveBeenCalledWith({
+      businessId: "business-1",
+      to: "+2348000000000",
+      body: "Hello Ada, order 001 is ready.",
+    });
+    expect(result).toMatchObject({ status: "SENT", retryAttempt: 1 });
+  });
   it("rejects a retry when the customer's phone number no longer matches the original destination", async () => {
     mocks.customerFindFirst.mockResolvedValue({
       whatsappOptIn: true,
