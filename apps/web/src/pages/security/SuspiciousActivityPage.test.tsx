@@ -243,9 +243,13 @@ describe("SuspiciousActivityPage", () => {
         correlationId: "correlation-user-1",
       },
     ]);
-    renderPage();
+    const { container } = renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /^user updated\b/i }));
+    const userUpdatedButton = container.querySelector(
+      '[data-activity-sort-id="user-updated"] > button',
+    );
+    expect(userUpdatedButton).not.toBeNull();
+    fireEvent.click(userUpdatedButton as HTMLButtonElement);
 
     expect(await screen.findByText(/Alex Staff branch access changed: removed access to Main Branch; retained access to Airport Branch/i)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(branchOne))).not.toBeVisible();
