@@ -433,8 +433,8 @@ export async function setCustomerLifecycleStatus(
  * those orders/invoices, so the complete transactional history moves with
  * the account without rewriting historical invoice/payment snapshots.
  *
- * Customer records themselves are not deleted or merged here. Full duplicate
- * account consolidation belongs to MA.
+ * Customer records themselves remain intact during this order/account transfer.
+ * Full duplicate-account consolidation is handled separately by MC (Merge Customer).
  */
 async function getEditableCustomerForBranch(
   tx: CustomerDb,
@@ -834,7 +834,12 @@ export async function mergeCustomer(
         customer.customerInstructions.trim(),
       ].filter(Boolean).join("\n\n[Instructions retained from merged customer]\n");
     }
+    // WhatsApp consent is bound to the exact phone number that opted in.
+    // Never transfer consent to a different destination number during merge.
+    const sameNormalizedPhone =
+      normalizePhone(customer.phone) === normalizePhone(targetCustomer.phone);
     if (
+      sameNormalizedPhone &&
       !targetCustomer.whatsappOptIn &&
       !targetCustomer.whatsappOptOutAt &&
       customer.whatsappOptIn
