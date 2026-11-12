@@ -357,7 +357,7 @@ describe("financial statement scheduler", () => {
     );
   });
 
-  it("delivers WhatsApp when WhatsApp delivery is enabled", async () => {
+  it("does not attempt unsupported staff WhatsApp statement delivery", async () => {
     prismaMock.business.findMany.mockResolvedValue([
       {
         ...business,
@@ -393,15 +393,8 @@ describe("financial statement scheduler", () => {
     );
 
     expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
-
-    expect(whatsappMock.sendWhatsAppReceipt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "+2348012345678",
-        image: expect.any(Buffer),
-        caption:
-          "Laundry Angel — Monthly Financial Statement — August 2026",
-      }),
-    );
+    expect(whatsappMock.sendWhatsAppReceipt).not.toHaveBeenCalled();
+    expect(prismaMock.financialStatementDelivery.upsert).not.toHaveBeenCalled();
   });
 
   it("does not resend a delivery already marked SENT", async () => {
