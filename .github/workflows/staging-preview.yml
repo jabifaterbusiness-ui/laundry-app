@@ -13,6 +13,7 @@ concurrency:
 jobs:
   preview:
     name: Open temporary password-protected staging preview
+    if: github.ref == 'refs/heads/fix/phase2-19-corrections-pr'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment:
