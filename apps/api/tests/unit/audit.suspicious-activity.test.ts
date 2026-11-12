@@ -49,7 +49,7 @@ describe("listSuspiciousActivity", () => {
 
     expect(call.where).toEqual({
       businessId: "business-1",
-      branchId: "branch-1",
+      OR: [{ branchId: "branch-1" }, { branchId: null }],
       action: {
         in: [...SUSPICIOUS_ACTIVITY_ACTIONS],
       },
