@@ -142,7 +142,7 @@ export function WhatsAppConnectionPanel() {
       script.defer = true;
       document.body.appendChild(script);
     }
-  }, [signupConfig?.configured, signupConfig?.appId, signupConfig?.apiVersion]);
+  }, [businessId, signupConfig?.configured, signupConfig?.appId, signupConfig?.apiVersion]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
