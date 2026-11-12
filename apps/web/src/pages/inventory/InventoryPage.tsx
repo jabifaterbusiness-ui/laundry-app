@@ -60,6 +60,7 @@ function formatMovementType(type: InventoryMovement["type"]) {
   if (type === "ISSUE") return "Issue";
   if (type === "RETURN") return "Return to stock";
   if (type === "WASTE") return "Waste";
+  if (type === "DAMAGED") return "Damaged";
   if (type === "EXPIRED") return "Expired";
   if (type === "TRANSFER_IN") return "Transfer received";
   if (type === "TRANSFER_OUT") return "Transfer dispatched";
@@ -102,6 +103,8 @@ export function InventoryPage() {
   const [movementQuantity, setMovementQuantity] = useState("");
   const [movementReason, setMovementReason] = useState("");
   const [movementReference, setMovementReference] = useState("");
+  const [movementBatchNumber, setMovementBatchNumber] = useState("");
+  const [movementExpiryDate, setMovementExpiryDate] = useState("");
   const [movementError, setMovementError] = useState<string | null>(null);
 
   const [adjustItemId, setAdjustItemId] = useState("");
@@ -330,6 +333,8 @@ export function InventoryPage() {
           type: movementType,
           reason: movementReason.trim() || undefined,
           reference: movementReference.trim() || undefined,
+          batchNumber: movementBatchNumber.trim() || undefined,
+          expiryDate: movementExpiryDate || undefined,
         },
         { accessToken },
         activeBranchId,
@@ -401,6 +406,8 @@ export function InventoryPage() {
   const [receiveLineId, setReceiveLineId] = useState("");
   const [receiveQuantity, setReceiveQuantity] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
+  const [receiveBatchNumber, setReceiveBatchNumber] = useState("");
+  const [receiveExpiryDate, setReceiveExpiryDate] = useState("");
   const [procurementError, setProcurementError] = useState<string | null>(null);
 
   const suppliersQuery = useQuery({
@@ -428,12 +435,12 @@ export function InventoryPage() {
   const receiveMutation = useMutation({
     mutationFn: () => receiveInventoryPurchaseOrder(receiveOrderId, {
       receiptNumber: receiptNumber.trim(),
-      lines: [{ purchaseOrderLineId: receiveLineId, quantity: Number(receiveQuantity) }],
+      lines: [{ purchaseOrderLineId: receiveLineId, quantity: Number(receiveQuantity), ...(receiveBatchNumber.trim() ? { batchNumber: receiveBatchNumber.trim() } : {}), ...(receiveExpiryDate ? { expiryDate: receiveExpiryDate } : {}) }],
     }, { accessToken }, activeBranchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] });
       invalidateStockViews();
-      setReceiveOrderId(""); setReceiveLineId(""); setReceiveQuantity(""); setReceiptNumber(""); setProcurementError(null);
+      setReceiveOrderId(""); setReceiveLineId(""); setReceiveQuantity(""); setReceiptNumber(""); setReceiveBatchNumber(""); setReceiveExpiryDate(""); setProcurementError(null);
     },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to record goods receipt."),
   });
@@ -532,8 +539,18 @@ export function InventoryPage() {
       return;
     }
 
-    if ((movementType === "RETURN" || movementType === "WASTE" || movementType === "EXPIRED") && !movementReason.trim()) {
-      setMovementError("Add a reason to document this return, waste or expiry movement.");
+    if ((movementType === "RETURN" || movementType === "WASTE" || movementType === "DAMAGED" || movementType === "EXPIRED") && !movementReason.trim()) {
+      setMovementError("Add a reason to document this return, waste, damage or expiry movement.");
+      return;
+    }
+
+    if (movementType === "EXPIRED" && !movementExpiryDate) {
+      setMovementError("Enter the original expiry date for expired stock.");
+      return;
+    }
+
+    if (movementExpiryDate && !movementBatchNumber.trim()) {
+      setMovementError("Enter a batch number when recording an expiry date.");
       return;
     }
 
@@ -578,6 +595,8 @@ export function InventoryPage() {
     setMovementQuantity("");
     setMovementReason("");
     setMovementReference("");
+    setMovementBatchNumber("");
+    setMovementExpiryDate("");
     setMovementError(null);
   }
 
@@ -1026,6 +1045,7 @@ export function InventoryPage() {
                 </option>
                 <option value="RETURN">{formatMovementType("RETURN")}</option>
                 <option value="WASTE">{formatMovementType("WASTE")}</option>
+                <option value="DAMAGED">{formatMovementType("DAMAGED")}</option>
                 <option value="EXPIRED">{formatMovementType("EXPIRED")}</option>
               </select>
             </label>
@@ -1095,6 +1115,28 @@ export function InventoryPage() {
               />
             </label>
           </div>
+          <div>
+            <label>
+              Batch / Lot Number
+              <input
+                value={movementBatchNumber}
+                onChange={(event) => setMovementBatchNumber(event.target.value)}
+                maxLength={100}
+                disabled={movementMutation.isPending}
+              />
+            </label>
+          </div>
+          <div>
+            <label>
+              Expiry Date
+              <input
+                type="date"
+                value={movementExpiryDate}
+                onChange={(event) => setMovementExpiryDate(event.target.value)}
+                disabled={movementMutation.isPending}
+              />
+            </label>
+          </div>
 
           {movementError && (
             <p role="alert">{movementError}</p>
@@ -1117,7 +1159,9 @@ export function InventoryPage() {
                     ? "Record Return"
                     : movementType === "WASTE"
                       ? "Record Waste"
-                      : "Record Expired Stock"}
+                      : movementType === "DAMAGED"
+                        ? "Record Damaged Stock"
+                        : "Record Expired Stock"}
           </button>
 
           <button
@@ -1276,6 +1320,8 @@ export function InventoryPage() {
                   <th>Balance after</th>
                   <th>Reason</th>
                   <th>Reference</th>
+                  <th>Batch / Lot</th>
+                  <th>Expiry Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -1288,6 +1334,8 @@ export function InventoryPage() {
                     <td>{movement.resultingQuantity}</td>
                     <td>{movement.reason ?? "—"}</td>
                     <td>{movement.reference ?? "—"}</td>
+                    <td>{movement.batchNumber ?? "—"}</td>
+                    <td>{movement.expiryDate ? new Date(movement.expiryDate).toLocaleDateString() : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1360,6 +1408,8 @@ export function InventoryPage() {
           <label>Outstanding item<select value={receiveLineId} onChange={(event) => setReceiveLineId(event.target.value)} required><option value="">Select item</option>{outstandingReceiptLines.map((line) => <option key={line.id} value={line.id}>{line.inventoryItem.name} — {line.quantityOrdered - line.quantityReceived} outstanding</option>)}</select></label>
           <label>Quantity received<input type="number" min="1" step="1" value={receiveQuantity} onChange={(event) => setReceiveQuantity(event.target.value)} required /></label>
           <label>Goods receipt reference<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} required maxLength={100} /></label>
+          <label>Batch / lot number<input value={receiveBatchNumber} onChange={(event) => setReceiveBatchNumber(event.target.value)} maxLength={100} /></label>
+          <label>Expiry date<input type="date" value={receiveExpiryDate} onChange={(event) => setReceiveExpiryDate(event.target.value)} /></label>
           <button type="submit" disabled={receiveMutation.isPending || !activeBranchId}>{receiveMutation.isPending ? "Recording..." : "Record delivery"}</button>
         </form>
       </section>
