@@ -6,6 +6,16 @@ const mocks = vi.hoisted(() => ({
   listApprovedWhatsAppTemplates: vi.fn(),
 }));
 
+vi.mock("../../src/middleware/error-handler.js", () => ({
+  AppError: class AppError extends Error {
+    statusCode: number;
+    constructor(message: string, statusCode: number) {
+      super(message);
+      this.statusCode = statusCode;
+    }
+  },
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     whatsAppBusinessConnection: {
