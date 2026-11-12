@@ -847,9 +847,17 @@ export function OrdersPage() {
         },
       });
     } else {
-      setSelectedOrder(existingWorkspace.activeOrder);
+      setSelectedOrder(null);
       updateWorkspace(workspaceId, {
+        activeOrder: null,
         mode: "new",
+        draft: {
+          customerId: customer.id,
+          lines: [{ serviceId: "", quantity: 1, colors: [] }],
+          garmentNote: "",
+          internalNote: "",
+          expectedReadyAt: "",
+        },
       });
     }
 
