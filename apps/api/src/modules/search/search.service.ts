@@ -5,7 +5,7 @@ import { getBranchResourceScope } from "../branches/branch-resource-scope.servic
 import type { GlobalSearchQuery } from "./search.validation.js";
 
 export interface GlobalSearchResult {
-  type: "CUSTOMER" | "ORDER" | "INVOICE";
+  type: "CUSTOMER" | "ORDER" | "INVOICE" | "PAYMENT";
   id: string;
   title: string;
   subtitle: string;
@@ -32,7 +32,7 @@ export async function globalSearch(
     resourceType: "CUSTOMERS",
   });
 
-  const [canViewCustomers, canViewOrders, canViewInvoices] =
+  const [canViewCustomers, canViewOrders, canViewInvoices, canViewPayments] =
     await Promise.all([
       hasPermission(
         userId,
@@ -51,6 +51,12 @@ export async function globalSearch(
         businessId,
         role,
         "invoices.view",
+      ),
+      hasPermission(
+        userId,
+        businessId,
+        role,
+        "payments.view",
       ),
     ]);
 
@@ -131,6 +137,62 @@ export async function globalSearch(
         })
       : Promise.resolve([]),
 
+    canViewPayments
+      ? prisma.payment.findMany({
+          where: {
+            businessId,
+            branchId,
+            invoice: {
+              is: {
+                businessId,
+                branchId,
+                order: {
+                  is: {
+                    businessId,
+                    branchId,
+                    customer: {
+                      is: {
+                        businessId,
+                        OR: [
+                          { ownerBranchId: { in: customerScope.ownerBranchIds } },
+                          { id: { in: customerScope.resourceIds } },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            OR: [
+              { reference: { contains: query, mode: "insensitive" } },
+              { note: { contains: query, mode: "insensitive" } },
+              { invoice: { is: { invoiceNumber: { contains: query } } } },
+              { invoice: { is: { customerName: { contains: query, mode: "insensitive" } } } },
+              { invoice: { is: { order: { is: { orderNumber: { contains: query } } } } } },
+              { invoice: { is: { order: { is: { customer: { is: { name: { contains: query, mode: "insensitive" } } } } } } },
+              { invoice: { is: { order: { is: { customer: { is: { phone: { contains: query } } } } } } },
+              { invoice: { is: { order: { is: { customer: { is: { email: { contains: query, mode: "insensitive" } } } } } } },
+            ],
+          },
+          orderBy: { createdAt: "desc" },
+          take: input.limit,
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            status: true,
+            type: true,
+            reference: true,
+            invoice: {
+              select: {
+                invoiceNumber: true,
+                customerName: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+
     canViewInvoices
       ? prisma.invoice.findMany({
           where: {
@@ -197,6 +259,15 @@ export async function globalSearch(
       title: `Invoice #${invoice.invoiceNumber}`,
       subtitle: `${invoice.customerName} · ${invoice.status}`,
       href: `/invoices?invoiceId=${encodeURIComponent(invoice.id)}`,
+    })),
+    payments.map((payment) => ({
+      type: "PAYMENT",
+      id: payment.id,
+      title: payment.reference
+        ? `Payment · ${payment.reference}`
+        : `Payment · ${payment.method} · ₦${payment.amount.toLocaleString("en-NG")}`,
+      subtitle: `${payment.invoice.customerName} · Invoice #${payment.invoice.invoiceNumber} · ${payment.status}`,
+      href: `/payments?paymentId=${encodeURIComponent(payment.id)}`,
     })),
   ];
   const results: GlobalSearchResult[] = [];
