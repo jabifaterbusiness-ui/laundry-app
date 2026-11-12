@@ -49,6 +49,7 @@ export function PaymentsPage() {
     user?.role === "BRANCH_MANAGER";
 
   const [page, setPage] = useState(1);
+  const [paymentSearch, setPaymentSearch] = useState("");
   const [status, setStatus] = useState<PaymentStatus | "">("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
     null,
@@ -68,6 +69,7 @@ export function PaymentsPage() {
       {
         page,
         status,
+        search: paymentSearch,
         branchId: activeBranchId,
       },
     ],
@@ -77,6 +79,7 @@ export function PaymentsPage() {
           page,
           pageSize: PAGE_SIZE,
           status: status || undefined,
+          search: paymentSearch.trim() || undefined,
         },
         { accessToken },
         activeBranchId,
@@ -375,6 +378,10 @@ export function PaymentsPage() {
   return (
     <main>
       <h1>Payments</h1>
+      <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
+        Search payments
+        <input type="search" name="payments-search" autoComplete="off" placeholder="Invoice or order number, customer name, phone, email or reference" value={paymentSearch} onChange={(event) => { setPaymentSearch(event.target.value); setPage(1); }} style={{ width: "100%", boxSizing: "border-box", marginTop: 6 }} />
+      </label>
 
       <div>
         <select
