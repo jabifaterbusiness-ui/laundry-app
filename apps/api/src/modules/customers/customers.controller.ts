@@ -293,6 +293,7 @@ export async function assignLegacyOwnersBulk(req: Request, res: Response) {
     metadata: {
       assignmentScope: result.assignmentScope,
       assignedCount: result.assignedCount,
+      customerIds: input.customerIds ?? null,
       ownerBranchId: result.branchId,
       ownerBranchName: result.branchName,
     },
