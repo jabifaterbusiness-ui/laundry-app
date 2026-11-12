@@ -77,6 +77,9 @@ export const createInventoryMovementSchema = z.object({
   if (value.type === "EXPIRED" && !value.expiryDate) {
     context.addIssue({ code: "custom", path: ["expiryDate"], message: "Expired-stock movements require the original expiry date" });
   }
+  if (value.type === "RECEIPT" && value.expiryDate && value.expiryDate <= new Date()) {
+    context.addIssue({ code: "custom", path: ["expiryDate"], message: "Cannot receive stock with an expired date" });
+  }
   if (value.type === "EXPIRED" && value.expiryDate && value.expiryDate > new Date()) {
     context.addIssue({ code: "custom", path: ["expiryDate"], message: "The expiry date must not be in the future" });
   }
