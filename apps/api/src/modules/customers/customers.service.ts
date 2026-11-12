@@ -594,6 +594,10 @@ export async function mergeCustomer(
       otherBranchAccount,
       otherBranchServicePrice,
       otherBranchDiscount,
+      otherBranchTargetOrder,
+      otherBranchTargetAccount,
+      otherBranchTargetServicePrice,
+      otherBranchTargetDiscount,
       externalShare,
       targetExternalShare,
     ] = await Promise.all([
@@ -611,6 +615,22 @@ export async function mergeCustomer(
       }),
       tx.priceAdjustment.findFirst({
         where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.order.findFirst({
+        where: { businessId, customerId: targetCustomer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.customerAccount.findFirst({
+        where: { businessId, customerId: targetCustomer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.customerServicePrice.findFirst({
+        where: { businessId, customerId: targetCustomer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.priceAdjustment.findFirst({
+        where: { businessId, customerId: targetCustomer.id, branchId: { not: branchId } },
         select: { id: true },
       }),
       tx.branchResourceShare.findFirst({
@@ -639,6 +659,10 @@ export async function mergeCustomer(
       otherBranchAccount ||
       otherBranchServicePrice ||
       otherBranchDiscount ||
+      otherBranchTargetOrder ||
+      otherBranchTargetAccount ||
+      otherBranchTargetServicePrice ||
+      otherBranchTargetDiscount ||
       externalShare ||
       targetExternalShare
     ) {
