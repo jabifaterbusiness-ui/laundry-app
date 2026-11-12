@@ -43,6 +43,9 @@ async function disableLegacyWhatsAppRuleWithoutTemplate(rule: {
   channel: string;
   whatsappTemplateName: string | null;
   whatsappTemplateLanguage: string | null;
+  whatsappMessage: string | null;
+  emailSubject: string | null;
+  emailMessage: string | null;
 }) {
   if (rule.enabled && (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)) {
     if (rule.channel === "BOTH") {
