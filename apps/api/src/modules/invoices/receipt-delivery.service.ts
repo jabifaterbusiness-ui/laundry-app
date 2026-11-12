@@ -47,6 +47,9 @@ export async function resendDigitalReceipt(
       name: true,
       email: true,
       phone: true,
+      whatsappOptIn: true,
+      whatsappOptInAt: true,
+      whatsappOptInSource: true,
     },
   });
 
@@ -74,6 +77,16 @@ export async function resendDigitalReceipt(
       input.channel === "EMAIL"
         ? "Customer does not have an email address"
         : "Customer does not have a phone number",
+      422,
+    );
+  }
+
+  if (
+    input.channel === "WHATSAPP" &&
+    (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource)
+  ) {
+    throw new AppError(
+      "Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending this receipt.",
       422,
     );
   }
