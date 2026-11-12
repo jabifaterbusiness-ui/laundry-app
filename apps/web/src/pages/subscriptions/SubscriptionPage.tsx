@@ -228,7 +228,6 @@ export function SubscriptionPage() {
         currencyCode: price.currencyCode,
         providerKey: selectedProvider,
         paymentMethodKey: selectedMethod,
-        reason: "Offline subscription payment queued for secure synchronization.",
         idempotencyKey:
           typeof crypto !== "undefined" &&
           typeof crypto.randomUUID === "function"
