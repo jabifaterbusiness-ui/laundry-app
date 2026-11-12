@@ -593,6 +593,7 @@ export async function mergeCustomer(
       otherBranchServicePrice,
       otherBranchDiscount,
       externalShare,
+      targetExternalShare,
     ] = await Promise.all([
       tx.order.findFirst({
         where: { businessId, customerId: customer.id, branchId: { not: branchId } },
@@ -620,16 +621,27 @@ export async function mergeCustomer(
         },
         select: { id: true },
       }),
+      tx.branchResourceShare.findFirst({
+        where: {
+          businessId,
+          ownerBranchId: branchId,
+          targetBranchId: { not: branchId },
+          resourceType: "CUSTOMERS",
+          OR: [{ resourceId: null }, { resourceId: targetCustomer.id }],
+        },
+        select: { id: true },
+      }),
     ]);
     if (
       otherBranchOrder ||
       otherBranchAccount ||
       otherBranchServicePrice ||
       otherBranchDiscount ||
-      externalShare
+      externalShare ||
+      targetExternalShare
     ) {
       throw new AppError(
-        "Source customer has records or sharing links in another branch and cannot be merged here",
+        "Customer records have links or records in another branch and cannot be merged here",
         409,
       );
     }
