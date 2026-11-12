@@ -625,6 +625,7 @@ function collectAuditChanges(
 
     for (const key of keys) {
       if (AUDIT_TECHNICAL_KEYS.has(key)) continue;
+      if (key === "items" && path.endsWith(".invoice")) continue;
       collectAuditChanges(
         left[key],
         right[key],
