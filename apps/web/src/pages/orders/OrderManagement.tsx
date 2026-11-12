@@ -35,7 +35,7 @@ import {
 } from "../../lib/orders-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
-import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
+
 
 const STATUSES: OrderStatus[] = [
   "RECEIVED",
