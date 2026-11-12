@@ -46,6 +46,39 @@ describe("CustomerFormDialog WhatsApp consent", () => {
     expect(submitted).not.toHaveProperty("whatsappOptInSource");
   });
 
+  it("requires a newly selected consent source before opting in the changed number", async () => {
+    const onSubmit = vi.fn(async (_input: CreateCustomerInput) => undefined);
+    render(
+      <CustomerFormDialog
+        customer={optedInCustomer()}
+        onCancel={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Phone"), {
+      target: { value: "08099998888" },
+    });
+    const consent = screen.getByRole("checkbox", {
+      name: /customer has explicitly agreed to receive whatsapp messages/i,
+    });
+    fireEvent.click(consent);
+
+    const source = screen.getByLabelText("How did the customer give consent?");
+    expect(source).toHaveValue("");
+    expect(source).toBeRequired();
+
+    fireEvent.change(source, { target: { value: "CUSTOMER_WRITTEN" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      phone: "08099998888",
+      whatsappOptIn: true,
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+  });
+
   it("preserves consent when only phone-number formatting changes", () => {
     render(
       <CustomerFormDialog
