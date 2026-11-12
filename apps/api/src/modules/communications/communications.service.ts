@@ -762,7 +762,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
       retryOfId: true,
       retryAttempt: true,
       retryPayload: true,
-      customer: { select: { id: true, name: true, phone: true, whatsappOptIn: true } },
+      customer: { select: { id: true, name: true, phone: true, whatsappOptIn: true, whatsappOptInAt: true, whatsappOptInSource: true } },
       order: { select: { id: true, orderNumber: true } },
       campaign: { select: { id: true, title: true } },
       retries: { select: { id: true }, take: 1 },
@@ -772,7 +772,7 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
   });
 
   return deliveries.map(({ retryPayload, retries, ...delivery }) => {
-    const { phone, whatsappOptIn, ...customer } = delivery.customer;
+    const { phone, whatsappOptIn, whatsappOptInAt, whatsappOptInSource, ...customer } = delivery.customer;
     return {
       ...delivery,
       customer,
@@ -782,6 +782,8 @@ export async function listCommunicationDeliveries(businessId: string, branchId: 
         retryPayload !== null &&
         retries.length === 0 &&
         whatsappOptIn &&
+        whatsappOptInAt !== null &&
+        whatsappOptInSource !== null &&
         phone === delivery.destination,
     };
   });
