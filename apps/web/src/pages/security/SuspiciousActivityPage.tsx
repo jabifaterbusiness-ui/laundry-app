@@ -1116,6 +1116,7 @@ export function SuspiciousActivityPage() {
       setEventOrder([...DEFAULT_ACTIVITY_EVENT_ORDER]);
       setDraftEventOrder([...DEFAULT_ACTIVITY_EVENT_ORDER]);
       setDraggingEventId(null);
+      setDragOverEventId(null);
       setIsCustomizingOrder(false);
       return;
     }
@@ -1134,6 +1135,7 @@ export function SuspiciousActivityPage() {
     setEventOrder(savedEventOrder);
     setDraftEventOrder(savedEventOrder);
     setDraggingEventId(null);
+    setDragOverEventId(null);
     setIsCustomizingOrder(false);
   }, [user?.id, activeBranchId]);
 
@@ -1162,6 +1164,7 @@ export function SuspiciousActivityPage() {
     setCategoryOrder(draftCategoryOrder);
     setEventOrder(draftEventOrder);
     setDraggingEventId(null);
+    setDragOverEventId(null);
     setIsCustomizingOrder(false);
   }
 
@@ -1366,6 +1369,7 @@ export function SuspiciousActivityPage() {
                       setDraftCategoryOrder(categoryOrder);
                       setDraftEventOrder(eventOrder);
                       setDraggingEventId(null);
+                      setDragOverEventId(null);
                       setIsCustomizingOrder(false);
                     }}>Cancel</button>
                   </>
