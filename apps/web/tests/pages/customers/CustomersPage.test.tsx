@@ -88,7 +88,7 @@ describe("CustomersPage", () => {
       pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
     });
     vi.mocked(listLegacyUnassignedCustomers).mockResolvedValue({
-      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, _count: { orders: 2 } }],
+      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, address: null, lifecycleStatus: "ACTIVE", createdAt: "", updatedAt: "", _count: { orders: 2 } }],
       pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
     });
     vi.mocked(apiFetch).mockResolvedValue([{ id: "branch-2", name: "Branch Two" }] as never);
@@ -123,7 +123,7 @@ describe("CustomersPage", () => {
       pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
     });
     vi.mocked(listLegacyUnassignedCustomers).mockResolvedValue({
-      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, _count: { orders: 2 } }],
+      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, address: null, lifecycleStatus: "ACTIVE", createdAt: "", updatedAt: "", _count: { orders: 2 } }],
       pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
     });
     vi.mocked(apiFetch).mockResolvedValue([{ id: "branch-2", name: "Branch Two" }] as never);
