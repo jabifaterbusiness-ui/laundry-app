@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   sendAutomatedWhatsAppTemplate: vi.fn(),
   assertWhatsAppMessagingEnabled: vi.fn(),
   replayPendingWhatsAppStatusEvents: vi.fn(),
+  orderStatusRuleUpsert: vi.fn(),
+  orderStatusRuleUpdate: vi.fn(),
+  orderStatusRuleFindMany: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -32,6 +35,11 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     branchResourceShare: {
       findMany: mocks.branchResourceShareFindMany,
+    },
+    orderStatusNotificationRule: {
+      upsert: mocks.orderStatusRuleUpsert,
+      update: mocks.orderStatusRuleUpdate,
+      findMany: mocks.orderStatusRuleFindMany,
     },
   },
 }));
@@ -56,7 +64,7 @@ vi.mock("../../src/modules/whatsapp/whatsapp-templates.service.js", () => ({
   sendAutomatedWhatsAppTemplate: mocks.sendAutomatedWhatsAppTemplate,
 }));
 
-import { createAnnouncement, listCommunicationDeliveries, listCustomerGroups, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
+import { createAnnouncement, listCommunicationDeliveries, listCustomerGroups, listOrderStatusRules, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
 
 const DELIVERY_ID = "11111111-1111-4111-8111-111111111111";
 const CUSTOMER_ID = "22222222-2222-4222-8222-222222222222";
@@ -102,6 +110,15 @@ beforeEach(() => {
   mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid.template-1" });
   mocks.assertWhatsAppMessagingEnabled.mockResolvedValue(undefined);
   mocks.replayPendingWhatsAppStatusEvents.mockResolvedValue(undefined);
+  mocks.orderStatusRuleUpsert.mockResolvedValue({
+    id: "ready-rule-1", enabled: false, channel: "WHATSAPP",
+    whatsappTemplateName: null, whatsappTemplateLanguage: null,
+  });
+  mocks.orderStatusRuleUpdate.mockResolvedValue({
+    id: "ready-rule-1", enabled: false, channel: "WHATSAPP",
+    whatsappTemplateName: null, whatsappTemplateLanguage: null,
+  });
+  mocks.orderStatusRuleFindMany.mockResolvedValue([]);
 });
 
 describe("customer communications branch visibility", () => {
@@ -153,6 +170,31 @@ describe("customer communications branch visibility", () => {
         ],
       },
     }));
+  });
+});
+
+describe("default order-status notification compliance", () => {
+  it("keeps the default ready notification disabled until an approved template is configured", async () => {
+    const legacyRule = {
+      id: "ready-rule-1",
+      enabled: true,
+      channel: "WHATSAPP",
+      whatsappTemplateName: null,
+      whatsappTemplateLanguage: null,
+    };
+    mocks.orderStatusRuleUpsert.mockResolvedValue(legacyRule);
+    mocks.orderStatusRuleUpdate.mockResolvedValue({ ...legacyRule, enabled: false });
+    mocks.orderStatusRuleFindMany.mockResolvedValue([{ ...legacyRule, enabled: false }]);
+
+    await listOrderStatusRules("business-1");
+
+    expect(mocks.orderStatusRuleUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ enabled: false, channel: "WHATSAPP" }),
+    }));
+    expect(mocks.orderStatusRuleUpdate).toHaveBeenCalledWith({
+      where: { id: "ready-rule-1" },
+      data: { enabled: false },
+    });
   });
 });
 
