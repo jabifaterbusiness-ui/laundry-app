@@ -21,6 +21,7 @@ export interface OrderWorkspace {
   customer: Customer;
   activeOrder: Order | null;
   mode: OrderWorkspaceMode;
+  returnTo?: "customer-workstation";
   isDirty?: boolean;
   draft: OrderWorkspaceDraft;
   updatedAt: number;
@@ -35,6 +36,7 @@ interface OrderWorkspaceState {
     options?: {
       order?: Order | null;
       draft?: Partial<OrderWorkspaceDraft>;
+      returnTo?: "customer-workstation";
     },
   ) => string;
 
@@ -44,7 +46,7 @@ interface OrderWorkspaceState {
   updateWorkspace: (
     workspaceId: string,
     update: Partial<
-      Pick<OrderWorkspace, "customer" | "activeOrder" | "mode" | "isDirty">
+      Pick<OrderWorkspace, "customer" | "activeOrder" | "mode" | "isDirty" | "returnTo">
     > & {
       draft?: Partial<OrderWorkspaceDraft>;
     },
@@ -94,6 +96,7 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
           activeOrder: options?.order ?? null,
           mode: options?.order ? "view" : "new",
           isDirty: false,
+          ...(options?.returnTo ? { returnTo: options.returnTo } : {}),
           draft: {
             ...DEFAULT_DRAFT,
             customerId: customer.id,
@@ -177,6 +180,9 @@ export const useOrderWorkspaceStore = create<OrderWorkspaceState>(
               : {}),
             ...(update.isDirty !== undefined
               ? { isDirty: update.isDirty }
+              : {}),
+            ...(update.returnTo !== undefined
+              ? { returnTo: update.returnTo }
               : {}),
             ...(update.draft
               ? {
