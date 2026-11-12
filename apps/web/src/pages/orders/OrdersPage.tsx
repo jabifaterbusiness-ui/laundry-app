@@ -1177,7 +1177,7 @@ export function OrdersPage() {
     const newOrderContent = formOpen ? (
 
         <section aria-labelledby="new-order-heading">
-          <h2 id="new-order-heading">New Order</h2>
+          <h2 id="new-order-heading">Order Details</h2>
           <form onSubmit={submitOrder}>
             <div>
               <div>
