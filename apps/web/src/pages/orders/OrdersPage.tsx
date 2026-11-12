@@ -813,10 +813,10 @@ export function OrdersPage() {
       switchWorkspace(workspaceId);
       updateWorkspace(workspaceId, {
         activeOrder: latestOrder,
-        mode: latestOrder ? "view" : "new",
+        mode: latestOrder || !canCreateOrder ? "view" : "new",
       });
       setSelectedOrder(latestOrder);
-      setFormOpen(!latestOrder);
+      setFormOpen(!latestOrder && canCreateOrder);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to switch customer.");
     }
