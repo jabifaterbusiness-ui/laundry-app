@@ -137,14 +137,14 @@ describe("PayrollApprovalSection", () => {
     });
 
     expect(within(review).getByText("Employees")).toBeInTheDocument();
-    expect(within(review).getByText("₦150,000")).toBeInTheDocument();
-    expect(within(review).getByText("₦20,000")).toBeInTheDocument();
-    expect(within(review).getByText("₦130,000")).toBeInTheDocument();
-    expect(within(review).getByText("₦50,000")).toBeInTheDocument();
-    expect(within(review).getByText("₦80,000")).toBeInTheDocument();
-    expect(within(review).getByText("Paid:")).toBeInTheDocument();
-    expect(within(review).getByText("Partially paid:")).toBeInTheDocument();
-    expect(within(review).getByText("Unpaid:")).toBeInTheDocument();
+    expect(within(review).getAllByText("₦150,000")).toHaveLength(2);
+    expect(within(review).getAllByText("₦20,000")).toHaveLength(2);
+    expect(within(review).getAllByText("₦130,000")).toHaveLength(2);
+    expect(within(review).getAllByText("₦50,000")).toHaveLength(2);
+    expect(within(review).getAllByText("₦80,000")).toHaveLength(2);
+    expect(within(review).getByText(/Paid: 0/)).toBeInTheDocument();
+    expect(within(review).getByText(/Partially paid: 1/)).toBeInTheDocument();
+    expect(within(review).getByText(/Unpaid: 0/)).toBeInTheDocument();
 
     expect(within(review).getByText("Ada Okafor")).toBeInTheDocument();
     expect(within(review).getByText("ada@example.com")).toBeInTheDocument();
