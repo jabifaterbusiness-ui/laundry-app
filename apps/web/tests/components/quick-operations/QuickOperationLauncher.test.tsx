@@ -569,7 +569,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => {
       expect(executeQuickOperationMock).toHaveBeenCalledWith(
         {
-          code: "TO",
+          code: "TI",
           input: {
             orderId: "order-1",
             customerId: "customer-2",
