@@ -27,6 +27,7 @@ import {
 import { useSensitiveAuthorization } from "../../components/auth/SensitiveAuthorizationProvider.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
 
@@ -878,6 +879,21 @@ export function CustomerWorkstationPage() {
                 }
               >
                 Add New Order
+              </button>
+            )}
+            {canUpdateCustomers && (
+              <button
+                type="button"
+                onClick={() => {
+                  const operation = QUICK_OPERATIONS.find((entry) => entry.code === "MC");
+                  if (operation) {
+                    window.dispatchEvent(new CustomEvent("quick-operation:open", {
+                      detail: { ...operation, recordId: selectedCustomer.id },
+                    }));
+                  }
+                }}
+              >
+                Merge Customer (MC)
               </button>
             )}
 
