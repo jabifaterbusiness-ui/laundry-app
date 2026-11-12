@@ -869,6 +869,32 @@ describe("payments.service", () => {
         }),
       );
     });
+    it("searches payment reference and related invoice, order, and customer details", async () => {
+      prismaMock.payment.findMany.mockResolvedValue([]);
+      prismaMock.payment.count.mockResolvedValue(0);
+
+      await listPayments({
+        businessId: "biz-A",
+        branchId: "branch-A",
+        search: "Adam",
+        page: 1,
+        pageSize: 25,
+      });
+
+      expect(prismaMock.payment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "biz-A",
+          branchId: "branch-A",
+          AND: [{
+            OR: expect.arrayContaining([
+              { reference: { contains: "Adam", mode: "insensitive" } },
+              { invoice: { is: { invoiceNumber: { contains: "Adam" } } } },
+              { invoice: { is: { order: { is: { orderNumber: { contains: "Adam" } } } } },
+            ]),
+          }],
+        }),
+      }));
+    });
   });
 
   describe("getInvoicePaymentSummary", () => {
