@@ -1530,8 +1530,8 @@ export function SuspiciousActivityPage() {
               ) : (
                 <div>
                   {selectedActivities.map((activity) => (
-                    <article key={activity.id}>
-                      <header>
+                    <article className="suspicious-activity-record" key={activity.id}>
+                      <header className="suspicious-activity-record-header">
                         <h3>{selectedDefinition.label}</h3>
                         <span>{selectedDefinition.risk}</span>
                       </header>
@@ -1539,7 +1539,7 @@ export function SuspiciousActivityPage() {
                         {activitySummary(activity, selectedDefinition)}
                       </p>
 
-                      <dl>
+                      <dl className="suspicious-activity-record-meta">
                         <div>
                           <dt>Date & time</dt>
                           <dd>{formatTimestamp(activity.timestamp)}</dd>
