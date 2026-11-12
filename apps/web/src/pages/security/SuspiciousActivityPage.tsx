@@ -788,8 +788,12 @@ function activitySummary(
           return typeof branch?.name === "string" ? branch.name : "";
         }).filter((name): name is string => Boolean(name) && !/^[0-9a-f-]{36}$/i.test(name))
       : [];
-    const beforeNames = branchLabels(beforeRecord.branchNames ?? beforeRecord.branches ?? metadata.beforeBranchNames);
-    const afterNames = branchLabels(afterRecord.branchNames ?? afterRecord.branches ?? metadata.afterBranchNames);
+    const beforeNames = branchLabels(
+      beforeRecord.branchNames ?? beforeRecord.branches ?? metadata.beforeBranchNames ?? beforeBranchIds,
+    );
+    const afterNames = branchLabels(
+      afterRecord.branchNames ?? afterRecord.branches ?? metadata.afterBranchNames ?? afterBranchIds,
+    );
     if (beforeNames.length || afterNames.length) {
       const removed = beforeNames.filter((name) => !afterNames.includes(name));
       const added = afterNames.filter((name) => !beforeNames.includes(name));
