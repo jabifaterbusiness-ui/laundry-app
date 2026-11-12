@@ -27,6 +27,8 @@ vi.mock("../../src/lib/prisma.js", () => ({
 
 vi.mock("../../src/config/index.js", () => ({
   config: {
+    log: { level: "silent" },
+    isProduction: true,
     receiptDelivery: {
       whatsappApiVersion: "v23.0",
       whatsappAppId: "123456",
