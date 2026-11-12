@@ -37,6 +37,26 @@ function getWhatsAppRetryPayload(input: {
 }
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
 
+async function disableLegacyWhatsAppRuleWithoutTemplate(rule: {
+  id: string;
+  enabled: boolean;
+  channel: string;
+  whatsappTemplateName: string | null;
+  whatsappTemplateLanguage: string | null;
+}) {
+  if (
+    rule.enabled &&
+    (rule.channel === "WHATSAPP" || rule.channel === "BOTH") &&
+    (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)
+  ) {
+    return prisma.orderStatusNotificationRule.update({
+      where: { id: rule.id },
+      data: { enabled: false },
+    });
+  }
+  return rule;
+}
+
 async function ensureDefaultReadyRule(businessId: string) {
   const rule = await prisma.orderStatusNotificationRule.upsert({
     where: { businessId_status: { businessId, status: "READY_FOR_PICKUP" } },
@@ -51,17 +71,7 @@ async function ensureDefaultReadyRule(businessId: string) {
 
   // Existing businesses may already have the legacy default enabled without
   // an approved template. Keep it disabled until a compliant fallback is set.
-  if (
-    rule.enabled &&
-    (rule.channel === "WHATSAPP" || rule.channel === "BOTH") &&
-    (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)
-  ) {
-    return prisma.orderStatusNotificationRule.update({
-      where: { id: rule.id },
-      data: { enabled: false },
-    });
-  }
-  return rule;
+  return disableLegacyWhatsAppRuleWithoutTemplate(rule);
 }
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
@@ -201,7 +211,10 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
     : await prisma.orderStatusNotificationRule.findFirst({
         where: { businessId: input.businessId, status: input.status },
       });
-  const rule = configuredRule?.enabled ? configuredRule : null;
+  const safeConfiguredRule = configuredRule
+    ? await disableLegacyWhatsAppRuleWithoutTemplate(configuredRule)
+    : null;
+  const rule = safeConfiguredRule?.enabled ? safeConfiguredRule : null;
   if (!rule) return [];
   const values = {
     customerName: order.customer.name,
@@ -245,7 +258,11 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
 
 export async function listOrderStatusRules(businessId: string) {
   await ensureDefaultReadyRule(businessId);
-  return prisma.orderStatusNotificationRule.findMany({ where: { businessId }, orderBy: { status: "asc" } });
+  const rules = await prisma.orderStatusNotificationRule.findMany({
+    where: { businessId },
+    orderBy: { status: "asc" },
+  });
+  return Promise.all(rules.map(disableLegacyWhatsAppRuleWithoutTemplate));
 }
 export async function saveOrderStatusRule(input: {
   businessId: string; status: string; enabled: boolean; channel: "WHATSAPP" | "EMAIL" | "BOTH";
