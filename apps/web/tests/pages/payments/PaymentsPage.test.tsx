@@ -22,6 +22,7 @@ const mockedSensitiveAuthorization = vi.mocked(sensitiveAuthorization);
 
 function renderPage(
   role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF",
+  initialEntries: string[] = ["/payments"],
 ) {
   useAuthStore.setState({
     user: {
@@ -46,7 +47,7 @@ function renderPage(
   });
 
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <PaymentsPage />
       </QueryClientProvider>
@@ -111,6 +112,7 @@ beforeEach(() => {
   useAuthStore.getState().clearSession();
 
   mockedPaymentsApi.listPayments.mockResolvedValue(paymentsResponse);
+  mockedPaymentsApi.getPayment.mockResolvedValue(postedPayment);
   mockedPaymentsApi.getInvoicePaymentSummary.mockResolvedValue(
     summaryResponse,
   );
@@ -172,6 +174,21 @@ beforeEach(() => {
 });
 
 describe("PaymentsPage void workflow", () => {
+  it("opens and displays the exact payment selected from Universal Search", async () => {
+    renderPage("BUSINESS_OWNER", ["/payments?paymentId=payment-1"]);
+
+    expect(await screen.findByRole("region", { name: "Selected payment record" })).toBeInTheDocument();
+    expect(mockedPaymentsApi.getPayment).toHaveBeenCalledWith(
+      "payment-1",
+      { accessToken: "token" },
+      "branch-1",
+    );
+    expect(screen.getByText("INV-00001")).toBeInTheDocument();
+    expect(screen.getByText("John Doe")).toBeInTheDocument();
+    expect(screen.getByText("₦5,000")).toBeInTheDocument();
+    expect(screen.getByText("CASH")).toBeInTheDocument();
+  });
+
   it("passes customer email and other payment search terms to the server", async () => {
     renderPage("BUSINESS_OWNER");
 
