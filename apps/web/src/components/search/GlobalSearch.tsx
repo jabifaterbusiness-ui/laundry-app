@@ -16,8 +16,9 @@ const RESULT_GROUPS: {
   type: GlobalSearchResultType;
   label: string;
 }[] = [
-  { type: "INVOICE", label: "Invoices" },
   { type: "CUSTOMER", label: "Customers" },
+  { type: "ORDER", label: "Orders" },
+  { type: "INVOICE", label: "Invoices" },
 ];
 
 function groupResults(results: GlobalSearchResult[]) {
@@ -64,9 +65,9 @@ export function GlobalSearch() {
   const exactOrderMatch = findExactOrderMatch(results, query);
   const hasOrderCandidate = results.some((result) => result.type === "ORDER");
   const orderMatchAvailable = Boolean(exactOrderMatch);
-  const groups = groupResults(
-    results.filter((result) => result.type !== "ORDER"),
-  );
+  // Keep every result type visible. Order matches used to be available only
+  // to the Enter-key shortcut, which made the dropdown appear invoice-only.
+  const groups = groupResults(results);
   const quickOperations = searchQuickOperations(query).filter((operation) =>
     hasPermission(user, operation.permission),
   );
