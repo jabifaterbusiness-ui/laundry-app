@@ -177,6 +177,57 @@ describe("GlobalSearch", () => {
     });
   });
 
+  it("opens an exact payment reference when Enter is pressed before search completes", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "PAYMENT";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve; }));
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "BANK-REF-42" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([{
+      type: "PAYMENT",
+      id: "payment-42",
+      title: "Payment · BANK-REF-42",
+      subtitle: "Ada Laundry · Invoice #00042 · POSTED",
+      href: "/payments?paymentId=payment-42",
+    }]);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42"));
+  });
+
+  it("does not guess or offer customer creation for ambiguous identifiers after pending Enter", async () => {
+    let resolveSearch!: (results: Array<{
+      type: "ORDER" | "INVOICE";
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>) => void;
+    globalSearchMock.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve; }));
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(globalSearchMock).toHaveBeenCalled());
+    resolveSearch([
+      { type: "ORDER", id: "order-22", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-22" },
+      { type: "INVOICE", id: "invoice-22", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-22" },
+    ]);
+
+    await waitFor(() => expect(screen.getByRole("option", { name: /Invoice #00022/ })).toBeInTheDocument());
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("option", { name: /Add New Customer/ })).not.toBeInTheDocument();
+  });
+
   it("chooses the exact order number when broader matches are also returned", async () => {
     globalSearchMock.mockResolvedValue([
       {
