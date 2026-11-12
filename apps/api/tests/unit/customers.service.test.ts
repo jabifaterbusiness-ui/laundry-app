@@ -30,6 +30,12 @@ const prismaMock = vi.hoisted(() => ({
   customerAccountTransaction: {
     updateMany: vi.fn(),
   },
+  customerServicePrice: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  customerGroupMember: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  announcementRecipient: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  communicationDelivery: { updateMany: vi.fn() },
+  orderStatusNotificationDelivery: { updateMany: vi.fn() },
+  priceAdjustment: { findFirst: vi.fn(), updateMany: vi.fn() },
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -74,6 +80,13 @@ beforeEach(() => {
     async (callback) => callback(prismaMock as never),
   );
   prismaMock.order.findFirst.mockReset();
+  prismaMock.customerServicePrice.findFirst.mockReset().mockResolvedValue(null);
+  prismaMock.customerServicePrice.findMany.mockReset().mockResolvedValue([]);
+  prismaMock.customerGroupMember.findMany.mockReset().mockResolvedValue([]);
+  prismaMock.customerGroupMember.findFirst.mockReset().mockResolvedValue(null);
+  prismaMock.announcementRecipient.findMany.mockReset().mockResolvedValue([]);
+  prismaMock.announcementRecipient.findFirst.mockReset().mockResolvedValue(null);
+  prismaMock.priceAdjustment.findFirst.mockReset().mockResolvedValue(null);
 });
 
 describe("listCustomers", () => {
@@ -572,13 +585,15 @@ describe("mergeCustomer - duplicate account merge", () => {
         id: sourceCustomer.id,
         businessId: "biz-A",
         ownerBranchId: "branch-A",
+        lifecycleStatus: { not: "MERGED" },
       },
       data: {
         isActive: false,
-        lifecycleStatus: "DORMANT",
-        statusReason: "Merged into another customer",
+        lifecycleStatus: "MERGED",
+        statusReason: `Merged into customer ${targetCustomer.id}`,
         statusChangedAt: expect.any(Date),
         statusChangedById: "user-A",
+        mergedIntoCustomerId: targetCustomer.id,
       },
     });
     expect(prismaMock.customerStatusHistory.create).toHaveBeenCalledWith({
@@ -586,8 +601,8 @@ describe("mergeCustomer - duplicate account merge", () => {
         customerId: sourceCustomer.id,
         businessId: "biz-A",
         previousStatus: "ACTIVE",
-        newStatus: "DORMANT",
-        reason: "Merged into another customer",
+        newStatus: "MERGED",
+        reason: `Merged into customer ${targetCustomer.id}`,
         changedById: "user-A",
       },
     });
@@ -597,7 +612,12 @@ describe("mergeCustomer - duplicate account merge", () => {
       targetCustomer,
       mergedOrderCount: 1,
       mergedOrders: orders,
+      mergedServicePriceCount: 0,
+      mergedGroupMembershipCount: 0,
+      mergedAnnouncementRecipientCount: 0,
       sourceDeactivated: true,
+      sourceArchived: true,
+      mergedIntoCustomerId: targetCustomer.id,
     });
   });
 
@@ -610,7 +630,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     await expect(
       mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
     ).rejects.toMatchObject({
-      message: "Source customer is used or shared by another branch and cannot be merged here",
+      message: "Source customer has records or sharing links in another branch and cannot be merged here",
       statusCode: 409,
     });
 
@@ -656,6 +676,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     expect(result.mergedOrderCount).toBe(0);
     expect(result.mergedOrders).toEqual([]);
     expect(result.sourceDeactivated).toBe(true);
+    expect(result.sourceArchived).toBe(true);
   });
 
   it("rejects merging a customer into itself", async () => {
