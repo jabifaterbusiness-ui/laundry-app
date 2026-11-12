@@ -131,6 +131,20 @@ export async function assignLegacyCustomerOwnerBranch(
   });
 }
 
+export async function assignLegacyCustomersOwnerBranch(
+  input: { branchId: string; customerIds?: string[]; all?: boolean },
+  auth: { accessToken: string | null; sensitiveAuthorization: string },
+): Promise<{ assignedCount: number; branchId: string; branchName: string; assignmentScope: "ALL_UNASSIGNED" | "SELECTED" }> {
+  const branchIdForRequest = getEffectiveBranchId();
+  return apiFetch("/customers/legacy-unassigned/assign", {
+    method: "POST",
+    accessToken: auth.accessToken,
+    branchId: branchIdForRequest,
+    sensitiveAuthorization: auth.sensitiveAuthorization,
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getCustomer(id: string, auth: { accessToken: string | null }): Promise<Customer> {
   return apiFetch<Customer>(`/customers/${id}`, { accessToken: auth.accessToken });
 }
