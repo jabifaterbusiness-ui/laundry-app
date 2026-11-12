@@ -209,6 +209,8 @@ describe("GlobalSearch", () => {
   it("clears and disables search while sensitive password authorization is open", async () => {
     render(<GlobalSearch />);
     const input = screen.getByRole("searchbox", { name: "Global search" });
+    expect(input).toHaveAttribute("autoComplete", "off");
+    expect(input).toHaveAttribute("data-lpignore", "true");
     fireEvent.change(input, { target: { value: "staff@example.com" } });
     expect(input).toHaveValue("staff@example.com");
 
