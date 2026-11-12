@@ -60,7 +60,6 @@ describe("offline-subscription-payment-queue", () => {
       providerKey: "paystack",
       paymentMethodKey: "CARD",
       idempotencyKey: "offline-payment-456",
-      reason: "Offline subscription payment duplicate test reason",
     });
 
     expect(second.id).toBe(first.id);
