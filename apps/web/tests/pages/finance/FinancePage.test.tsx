@@ -516,8 +516,8 @@ describe("FinancePage", () => {
     });
     expect(whatsappCheckbox).toBeDisabled();
     expect(
-      within(section).getByText(/WhatsApp financial-statement delivery is temporarily unavailable/i),
-    ).toBeInTheDocument();
+      within(section).getAllByText(/WhatsApp financial-statement delivery is temporarily unavailable/i),
+    ).toHaveLength(2);
 
     await user.click(
       within(section).getByRole("button", {
