@@ -574,6 +574,30 @@ export async function mergeCustomer(
       throw new AppError("Both customers must belong to the currently selected branch to be merged", 409);
     }
 
+    const [otherBranchOrder, otherBranchAccount, externalShare] = await Promise.all([
+      tx.order.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.customerAccount.findFirst({
+        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
+        select: { id: true },
+      }),
+      tx.branchResourceShare.findFirst({
+        where: {
+          businessId,
+          ownerBranchId: branchId,
+          targetBranchId: { not: branchId },
+          resourceType: "CUSTOMERS",
+          OR: [{ resourceId: null }, { resourceId: customer.id }],
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (otherBranchOrder || otherBranchAccount || externalShare) {
+      throw new AppError("Source customer is used or shared by another branch and cannot be merged here", 409);
+    }
+
     const orders = await tx.order.findMany({
       where: { businessId, branchId, customerId: customer.id },
       select: { id: true, orderNumber: true, branchId: true },
@@ -608,31 +632,7 @@ export async function mergeCustomer(
       });
     }
 
-    const [otherBranchOrder, otherBranchAccount, externalShare] = await Promise.all([
-      tx.order.findFirst({
-        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
-        select: { id: true },
-      }),
-      tx.customerAccount.findFirst({
-        where: { businessId, customerId: customer.id, branchId: { not: branchId } },
-        select: { id: true },
-      }),
-      customer.ownerBranchId === branchId
-        ? tx.branchResourceShare.findFirst({
-            where: {
-              businessId,
-              ownerBranchId: branchId,
-              targetBranchId: { not: branchId },
-              resourceType: "CUSTOMERS",
-              OR: [{ resourceId: null }, { resourceId: customer.id }],
-            },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-    ]);
-
-    const sourceDeactivated = customer.ownerBranchId === branchId &&
-      !otherBranchOrder && !otherBranchAccount && !externalShare;
+    const sourceDeactivated = true;
 
     if (sourceDeactivated) {
       const previousStatus = customer.lifecycleStatus;
