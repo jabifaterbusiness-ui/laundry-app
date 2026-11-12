@@ -313,14 +313,14 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
 ];
 
 const DEFAULT_ACTIVITY_CATEGORY_ORDER = [
+  "backup",
+  "inventory",
   "security",
   "users",
   "permissions",
   "financial",
   "invoices",
   "customers",
-  "inventory",
-  "backup",
   "operations",
   "system",
 ];
