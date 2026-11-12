@@ -219,7 +219,8 @@ export function GlobalSearch() {
         return;
       }
 
-      // Keep matching orders available to Enter without listing them in the dropdown.
+      // Enter opens an exact order-number match first; otherwise it follows
+      // the first visible customer or invoice result.
       const firstResult =
         exactOrderMatch ??
         results.find((result) => result.type !== "ORDER");
