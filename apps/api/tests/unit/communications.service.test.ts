@@ -360,7 +360,7 @@ describe("listCommunicationDeliveries", () => {
     mocks.communicationDeliveryFindMany.mockResolvedValue([
       {
         ...failedDelivery(),
-        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+2348000000000", whatsappOptIn: true, whatsappOptInAt: new Date("2026-11-01T10:00:00.000Z"), whatsappOptInSource: "CUSTOMER_FORM" },
+        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+234 800 000 0000", whatsappOptIn: true, whatsappOptInAt: new Date("2026-11-01T10:00:00.000Z"), whatsappOptInSource: "CUSTOMER_FORM" },
         order: { id: ORDER_ID, orderNumber: "001" },
         campaign: null,
       },
