@@ -44,15 +44,21 @@ async function disableLegacyWhatsAppRuleWithoutTemplate(rule: {
   whatsappTemplateName: string | null;
   whatsappTemplateLanguage: string | null;
 }) {
-  if (
-    rule.enabled &&
-    (rule.channel === "WHATSAPP" || rule.channel === "BOTH") &&
-    (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)
-  ) {
-    return prisma.orderStatusNotificationRule.update({
-      where: { id: rule.id },
-      data: { enabled: false },
-    });
+  if (rule.enabled && (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)) {
+    if (rule.channel === "BOTH") {
+      // Preserve the email half of a legacy BOTH rule while disabling the
+      // non-compliant WhatsApp path until its approved template is selected.
+      return prisma.orderStatusNotificationRule.update({
+        where: { id: rule.id },
+        data: { channel: "EMAIL" },
+      });
+    }
+    if (rule.channel === "WHATSAPP") {
+      return prisma.orderStatusNotificationRule.update({
+        where: { id: rule.id },
+        data: { enabled: false },
+      });
+    }
   }
   return rule;
 }
