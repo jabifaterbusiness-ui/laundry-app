@@ -220,6 +220,7 @@ function seedAuth() {
       permissions: [
       "orders.create",
       "orders.update",
+      "customers.view",
       "orders.change_status",
       "colors.view",
       "colors.manage",
