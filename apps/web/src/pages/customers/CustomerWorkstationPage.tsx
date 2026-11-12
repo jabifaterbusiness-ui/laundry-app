@@ -872,7 +872,7 @@ export function CustomerWorkstationPage() {
                 type="button"
                 onClick={() =>
                   navigate(
-                    `/orders?customerId=${encodeURIComponent(
+                    `/order-management?newOrder=1&customerId=${encodeURIComponent(
                       selectedCustomer.id,
                     )}&returnTo=customer-workstation`,
                   )
@@ -1076,7 +1076,7 @@ export function CustomerWorkstationPage() {
                       <td>
                         <button
                           type="button"
-                          onClick={() => navigate(`/order-management?orderId=${encodeURIComponent(order.id)}&returnTo=customer-workstation&customerId=${encodeURIComponent(selectedCustomer.id)}`)}
+                          onClick={() => navigate(`/order-management?orderId=${encodeURIComponent(order.id)}&returnTo=customer-workstation`)}
                         >
                           {order.orderNumber}
                         </button>
