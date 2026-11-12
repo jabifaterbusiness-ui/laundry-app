@@ -715,18 +715,35 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer) {
+    const existingWorkspace = workspaces.find(
+      (workspace) => workspace.customer.id === customer.id,
+    );
+
     const workspaceId = openWorkspace(customer);
     switchWorkspace(workspaceId);
-    // A customer search result opens the customer's Order Management account,
-    // not a blank New Order form. The order list is scoped to this customer.
+
+    if (existingWorkspace) {
+      setSelectedOrder(existingWorkspace.activeOrder);
+      setFormError(null);
+      setCustomerPickerOpen(false);
+      setFormOpen(existingWorkspace.mode === "new");
+      return;
+    }
+
     updateWorkspace(workspaceId, {
-      mode: "view",
-      activeOrder: null,
+      mode: "new",
+      draft: {
+        customerId: customer.id,
+        lines: [{ serviceId: "", quantity: 1, colors: [] }],
+        garmentNote: "",
+        internalNote: "",
+        expectedReadyAt: "",
+      },
     });
     setSelectedOrder(null);
     setFormError(null);
     setCustomerPickerOpen(false);
-    setFormOpen(false);
+    setFormOpen(true);
   }
 
   function openCustomerAccount(customer: Customer) {
