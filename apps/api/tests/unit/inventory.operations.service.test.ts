@@ -43,7 +43,7 @@ describe("inventory operations", () => {
     const orderedAt = new Date("2026-10-01T09:00:00.000Z");
     const receivedAt = new Date("2026-10-04T09:00:00.000Z");
     db.inventoryStock.findMany.mockResolvedValue([]);
-    db.inventoryMovement.findMany.mockResolvedValue([]);
+    db.inventoryMovement.findMany.mockResolvedValue([{ type: "DAMAGED", quantity: 3 }]);
     db.inventoryPurchaseOrder.findMany.mockResolvedValue([
       {
         supplierId: "supplier-1",
@@ -86,6 +86,8 @@ describe("inventory operations", () => {
         ]),
       }),
     }));
+    expect(report.movementTotals).toEqual({ DAMAGED: 3 });
+    expect(report.consumptionQuantity).toBe(3);
     expect(report.supplierPerformance).toEqual([{
       supplierId: "supplier-1",
       supplierName: "Reliable Supplies",
