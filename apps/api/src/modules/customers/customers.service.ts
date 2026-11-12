@@ -758,7 +758,7 @@ export async function mergeCustomer(
 
     // Retain the source profile as the archive, while filling missing target
     // profile fields from it. Explicit target contact/consent choices win.
-    const targetProfileUpdate: Record<string, unknown> = {};
+    const targetProfileUpdate: Prisma.CustomerUpdateInput = {};
     if (!targetCustomer.email && customer.email) targetProfileUpdate.email = customer.email;
     if (!targetCustomer.address && customer.address) targetProfileUpdate.address = customer.address;
     if (!targetCustomer.notes && customer.notes) targetProfileUpdate.notes = customer.notes;
