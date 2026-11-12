@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Customer } from "@laundry-app/shared";
-import type { CreateCustomerInput } from "../../../src/lib/customers-api.js";
+import { DuplicateCustomerError, type CreateCustomerInput } from "../../../src/lib/customers-api.js";
 import { CustomerFormDialog } from "../../../src/pages/customers/CustomerFormDialog.js";
 
 function optedInCustomer() {
@@ -23,6 +23,40 @@ function optedOutCustomer() {
     whatsappOptIn: false,
   } as unknown as Customer;
 }
+
+describe("CustomerFormDialog duplicate protection", () => {
+  it("shows possible duplicate accounts and requires explicit confirmation before creating anyway", async () => {
+    const onSubmit = vi.fn()
+      .mockRejectedValueOnce(new DuplicateCustomerError(
+        "A customer with this phone number may already exist.",
+        [{ id: "existing-customer", name: "Existing Ada", phone: "08012345678" }],
+      ))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <CustomerFormDialog
+        customer={null}
+        initialPhone="08012345678"
+        onCancel={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Existing Ada (08012345678)");
+    expect(onSubmit).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      phone: "08012345678",
+      confirmDuplicate: false,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create anyway" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect(onSubmit).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      phone: "08012345678",
+      confirmDuplicate: true,
+    }));
+  });
+});
 
 describe("CustomerFormDialog WhatsApp consent", () => {
   it("requires fresh consent when the customer's phone number changes", async () => {
