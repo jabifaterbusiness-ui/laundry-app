@@ -448,6 +448,7 @@ describe("globalSearch customer fallback", () => {
     ] as never);
     orderFindMany.mockResolvedValue([]);
     invoiceFindMany.mockResolvedValue([]);
+    paymentFindMany.mockResolvedValue([]);
   });
 
   it("keeps a customer shortcut when the search has no matching existing orders", async () => {
