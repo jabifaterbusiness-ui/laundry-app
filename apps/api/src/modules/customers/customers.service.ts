@@ -666,3 +666,52 @@ export async function mergeCustomer(
     };
   }, { isolationLevel: "Serializable" });
 }
+
+
+/**
+ * Atomically assigns a selected set of unassigned legacy customers, or
+ * every currently unassigned legacy customer, to one active branch.
+ * The tenant and unassigned predicates are part of the UPDATE itself.
+ */
+export async function assignLegacyCustomerOwnersBulk(input: {
+  businessId: string;
+  branchId: string;
+  customerIds?: string[];
+  all?: boolean;
+}) {
+  const customerIds = input.customerIds ? [...new Set(input.customerIds)] : undefined;
+  if (!input.all && (!customerIds || customerIds.length === 0)) {
+    throw new AppError("Select at least one customer or choose all unassigned customers", 422);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const branch = await tx.branch.findFirst({
+      where: { id: input.branchId, businessId: input.businessId, isActive: true },
+      select: { id: true, name: true },
+    });
+    if (!branch) throw new AppError("Choose an active branch belonging to this business", 422);
+
+    const result = await tx.customer.updateMany({
+      where: {
+        businessId: input.businessId,
+        ownerBranchId: null,
+        ...(input.all ? {} : { id: { in: customerIds! } }),
+      },
+      data: { ownerBranchId: branch.id },
+    });
+
+    if (!input.all && result.count !== customerIds!.length) {
+      throw new AppError(
+        "One or more selected customers are no longer unassigned. Refresh the review queue and try again; no customers were changed.",
+        409,
+      );
+    }
+
+    return {
+      assignedCount: result.count,
+      branchId: branch.id,
+      branchName: branch.name,
+      assignmentScope: input.all ? "ALL_UNASSIGNED" as const : "SELECTED" as const,
+    };
+  }, { isolationLevel: "Serializable" });
+}
