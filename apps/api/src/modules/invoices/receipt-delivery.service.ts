@@ -5,6 +5,7 @@ import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.j
 import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
 import { sendReceiptEmail } from "./providers/resend.provider.js";
 import { sendWhatsAppReceipt } from "./providers/whatsapp.provider.js";
+import { sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../whatsapp/whatsapp-templates.service.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 
 export type ReceiptDeliveryChannel = "EMAIL" | "WHATSAPP";
@@ -107,17 +108,57 @@ export async function resendDigitalReceipt(
 
     const image = await renderCustomerReceiptImage(receipt);
 
-    const delivery = await sendWhatsAppReceipt({
-      businessId: input.businessId,
-      to: destination,
-      image,
-    });
+    try {
+      const delivery = await sendWhatsAppReceipt({
+        businessId: input.businessId,
+        to: destination,
+        image,
+      });
 
-    return {
-      channel: input.channel,
-      destination,
-      providerMessageId: delivery.id,
-    };
+      return {
+        channel: input.channel,
+        destination,
+        providerMessageId: delivery.id,
+      };
+    } catch (error) {
+      const serviceWindowClosed = error instanceof Error &&
+        error.message.includes("24-hour WhatsApp customer-service window is closed");
+      if (!serviceWindowClosed) throw error;
+
+      const connection = await prisma.whatsAppBusinessConnection.findUnique({
+        where: { businessId: input.businessId },
+        select: { receiptTemplateName: true, receiptTemplateLanguage: true },
+      });
+      if (!connection?.receiptTemplateName || !connection.receiptTemplateLanguage) {
+        throw new AppError(
+          "The 24-hour WhatsApp reply window is closed. Connect an approved UTILITY receipt template with an IMAGE header before sending this receipt.",
+          422,
+        );
+      }
+
+      const mediaId = await uploadWhatsAppTemplateImage(input.businessId, image);
+      const templateDelivery = await sendAutomatedWhatsAppTemplate({
+        businessId: input.businessId,
+        customerId: customer.id,
+        phone: destination,
+        templateName: connection.receiptTemplateName,
+        language: connection.receiptTemplateLanguage,
+        templateCategory: "UTILITY",
+        headerImageId: mediaId,
+        variableValues: [
+          receipt.customerName,
+          receipt.invoiceNumber,
+          `₦${receipt.totalAmount.toLocaleString("en-NG")}`,
+          `₦${receipt.balanceDue.toLocaleString("en-NG")}`,
+        ],
+      });
+
+      return {
+        channel: input.channel,
+        destination,
+        providerMessageId: templateDelivery.providerMessageId,
+      };
+    }
   } catch (error) {
     throw new AppError(
       error instanceof Error
