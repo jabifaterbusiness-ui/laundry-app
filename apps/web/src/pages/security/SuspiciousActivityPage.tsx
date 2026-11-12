@@ -665,6 +665,56 @@ function formatChangePath(path: string): string {
     .join(" · ");
 }
 
+function activityRecordLabel(activity: {
+  entityType: string;
+  metadata: unknown;
+}) {
+  const metadata = asAuditRecord(activity.metadata) ?? {};
+  const invoiceNumber = metadata.invoiceNumber;
+  const orderNumber = metadata.orderNumber;
+  const customerName = metadata.customerName;
+  const name = metadata.name;
+  if (typeof invoiceNumber === "string" && invoiceNumber) return `Invoice #${invoiceNumber}`;
+  if (typeof orderNumber === "string" && orderNumber) return `Order #${orderNumber}`;
+  if (typeof customerName === "string" && customerName) return customerName;
+  if (typeof name === "string" && name) return name;
+  return activity.entityType.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
+function activitySummary(activity: {
+  entityType: string;
+  metadata: unknown;
+}, definition: ActivityDefinition) {
+  const metadata = asAuditRecord(activity.metadata) ?? {};
+  const before = metadata.before ?? (
+    metadata.beforeStatus !== undefined ? { status: metadata.beforeStatus } : undefined
+  );
+  const after = metadata.after ?? (
+    metadata.afterStatus !== undefined ? { status: metadata.afterStatus } : undefined
+  );
+  const changes = before !== undefined || after !== undefined
+    ? collectAuditChanges(before, after)
+    : [];
+  const totalChange = changes.find((change) =>
+    /(^|\.)(totalAmount|orderTotal|totalPrice|amount)$/.test(change.path),
+  );
+  const quantityChange = changes.find((change) => /(^|\.)quantity$/.test(change.path));
+  const statusChange = changes.find((change) => /(^|\.)status$/.test(change.path));
+  const highlights = [quantityChange, totalChange, statusChange]
+    .filter((change): change is NonNullable<typeof change> => Boolean(change))
+    .slice(0, 2)
+    .map((change) =>
+      `${formatChangePath(change.path)}: ${formatAuditValue(change.before, change.path.split(".").pop())} → ${formatAuditValue(change.after, change.path.split(".").pop())}`,
+    );
+  const recordTitle = activityRecordLabel(activity);
+  const reason = typeof metadata.reason === "string" && metadata.reason.trim()
+    ? metadata.reason.trim()
+    : null;
+  if (highlights.length) return `${recordTitle} changed. ${highlights.join(". ")}.`;
+  if (reason) return `${recordTitle}. Reason: ${reason}`;
+  return definition.description;
+}
+
 function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
   const record = asAuditRecord(metadata);
 
@@ -1312,6 +1362,9 @@ export function SuspiciousActivityPage() {
                         <h3>{selectedDefinition.label}</h3>
                         <span>{selectedDefinition.risk}</span>
                       </header>
+                      <p className="suspicious-activity-record-summary">
+                        {activitySummary(activity, selectedDefinition)}
+                      </p>
 
                       <dl>
                         <div>
@@ -1320,97 +1373,55 @@ export function SuspiciousActivityPage() {
                         </div>
 
                         <div>
-                          <dt>Action</dt>
-                          <dd>{activity.action}</dd>
-                        </div>
-
-                        <div>
-                          <dt>Actor</dt>
+                          <dt>Changed by</dt>
                           <dd>{activity.actorName ?? "System"}</dd>
                         </div>
 
                         <div>
-                          <dt>Record</dt>
+                          <dt>Affected record</dt>
                           <dd>
-                            {activity.entityType}
                             {activity.entityId ? (
-                              <>
-                                {" · "}
-                                {activity.entityType.toLowerCase() === "customer" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/customer-workstation?customerId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "order" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/orders?orderId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "invoice" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/invoices?invoiceId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "payment" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/payments?paymentId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "migrationjob" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/data-management?jobId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : (
-                                  activity.entityId
-                                )}
-                              </>
-                            ) : null}
+                              activity.entityType.toLowerCase() === "customer" ? (
+                                <button type="button" onClick={() => navigate(`/customer-workstation?customerId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "order" ? (
+                                <button type="button" onClick={() => navigate(`/orders?orderId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "invoice" ? (
+                                <button type="button" onClick={() => navigate(`/invoices?invoiceId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "payment" ? (
+                                <button type="button" onClick={() => navigate(`/payments?paymentId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "migrationjob" ? (
+                                <button type="button" onClick={() => navigate(`/data-management?jobId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activityRecordLabel(activity)
+                            ) : activityRecordLabel(activity)}
                           </dd>
                         </div>
 
-                        <div>
-                          <dt>Reason</dt>
-                          <dd>{activity.reason ?? "—"}</dd>
-                        </div>
-
-                        {activity.correlationId ? (
+                        {activity.reason ? (
                           <div>
-                            <dt>Correlation</dt>
-                            <dd>{activity.correlationId}</dd>
+                            <dt>Reason</dt>
+                            <dd>{activity.reason}</dd>
                           </div>
                         ) : null}
                       </dl>
+
+                      <details className="suspicious-activity-technical-details">
+                        <summary>Technical event information</summary>
+                        <dl>
+                          <div><dt>Action type</dt><dd>{activity.action}</dd></div>
+                          <div><dt>Record ID</dt><dd>{activity.entityId ?? "Not recorded"}</dd></div>
+                          <div><dt>Correlation ID</dt><dd>{activity.correlationId ?? "Not recorded"}</dd></div>
+                        </dl>
+                      </details>
 
                       <AuditMetadataDetails metadata={activity.metadata} />
                     </article>
