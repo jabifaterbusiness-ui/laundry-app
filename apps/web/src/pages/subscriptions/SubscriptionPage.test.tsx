@@ -329,13 +329,7 @@ describe("SubscriptionPage", () => {
       target: { value: "CARD" },
     });
 
-    const offlineReason = screen.getByRole("textbox", {
-      name: "Reason for saving payment offline",
-    });
-
-    fireEvent.change(offlineReason, {
-      target: { value: "routine offline payment test" },
-    });
+    expect(screen.queryByRole("textbox", { name: /reason for saving payment offline/i })).not.toBeInTheDocument();
 
     const offlineButton = await screen.findByRole("button", {
       name: "Save Monthly payment offline",
