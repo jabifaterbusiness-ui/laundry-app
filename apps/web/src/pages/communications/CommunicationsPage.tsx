@@ -51,7 +51,7 @@ export function CommunicationsPage() {
   const customersQuery = useQuery({
     queryKey: ["customers", "communications", businessId, activeBranchId, customerPage],
     queryFn: () => listCustomers({ page: customerPage, pageSize: 100, status: "active" }, { accessToken }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
   const connectionQuery = useQuery({
     queryKey: ["whatsapp", "connection", businessId],
@@ -76,7 +76,7 @@ export function CommunicationsPage() {
   const deliveriesQuery = useQuery({
     queryKey: ["communications", "deliveries", businessId, activeBranchId],
     queryFn: () => listCommunicationDeliveries({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
   useEffect(() => {
     setTitle("");
@@ -137,7 +137,7 @@ export function CommunicationsPage() {
   const reminderConfigQuery = useQuery({
     queryKey: ["communications", "reminder-config", businessId, activeBranchId],
     queryFn: () => getReminderConfig({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export function CommunicationsPage() {
   const unpickedQuery = useQuery({
     queryKey: ["communications", "unpicked-orders", businessId, activeBranchId],
     queryFn: () => listUnpickedOrders({ accessToken, branchId: activeBranchId }),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && businessId && activeBranchId),
   });
 
   const announcementMutation = useMutation({
