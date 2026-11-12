@@ -132,6 +132,21 @@ describe("whatsapp.provider", () => {
     expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
   });
 
+  it("rejects a receipt destination that does not belong to the consented customer", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      phone: "2348099999999",
+      whatsappOptIn: true,
+    });
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1",
+      customerId: "customer-1",
+      to: "2348012345678",
+      image: IMAGE,
+    })).rejects.toThrow("does not match the selected customer");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+    expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
+  });
+
   it("blocks tenant receipt images outside the 24-hour customer-service window", async () => {
     mocks.inboundFindFirst.mockResolvedValue(null);
     await expect(sendWhatsAppReceipt({
