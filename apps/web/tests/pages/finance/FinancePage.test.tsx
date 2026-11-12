@@ -511,9 +511,13 @@ describe("FinancePage", () => {
     await user.clear(minuteInput);
     await user.type(minuteInput, "30");
 
-    await user.click(await within(section).findByRole("checkbox", {
+    const whatsappCheckbox = await within(section).findByRole("checkbox", {
       name: "WhatsApp",
-    }));
+    });
+    expect(whatsappCheckbox).toBeDisabled();
+    expect(
+      within(section).getByText(/WhatsApp financial-statement delivery is temporarily unavailable/i),
+    ).toBeInTheDocument();
 
     await user.click(
       within(section).getByRole("button", {
@@ -531,7 +535,7 @@ describe("FinancePage", () => {
           hour: 9,
           minute: 30,
           emailEnabled: true,
-          whatsappEnabled: true,
+          whatsappEnabled: false,
           dailyEnabled: false,
           dailyHour: 8,
           dailyMinute: 0,
