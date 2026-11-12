@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 describe("listSuspiciousActivity", () => {
-  it("queries only the requested business and suspicious actions", async () => {
+  it("queries the active branch plus business-wide events, limited to suspicious actions", async () => {
     const records = [
       {
         id: "audit-1",
