@@ -110,7 +110,7 @@ describe("listSuspiciousActivity", () => {
   it("selects only fields needed by the protected activity centre", async () => {
     findMany.mockResolvedValue([]);
 
-    await listSuspiciousActivity("business-1");
+    await listSuspiciousActivity("business-1", "branch-1");
 
     const call = findMany.mock.calls[0]![0];
 
