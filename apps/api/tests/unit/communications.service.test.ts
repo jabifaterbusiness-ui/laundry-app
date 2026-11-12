@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   orderStatusRuleUpsert: vi.fn(),
   orderStatusRuleUpdate: vi.fn(),
   orderStatusRuleFindMany: vi.fn(),
+  orderStatusRuleFindFirst: vi.fn(),
+  orderFindFirst: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -40,7 +42,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       upsert: mocks.orderStatusRuleUpsert,
       update: mocks.orderStatusRuleUpdate,
       findMany: mocks.orderStatusRuleFindMany,
+      findFirst: mocks.orderStatusRuleFindFirst,
     },
+    order: { findFirst: mocks.orderFindFirst },
   },
 }));
 
@@ -64,7 +68,7 @@ vi.mock("../../src/modules/whatsapp/whatsapp-templates.service.js", () => ({
   sendAutomatedWhatsAppTemplate: mocks.sendAutomatedWhatsAppTemplate,
 }));
 
-import { createAnnouncement, listCommunicationDeliveries, listCustomerGroups, listOrderStatusRules, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
+import { createAnnouncement, listCommunicationDeliveries, listCustomerGroups, listOrderStatusRules, notifyOrderStatus, retryWhatsAppDelivery } from "../../src/modules/communications/communications.service.js";
 
 const DELIVERY_ID = "11111111-1111-4111-8111-111111111111";
 const CUSTOMER_ID = "22222222-2222-4222-8222-222222222222";
@@ -208,6 +212,104 @@ describe("default order-status notification compliance", () => {
       where: { id: "in-progress-rule-1" },
       data: { enabled: false },
     });
+  });
+});
+
+describe("automatic WhatsApp order notifications", () => {
+  const order = {
+    id: "order-1",
+    businessId: "business-1",
+    branchId: "branch-1",
+    customerId: CUSTOMER_ID,
+    orderNumber: "00001",
+    customer: {
+      id: CUSTOMER_ID,
+      name: "Ada",
+      phone: "+2348000000000",
+      email: "ada@example.com",
+      whatsappOptIn: true,
+    },
+    business: { name: "LaundryAngel" },
+  };
+
+  beforeEach(() => {
+    mocks.orderFindFirst.mockResolvedValue(order);
+    mocks.orderStatusRuleUpsert.mockResolvedValue({
+      id: "ready-rule-1",
+      enabled: true,
+      channel: "WHATSAPP",
+      whatsappMessage: "Hello {{customerName}}, order {{orderNumber}} is ready.",
+      whatsappTemplateName: "order_ready",
+      whatsappTemplateLanguage: "en",
+      emailSubject: "Order update",
+      emailMessage: "Your order is ready.",
+    });
+    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
+    mocks.communicationDeliveryCreate.mockResolvedValue({ id: "delivery-1" });
+    mocks.communicationDeliveryUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.sendWhatsAppText.mockResolvedValue({ id: "wamid-order-1" });
+  });
+
+  it("sends the configured WhatsApp notification to an opted-in customer", async () => {
+    const result = await notifyOrderStatus({
+      orderId: "order-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      status: "READY_FOR_PICKUP",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ status: "SENT", channel: "WHATSAPP", providerMessageId: "wamid-order-1" }),
+    ]);
+    expect(mocks.sendWhatsAppText).toHaveBeenCalledWith({
+      businessId: "business-1",
+      to: "+2348000000000",
+      body: "Hello Ada, order 00001 is ready.",
+    });
+  });
+
+  it("uses the approved UTILITY template after the 24-hour reply window closes", async () => {
+    mocks.sendWhatsAppText.mockRejectedValue(
+      new Error("The 24-hour WhatsApp customer-service window is closed. Use an approved template for this customer instead."),
+    );
+    mocks.sendAutomatedWhatsAppTemplate.mockResolvedValue({ providerMessageId: "wamid-template-ready" });
+
+    const result = await notifyOrderStatus({
+      orderId: "order-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      status: "READY_FOR_PICKUP",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ status: "SENT", channel: "WHATSAPP", providerMessageId: "wamid-template-ready" }),
+    ]);
+    expect(mocks.sendAutomatedWhatsAppTemplate).toHaveBeenCalledWith({
+      businessId: "business-1",
+      customerId: CUSTOMER_ID,
+      phone: "+2348000000000",
+      templateName: "order_ready",
+      language: "en",
+      variableValues: ["Ada", "00001", "ready for pickup", "LaundryAngel"],
+      templateCategory: "UTILITY",
+    });
+  });
+
+  it("records the notification as blocked when the customer has not opted in", async () => {
+    mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
+
+    const result = await notifyOrderStatus({
+      orderId: "order-1",
+      businessId: "business-1",
+      branchId: "branch-1",
+      status: "READY_FOR_PICKUP",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ status: "FAILED", channel: "WHATSAPP" }),
+    ]);
+    expect(mocks.sendWhatsAppText).not.toHaveBeenCalled();
+    expect(mocks.sendAutomatedWhatsAppTemplate).not.toHaveBeenCalled();
   });
 });
 
