@@ -787,6 +787,10 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer, forceNewOrder = false) {
+    if (returnToFromUrl === "customer-workstation") {
+      workspaceReturnToRef.current = "customer-workstation";
+      setWorkspaceReturnTo("customer-workstation");
+    }
     markOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
