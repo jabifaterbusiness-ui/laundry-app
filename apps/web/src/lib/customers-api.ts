@@ -136,7 +136,7 @@ export async function assignLegacyCustomersOwnerBranch(
   auth: { accessToken: string | null; sensitiveAuthorization: string },
 ): Promise<{ assignedCount: number; branchId: string; branchName: string; assignmentScope: "ALL_UNASSIGNED" | "SELECTED" }> {
   const branchIdForRequest = getEffectiveBranchId();
-  return apiFetch("/customers/legacy-unassigned/assign", {
+  return apiFetch<{ assignedCount: number; branchId: string; branchName: string; assignmentScope: "ALL_UNASSIGNED" | "SELECTED" }>("/customers/legacy-unassigned/assign", {
     method: "POST",
     accessToken: auth.accessToken,
     branchId: branchIdForRequest,
