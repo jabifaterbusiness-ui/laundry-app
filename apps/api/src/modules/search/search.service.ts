@@ -237,7 +237,7 @@ export async function globalSearch(
   ]);
 
   // Keep result types balanced so a long list of customer matches cannot
-  // push every matching order or invoice out of the dropdown.
+  // push matching orders, invoices or payments out of the dropdown.
   const groupedResults: GlobalSearchResult[][] = [
     customers.map((customer) => ({
       type: "CUSTOMER",
