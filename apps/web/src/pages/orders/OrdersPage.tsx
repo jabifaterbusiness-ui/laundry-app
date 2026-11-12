@@ -1175,7 +1175,12 @@ export function OrdersPage() {
               ? allOrders
               : [];
 
-    const newOrderContent = formOpen ? (
+    const showOrderForm = formOpen || Boolean(
+      activeWorkspace
+      && (activeWorkspace.mode === "new" || activeWorkspace.mode === "edit")
+      && !customerPickerOpen,
+    );
+    const newOrderContent = showOrderForm ? (
 
         <section aria-labelledby="new-order-heading">
           <h2 id="new-order-heading">Order Details</h2>
@@ -1197,6 +1202,7 @@ export function OrdersPage() {
                   type="button"
                   disabled={activeWorkspace?.mode === "edit"}
                   onClick={() => {
+                    setSwitchingCustomer(true);
                     setCustomerSearch("");
                     setFormOpen(false);
                     setCustomerPickerOpen(true);
