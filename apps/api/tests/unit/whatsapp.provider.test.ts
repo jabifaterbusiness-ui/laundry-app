@@ -36,7 +36,7 @@ const IMAGE = Buffer.from("fake-png");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: true });
+  mocks.customerFindFirst.mockResolvedValue({ phone: "2348012345678", whatsappOptIn: true });
 
   mocks.fetchMock
     .mockResolvedValueOnce({
@@ -126,8 +126,27 @@ describe("whatsapp.provider", () => {
   it("blocks business-initiated WhatsApp receipts when the customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ whatsappOptIn: false });
     await expect(sendWhatsAppReceipt({
-      businessId: "business-1", to: "2348012345678", image: IMAGE,
+      businessId: "business-1", customerId: "customer-1", to: "2348012345678", image: IMAGE,
     })).rejects.toThrow("has not explicitly opted in");
+    expect(mocks.customerFindFirst).toHaveBeenCalledWith({
+      where: { id: "customer-1", businessId: "business-1" },
+      select: { phone: true, whatsappOptIn: true },
+    });
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+    expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects a receipt destination that does not belong to the consented customer", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      phone: "2348099999999",
+      whatsappOptIn: true,
+    });
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1",
+      customerId: "customer-1",
+      to: "2348012345678",
+      image: IMAGE,
+    })).rejects.toThrow("does not match the selected customer");
     expect(mocks.fetchMock).not.toHaveBeenCalled();
     expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
   });
@@ -135,7 +154,7 @@ describe("whatsapp.provider", () => {
   it("blocks tenant receipt images outside the 24-hour customer-service window", async () => {
     mocks.inboundFindFirst.mockResolvedValue(null);
     await expect(sendWhatsAppReceipt({
-      businessId: "business-1", to: "2348012345678", image: IMAGE,
+      businessId: "business-1", customerId: "customer-1", to: "2348012345678", image: IMAGE,
     })).rejects.toThrow("24-hour WhatsApp customer-service window is closed");
     expect(mocks.fetchMock).not.toHaveBeenCalled();
   });

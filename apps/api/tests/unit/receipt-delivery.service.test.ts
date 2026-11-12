@@ -237,6 +237,7 @@ describe("receipt-delivery.service", () => {
 
     expect(sendWhatsAppReceiptMock).toHaveBeenCalledWith({
       businessId: INPUT.businessId,
+      customerId: "customer-A",
       to: "08000000000",
       image: Buffer.from("receipt-png"),
     });

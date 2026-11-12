@@ -111,6 +111,7 @@ export async function resendDigitalReceipt(
     try {
       const delivery = await sendWhatsAppReceipt({
         businessId: input.businessId,
+        customerId: customer.id,
         to: destination,
         image,
       });
