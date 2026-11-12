@@ -44,7 +44,7 @@ describe("globalSearch", () => {
     invoiceFindMany.mockResolvedValue([]);
   });
 
-  it("prioritizes existing orders and invoices over customer shortcuts", async () => {
+  it("returns customer, matching order, and matching invoice results together", async () => {
     customerFindMany.mockResolvedValue([
       {
         id: "customer-1",
@@ -87,6 +87,13 @@ describe("globalSearch", () => {
 
     expect(results).toEqual([
       {
+        type: "CUSTOMER",
+        id: "customer-1",
+        title: "John Doe",
+        subtitle: "08012345678",
+        href: "/orders?customerId=customer-1",
+      },
+      {
         type: "ORDER",
         id: "order-1",
         title: "Order #00001",
@@ -105,7 +112,7 @@ describe("globalSearch", () => {
     expect(permissionCheck).toHaveBeenCalledTimes(3);
   });
 
-  it("opens matching orders directly for customer email searches instead of starting a new order", async () => {
+  it("returns the customer account and matching order for customer email searches", async () => {
     customerFindMany.mockResolvedValue([
       {
         id: "customer-2",
@@ -163,6 +170,13 @@ describe("globalSearch", () => {
       }),
     );
     expect(results).toEqual([
+      {
+        type: "CUSTOMER",
+        id: "customer-2",
+        title: "Aaron Daniel",
+        subtitle: "08059489393 · aaron@example.com",
+        href: "/orders?customerId=customer-2",
+      },
       {
         type: "ORDER",
         id: "latest-order",
