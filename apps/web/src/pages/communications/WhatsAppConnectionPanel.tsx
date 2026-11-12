@@ -23,6 +23,7 @@ type SignupAsset = { wabaId: string; phoneNumberId: string };
 
 export function WhatsAppConnectionPanel() {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const businessId = useAuthStore((state) => state.user?.businessId);
   const queryClient = useQueryClient();
   const [sdkReady, setSdkReady] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -32,13 +33,13 @@ export function WhatsAppConnectionPanel() {
   const submittedRef = useRef(false);
 
   const connectionQuery = useQuery({
-    queryKey: ["whatsapp", "connection"],
+    queryKey: ["whatsapp", "connection", businessId],
     queryFn: () => getWhatsAppConnection({ accessToken }),
     enabled: Boolean(accessToken),
   });
 
   const approvedTemplatesQuery = useQuery({
-    queryKey: ["whatsapp", "templates"],
+    queryKey: ["whatsapp", "templates", businessId],
     queryFn: () => getApprovedWhatsAppTemplates(accessToken),
     enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
   });
@@ -50,7 +51,7 @@ export function WhatsAppConnectionPanel() {
         ? `${connection.receiptTemplateName}|${connection.receiptTemplateLanguage}`
         : "",
     );
-  }, [connectionQuery.data?.connection?.receiptTemplateName, connectionQuery.data?.connection?.receiptTemplateLanguage]);
+  }, [businessId, connectionQuery.data?.connection?.receiptTemplateName, connectionQuery.data?.connection?.receiptTemplateLanguage]);
 
   const receiptTemplateMutation = useMutation({
     mutationFn: () => {
@@ -64,7 +65,9 @@ export function WhatsAppConnectionPanel() {
     },
     onSuccess: async () => {
       setFeedback("WhatsApp receipt template settings saved.");
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection"] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "connection", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "templates", businessId] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "approved-templates", businessId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to save the receipt template."),
   });
