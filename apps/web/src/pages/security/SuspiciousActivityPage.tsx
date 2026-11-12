@@ -996,20 +996,6 @@ export function SuspiciousActivityPage() {
     });
   }, [activities, selectedDefinition]);
 
-  useEffect(() => {
-    if (!user?.id || !activeBranchId) {
-      setReadState({});
-      return;
-    }
-
-    setReadState(
-      loadSuspiciousActivityReadState(
-        user.id,
-        activeBranchId,
-      ).lastSeenEventIds,
-    );
-  }, [user?.id, activeBranchId]);
-
   const categoryGroups = useMemo(() => {
     const grouped = new Map<string, ActivityDefinition[]>();
     for (const definition of ACTIVITY_DEFINITIONS) {
