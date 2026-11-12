@@ -204,9 +204,9 @@ describe("SuspiciousActivityPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /user updated/i }));
 
-    expect(await screen.findByText(/User Alex Staff branch access changed from 2 to 1 assigned branches/i)).toBeInTheDocument();
-    expect(screen.queryByText(new RegExp(branchOne))).not.toBeInTheDocument();
-    expect(screen.queryByText(new RegExp(branchTwo))).not.toBeInTheDocument();
+    expect(await screen.findByText(/Alex Staff branch access changed from 2 to 1 assigned branches/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(branchOne))).not.toBeVisible();
+    expect(screen.getByText(new RegExp(branchTwo))).not.toBeVisible();
   });
 
   it("blocks users without the suspicious activity permission", () => {
