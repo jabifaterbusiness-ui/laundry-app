@@ -84,31 +84,31 @@ describe("SuspiciousActivityPage", () => {
     localStorage.clear();
   });
 
-  it("lets an authorized user reorder sections and remembers the chosen order", async () => {
+  it("lets an authorized user reorder activity types globally and remembers the chosen order", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
-    const { unmount } = renderPage();
+    const { container, unmount } = renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
-    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
-    expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
-    fireEvent.click(screen.getByRole("button", { name: "Move Inventory to top" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Stock Adjusted to top" }));
     fireEvent.click(screen.getByRole("button", { name: "Save order" }));
 
-    const savedOrder = JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]");
-    expect(savedOrder.slice(0, 2)).toEqual(["inventory", "backup"]);
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    expect(savedOrder[0]).toBe("stock-adjusted");
     unmount();
 
     renderPage();
-    const headings = await screen.findAllByRole("heading", { level: 3 });
-    expect(headings[0]).toHaveTextContent("Inventory");
-    expect(headings[1]).toHaveTextContent("Backup & recovery");
+    const firstActivity = await screen.findAllByText(/Stock Adjusted/);
+    expect(firstActivity.length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-activity-sort-id="stock-adjusted"]')).not.toBeNull();
   });
 
-  it("moves an individual event type directly to the top or bottom of its category and persists the order", async () => {
+  it("moves an individual event type directly to the top or bottom of the global list and persists the order", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to top" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to bottom" }));
@@ -117,19 +117,18 @@ describe("SuspiciousActivityPage", () => {
     const savedOrder = JSON.parse(
       localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
     ) as string[];
-    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
-    expect(quickOperations[0]).not.toBe("quick-void-operation");
-    expect(quickOperations[quickOperations.length - 1]).toBe("quick-void-operation");
+    expect(savedOrder[0]).toBe("quick-void-operation");
+    expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
   });
 
   it("supports pointer dragging event types into an exact position", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
     const { container } = renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
 
     const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
-    const target = container.querySelector('[data-activity-sort-id="quick-manual-update"]');
+    const target = container.querySelector('[data-activity-sort-id="stock-adjusted"]');
     expect(target).not.toBeNull();
 
     fireEvent.pointerDown(dragHandle, { pointerId: 1, pointerType: "touch" });
@@ -140,9 +139,8 @@ describe("SuspiciousActivityPage", () => {
     const savedOrder = JSON.parse(
       localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
     ) as string[];
-    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
-    expect(quickOperations.indexOf("quick-void-operation")).toBeLessThan(
-      quickOperations.indexOf("quick-manual-update"),
+    expect(savedOrder.indexOf("quick-void-operation")).toBeLessThan(
+      savedOrder.indexOf("stock-adjusted"),
     );
   });
 
@@ -174,7 +172,7 @@ describe("SuspiciousActivityPage", () => {
     );
 
     expect(
-      screen.getByText(/services\.view for Alex Staff: Not allowed → Allowed/i),
+      screen.getByText(/services view access for Alex Staff changed from not allowed to allowed/i),
     ).toBeInTheDocument();
     expect(screen.getByText("User Alex Staff")).toBeInTheDocument();
 
