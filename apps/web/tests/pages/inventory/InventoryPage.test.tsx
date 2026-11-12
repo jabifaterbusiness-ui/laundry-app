@@ -424,6 +424,37 @@ describe("InventoryPage", () => {
     });
   });
 
+  it("shows batch expiry status in branch inventory reports", async () => {
+    mockGetInventoryReports.mockResolvedValue({
+      data: {
+        periodDays: 30,
+        totalValuation: 0,
+        movementCount: 0,
+        consumptionQuantity: 0,
+        adjustmentQuantity: 0,
+        valuation: [],
+        movementTotals: {},
+        expiryRegister: [{
+          id: "expiry-1",
+          inventoryItem: item,
+          batchNumber: "LOT-EXP-01",
+          expiryDate: "2026-11-15T00:00:00.000Z",
+          quantityReceived: 8,
+          receiptNumber: "GRN-EXP-01",
+          receivedAt: "2026-11-01T00:00:00.000Z",
+          daysUntilExpiry: 3,
+          status: "DUE_SOON",
+        }],
+        supplierPerformance: [],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText("Batch expiry register")).toBeInTheDocument();
+    expect(await screen.findByText("LOT-EXP-01")).toBeInTheDocument();
+    expect(screen.getByText("Due within 30 days")).toBeInTheDocument();
+  });
+
   it("creates an inventory item", async () => {
     renderPage();
 
