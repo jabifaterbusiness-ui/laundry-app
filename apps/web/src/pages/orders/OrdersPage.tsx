@@ -193,6 +193,7 @@ export function OrdersPage() {
   const [customerId, setCustomerId] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [orderFormDirty, setOrderFormDirty] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [switchingCustomer, setSwitchingCustomer] = useState(false);
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -440,6 +441,7 @@ export function OrdersPage() {
         });
       }
 
+      setOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setSelectedOrder(order);
@@ -531,6 +533,7 @@ export function OrdersPage() {
       }
 
       setSelectedOrder(order);
+      setOrderFormDirty(false);
       setFormOpen(false);
       setFormError(null);
       setEditReason("");
@@ -609,7 +612,8 @@ export function OrdersPage() {
     void (async () => {
       try {
         const customer = await getCustomer(order.customerId, { accessToken });
-        const workspaceId = openWorkspace(customer, { order });
+        setOrderFormDirty(false);
+    const workspaceId = openWorkspace(customer, { order });
         switchWorkspace(workspaceId);
         updateWorkspace(workspaceId, { activeOrder: order, mode: "view" });
         setSelectedOrder(order);
@@ -1197,7 +1201,7 @@ export function OrdersPage() {
 
         <section aria-labelledby="new-order-heading">
           <h2 id="new-order-heading">Order Details</h2>
-          <form onSubmit={submitOrder}>
+          <form onSubmit={submitOrder} onChange={() => setOrderFormDirty(true)}>
             <div>
               <div>
                 <strong>Customer</strong>
@@ -1739,6 +1743,7 @@ export function OrdersPage() {
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
+            isDirty={orderFormDirty}
             customer={activeWorkspace.customer}
             mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
