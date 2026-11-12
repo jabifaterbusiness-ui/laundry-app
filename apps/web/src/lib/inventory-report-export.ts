@@ -36,6 +36,18 @@ export function buildInventoryReportCsv(report: InventoryReport): string {
       row.totalValue / 100,
     ])),
     "",
+    csvRow(["Batch expiry register"]),
+    csvRow(["Item", "Batch / lot", "Receipt", "Quantity received", "Expiry date", "Days until expiry", "Status"]),
+    ...report.expiryRegister.map((row) => csvRow([
+      row.inventoryItem.name,
+      row.batchNumber ?? "",
+      row.receiptNumber,
+      row.quantityReceived,
+      new Date(row.expiryDate).toISOString().slice(0, 10),
+      row.daysUntilExpiry,
+      row.status,
+    ])),
+    "",
     csvRow(["Supplier", "Orders", "Received", "Partially received", "Open", "Average first receipt lead time (days)", "Ordered value (NGN)"]),
     ...report.supplierPerformance.map((row) => csvRow([
       row.supplierName,
