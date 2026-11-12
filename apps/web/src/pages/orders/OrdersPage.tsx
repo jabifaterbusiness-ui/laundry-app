@@ -1714,7 +1714,7 @@ export function OrdersPage() {
 
   return (
     <main>
-      <h1>{activeWorkspace?.mode === "view" ? `Order Management · ${activeWorkspace.customer.name}` : "Orders"}</h1>
+      <h1>{activeWorkspace ? `Order Management · ${activeWorkspace.customer.name}` : "Orders"}</h1>
       {activeWorkspace && (activeWorkspace.mode !== "view" || activeWorkspace.activeOrder) ? (
         <>
           <OrderManagement
