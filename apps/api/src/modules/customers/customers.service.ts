@@ -837,6 +837,8 @@ export async function mergeCustomer(
     // WhatsApp consent is bound to the exact phone number that opted in.
     // Never transfer consent to a different destination number during merge.
     const sameNormalizedPhone =
+      typeof customer.phone === "string" &&
+      typeof targetCustomer.phone === "string" &&
       normalizePhone(customer.phone) === normalizePhone(targetCustomer.phone);
     if (
       sameNormalizedPhone &&
