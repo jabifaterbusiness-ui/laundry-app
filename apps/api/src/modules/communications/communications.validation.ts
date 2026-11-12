@@ -45,6 +45,14 @@ export const statusRuleSchema = z.object({
   if (Boolean(value.whatsappTemplateName) !== Boolean(value.whatsappTemplateLanguage)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose both a template and its language", path: ["whatsappTemplateLanguage"] });
   }
+  if (value.enabled && (value.channel === "WHATSAPP" || value.channel === "BOTH") &&
+      (!value.whatsappTemplateName || !value.whatsappTemplateLanguage)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Choose an approved UTILITY template so notifications can still be sent after the 24-hour reply window closes",
+      path: ["whatsappTemplateName"],
+    });
+  }
 });
 export const statusRuleIdSchema = z.object({ id: z.string().uuid() });
 export const reminderConfigSchema = z.object({
