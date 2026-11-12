@@ -1067,15 +1067,40 @@ export function CustomerWorkstationPage() {
                     <th>Status</th>
                     <th>Total</th>
                     <th>Created</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order) => (
                     <tr key={order.id}>
-                      <td>{order.orderNumber}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/order-management?orderId=${encodeURIComponent(order.id)}&returnTo=customer-workstation&customerId=${encodeURIComponent(selectedCustomer.id)}`)}
+                        >
+                          {order.orderNumber}
+                        </button>
+                      </td>
                       <td>{statusLabel(order.status)}</td>
                       <td>{formatMoney(order.orderTotal)}</td>
                       <td>{formatDate(order.createdAt)}</td>
+                      <td>
+                        {hasPermission(user, "orders.update") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const operation = QUICK_OPERATIONS.find((entry) => entry.code === "TO");
+                              if (operation) {
+                                window.dispatchEvent(new CustomEvent("quick-operation:open", {
+                                  detail: { ...operation, recordId: order.id },
+                                }));
+                              }
+                            }}
+                          >
+                            Transfer Order (TO)
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
