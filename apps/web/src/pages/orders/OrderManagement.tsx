@@ -868,7 +868,7 @@ function OrderManagementContent({
             setPrintInvoiceId(invoiceQuery.data!.id);
           }}
         >
-          Print Customer Copy (F1)
+          Print Customer Copy (FN+F1)
         </button>
 
         <button
