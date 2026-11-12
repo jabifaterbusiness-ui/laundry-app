@@ -291,7 +291,7 @@ describe("QuickOperationLauncher", () => {
     listCustomersMock.mockReset();
     listCustomersMock.mockResolvedValue({
       data: [
-        { id: "customer-1", name: "Source Customer", phone: "08000000001", lifecycleStatus: "ACTIVE" },
+        { id: "customer-1", name: "Source Customer", phone: "08000000001", lifecycleStatus: "ACTIVE", ownerBranchId: "branch-1" },
         { id: "customer-2", name: "Target Customer", phone: "08000000002", lifecycleStatus: "ACTIVE" },
       ],
       pagination: { page: 1, pageSize: 100, total: 2, totalPages: 1 },
