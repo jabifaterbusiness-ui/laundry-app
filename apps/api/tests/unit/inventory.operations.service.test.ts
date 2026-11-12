@@ -193,6 +193,44 @@ describe("inventory operations", () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
+  it("deducts damaged quantities from available stock and preserves batch trace", async () => {
+    db.inventoryItem.findFirst.mockResolvedValue({ id: ITEM, businessId: BUSINESS, ownerBranchId: SOURCE, isActive: true });
+    db.branch.findFirst.mockResolvedValue({ id: SOURCE, businessId: BUSINESS, isActive: true });
+    db.inventoryStock.upsert.mockResolvedValue({ id: "stock-damaged", quantity: 9, reservedQuantity: 2, averageUnitCost: 125 });
+    db.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-damaged", quantity: 9, reservedQuantity: 2, averageUnitCost: 125 });
+    db.inventoryStock.update.mockResolvedValue({ id: "stock-damaged", quantity: 6 });
+    db.inventoryMovement.create.mockResolvedValue({ id: "movement-damaged", type: "DAMAGED" });
+
+    const result = await createInventoryMovement(
+      { businessId: BUSINESS, branchId: SOURCE, userId: USER },
+      {
+        inventoryItemId: ITEM,
+        quantity: 3,
+        type: "DAMAGED",
+        reason: "Container leaked in storage",
+        batchNumber: "LOT-DMG-01",
+        expiryDate: new Date("2027-03-01"),
+        createdById: USER,
+      },
+    );
+
+    expect(db.inventoryStock.update).toHaveBeenCalledWith({
+      where: { id: "stock-damaged" },
+      data: { quantity: 6 },
+    });
+    expect(db.inventoryMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: "DAMAGED",
+        quantity: 3,
+        resultingQuantity: 6,
+        reason: "Container leaked in storage",
+        batchNumber: "LOT-DMG-01",
+        expiryDate: new Date("2027-03-01"),
+      }),
+    });
+    expect(result.stock.quantity).toBe(6);
+  });
+
   it("requires an audit reason for returns, waste, damage and expiry movements", async () => {
     for (const type of ["RETURN", "WASTE", "DAMAGED", "EXPIRED"] as const) {
       await expect(createInventoryMovement(
