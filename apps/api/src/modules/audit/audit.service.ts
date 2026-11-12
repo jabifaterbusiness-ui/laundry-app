@@ -74,7 +74,7 @@ export async function listSuspiciousActivity(
   const records = await prisma.auditLog.findMany({
     where: {
       businessId,
-      branchId,
+      OR: [{ branchId }, { branchId: null }],
       action: {
         in: [...SUSPICIOUS_ACTIVITY_ACTIONS],
       },
