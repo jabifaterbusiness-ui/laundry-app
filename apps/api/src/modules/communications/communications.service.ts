@@ -38,16 +38,30 @@ function getWhatsAppRetryPayload(input: {
 const DEFAULT_READY_WHATSAPP_MESSAGE = "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.";
 
 async function ensureDefaultReadyRule(businessId: string) {
-  return prisma.orderStatusNotificationRule.upsert({
+  const rule = await prisma.orderStatusNotificationRule.upsert({
     where: { businessId_status: { businessId, status: "READY_FOR_PICKUP" } },
     create: {
-      businessId, status: "READY_FOR_PICKUP", enabled: true, channel: "WHATSAPP",
+      businessId, status: "READY_FOR_PICKUP", enabled: false, channel: "WHATSAPP",
       whatsappMessage: DEFAULT_READY_WHATSAPP_MESSAGE,
       emailSubject: "Your laundry is ready for pickup",
       emailMessage: "Hello {{customerName}}, your order {{orderNumber}} is ready for pickup. Thank you for choosing {{companyName}}.",
     },
     update: {},
   });
+
+  // Existing businesses may already have the legacy default enabled without
+  // an approved template. Keep it disabled until a compliant fallback is set.
+  if (
+    rule.enabled &&
+    (rule.channel === "WHATSAPP" || rule.channel === "BOTH") &&
+    (!rule.whatsappTemplateName || !rule.whatsappTemplateLanguage)
+  ) {
+    return prisma.orderStatusNotificationRule.update({
+      where: { id: rule.id },
+      data: { enabled: false },
+    });
+  }
+  return rule;
 }
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
