@@ -446,6 +446,9 @@ async function getEditableCustomerForBranch(
 ) {
   const customer = await getCustomerForBusiness(customerId, businessId, branchId, userId, tx);
   if (!customer) throw new AppError(notFoundMessage, 404);
+  if (customer.lifecycleStatus === "MERGED") {
+    throw new AppError("Merged customer archives are read-only. Use the destination customer instead.", 409);
+  }
   await assertBranchResourceWriteAccess({
     businessId,
     branchId,
