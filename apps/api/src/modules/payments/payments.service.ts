@@ -16,6 +16,7 @@ export interface ListPaymentsParams {
   businessId: string;
   branchId: string;
   invoiceId?: string;
+  search?: string;
   status?: PaymentStatus;
   type?: PaymentType;
   page: number;
@@ -394,6 +395,7 @@ export async function listPayments(params: ListPaymentsParams) {
     businessId,
     branchId,
     invoiceId,
+    search,
     status,
     type,
     page,
@@ -406,6 +408,20 @@ export async function listPayments(params: ListPaymentsParams) {
     ...(invoiceId ? { invoiceId } : {}),
     ...(status ? { status } : {}),
     ...(type ? { type } : {}),
+    ...(search ? {
+      AND: [{
+        OR: [
+          { reference: { contains: search, mode: "insensitive" } },
+          { note: { contains: search, mode: "insensitive" } },
+          { invoice: { is: { invoiceNumber: { contains: search } } } },
+          { invoice: { is: { customerName: { contains: search, mode: "insensitive" } } } },
+          { invoice: { is: { order: { is: { orderNumber: { contains: search } } } } } },
+          { invoice: { is: { order: { is: { customer: { is: { name: { contains: search, mode: "insensitive" } } } } } } },
+          { invoice: { is: { order: { is: { customer: { is: { phone: { contains: search } } } } } } },
+          { invoice: { is: { order: { is: { customer: { is: { email: { contains: search, mode: "insensitive" } } } } } } },
+        ],
+      }],
+    } : {}),
   };
 
   const [data, total] = await Promise.all([
