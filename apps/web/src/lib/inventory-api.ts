@@ -50,9 +50,9 @@ export interface InventoryMovement {
   inventoryItemId: string;
   quantity: number;
   type: InventoryMovementType;
-  unitCost: number;
-  batchNumber: string | null;
-  expiryDate: string | null;
+  unitCost?: number;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
   resultingQuantity: number;
   reason: string | null;
   reference: string | null;
