@@ -870,8 +870,18 @@ export async function mergeCustomer(
       },
     });
 
+    const archivedCustomer = {
+      ...customer,
+      isActive: false,
+      lifecycleStatus: "MERGED" as const,
+      statusReason: `Merged into customer ${targetCustomer.id}`,
+      statusChangedAt,
+      statusChangedById: userId,
+      mergedIntoCustomerId: targetCustomer.id,
+    };
+
     return {
-      customer,
+      customer: archivedCustomer,
       targetCustomer,
       mergedOrderCount: orders.length,
       mergedOrders: orders,
