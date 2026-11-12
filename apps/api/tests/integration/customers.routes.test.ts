@@ -329,7 +329,7 @@ describe("Customers routes - tenant isolation end-to-end", () => {
         id: "11111111-1111-1111-1111-111111111111",
         businessId: "biz-B",
       }),
-      include: { ownerBranch: { select: { id: true, name: true } } },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
     });
   });
 
