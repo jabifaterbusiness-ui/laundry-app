@@ -759,6 +759,7 @@ describe("mergeCustomer - duplicate account merge", () => {
 
     orderFindMany.mockResolvedValue([]);
     customerAccountFindFirst
+      .mockResolvedValueOnce(null as never) // no foreign-branch account
       .mockResolvedValueOnce({ id: "source-account" } as never)
       .mockResolvedValueOnce({ id: "target-account" } as never);
     customerAccountTransactionUpdateMany.mockResolvedValue({ count: 2 });
@@ -799,6 +800,7 @@ describe("mergeCustomer - duplicate account merge", () => {
 
     orderFindMany.mockResolvedValue([]);
     customerAccountFindFirst
+      .mockResolvedValueOnce(null as never) // no foreign-branch account
       .mockResolvedValueOnce({ id: "source-account" } as never)
       .mockResolvedValueOnce(null);
     customerAccountUpdate.mockResolvedValue({
