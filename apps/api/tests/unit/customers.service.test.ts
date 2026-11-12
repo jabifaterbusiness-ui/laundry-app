@@ -663,29 +663,36 @@ describe("mergeCustomer - duplicate account merge", () => {
     });
   });
 
-  it("moves service prices, group memberships, campaign recipients and delivery history", async () => {
+  it("moves customer-linked records and preserves duplicate membership history", async () => {
     findFirst
       .mockResolvedValueOnce(sourceCustomer as never)
       .mockResolvedValueOnce(targetCustomer as never);
     orderFindMany.mockResolvedValue([]);
+    const sourceCreatedAt = new Date("2025-01-01T00:00:00.000Z");
+    const targetCreatedAt = new Date("2025-06-01T00:00:00.000Z");
     prismaMock.customerServicePrice.findMany.mockResolvedValue([
       { id: "price-1", serviceId: "service-1", branchId: "branch-A", unitPrice: 1800 },
+      { id: "price-2", serviceId: "service-2", branchId: "branch-A", unitPrice: 2200 },
     ] as never);
     prismaMock.customerServicePrice.findFirst
       .mockResolvedValueOnce(null) // foreign-branch preflight
-      .mockResolvedValueOnce(null); // no target price duplicate
+      .mockResolvedValueOnce(null) // no target override for service 1
+      .mockResolvedValueOnce({ id: "target-price-2" } as never); // retain source conflict
     prismaMock.customerServicePrice.update.mockResolvedValue({ id: "price-1" } as never);
     prismaMock.customerGroupMember.findMany.mockResolvedValue([
-      { id: "group-member-1", groupId: "group-1" },
-      { id: "group-member-2", groupId: "group-2" },
+      { id: "group-member-1", groupId: "group-1", createdAt: sourceCreatedAt },
+      { id: "group-member-2", groupId: "group-2", createdAt: sourceCreatedAt },
     ] as never);
     prismaMock.customerGroupMember.findFirst
-      .mockResolvedValueOnce({ id: "existing-group-member" } as never)
+      .mockResolvedValueOnce({ id: "existing-group-member", createdAt: targetCreatedAt } as never)
       .mockResolvedValueOnce(null);
     prismaMock.announcementRecipient.findMany.mockResolvedValue([
-      { id: "recipient-1", campaignId: "campaign-1" },
+      { id: "recipient-1", campaignId: "campaign-1", createdAt: sourceCreatedAt },
+      { id: "recipient-2", campaignId: "campaign-2", createdAt: sourceCreatedAt },
     ] as never);
-    prismaMock.announcementRecipient.findFirst.mockResolvedValue(null);
+    prismaMock.announcementRecipient.findFirst
+      .mockResolvedValueOnce({ id: "existing-recipient", createdAt: targetCreatedAt } as never)
+      .mockResolvedValueOnce(null);
 
     const result = await mergeCustomer(
       sourceCustomer.id,
@@ -695,9 +702,15 @@ describe("mergeCustomer - duplicate account merge", () => {
       targetCustomer.id,
     );
 
+    expect(prismaMock.customerServicePrice.update).toHaveBeenCalledTimes(1);
     expect(prismaMock.customerServicePrice.update).toHaveBeenCalledWith({
       where: { id: "price-1" },
       data: { customerId: targetCustomer.id },
+    });
+    expect(prismaMock.customerServicePrice.delete).not.toHaveBeenCalled();
+    expect(prismaMock.customerGroupMember.update).toHaveBeenCalledWith({
+      where: { id: "existing-group-member" },
+      data: { createdAt: sourceCreatedAt },
     });
     expect(prismaMock.customerGroupMember.delete).toHaveBeenCalledWith({
       where: { id: "group-member-1" },
@@ -707,7 +720,14 @@ describe("mergeCustomer - duplicate account merge", () => {
       data: { customerId: targetCustomer.id },
     });
     expect(prismaMock.announcementRecipient.update).toHaveBeenCalledWith({
+      where: { id: "existing-recipient" },
+      data: { createdAt: sourceCreatedAt },
+    });
+    expect(prismaMock.announcementRecipient.delete).toHaveBeenCalledWith({
       where: { id: "recipient-1" },
+    });
+    expect(prismaMock.announcementRecipient.update).toHaveBeenCalledWith({
+      where: { id: "recipient-2" },
       data: { customerId: targetCustomer.id },
     });
     expect(prismaMock.communicationDelivery.updateMany).toHaveBeenCalledWith({
@@ -723,8 +743,9 @@ describe("mergeCustomer - duplicate account merge", () => {
       data: { customerId: targetCustomer.id },
     });
     expect(result.mergedServicePriceCount).toBe(1);
+    expect(result.retainedServicePriceConflictCount).toBe(1);
     expect(result.mergedGroupMembershipCount).toBe(2);
-    expect(result.mergedAnnouncementRecipientCount).toBe(1);
+    expect(result.mergedAnnouncementRecipientCount).toBe(2);
   });
 
   it("rejects a source customer with orders in another branch before moving any records", async () => {
