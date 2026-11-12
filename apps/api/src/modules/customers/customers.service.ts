@@ -659,8 +659,8 @@ export async function mergeCustomer(
     }
 
     // Merge branch-scoped price overrides. If the target already has an
-    // override for the same service/branch, the source override becomes the
-    // canonical value; otherwise its original row is reassigned intact.
+    // override for the same service/branch, retain the source row on the
+    // archived customer as a conflict snapshot; otherwise reassign it intact.
     const sourcePrices = await tx.customerServicePrice.findMany({
       where: { businessId, customerId: customer.id },
     });
@@ -674,13 +674,7 @@ export async function mergeCustomer(
         },
         select: { id: true },
       });
-      if (targetPrice) {
-        await tx.customerServicePrice.update({
-          where: { id: targetPrice.id },
-          data: { unitPrice: sourcePrice.unitPrice },
-        });
-        await tx.customerServicePrice.delete({ where: { id: sourcePrice.id } });
-      } else {
+      if (!targetPrice) {
         await tx.customerServicePrice.update({
           where: { id: sourcePrice.id },
           data: { customerId: targetCustomer.id },
@@ -692,14 +686,18 @@ export async function mergeCustomer(
     // (groupId, customerId) key when both records belong to the same group.
     const sourceGroupMemberships = await tx.customerGroupMember.findMany({
       where: { businessId, customerId: customer.id },
-      select: { id: true, groupId: true },
+      select: { id: true, groupId: true, createdAt: true },
     });
     for (const membership of sourceGroupMemberships) {
       const existing = await tx.customerGroupMember.findFirst({
         where: { groupId: membership.groupId, customerId: targetCustomer.id },
-        select: { id: true },
+        select: { id: true, createdAt: true },
       });
       if (existing) {
+        await tx.customerGroupMember.update({
+          where: { id: existing.id },
+          data: { createdAt: membership.createdAt < existing.createdAt ? membership.createdAt : existing.createdAt },
+        });
         await tx.customerGroupMember.delete({ where: { id: membership.id } });
       } else {
         await tx.customerGroupMember.update({
@@ -713,14 +711,18 @@ export async function mergeCustomer(
     // existing target recipient when both accounts were already included.
     const sourceRecipients = await tx.announcementRecipient.findMany({
       where: { customerId: customer.id },
-      select: { id: true, campaignId: true },
+      select: { id: true, campaignId: true, createdAt: true },
     });
     for (const recipient of sourceRecipients) {
       const existing = await tx.announcementRecipient.findFirst({
         where: { campaignId: recipient.campaignId, customerId: targetCustomer.id },
-        select: { id: true },
+        select: { id: true, createdAt: true },
       });
       if (existing) {
+        await tx.announcementRecipient.update({
+          where: { id: existing.id },
+          data: { createdAt: recipient.createdAt < existing.createdAt ? recipient.createdAt : existing.createdAt },
+        });
         await tx.announcementRecipient.delete({ where: { id: recipient.id } });
       } else {
         await tx.announcementRecipient.update({
