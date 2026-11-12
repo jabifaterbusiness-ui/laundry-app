@@ -386,6 +386,32 @@ describe("updateCustomer - tenant isolation", () => {
     });
   });
 
+  it("preserves existing WhatsApp consent when only phone formatting changes", async () => {
+    const consentAt = new Date("2026-09-01T00:00:00.000Z");
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-1",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348011111111",
+        whatsappOptIn: true,
+        whatsappOptInAt: consentAt,
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      } as never)
+      .mockResolvedValueOnce({ id: "cust-1", phone: "+234 801 111 1111", whatsappOptIn: true } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-1", "biz-1", "branch-A", "user-A", {
+      phone: "+234 801 111 1111",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-1", businessId: "biz-1" },
+      data: { phone: "+234 801 111 1111" },
+    });
+  });
+
   it("records fresh WhatsApp consent when the new phone opts in during the same update", async () => {
     findFirst
       .mockResolvedValueOnce({
