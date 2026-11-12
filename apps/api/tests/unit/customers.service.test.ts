@@ -311,6 +311,42 @@ describe("updateCustomer - tenant isolation", () => {
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "cust-1", businessId: "biz-1" }, data: { name: "New Name" } });
   });
 
+  it("repairs a legacy opt-in that has no recorded source or timestamp", async () => {
+    findFirst
+      .mockResolvedValueOnce({
+        id: "cust-legacy",
+        businessId: "biz-1",
+        ownerBranchId: "branch-A",
+        phone: "2348012345678",
+        whatsappOptIn: true,
+        whatsappOptInAt: null,
+        whatsappOptInSource: null,
+      } as never)
+      .mockResolvedValueOnce({
+        id: "cust-legacy",
+        ownerBranchId: "branch-A",
+        whatsappOptIn: true,
+        whatsappOptInAt: new Date(),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+      } as never);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updateCustomer("cust-legacy", "biz-1", "branch-A", "user-A", {
+      whatsappOptIn: true,
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "cust-legacy", businessId: "biz-1" },
+      data: expect.objectContaining({
+        whatsappOptIn: true,
+        whatsappOptInAt: expect.any(Date),
+        whatsappOptInSource: "CUSTOMER_WRITTEN",
+        whatsappOptOutAt: null,
+      }),
+    });
+  });
+
   it("records opt-out only when a previously opted-in customer withdraws consent", async () => {
     findFirst.mockResolvedValue({ whatsappOptIn: true } as never);
     updateMany.mockResolvedValue({ count: 1 });
