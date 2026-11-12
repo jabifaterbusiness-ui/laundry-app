@@ -33,7 +33,7 @@ describe("GlobalSearch", () => {
     searchQuickOperationsMock.mockReturnValue([]);
   });
 
-  it("keeps order matches out of suggestions and opens the exact match on Enter", async () => {
+  it("shows order matches in suggestions and opens the exact order selected", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "ORDER", id: "order-42", title: "Order #00042",
       subtitle: "Ada Laundry · RECEIVED", href: "/orders?orderId=order-42",
@@ -41,12 +41,12 @@ describe("GlobalSearch", () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "00042" } });
 
-    expect(await screen.findByText("Matching order found. Press Enter to open Order Management.")).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Order #00042/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /Order #00042/ })).toBeInTheDocument();
+    expect(screen.getByText("Orders")).toBeInTheDocument();
     await waitFor(() => expect(globalSearchMock).toHaveBeenCalledWith(
       { q: "00042", limit: 10 }, { accessToken: "access-token" }, "branch-main",
     ));
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Global search" }), { key: "Enter" });
+    fireEvent.click(screen.getByRole("option", { name: /Order #00042/ }));
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-42");
     expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
   });
@@ -97,7 +97,7 @@ describe("GlobalSearch", () => {
     render(<GlobalSearch />);
     const input = screen.getByRole("textbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00005" } });
-    await screen.findByText("Matching order found. Press Enter to open Order Management.");
+    await screen.findByRole("option", { name: /Order #00005/ });
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
@@ -113,7 +113,7 @@ describe("GlobalSearch", () => {
     const input = screen.getByRole("textbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00005" } });
 
-    expect(await screen.findByText("No exact order-number match. Check the order number and try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Order #100005")).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(navigateMock).not.toHaveBeenCalled();
