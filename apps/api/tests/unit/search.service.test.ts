@@ -17,6 +17,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     invoice: {
       findMany: vi.fn(),
     },
+    payment: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
