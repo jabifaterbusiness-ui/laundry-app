@@ -53,6 +53,11 @@ export function OrderManagementPage() {
   }, [requestSensitiveAuthorization]);
 
   useEffect(() => {
+    authorizationRequestedForRef.current = null;
+    setAuthorizedContext(null);
+  }, [userId, businessId, activeBranchId]);
+
+  useEffect(() => {
     if (
       !orderId ||
       !userId ||
