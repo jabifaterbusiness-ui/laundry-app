@@ -733,6 +733,7 @@ export function OrdersPage() {
     : null;
 
   function closeForm() {
+    setOrderFormDirty(false);
     if (activeWorkspace?.mode === "edit" && activeWorkspaceId) {
       updateWorkspace(activeWorkspaceId, { mode: "view" });
     }
@@ -743,6 +744,7 @@ export function OrdersPage() {
   }
 
   function openCreate() {
+    setOrderFormDirty(false);
     setSelectedOrder(null);
     setFormError(null);
 
@@ -761,6 +763,7 @@ export function OrdersPage() {
   }
 
   function openCustomerWorkspace(customer: Customer) {
+    setOrderFormDirty(false);
     const existingWorkspace = workspaces.find(
       (workspace) => workspace.customer.id === customer.id,
     );
@@ -1043,6 +1046,7 @@ export function OrdersPage() {
       return;
     }
 
+    setOrderFormDirty(false);
     const workspaceId = openWorkspace(customer, { order });
     switchWorkspace(workspaceId);
     updateWorkspace(workspaceId, {
@@ -1749,6 +1753,7 @@ export function OrdersPage() {
             newOrderContent={newOrderContent}
             onBack={() => {
               const customerId = activeWorkspace.customer.id;
+              setOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
               if (workspaceReturnTo === "customer-workstation") {
                 setWorkspaceReturnTo(null);
