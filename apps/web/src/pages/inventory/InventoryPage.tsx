@@ -1226,9 +1226,11 @@ export function InventoryPage() {
       </section>
 
       <section className="inventory-panel inventory-ledger" aria-label="Stock movement history">
+        <details className="inventory-ledger-details">
+          <summary><h2>Stock Movement History</h2></summary>
+          <div className="inventory-ledger-content">
         <div className="inventory-ledger-heading">
           <div>
-            <h2>Stock Movement History</h2>
             <p>Auditable, branch-specific record of receipts, issues and adjustments.</p>
           </div>
           <label>
@@ -1313,6 +1315,8 @@ export function InventoryPage() {
             ) : null}
           </>
         ) : null}
+          </div>
+        </details>
       </section>
 
       <section className="inventory-panel inventory-procurement" aria-label="Suppliers and procurement">

@@ -12,6 +12,7 @@ let mockUser = {
   role: "Branch Manager",
   securityRole: "BRANCH_MANAGER" as const,
   permissions: ["security.suspicious_activity.view"],
+  branches: [] as Array<{ id: string; name: string }>,
 };
 
 let mockAccessToken = "token";
@@ -78,37 +79,39 @@ describe("SuspiciousActivityPage", () => {
       role: "Branch Manager",
       securityRole: "BRANCH_MANAGER",
       permissions: ["security.suspicious_activity.view"],
+      branches: [],
     };
 
     mockAccessToken = "token";
     localStorage.clear();
   });
 
-  it("lets an authorized user reorder sections and remembers the chosen order", async () => {
+  it("lets an authorized user reorder activity types globally and remembers the chosen order", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
     const { unmount } = renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
-    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
-    expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
-    fireEvent.click(screen.getByRole("button", { name: "Move Inventory to top" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Stock Adjusted to top" }));
     fireEvent.click(screen.getByRole("button", { name: "Save order" }));
 
-    const savedOrder = JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]");
-    expect(savedOrder.slice(0, 2)).toEqual(["inventory", "backup"]);
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    expect(savedOrder[0]).toBe("stock-adjusted");
     unmount();
 
-    renderPage();
-    const headings = await screen.findAllByRole("heading", { level: 3 });
-    expect(headings[0]).toHaveTextContent("Inventory");
-    expect(headings[1]).toHaveTextContent("Backup & recovery");
+    const reloaded = renderPage();
+    await screen.findByRole("button", { name: /Stock Adjusted/ });
+    expect(
+      reloaded.container.querySelector(".suspicious-activity-event-grid [data-activity-sort-id]"),
+    ).toHaveAttribute("data-activity-sort-id", "stock-adjusted");
   });
 
-  it("moves an individual event type directly to the top or bottom of its category and persists the order", async () => {
+  it("moves an individual event type directly to the top or bottom of the global list and persists the order", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to top" }));
     fireEvent.click(screen.getByRole("button", { name: "Move Void Operation to bottom" }));
@@ -117,19 +120,17 @@ describe("SuspiciousActivityPage", () => {
     const savedOrder = JSON.parse(
       localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
     ) as string[];
-    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
-    expect(quickOperations[0]).not.toBe("quick-void-operation");
-    expect(quickOperations[quickOperations.length - 1]).toBe("quick-void-operation");
+    expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
   });
 
   it("supports pointer dragging event types into an exact position", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([]);
     const { container } = renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
 
     const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
-    const target = container.querySelector('[data-activity-sort-id="quick-manual-update"]');
+    const target = container.querySelector('[data-activity-sort-id="stock-adjusted"]');
     expect(target).not.toBeNull();
 
     fireEvent.pointerDown(dragHandle, { pointerId: 1, pointerType: "touch" });
@@ -140,10 +141,45 @@ describe("SuspiciousActivityPage", () => {
     const savedOrder = JSON.parse(
       localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
     ) as string[];
-    const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
-    expect(quickOperations.indexOf("quick-void-operation")).toBeLessThan(
-      quickOperations.indexOf("quick-manual-update"),
+    expect(savedOrder.indexOf("quick-void-operation")).toBeLessThan(
+      savedOrder.indexOf("stock-adjusted"),
     );
+  });
+
+  it("allows touch dragging an activity to the very end of the global list", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
+    const cards = container.querySelectorAll("[data-activity-sort-id]");
+    const lastCard = cards[cards.length - 1];
+    expect(lastCard).toBeDefined();
+
+    fireEvent.pointerDown(dragHandle, { pointerId: 2, pointerType: "touch" });
+    fireEvent.pointerEnter(lastCard as Element, { pointerId: 2, pointerType: "touch" });
+    fireEvent.pointerUp(lastCard as Element, { pointerId: 2, pointerType: "touch" });
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
+  });
+
+  it("clears a pointer drag when the user releases outside the activity list", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
+    const card = container.querySelector('[data-activity-sort-id="quick-void-operation"]');
+    expect(card).not.toBeNull();
+
+    fireEvent.pointerDown(dragHandle, { pointerId: 3, pointerType: "touch" });
+    expect(card).toHaveClass("suspicious-activity-event-card-dragging");
+    fireEvent.pointerUp(window, { pointerId: 3, pointerType: "touch" });
+    expect(card).not.toHaveClass("suspicious-activity-event-card-dragging");
   });
 
   it("summarizes permission changes clearly and starts every secondary audit section collapsed", async () => {
@@ -174,13 +210,80 @@ describe("SuspiciousActivityPage", () => {
     );
 
     expect(
-      screen.getByText(/services\.view for Alex Staff: Not allowed → Allowed/i),
+      screen.getByText(/services view access for Alex Staff changed from not allowed to allowed/i),
     ).toBeInTheDocument();
     expect(screen.getByText("User Alex Staff")).toBeInTheDocument();
 
     const detailSections = Array.from(container.querySelectorAll("details"));
     expect(detailSections.length).toBeGreaterThanOrEqual(5);
     expect(detailSections.every((section) => !section.hasAttribute("open"))).toBe(true);
+  });
+
+  it("summarizes branch access changes without exposing raw branch UUIDs", async () => {
+    const branchOne = "bc2c2b26-34a9-4c7f-bc6a-98a3fd7c2d01";
+    const branchTwo = "d2b2f66a-8a88-4d8d-9c63-6c11a4f02e12";
+    mockUser.branches = [
+      { id: branchOne, name: "Main Branch" },
+      { id: branchTwo, name: "Airport Branch" },
+    ];
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "user-updated-1",
+        timestamp: "2026-11-11T11:44:09.000Z",
+        action: "user.updated",
+        entityType: "User",
+        entityId: "user-target-1",
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          name: "Alex Staff",
+          before: { branchIds: [branchOne, branchTwo] },
+          after: { branchIds: [branchTwo] },
+        },
+        correlationId: "correlation-user-1",
+      },
+    ]);
+    const { container } = renderPage();
+
+    const userUpdatedLabel = await screen.findByText("User Updated", { exact: true });
+    const userUpdatedCard = userUpdatedLabel.closest(
+      '[data-activity-sort-id="user-updated"]',
+    );
+    const userUpdatedButton = userUpdatedCard?.querySelector("button");
+    expect(userUpdatedButton).not.toBeNull();
+    fireEvent.click(userUpdatedButton as HTMLButtonElement);
+
+    expect(await screen.findByText(/Alex Staff branch access changed: removed access to Main Branch; retained access to Airport Branch/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(branchOne))).not.toBeVisible();
+    expect(screen.getByText(new RegExp(branchTwo))).not.toBeVisible();
+  });
+
+  it("shows bulk legacy customer ownership assignments as a readable security event", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([
+      {
+        id: "legacy-customer-bulk-assigned",
+        timestamp: "2026-11-12T15:00:00.000Z",
+        action: "customer.legacy_owner_bulk_assigned",
+        entityType: "Customer",
+        entityId: null,
+        actorUserId: "manager-1",
+        actorName: "Jane Manager",
+        metadata: {
+          assignmentScope: "ALL_UNASSIGNED",
+          assignedCount: 4,
+          ownerBranchId: "branch-2",
+          ownerBranchName: "Branch Two",
+        },
+        correlationId: "correlation-customer-bulk-1",
+      },
+    ]);
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /customer branch ownership assigned/i }),
+    );
+
+    expect(await screen.findByText("4 legacy customers assigned to Branch Two.")).toBeInTheDocument();
   });
 
   it("blocks users without the suspicious activity permission", () => {

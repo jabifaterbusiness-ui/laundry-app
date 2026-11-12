@@ -14,7 +14,6 @@ import { DataManagementPage } from "./pages/DataManagementPage.js";
 import { ServicesPage } from "./pages/services/ServicesPage.js";
 import { ColorsPage } from "./pages/colors/ColorsPage.js";
 import { OrdersPage } from "./pages/orders/OrdersPage.js";
-import { OrderManagementPage } from "./pages/orders/OrderManagementPage.js";
 import { InvoicesPage } from "./pages/invoices/InvoicesPage.js";
 import { PaymentsPage } from "./pages/payments/PaymentsPage.js";
 import { InventoryPage } from "./pages/inventory/InventoryPage.js";
@@ -59,7 +58,7 @@ function AuthenticatedLayout() {
           <Route path="/communications" element={<CommunicationsPage />} />
           <Route path="/colors" element={<ColorsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/order-management" element={<OrderManagementPage />} />
+          <Route path="/order-management" element={<OrdersPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/inventory" element={<InventoryPage />} />

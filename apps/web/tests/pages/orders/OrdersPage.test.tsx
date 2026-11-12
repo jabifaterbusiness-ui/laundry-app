@@ -219,6 +219,8 @@ function seedAuth() {
       role: "STAFF",
       permissions: [
       "orders.create",
+      "orders.update",
+      "customers.view",
       "orders.change_status",
       "colors.view",
       "colors.manage",
@@ -731,19 +733,20 @@ describe("OrdersPage quick customer switching", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("redirects legacy order deep links to the independent Order Management route", async () => {
+  it("opens legacy order deep links directly inside the unified Order Management workspace", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+
     renderPage([`/orders?orderId=${orderA.id}`]);
 
+    expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByTestId("current-location")).toHaveTextContent(
-        `/order-management?orderId=${orderA.id}`,
-      );
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
     });
-
-    expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
   });
 
-  it("opens an existing order in Order Management from its folder", async () => {
+  it("opens an existing order in the unified Order Management workspace from its folder", async () => {
     vi.mocked(listOrders).mockResolvedValue({
       data: [orderA],
       pagination: {
@@ -753,28 +756,47 @@ describe("OrdersPage quick customer switching", () => {
         totalPages: 1,
       },
     });
-
     vi.mocked(listAllOrders).mockResolvedValue([orderA]);
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
 
     renderPage();
 
-    const allOrdersFolder = await screen.findByRole("button", {
-      name: /all orders/i,
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /all orders/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "00001" }));
 
-    fireEvent.click(allOrdersFolder);
-
-    const orderButton = await screen.findByRole("button", {
-      name: "00001",
-    });
-
-    fireEvent.click(orderButton);
-
+    expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByTestId("current-location")).toHaveTextContent(
-        `/order-management?orderId=${orderA.id}`,
-      );
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
     });
+  });
+
+  it("keeps editing, new orders and customer switching inside Order Management", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockImplementation(async (id) => id === customerB.id ? customerB : customerA);
+    vi.mocked(listOrders).mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 1, total: 0, totalPages: 1 },
+    });
+
+    renderPage([`/order-management?orderId=${orderA.id}`]);
+    await screen.findByRole("region", { name: "Order Management" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
+    expect(await screen.findByRole("heading", { name: /Edit Invoice/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /^New Order$/i }));
+    expect(await screen.findByRole("heading", { name: /^New Order$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch Customer$/i }));
+    expect(await screen.findByRole("heading", { name: /Find Customer/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /John Doe/i }));
+
+    expect(await screen.findByRole("heading", { name: /^New Order$/i })).toBeInTheDocument();
+    expect(screen.getByText("John Doe")).toBeInTheDocument();
+    expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
   });
 
   it("opens the customer picker when returning from Order Management to switch customers", async () => {

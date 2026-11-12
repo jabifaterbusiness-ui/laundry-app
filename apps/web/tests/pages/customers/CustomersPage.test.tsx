@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -10,6 +10,7 @@ const mockAuthState = vi.hoisted(() => ({
     email: "staff@example.com",
     fullName: "Staff User",
     role: "STAFF" as const,
+    securityRole: undefined as "BUSINESS_OWNER" | undefined,
     businessId: "business-1",
     branches: [{ id: "branch-1", name: "Main Branch" }],
   },
@@ -29,6 +30,13 @@ vi.mock("../../../src/state/auth-store.js", () => ({
     selector(mockAuthState),
 }));
 
+vi.mock("../../../src/lib/api-client.js", async () => {
+  const actual = await vi.importActual<typeof import("../../../src/lib/api-client.js")>(
+    "../../../src/lib/api-client.js",
+  );
+  return { ...actual, apiFetch: vi.fn() };
+});
+
 vi.mock("../../../src/lib/customers-api.js", async () => {
   const actual = await vi.importActual<typeof import("../../../src/lib/customers-api.js")>(
     "../../../src/lib/customers-api.js",
@@ -36,15 +44,20 @@ vi.mock("../../../src/lib/customers-api.js", async () => {
   return {
     ...actual,
     listCustomers: vi.fn(),
+    listLegacyUnassignedCustomers: vi.fn(),
+    assignLegacyCustomersOwnerBranch: vi.fn(),
     createCustomerWithOfflineQueue: vi.fn(),
     updateCustomer: vi.fn(),
     updateCustomerWithOfflineQueue: vi.fn(),
   };
 });
 
+import { apiFetch } from "../../../src/lib/api-client.js";
 import {
   DuplicateCustomerError,
   listCustomers,
+  listLegacyUnassignedCustomers,
+  assignLegacyCustomersOwnerBranch,
   createCustomerWithOfflineQueue,
   updateCustomer,
   updateCustomerWithOfflineQueue,
@@ -62,6 +75,84 @@ function renderPage() {
 }
 
 describe("CustomersPage", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    mockAuthState.user.securityRole = undefined;
+  });
+
+  it("allows the business owner to assign selected legacy customers to one branch", async () => {
+    mockAuthState.user.securityRole = "BUSINESS_OWNER";
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+    });
+    vi.mocked(listLegacyUnassignedCustomers).mockResolvedValue({
+      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, address: null, lifecycleStatus: "ACTIVE", createdAt: "", updatedAt: "", _count: { orders: 2 } }],
+      pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    });
+    vi.mocked(apiFetch).mockResolvedValue([{ id: "branch-2", name: "Branch Two" }] as never);
+    vi.mocked(assignLegacyCustomersOwnerBranch).mockResolvedValue({
+      assignedCount: 1,
+      branchId: "branch-2",
+      branchName: "Branch Two",
+      assignmentScope: "SELECTED",
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select Legacy Jane" }));
+    await screen.findAllByRole("option", { name: "Branch Two" });
+    fireEvent.change(screen.getByLabelText("Branch for bulk legacy customer assignment"), {
+      target: { value: "branch-2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Assign selected (1)" }));
+
+    await waitFor(() => {
+      expect(assignLegacyCustomersOwnerBranch).toHaveBeenCalledWith(
+        { branchId: "branch-2", customerIds: ["legacy-1"] },
+        { accessToken: "token", sensitiveAuthorization: "sensitive-token" },
+      );
+    });
+  });
+
+  it("allows the business owner to assign every unassigned legacy customer to one branch", async () => {
+    mockAuthState.user.securityRole = "BUSINESS_OWNER";
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+    });
+    vi.mocked(listLegacyUnassignedCustomers).mockResolvedValue({
+      data: [{ id: "legacy-1", name: "Legacy Jane", phone: "08000000001", email: null, address: null, lifecycleStatus: "ACTIVE", createdAt: "", updatedAt: "", _count: { orders: 2 } }],
+      pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    });
+    vi.mocked(apiFetch).mockResolvedValue([{ id: "branch-2", name: "Branch Two" }] as never);
+    vi.mocked(assignLegacyCustomersOwnerBranch).mockResolvedValue({
+      assignedCount: 4,
+      branchId: "branch-2",
+      branchName: "Branch Two",
+      assignmentScope: "ALL_UNASSIGNED",
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderPage();
+
+    await screen.findByText("Legacy Jane");
+    await screen.findAllByRole("option", { name: "Branch Two" });
+    fireEvent.change(screen.getByLabelText("Branch for bulk legacy customer assignment"), {
+      target: { value: "branch-2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Assign all unassigned customers" }));
+
+    await waitFor(() => {
+      expect(assignLegacyCustomersOwnerBranch).toHaveBeenCalledWith(
+        { branchId: "branch-2", all: true },
+        { accessToken: "token", sensitiveAuthorization: "sensitive-token" },
+      );
+    });
+  });
+
   it("renders customers once loaded", async () => {
     vi.mocked(listCustomers).mockResolvedValue({
       data: [{ id: "1", name: "Jane Doe", phone: "5551234567", email: null, address: null, notes: null, ownerBranchId: "branch-1", ownerBranch: { id: "branch-1", name: "Main Branch" }, isActive: true, createdAt: "", updatedAt: "" }],

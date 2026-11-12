@@ -803,7 +803,7 @@ function OrderManagementContent({
       >
         <button
           type="button"
-          disabled={mode !== "view"}
+          disabled={mode !== "view" || !hasPermission(user, "orders.create")}
           onClick={() => onNewOrder(currentCustomer)}
         >
           New Order
@@ -815,7 +815,7 @@ function OrderManagementContent({
             if (order) onEditOrder(order);
           }}
         >
-          Edit Invoice
+          Edit Order / Invoice
         </button>
         <button
           type="button"
@@ -909,7 +909,11 @@ function OrderManagementContent({
           Status
         </button>
 
-        <button type="button" onClick={onSwitchCustomer}>
+        <button
+          type="button"
+          disabled={!hasPermission(user, "customers.view")}
+          onClick={onSwitchCustomer}
+        >
           Switch Customer
         </button>
         <button type="button" onClick={() => setLayer("more")}>

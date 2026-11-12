@@ -128,3 +128,13 @@ export const legacyCustomerReviewQuerySchema = z.object({
 export const assignLegacyCustomerOwnerSchema = z.object({
   branchId: z.string().uuid("Choose a valid branch"),
 });
+
+
+export const assignLegacyCustomersBulkSchema = z.object({
+  branchId: z.string().uuid("Choose a valid branch"),
+  customerIds: z.array(z.string().uuid("Invalid customer id")).min(1).max(500).optional(),
+  all: z.boolean().optional().default(false),
+}).refine(
+  (input) => input.all ? input.customerIds === undefined : Boolean(input.customerIds?.length),
+  { message: "Choose all unassigned customers or provide selected customer IDs" },
+);

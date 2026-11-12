@@ -60,7 +60,6 @@ function makeEntry(overrides = {}) {
     providerKey: "paystack",
     paymentMethodKey: "CARD",
     idempotencyKey: "offline-payment-123",
-    reason: "Offline payment reconciliation test reason",
     status: "PENDING" as const,
     intentId: null,
     paymentReference: null,
@@ -157,7 +156,6 @@ describe("replayOfflineSubscriptionPaymentQueue", () => {
         intentId: "intent-1",
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
       },
     );
 
@@ -172,32 +170,6 @@ describe("replayOfflineSubscriptionPaymentQueue", () => {
         status: "READY",
         intentId: "intent-1",
         providerCheckoutUrl: "https://example.com/pay/123",
-      }),
-    );
-  });
-
-  it("fails safely for a legacy queued payment without a reason", async () => {
-    const entry = makeEntry({ reason: undefined });
-    mocks.listOfflineSubscriptionPayments.mockResolvedValue([entry]);
-
-    const result = await replayOfflineSubscriptionPaymentQueue(context);
-
-    expect(result).toEqual({
-      processed: 1,
-      ready: 0,
-      completed: 0,
-      failed: 1,
-    });
-
-    expect(mocks.createSubscriptionPaymentIntent).not.toHaveBeenCalled();
-    expect(mocks.reconcileOfflineSubscriptionPayment).not.toHaveBeenCalled();
-    expect(mocks.initializeSubscriptionPayment).not.toHaveBeenCalled();
-    expect(mocks.updateOfflineSubscriptionPayment).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({
-        status: "FAILED",
-        lastError:
-          "A reason is required for this offline subscription payment.",
       }),
     );
   });

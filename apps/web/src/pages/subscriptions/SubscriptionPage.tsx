@@ -72,7 +72,6 @@ export function SubscriptionPage() {
 
   const [selectedProvider, setSelectedProvider] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("");
-  const [offlinePaymentReason, setOfflinePaymentReason] = useState("");
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [isOnline, setIsOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine,
@@ -209,13 +208,6 @@ export function SubscriptionPage() {
         throw new Error("Select a payment provider and payment method.");
       }
 
-      const reason = offlinePaymentReason.trim();
-      if (!reason) {
-        throw new Error(
-          "A reason is required to save a subscription payment offline.",
-        );
-      }
-
       const price = new Map(
         (
           subscriptionPricesQuery.data?.prices ??
@@ -236,7 +228,6 @@ export function SubscriptionPage() {
         currencyCode: price.currencyCode,
         providerKey: selectedProvider,
         paymentMethodKey: selectedMethod,
-        reason,
         idempotencyKey:
           typeof crypto !== "undefined" &&
           typeof crypto.randomUUID === "function"
@@ -247,7 +238,6 @@ export function SubscriptionPage() {
       });
     },
     onSuccess: () => {
-      setOfflinePaymentReason("");
       setCheckoutMessage(
         isOnline
           ? "Payment saved locally and will be prepared for secure checkout."
@@ -460,17 +450,6 @@ export function SubscriptionPage() {
           </section>
 
           <section className="subscription-renewal">
-            <div className="subscription-section-heading">
-              <div>
-                <p className="subscription-eyebrow">Renewal</p>
-                <h2>Choose your subscription period</h2>
-                <p>
-                  Renewing an active subscription preserves its remaining paid
-                  time and extends the selected plan from the current expiry.
-                </p>
-              </div>
-            </div>
-
             {subscription.status === "EXPIRED" ? (
               <div className="subscription-expiry-banner">
                 <strong>Your subscription has expired.</strong>
@@ -537,27 +516,6 @@ export function SubscriptionPage() {
                     business country and currency.
                   </p>
                 ) : null}
-
-                <div className="subscription-offline-reason">
-                  <label>
-                    <span>Reason for saving payment offline</span>
-                    <textarea
-                      value={offlinePaymentReason}
-                      onChange={(event) =>
-                        setOfflinePaymentReason(event.target.value)
-                      }
-                      maxLength={1000}
-                      rows={3}
-                      placeholder="Explain why this subscription payment is being saved offline."
-                      aria-label="Reason for saving payment offline"
-                      disabled={offlinePaymentMutation.isPending}
-                    />
-                  </label>
-                  <small>
-                    A reason is required before an offline payment can be
-                    synchronized and reconciled.
-                  </small>
-                </div>
 
                 <div className="subscription-plan-options">
                   {(

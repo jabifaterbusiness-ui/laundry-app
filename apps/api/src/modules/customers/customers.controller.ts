@@ -10,6 +10,7 @@ import {
   changeCustomerStatusSchema,
   legacyCustomerReviewQuerySchema,
   assignLegacyCustomerOwnerSchema,
+  assignLegacyCustomersBulkSchema,
 } from "./customers.validation.js";
 import {
   createCustomer,
@@ -20,6 +21,7 @@ import {
   updateCustomer,
   listUnassignedLegacyCustomers,
   assignLegacyCustomerOwnerBranch,
+  assignLegacyCustomerOwnersBulk,
 } from "./customers.service.js";
 
 /**
@@ -267,4 +269,35 @@ export async function assignLegacyOwnerBranch(req: Request, res: Response) {
     },
   });
   res.status(200).json(customer);
+}
+
+
+export async function assignLegacyOwnersBulk(req: Request, res: Response) {
+  const businessId = requireBusinessOwner(req);
+  const input = assignLegacyCustomersBulkSchema.parse(req.body);
+  const result = await assignLegacyCustomerOwnersBulk({
+    businessId,
+    branchId: input.branchId,
+    ...(input.customerIds ? { customerIds: input.customerIds } : {}),
+    all: input.all,
+  });
+
+  await recordAuditEvent({
+    action: "customer.legacy_owner_bulk_assigned",
+    entityType: "Customer",
+    entityId: null,
+    businessId,
+    actorUserId: req.user!.id,
+    branchId: req.branchId ?? null,
+    correlationId: req.correlationId ?? null,
+    metadata: {
+      assignmentScope: result.assignmentScope,
+      assignedCount: result.assignedCount,
+      customerIds: input.customerIds ?? null,
+      ownerBranchId: result.branchId,
+      ownerBranchName: result.branchName,
+    },
+  });
+
+  res.status(200).json(result);
 }

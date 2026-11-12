@@ -30,8 +30,19 @@ import {
   getSubscriptionPaymentIntent,
   reconcileOfflineSubscriptionPayment,
 } from "../../src/modules/subscriptions/subscription-payment-reconciliation.service.js";
+import {
+  reconcileOfflineSubscriptionPaymentSchema,
+} from "../../src/modules/subscriptions/subscription-payment-reconciliation.validation.js";
 
 describe("subscription payment reconciliation", () => {
+  it("accepts reconciliation without an offline-payment reason", () => {
+    expect(reconcileOfflineSubscriptionPaymentSchema.safeParse({
+      intentId: "00000000-0000-4000-8000-000000000020",
+      providerKey: "paystack",
+      paymentMethodKey: "CARD",
+    }).success).toBe(true);
+  });
+
   const offlineIntent = {
     id: "00000000-0000-4000-8000-000000000020",
     businessId: "business-1",
@@ -56,7 +67,6 @@ describe("subscription payment reconciliation", () => {
     origin: "ONLINE",
     providerKey: "paystack",
     paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
   };
 
   beforeEach(() => {
@@ -83,7 +93,6 @@ describe("subscription payment reconciliation", () => {
         intentId: offlineIntent.id,
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
       },
       "owner-1",
       "correlation-1",
@@ -131,7 +140,6 @@ describe("subscription payment reconciliation", () => {
         intentId: reconciledIntent.id,
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
       },
     );
 
@@ -157,7 +165,6 @@ describe("subscription payment reconciliation", () => {
           intentId: offlineIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
         },
       ),
     ).rejects.toMatchObject({ statusCode: 403 });
@@ -175,7 +182,6 @@ describe("subscription payment reconciliation", () => {
           intentId: reconciledIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "BANK_TRANSFER",
-          reason: "Offline payment reconciliation test reason",
         },
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -194,7 +200,7 @@ describe("subscription payment reconciliation", () => {
           intentId: offlineIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
+
         },
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
