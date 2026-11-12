@@ -888,6 +888,7 @@ export function OrdersPage() {
 
   function addLine() {
     if (!activeWorkspaceId) return;
+    setOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -901,6 +902,7 @@ export function OrdersPage() {
 
   function removeLine(index: number) {
     if (!activeWorkspaceId) return;
+    setOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -915,6 +917,7 @@ export function OrdersPage() {
     value: OrderLine[typeof field],
   ) {
     if (!activeWorkspaceId) return;
+    setOrderFormDirty(true);
 
     updateWorkspace(activeWorkspaceId, {
       draft: {
@@ -1035,6 +1038,7 @@ export function OrdersPage() {
       return;
     }
 
+    setOrderFormDirty(false);
     const customer =
       (activeWorkspace?.customer.id === order.customerId
         ? activeWorkspace.customer
