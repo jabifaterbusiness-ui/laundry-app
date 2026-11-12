@@ -35,13 +35,13 @@ export function WhatsAppConnectionPanel() {
   const connectionQuery = useQuery({
     queryKey: ["whatsapp", "connection", businessId],
     queryFn: () => getWhatsAppConnection({ accessToken }),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken && businessId),
   });
 
   const approvedTemplatesQuery = useQuery({
     queryKey: ["whatsapp", "templates", businessId],
     queryFn: () => getApprovedWhatsAppTemplates(accessToken),
-    enabled: Boolean(accessToken && connectionQuery.data?.connection?.status === "CONNECTED"),
+    enabled: Boolean(accessToken && businessId && connectionQuery.data?.connection?.status === "CONNECTED"),
   });
 
   useEffect(() => {
