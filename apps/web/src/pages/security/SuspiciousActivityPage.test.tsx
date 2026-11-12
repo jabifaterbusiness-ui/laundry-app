@@ -146,6 +146,27 @@ describe("SuspiciousActivityPage", () => {
     );
   });
 
+  it("allows touch dragging an activity to the very end of the global list", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
+    const cards = container.querySelectorAll("[data-activity-sort-id]");
+    const lastCard = cards[cards.length - 1];
+    expect(lastCard).toBeDefined();
+
+    fireEvent.pointerDown(dragHandle, { pointerId: 2, pointerType: "touch" });
+    fireEvent.pointerEnter(lastCard as Element, { pointerId: 2, pointerType: "touch" });
+    fireEvent.pointerUp(lastCard as Element, { pointerId: 2, pointerType: "touch" });
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    const savedOrder = JSON.parse(
+      localStorage.getItem("laundry-app:suspicious-activity-events:manager-1:branch-1") ?? "[]",
+    ) as string[];
+    expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
+  });
+
   it("summarizes permission changes clearly and starts every secondary audit section collapsed", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([
       {
