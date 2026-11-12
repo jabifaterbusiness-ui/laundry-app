@@ -161,6 +161,7 @@ describe("SensitiveAuthorizationProvider", () => {
         inactivityTimeoutMs: 180_000,
       });
       await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(useAuthStore.getState().sensitiveAuthorization).toBeNull();
