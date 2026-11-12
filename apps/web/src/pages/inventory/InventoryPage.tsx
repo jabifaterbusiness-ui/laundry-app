@@ -1507,6 +1507,27 @@ export function InventoryPage() {
           <table><thead><tr><th>Item</th><th>On hand</th><th>Reserved</th><th>Average unit cost</th><th>Value</th></tr></thead><tbody>
             {inventoryReportQuery.data.data.valuation.map((row) => <tr key={row.inventoryItem.id}><td>{row.inventoryItem.name}</td><td>{row.quantity}</td><td>{row.reservedQuantity}</td><td>{(row.averageUnitCost / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td><td>{(row.totalValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
           </tbody></table>
+          <h3>Batch expiry register</h3>
+          {inventoryReportQuery.data.data.expiryRegister.length ? (
+            <div className="inventory-table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Batch / lot</th><th>Receipt</th><th>Received</th><th>Expiry date</th><th>Days remaining</th><th>Status</th></tr></thead>
+                <tbody>
+                  {inventoryReportQuery.data.data.expiryRegister.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.inventoryItem.name}</td>
+                      <td>{row.batchNumber ?? "—"}</td>
+                      <td>{row.receiptNumber}</td>
+                      <td>{row.quantityReceived}</td>
+                      <td>{new Date(row.expiryDate).toLocaleDateString()}</td>
+                      <td>{row.daysUntilExpiry < 0 ? "Past expiry" : row.daysUntilExpiry}</td>
+                      <td>{row.status === "EXPIRED" ? "Expired" : row.status === "DUE_SOON" ? "Due within 30 days" : "In date"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p>No batch expiry dates have been recorded for this branch.</p>}
           <h3>Supplier performance (last 30 days)</h3>
           {inventoryReportQuery.data.data.supplierPerformance.length ? <table><thead><tr><th>Supplier</th><th>Orders</th><th>Received</th><th>Partial</th><th>Open</th><th>First receipt lead time</th><th>Ordered value</th></tr></thead><tbody>
             {inventoryReportQuery.data.data.supplierPerformance.map((row) => <tr key={row.supplierId}><td>{row.supplierName}</td><td>{row.orderCount}</td><td>{row.receivedOrderCount}</td><td>{row.partiallyReceivedOrderCount}</td><td>{row.openOrderCount}</td><td>{row.averageFirstReceiptLeadTimeDays === null ? "—" : `${row.averageFirstReceiptLeadTimeDays} days`}</td><td>{(row.orderedValue / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
