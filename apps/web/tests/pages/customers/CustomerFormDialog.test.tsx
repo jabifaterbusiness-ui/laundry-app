@@ -41,8 +41,9 @@ describe("CustomerFormDialog WhatsApp consent", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][0]).toMatchObject({ phone: "08099998888", whatsappOptIn: false });
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("whatsappOptInSource");
+    const submitted = onSubmit.mock.calls[0]?.[0];
+    expect(submitted).toMatchObject({ phone: "08099998888", whatsappOptIn: false });
+    expect(submitted).not.toHaveProperty("whatsappOptInSource");
   });
 
   it("preserves consent when only phone-number formatting changes", () => {
