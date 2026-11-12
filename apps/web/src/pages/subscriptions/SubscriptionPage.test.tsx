@@ -314,6 +314,8 @@ describe("SubscriptionPage", () => {
 
     renderSubscription();
 
+    expect(screen.queryByRole("heading", { name: "Choose your subscription period" })).not.toBeInTheDocument();
+
     const providerSelect = await screen.findByLabelText("Payment provider");
     const methodSelect = screen.getByLabelText("Payment method");
 
