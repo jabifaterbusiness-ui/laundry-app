@@ -582,9 +582,11 @@ export async function mergeCustomer(
     if (customer.id === targetCustomerId) {
       throw new AppError("Customer cannot be merged into the same customer", 422);
     }
-    const targetCustomer = await getEditableCustomerForBranch(
-      tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
-    );
+    const targetCustomer = await tx.customer.findFirst({
+      where: { id: targetCustomerId, businessId },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
+    });
+    if (!targetCustomer) throw new AppError("Target customer not found", 404);
 
     if (customer.ownerBranchId !== branchId || targetCustomer.ownerBranchId !== branchId) {
       throw new AppError("Both customers must belong to the currently selected branch to be merged", 409);
