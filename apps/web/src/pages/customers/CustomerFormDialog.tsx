@@ -17,7 +17,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
   const [address, setAddress] = useState(customer?.address ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [whatsappOptIn, setWhatsappOptIn] = useState(customer?.whatsappOptIn ?? false);
-  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"]>(customer?.whatsappOptInSource as CreateCustomerInput["whatsappOptInSource"] ?? "CUSTOMER_VERBAL");
+  const [whatsappOptInSource, setWhatsappOptInSource] = useState<CreateCustomerInput["whatsappOptInSource"] | "">(customer?.whatsappOptInSource ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<Pick<Customer, "id" | "name" | "phone">[] | null>(null);
@@ -76,7 +76,7 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
                 // Consent applies to the number the customer agreed to use.
                 // A changed destination must be explicitly opted in again.
                 setWhatsappOptIn(false);
-                setWhatsappOptInSource("CUSTOMER_VERBAL");
+                setWhatsappOptInSource("");
               }
             }}
             required
@@ -104,7 +104,12 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
           {whatsappOptIn && (
             <label>
               How did the customer give consent?
-              <select value={whatsappOptInSource} onChange={(e) => setWhatsappOptInSource(e.target.value as NonNullable<CreateCustomerInput["whatsappOptInSource"]>)}>
+              <select
+                value={whatsappOptInSource}
+                required={whatsappOptIn}
+                onChange={(e) => setWhatsappOptInSource(e.target.value as CreateCustomerInput["whatsappOptInSource"] | "")}
+              >
+                <option value="">Select how consent was given</option>
                 <option value="CUSTOMER_VERBAL">Verbal agreement</option>
                 <option value="CUSTOMER_WRITTEN">Written agreement</option>
                 <option value="CUSTOMER_WEBSITE">Website / online form</option>
