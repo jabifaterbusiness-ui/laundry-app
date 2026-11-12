@@ -1,7 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { requireReason } from "../../lib/reason.js";
 import { validatePaymentSelection } from "../platform/payment-config.service.js";
 import type { ReconcileOfflineSubscriptionPaymentInput } from "./subscription-payment-reconciliation.validation.js";
 
@@ -11,8 +10,6 @@ export async function reconcileOfflineSubscriptionPayment(
   actorUserId?: string | null,
   correlationId?: string | null,
 ) {
-  const reason = requireReason(input.reason);
-
   const intent = await prisma.subscriptionPaymentIntent.findUnique({
     where: { id: input.intentId },
     include: {
@@ -127,7 +124,6 @@ export async function reconcileOfflineSubscriptionPayment(
       origin: reconciled.origin,
       providerKey: reconciled.providerKey,
       paymentMethodKey: reconciled.paymentMethodKey,
-      reason,
     },
   });
 
