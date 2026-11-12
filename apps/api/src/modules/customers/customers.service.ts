@@ -664,6 +664,8 @@ export async function mergeCustomer(
     const sourcePrices = await tx.customerServicePrice.findMany({
       where: { businessId, customerId: customer.id },
     });
+    let movedServicePriceCount = 0;
+    let retainedServicePriceConflictCount = 0;
     for (const sourcePrice of sourcePrices) {
       const targetPrice = await tx.customerServicePrice.findFirst({
         where: {
@@ -679,6 +681,9 @@ export async function mergeCustomer(
           where: { id: sourcePrice.id },
           data: { customerId: targetCustomer.id },
         });
+        movedServicePriceCount += 1;
+      } else {
+        retainedServicePriceConflictCount += 1;
       }
     }
 
@@ -844,7 +849,8 @@ export async function mergeCustomer(
       targetCustomer,
       mergedOrderCount: orders.length,
       mergedOrders: orders,
-      mergedServicePriceCount: sourcePrices.length,
+      mergedServicePriceCount: movedServicePriceCount,
+      retainedServicePriceConflictCount,
       mergedGroupMembershipCount: sourceGroupMemberships.length,
       mergedAnnouncementRecipientCount: sourceRecipients.length,
       sourceDeactivated: true,
