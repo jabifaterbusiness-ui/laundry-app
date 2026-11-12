@@ -53,6 +53,10 @@ vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
 }));
 
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
+  normalizeWhatsAppRecipient: (value: string) => {
+    const normalized = value.replace(/\\D/g, "");
+    return normalized.length === 11 && normalized.startsWith("0") ? "234" + normalized.slice(1) : normalized;
+  },
   sendWhatsAppText: mocks.sendWhatsAppText,
 }));
 
