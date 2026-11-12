@@ -25,11 +25,13 @@ vi.mock("../../state/auth-store.js", () => ({
     selector: (state: {
       user: typeof mockUser;
       accessToken: string;
+      activeBranchId: string;
     }) => unknown,
   ) =>
     selector({
       user: mockUser,
       accessToken: mockAccessToken,
+      activeBranchId: "branch-1",
     }),
 }));
 
@@ -79,6 +81,27 @@ describe("SuspiciousActivityPage", () => {
     };
 
     mockAccessToken = "token";
+    localStorage.clear();
+  });
+
+  it("lets an authorized user reorder sections and remembers the chosen order", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { unmount } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    const moveBackupUp = screen.getByRole("button", { name: "Move Backup & recovery up" });
+    for (let index = 0; index < 7; index += 1) {
+      fireEvent.click(moveBackupUp);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    expect(JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]")[0]).toBe("backup");
+    unmount();
+
+    renderPage();
+    const headings = await screen.findAllByRole("heading", { level: 3 });
+    expect(headings[0]).toHaveTextContent("Backup & recovery");
+    expect(headings[1]).toHaveTextContent("Inventory");
   });
 
   it("blocks users without the suspicious activity permission", () => {
