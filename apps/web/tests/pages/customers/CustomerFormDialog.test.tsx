@@ -17,6 +17,13 @@ function optedInCustomer() {
   } as unknown as Customer;
 }
 
+function optedOutCustomer() {
+  return {
+    ...optedInCustomer(),
+    whatsappOptIn: false,
+  } as unknown as Customer;
+}
+
 describe("CustomerFormDialog WhatsApp consent", () => {
   it("requires fresh consent when the customer's phone number changes", async () => {
     const onSubmit = vi.fn(async (_input: CreateCustomerInput) => undefined);
@@ -82,7 +89,7 @@ describe("CustomerFormDialog WhatsApp consent", () => {
   it("requires a fresh consent source when a previously opted-out customer opts in again", () => {
     render(
       <CustomerFormDialog
-        customer={optedInCustomer()}
+        customer={optedOutCustomer()}
         onCancel={vi.fn()}
         onSubmit={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -91,7 +98,6 @@ describe("CustomerFormDialog WhatsApp consent", () => {
     const consent = screen.getByRole("checkbox", {
       name: /customer has explicitly agreed to receive whatsapp messages/i,
     });
-    fireEvent.click(consent);
     expect(consent).not.toBeChecked();
     fireEvent.click(consent);
     expect(consent).toBeChecked();
