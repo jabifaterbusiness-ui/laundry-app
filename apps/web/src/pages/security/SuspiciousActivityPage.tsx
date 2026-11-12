@@ -938,7 +938,7 @@ export function SuspiciousActivityPage() {
     setDraftCategoryOrder(nextCategoryOrder);
     setIsCustomizingOrder(false);
     setSelectedEventId(null);
-  }, [user?.id, activeBranchId]);
+  }, [user?.businessId, user?.id, activeBranchId]);
 
   const canView = hasPermission(
     user,
