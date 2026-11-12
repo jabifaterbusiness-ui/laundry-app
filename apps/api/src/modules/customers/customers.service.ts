@@ -546,9 +546,9 @@ export async function transferCustomer(
 }
 
 /**
- * Merges order records in the selected branch and combines only the
- * customer account ledger configured for that branch. The source customer is deactivated only when
- * it is owned by this branch and no other branch still references or shares it.
+ * Consolidates all supported customer-linked records inside the selected branch.
+ * Historical order/payment/delivery records retain their original timestamps and
+ * values; the source customer remains as a MERGED archive linked to its target.
  */
 export async function mergeCustomer(
   customerId: string,
@@ -789,7 +789,7 @@ export async function mergeCustomer(
 
     const previousStatus = customer.lifecycleStatus;
     const statusChangedAt = new Date();
-    await tx.customer.updateMany({
+    const archiveResult = await tx.customer.updateMany({
       where: {
         id: customer.id,
         businessId,
@@ -805,6 +805,9 @@ export async function mergeCustomer(
         mergedIntoCustomerId: targetCustomer.id,
       },
     });
+    if (archiveResult.count !== 1) {
+      throw new AppError("Source customer changed during merge. Refresh and try again.", 409);
+    }
     await tx.customerStatusHistory.create({
       data: {
         customerId: customer.id,
