@@ -116,11 +116,13 @@ export async function sendApprovedWhatsAppTemplate(input: {
     recipient = normalizeWhatsAppRecipient(customer.phone);
     customerId = customer.id;
     if (
-      input.requireInboundConversation === false &&
       (!customer.whatsappOptIn || !customer.whatsappOptInAt || !customer.whatsappOptInSource)
     ) {
-      throw new AppError("Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before business-initiated delivery.", 422);
+      throw new AppError("Customer has no complete recorded WhatsApp consent (source and timestamp). Record consent before sending a business-initiated template.", 422);
     }
+  }
+  if (input.requireInboundConversation !== false && !customerId) {
+    throw new AppError("A saved customer with recorded WhatsApp consent is required before sending an inbox template", 422);
   }
   if (input.requireInboundConversation === false && !customerId) {
     throw new AppError("A saved customer with recorded WhatsApp consent is required for automated template delivery", 422);
