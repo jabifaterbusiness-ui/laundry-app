@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -21,6 +23,12 @@ export function SensitiveAuthorizationProvider({
   children,
 }: PropsWithChildren) {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const userId = useAuthStore((state) => state.user?.id);
+  const businessId = useAuthStore((state) => state.user?.businessId);
+  const sessionKey = [userId ?? "", businessId ?? "", accessToken ?? ""].join(":");
+  const sessionKeyRef = useRef(sessionKey);
+  sessionKeyRef.current = sessionKey;
+  const previousSessionKeyRef = useRef(sessionKey);
   const sensitiveAuthorization = useAuthStore(
     (state) => state.sensitiveAuthorization,
   );
@@ -106,21 +114,34 @@ export function SensitiveAuthorizationProvider({
     }
   }, [resolveRequest]);
 
+  useEffect(() => {
+    if (previousSessionKeyRef.current === sessionKey) return;
+    previousSessionKeyRef.current = sessionKey;
+    setPassword("");
+    setError(null);
+    setBusy(false);
+    if (open) closeDialog(null);
+  }, [sessionKey, open, closeDialog]);
+
   const handleSubmit = useCallback(async () => {
     if (!accessToken || !password) {
       setError("Enter your password.");
       return;
     }
 
+    const attemptSessionKey = sessionKey;
+    const attemptAccessToken = accessToken;
+    const attemptPassword = password;
     setBusy(true);
     setError(null);
 
     try {
-      const authorization = await reauthorize(password, accessToken);
-
+      const authorization = await reauthorize(attemptPassword, attemptAccessToken);
+      if (sessionKeyRef.current !== attemptSessionKey) return;
       setSensitiveAuthorization(authorization);
       closeDialog(authorization.token);
     } catch (requestError) {
+      if (sessionKeyRef.current !== attemptSessionKey) return;
       setPassword("");
       setError(
         requestError instanceof Error
@@ -134,6 +155,7 @@ export function SensitiveAuthorizationProvider({
     accessToken,
     closeDialog,
     password,
+    sessionKey,
     setSensitiveAuthorization,
   ]);
 
