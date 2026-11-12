@@ -245,9 +245,11 @@ describe("SuspiciousActivityPage", () => {
     ]);
     const { container } = renderPage();
 
-    const userUpdatedButton = container.querySelector(
-      '[data-activity-sort-id="user-updated"] > button',
+    const userUpdatedLabel = await screen.findByText("User Updated", { exact: true });
+    const userUpdatedCard = userUpdatedLabel.closest(
+      '[data-activity-sort-id="user-updated"]',
     );
+    const userUpdatedButton = userUpdatedCard?.querySelector("button");
     expect(userUpdatedButton).not.toBeNull();
     fireEvent.click(userUpdatedButton as HTMLButtonElement);
 
