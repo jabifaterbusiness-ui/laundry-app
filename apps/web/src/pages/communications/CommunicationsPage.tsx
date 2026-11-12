@@ -95,7 +95,7 @@ export function CommunicationsPage() {
     setWhatsappTemplateName("");
     setWhatsappTemplateLanguage("");
     setEmailSubject("Order update from {{companyName}}");
-    setEmailTemplate("Hello {{customerName}},\\n\\nYour order {{orderNumber}} is ready for pickup.\\n\\nThank you for choosing {{companyName}}.");
+    setEmailTemplate("Hello {{customerName}},\n\nYour order {{orderNumber}} is ready for pickup.\n\nThank you for choosing {{companyName}}.");
     setThresholdMonths(2);
     setReminderTemplateName("");
     setReminderTemplateLanguage("");
