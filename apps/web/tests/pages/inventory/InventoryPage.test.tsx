@@ -408,8 +408,11 @@ describe("InventoryPage", () => {
     renderPage();
 
     expect(await screen.findByText("Stock Movement History")).toBeInTheDocument();
-    expect(await screen.findByText("Supplier delivery")).toBeInTheDocument();
-    expect(screen.getByText("PO-1001")).toBeInTheDocument();
+    const movementReason = await screen.findByText("Supplier delivery");
+    expect(movementReason).not.toBeVisible();
+    fireEvent.click(screen.getByText("Stock Movement History"));
+    expect(movementReason).toBeVisible();
+    expect(screen.getByText("PO-1001")).toBeVisible();
     await waitFor(() => {
       expect(mockListInventoryMovements).toHaveBeenCalledWith(
         { inventoryItemId: undefined, page: 1, pageSize: 20 },
