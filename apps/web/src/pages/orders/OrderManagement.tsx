@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
+import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
 import { getCustomer, updateCustomer } from "../../lib/customers-api.js";
 import {
   deleteInvoice,
