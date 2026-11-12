@@ -81,6 +81,7 @@ export function SensitiveAuthorizationProvider({
       setPassword("");
       setError(null);
       setResolveRequest(() => resolve);
+      window.dispatchEvent(new Event("sensitive-authorization:started"));
       setOpen(true);
     });
   }, [
@@ -94,6 +95,7 @@ export function SensitiveAuthorizationProvider({
   ]);
 
   const closeDialog = useCallback((result: string | null) => {
+    window.dispatchEvent(new Event("sensitive-authorization:finished"));
     setOpen(false);
     setPassword("");
     setError(null);
