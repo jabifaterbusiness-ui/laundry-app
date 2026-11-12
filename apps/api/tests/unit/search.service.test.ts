@@ -266,7 +266,7 @@ describe("globalSearch", () => {
   it("only returns categories the user can view", async () => {
     permissionCheck.mockImplementation(
       async (_userId, _businessId, _role, permissionCode) =>
-        permissionCode !== "invoices.view",
+        permissionCode !== "invoices.view" && permissionCode !== "payments.view",
     );
 
     customerFindMany.mockResolvedValue([
