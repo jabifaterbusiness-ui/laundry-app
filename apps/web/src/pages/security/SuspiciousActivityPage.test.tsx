@@ -119,7 +119,7 @@ describe("SuspiciousActivityPage", () => {
     ) as string[];
     const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
     expect(quickOperations[0]).not.toBe("quick-void-operation");
-    expect(quickOperations.at(-1)).toBe("quick-void-operation");
+    expect(quickOperations[quickOperations.length - 1]).toBe("quick-void-operation");
   });
 
   it("supports pointer dragging event types into an exact position", async () => {
@@ -129,7 +129,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
 
     const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
-    const target = container.querySelector('[data-activity-sort-id="quick-refund"]');
+    const target = container.querySelector('[data-activity-sort-id="quick-manual-update"]');
     expect(target).not.toBeNull();
 
     fireEvent.pointerDown(dragHandle, { pointerId: 1, pointerType: "touch" });
@@ -142,7 +142,7 @@ describe("SuspiciousActivityPage", () => {
     ) as string[];
     const quickOperations = savedOrder.filter((id) => id.startsWith("quick-"));
     expect(quickOperations.indexOf("quick-void-operation")).toBeLessThan(
-      quickOperations.indexOf("quick-refund"),
+      quickOperations.indexOf("quick-manual-update"),
     );
   });
 
@@ -176,7 +176,7 @@ describe("SuspiciousActivityPage", () => {
     expect(
       screen.getByText(/services\.view for Alex Staff: Not allowed → Allowed/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Alex Staff")).toBeInTheDocument();
+    expect(screen.getByText("User Alex Staff")).toBeInTheDocument();
 
     const detailSections = Array.from(container.querySelectorAll("details"));
     expect(detailSections.length).toBeGreaterThanOrEqual(5);
