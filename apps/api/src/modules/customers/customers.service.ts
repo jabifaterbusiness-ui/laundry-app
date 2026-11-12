@@ -87,7 +87,10 @@ export async function listCustomers(params: ListParams) {
   const [data, total] = await Promise.all([
     prisma.customer.findMany({
       where,
-      include: { ownerBranch: { select: { id: true, name: true } } },
+      include: {
+        ownerBranch: { select: { id: true, name: true } },
+        mergedIntoCustomer: { select: { id: true, name: true } },
+      },
       orderBy: { name: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -129,7 +132,10 @@ export async function getCustomerForBusiness(
       businessId,
       OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
     },
-    include: { ownerBranch: { select: { id: true, name: true } } },
+    include: {
+      ownerBranch: { select: { id: true, name: true } },
+      mergedIntoCustomer: { select: { id: true, name: true } },
+    },
   });
 }
 
