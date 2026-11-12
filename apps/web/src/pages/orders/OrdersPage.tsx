@@ -796,7 +796,9 @@ export function OrdersPage() {
 
   function openCustomerWorkspace(customer: Customer, forceNewOrder = false, returnToCustomerWorkstation = false) {
     const shouldReturnToCustomerWorkstation =
-      returnToCustomerWorkstation || returnToFromUrl === "customer-workstation";
+      returnToCustomerWorkstation ||
+      returnToFromUrl === "customer-workstation" ||
+      returnToCustomerWorkstation;
     if (shouldReturnToCustomerWorkstation) {
       workspaceReturnToRef.current = "customer-workstation";
       setWorkspaceReturnTo("customer-workstation");
