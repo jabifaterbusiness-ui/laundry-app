@@ -38,7 +38,12 @@ const IMAGE = Buffer.from("fake-png");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.customerFindFirst.mockResolvedValue({ phone: "2348012345678", whatsappOptIn: true });
+  mocks.customerFindFirst.mockResolvedValue({
+    phone: "2348012345678",
+    whatsappOptIn: true,
+    whatsappOptInAt: new Date("2026-10-01T00:00:00.000Z"),
+    whatsappOptInSource: "CUSTOMER_WRITTEN",
+  });
   mocks.connectionFindUnique.mockResolvedValue({ phoneNumberId: "phone-number-id-123", status: "CONNECTED" });
 
   mocks.fetchMock
@@ -145,10 +150,32 @@ describe("whatsapp.provider", () => {
     })).rejects.toThrow("has not explicitly opted in");
     expect(mocks.customerFindFirst).toHaveBeenCalledWith({
       where: { id: "customer-1", businessId: "business-1" },
-      select: { phone: true, whatsappOptIn: true },
+      select: {
+        phone: true,
+        whatsappOptIn: true,
+        whatsappOptInAt: true,
+        whatsappOptInSource: true,
+      },
     });
     expect(mocks.fetchMock).not.toHaveBeenCalled();
     expect(mocks.inboundFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("blocks receipts when legacy opt-in has no recorded source or timestamp", async () => {
+    mocks.customerFindFirst.mockResolvedValue({
+      phone: "2348012345678",
+      whatsappOptIn: true,
+      whatsappOptInAt: null,
+      whatsappOptInSource: null,
+    });
+
+    await expect(sendWhatsAppReceipt({
+      businessId: "business-1",
+      customerId: "customer-1",
+      to: "2348012345678",
+      image: IMAGE,
+    })).rejects.toThrow("recorded consent source and timestamp");
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects a receipt destination that does not belong to the consented customer", async () => {
