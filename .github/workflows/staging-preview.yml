@@ -14,7 +14,7 @@ jobs:
   preview:
     name: Open temporary password-protected staging preview
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment:
       name: laundryangel-staging
     env:
@@ -92,10 +92,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CLOUDFLARED_VERSION="2025.11.1"
+          CLOUDFLARED_VERSION="2026.10.7"
           curl --fail --location --silent --show-error \
             "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-linux-amd64" \
             -o /tmp/cloudflared
+          echo "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872  /tmp/cloudflared" | sha256sum --check --status
           sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared tunnel --no-autoupdate --url http://127.0.0.1:18081 >/tmp/cloudflared.log 2>&1 &
           echo "$!" > /tmp/cloudflared.pid
