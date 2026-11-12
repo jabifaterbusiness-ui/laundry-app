@@ -157,6 +157,7 @@ describe("createOrder", () => {
           { ownerBranchId: { in: [BRANCH_A] } },
           { id: { in: [] } },
         ],
+        lifecycleStatus: { not: "MERGED" },
       },
       select: {
         id: true,
