@@ -81,6 +81,7 @@ describe("OrderManagementPage", () => {
     vi.clearAllMocks();
     useAuthStore.setState({
       accessToken: "test-token",
+      user: { id: "user-a", businessId: "business-a" },
       activeBranchId: "branch-a",
     } as never);
     getOrderMock.mockResolvedValue(order);
@@ -124,6 +125,24 @@ describe("OrderManagementPage", () => {
     authorize("sensitive-token");
     await waitFor(() => expect(getOrderMock).toHaveBeenCalledOnce());
     await waitFor(() => expect(getCustomerMock).toHaveBeenCalledOnce());
+  });
+
+  it("requires fresh password authorization when the active branch changes", async () => {
+    renderPage();
+
+    await waitFor(() => expect(requestAuthorizationMock).toHaveBeenCalledOnce());
+    await screen.findByRole("region", { name: "Order Management" });
+
+    useAuthStore.setState({ activeBranchId: "branch-b" });
+
+    await waitFor(() => expect(requestAuthorizationMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(getOrderMock).toHaveBeenCalledWith(
+        order.id,
+        { accessToken: "test-token" },
+        "branch-b",
+      );
+    });
   });
 
   it("does not render an order list inside the standalone workspace", async () => {
