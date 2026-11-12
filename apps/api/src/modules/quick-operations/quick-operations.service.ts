@@ -263,6 +263,12 @@ export async function executeQuickOperation(
             (order) => order.orderNumber,
           ),
           sourceDeactivated: result.sourceDeactivated,
+          sourceArchived: result.sourceArchived,
+          mergedIntoCustomerId: result.mergedIntoCustomerId,
+          mergedServicePriceCount: result.mergedServicePriceCount,
+          retainedServicePriceConflictCount: result.retainedServicePriceConflictCount,
+          mergedGroupMembershipCount: result.mergedGroupMembershipCount,
+          mergedAnnouncementRecipientCount: result.mergedAnnouncementRecipientCount,
         },
       });
 
