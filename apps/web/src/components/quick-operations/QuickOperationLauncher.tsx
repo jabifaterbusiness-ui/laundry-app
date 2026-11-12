@@ -223,7 +223,7 @@ export function QuickOperationLauncher({
         const sourceCustomerId = operation.code === "MC" ? recordId : sourceOrderCustomerId;
         setTargetCustomers(response.data
           .filter((customer) => customer.lifecycleStatus !== "MERGED" && (operation.code !== "MC" || customer.ownerBranchId === activeBranchId) && customer.id !== sourceCustomerId)
-          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, ownerBranchId: customer.ownerBranchId })));
+          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, ownerBranchId: customer.ownerBranchId ?? null })));
       })
       .catch((error: unknown) => {
         if (!active) return;
