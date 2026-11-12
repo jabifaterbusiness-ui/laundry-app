@@ -246,15 +246,11 @@ describe("approved WhatsApp template pagination", () => {
 
   it("refuses automated template delivery when the saved customer has not opted in", async () => {
     mocks.customerFindFirst.mockResolvedValue({ id: "customer-1", phone: "2348012345678", whatsappOptIn: false });
-    const approved = page([
-      { id: "template-1", name: "order_update", language: "en", status: "APPROVED", category: "UTILITY", components: [{ type: "BODY", text: "Hello {{1}}" }] },
-    ]);
-    mocks.fetch.mockResolvedValueOnce(approved);
     await expect(sendAutomatedWhatsAppTemplate({
       businessId: "business-1", customerId: "customer-1", phone: "2348012345678",
       templateName: "order_update", language: "en", variableValues: ["Ada"],
     })).rejects.toThrow("recorded WhatsApp consent");
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("refuses automated templates when opt-in has no recorded source or timestamp", async () => {
@@ -273,7 +269,7 @@ describe("approved WhatsApp template pagination", () => {
       templateName: "order_update",
       language: "en",
       variableValues: ["Ada"],
-    })).rejects.toThrow("recorded consent source and timestamp");
+    })).rejects.toThrow("consent (source and timestamp)");
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
