@@ -129,7 +129,6 @@ describe("subscription payment reconciliation", () => {
         intentId: reconciledIntent.id,
         providerKey: "paystack",
         paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
       },
     );
 
@@ -190,7 +189,7 @@ describe("subscription payment reconciliation", () => {
           intentId: offlineIntent.id,
           providerKey: "paystack",
           paymentMethodKey: "CARD",
-        reason: "Offline payment reconciliation test reason",
+
         },
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
