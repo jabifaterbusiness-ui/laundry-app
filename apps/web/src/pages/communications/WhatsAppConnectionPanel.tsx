@@ -180,9 +180,18 @@ export function WhatsAppConnectionPanel() {
       ) : (
         <div style={{ marginTop: 16 }}>
           <button type="button" onClick={launchSignup} disabled={!signupConfig?.configured || !sdkReady || connectMutation.isPending} style={{ border: 0, borderRadius: 11, padding: "11px 17px", background: "#0f766e", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: !signupConfig?.configured || !sdkReady ? .6 : 1 }}>
-            {connectMutation.isPending ? "Connecting…" : sdkReady ? "Connect with Meta" : "Preparing secure connection…"}
+            {connectMutation.isPending ? "Connecting…" : !signupConfig?.configured ? "Platform setup required" : sdkReady ? "Connect with Meta" : "Loading secure connection…"}
           </button>
-          {!signupConfig?.configured && <p style={{ color: "#b45309", fontSize: 13, marginBottom: 0 }}>Meta Embedded Signup is not fully configured on the platform yet.</p>}
+          {!signupConfig?.configured && (
+            <div role="status" style={{ marginTop: 12, padding: 14, borderRadius: 11, background: "#fff7ed", border: "1px solid #fed7aa", color: "#7c2d12" }}>
+              <strong>WhatsApp connection is waiting for platform setup.</strong>
+              <p style={{ margin: "6px 0", fontSize: 13 }}>A platform administrator must configure these server-side settings before a business can connect its own WhatsApp number:</p>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 20, fontSize: 13 }}>
+                {(signupConfig?.missingConfiguration ?? ["WHATSAPP_API_VERSION", "WHATSAPP_APP_ID", "WHATSAPP_APP_SECRET", "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID", "WHATSAPP_TOKEN_ENCRYPTION_KEY", "WHATSAPP_VERIFY_TOKEN"]).map((setting) => <li key={setting}><code>{setting}</code></li>)}
+              </ul>
+              <p style={{ margin: "8px 0 0", fontSize: 12 }}>Secret values remain on the API server and are never shown here. This is a platform configuration requirement, not a setting the laundry business can fix from this screen.</p>
+            </div>
+          )}
         </div>
       )}
       {feedback && <p role="status" style={{ marginBottom: 0, marginTop: 12, color: "#334155", fontSize: 13 }}>{feedback}</p>}
