@@ -416,6 +416,31 @@ export function PaymentsPage() {
         <p>No payments found.</p>
       )}
 
+      {paymentIdFromUrl && (
+        <section aria-label="Selected payment record">
+          <h2>Selected payment</h2>
+          {paymentFromUrlQuery.isLoading && <p>Loading payment record…</p>}
+          {paymentFromUrlQuery.isError && (
+            <p role="alert">
+              {paymentFromUrlQuery.error instanceof ApiError
+                ? paymentFromUrlQuery.error.message
+                : "Unable to load the selected payment."}
+            </p>
+          )}
+          {paymentFromUrlQuery.data && (
+            <>
+              <p><strong>Invoice:</strong> {paymentFromUrlQuery.data.invoice?.invoiceNumber ?? paymentFromUrlQuery.data.invoiceId}</p>
+              <p><strong>Customer:</strong> {paymentFromUrlQuery.data.invoice?.customerName ?? "—"}</p>
+              <p><strong>Amount:</strong> {formatMoney(paymentFromUrlQuery.data.amount)}</p>
+              <p><strong>Method:</strong> {paymentFromUrlQuery.data.method}</p>
+              <p><strong>Status:</strong> {statusLabel(paymentFromUrlQuery.data.status)}</p>
+              <p><strong>Reference:</strong> {paymentFromUrlQuery.data.reference ?? "—"}</p>
+              <p><strong>Recorded:</strong> {formatDate(paymentFromUrlQuery.data.createdAt)}</p>
+            </>
+          )}
+        </section>
+      )}
+
       {payments.length > 0 && (
         <table>
           <thead>
@@ -785,7 +810,7 @@ export function PaymentsPage() {
 
                   <tbody>
                     {summary.payments.map((payment) => (
-                      <tr key={payment.id}>
+                      <tr key={payment.id} aria-current={paymentIdFromUrl === payment.id ? "true" : undefined}>
                         <td>{formatMoney(payment.amount)}</td>
                         <td>{payment.method}</td>
                         <td>{statusLabel(payment.status)}</td>
