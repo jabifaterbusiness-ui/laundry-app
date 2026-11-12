@@ -360,7 +360,7 @@ describe("listCommunicationDeliveries", () => {
     mocks.communicationDeliveryFindMany.mockResolvedValue([
       {
         ...failedDelivery(),
-        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+2348000000000", whatsappOptIn: true },
+        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+2348000000000", whatsappOptIn: true, whatsappOptInAt: new Date("2026-11-01T10:00:00.000Z"), whatsappOptInSource: "CUSTOMER_FORM" },
         order: { id: ORDER_ID, orderNumber: "001" },
         campaign: null,
       },
@@ -415,6 +415,28 @@ describe("listCommunicationDeliveries", () => {
     expect(result[0]).not.toHaveProperty("retryPayload");
     expect(result[0]?.customer).not.toHaveProperty("phone");
     expect(result[0]?.customer).not.toHaveProperty("whatsappOptIn");
+  });
+
+  it("does not advertise retries when an opt-in is missing its recorded source or timestamp", async () => {
+    mocks.communicationDeliveryFindMany.mockResolvedValue([
+      {
+        ...failedDelivery(),
+        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+2348000000000", whatsappOptIn: true, whatsappOptInAt: null, whatsappOptInSource: "CUSTOMER_FORM" },
+        order: { id: ORDER_ID, orderNumber: "001" },
+        campaign: null,
+      },
+      {
+        ...failedDelivery({ id: "22222222-2222-4222-8222-222222222224" }),
+        customer: { id: CUSTOMER_ID, name: "Ada", phone: "+2348000000000", whatsappOptIn: true, whatsappOptInAt: new Date("2026-11-01T10:00:00.000Z"), whatsappOptInSource: null },
+        order: { id: ORDER_ID, orderNumber: "001" },
+        campaign: null,
+      },
+    ]);
+
+    const result = await listCommunicationDeliveries("business-1", "branch-1", "user-1");
+
+    expect(result).toHaveLength(2);
+    expect(result.every((delivery) => delivery.retryAvailable === false)).toBe(true);
   });
 
   it("does not advertise retries when the customer opted out or the stored destination is stale", async () => {
