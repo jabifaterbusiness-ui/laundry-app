@@ -1311,7 +1311,7 @@ export async function getInventoryBranchComparison(scope: BusinessScope) {
 export async function getInventoryReports(scope: BranchScope) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
-  const [stocks, movements, purchaseOrders] = await prisma.$transaction([
+  const [stocks, movements, purchaseOrders, expiryReceiptLines] = await prisma.$transaction([
     prisma.inventoryStock.findMany({
       where: { businessId: scope.businessId, branchId: scope.branchId },
       include: { inventoryItem: true },
@@ -1336,6 +1336,18 @@ export async function getInventoryReports(scope: BranchScope) {
       },
       include: { supplier: true, lines: true, receipts: true },
       orderBy: { createdAt: "desc" },
+      take: 500,
+    }),
+    prisma.inventoryGoodsReceiptLine.findMany({
+      where: {
+        expiryDate: { not: null },
+        goodsReceipt: { is: { businessId: scope.businessId, branchId: scope.branchId } },
+      },
+      include: {
+        inventoryItem: true,
+        goodsReceipt: { select: { receiptNumber: true, receivedAt: true } },
+      },
+      orderBy: { expiryDate: "asc" },
       take: 500,
     }),
   ]);
@@ -1371,8 +1383,24 @@ export async function getInventoryReports(scope: BranchScope) {
     }
     supplierPerformance.set(order.supplierId, row);
   }
+  const now = new Date();
+  const expiryRegister = expiryReceiptLines.map((line) => {
+    const expiryDate = line.expiryDate!;
+    const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / 86400000);
+    return {
+      id: line.id,
+      inventoryItem: line.inventoryItem,
+      batchNumber: line.batchNumber,
+      expiryDate,
+      quantityReceived: line.quantity,
+      receiptNumber: line.goodsReceipt.receiptNumber,
+      receivedAt: line.goodsReceipt.receivedAt,
+      daysUntilExpiry,
+      status: daysUntilExpiry < 0 ? "EXPIRED" as const : daysUntilExpiry <= 30 ? "DUE_SOON" as const : "IN_DATE" as const,
+    };
+  });
   return {
-    periodDays: 30, totalValuation, valuation,
+    periodDays: 30, totalValuation, valuation, expiryRegister,
     movementTotals, movementCount: movements.length,
     consumptionQuantity: (movementTotals.ISSUE ?? 0) + (movementTotals.WASTE ?? 0) + (movementTotals.DAMAGED ?? 0) + (movementTotals.EXPIRED ?? 0),
     adjustmentQuantity: movementTotals.ADJUSTMENT ?? 0,
