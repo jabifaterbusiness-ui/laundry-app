@@ -405,6 +405,16 @@ const AUDIT_TECHNICAL_KEYS = new Set([
   "id",
   "businessId",
   "branchId",
+  "customerId",
+  "orderId",
+  "invoiceId",
+  "paymentId",
+  "actorUserId",
+  "submittedById",
+  "newCustomerId",
+  "previousCustomerId",
+  "createdAt",
+  "updatedAt",
   "historyId",
   "correlationId",
   "logoUrl",
@@ -582,36 +592,16 @@ function AuditSnapshot({
   if (!record) return null;
 
   const invoice = asAuditRecord(record.invoice);
-  const orderItems = record.items;
-  const invoiceItems = invoice?.items;
-  const orderExcluded = new Set(["items", "garments", "invoice"]);
-  const invoiceExcluded = new Set(["items"]);
+  const combined = invoice ? { ...record, ...invoice } : record;
+  const items = invoice?.items ?? record.items;
 
   return (
     <section className="suspicious-activity-detail-snapshot">
       <h3>{title}</h3>
-      {invoice ? (
-        <>
-          <h4>Order context</h4>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(record).filter(([key]) => !orderExcluded.has(key)),
-          )} />
-          <AuditLineItems title="Order service lines" items={orderItems} />
-          <AuditLineItems title="Invoice line items" items={invoiceItems} />
-          <h4>Invoice details</h4>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(invoice).filter(([key]) => !invoiceExcluded.has(key)),
-          )} />
-        </>
-      ) : (
-        <>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(record).filter(([key]) => key !== "items" && key !== "garments"),
-          )} />
-          <AuditLineItems title="Line items" items={orderItems} />
-          <AuditLineItems title="Invoice line items" items={invoiceItems} />
-        </>
-      )}
+      <AuditFieldList data={Object.fromEntries(
+        Object.entries(combined).filter(([key]) => !["items", "garments", "invoice"].includes(key)),
+      )} />
+      <AuditLineItems title="Items and services" items={items} />
     </section>
   );
 }
@@ -715,20 +705,8 @@ function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
 
       {Object.keys(context).length ? (
         <>
-          <h4>Business context and recorded details</h4>
+          <h4>Key details</h4>
           <AuditFieldList data={context} />
-          {Object.entries(context).filter(([, value]) => {
-            const item = asAuditRecord(value);
-            return item !== null;
-          }).map(([key, value]) => (
-            <section className="suspicious-activity-detail-subsection" key={key}>
-              <h4>{auditFieldLabel(key)}</h4>
-              <AuditFieldList data={asAuditRecord(value)!} />
-              {asAuditRecord(value)?.items !== undefined ? (
-                <AuditLineItems title="Line items" items={asAuditRecord(value)?.items} />
-              ) : null}
-            </section>
-          ))}
         </>
       ) : null}
 
@@ -755,10 +733,13 @@ function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
             <p>No field-level differences were detected in the available snapshots.</p>
           )}
           {changes.length >= 40 ? <p>Change list limited to the first 40 differences.</p> : null}
-          <div className="suspicious-activity-detail-snapshot-grid">
-            <AuditSnapshot title="Before the change" snapshot={before} />
-            <AuditSnapshot title="After the change" snapshot={after} />
-          </div>
+          <details className="suspicious-activity-technical-details">
+            <summary>View full before-and-after snapshots</summary>
+            <div className="suspicious-activity-detail-snapshot-grid">
+              <AuditSnapshot title="Before the change" snapshot={before} />
+              <AuditSnapshot title="After the change" snapshot={after} />
+            </div>
+          </details>
         </>
       ) : (
         <p className="suspicious-activity-detail-hint">
