@@ -351,6 +351,7 @@ export async function createInventoryMovement(
   }
   if (input.type === "EXPIRED" && !input.expiryDate) throw new AppError("Expired-stock movements require the original expiry date", 422);
   if (input.expiryDate && !input.batchNumber?.trim()) throw new AppError("A batch number is required when an expiry date is recorded", 422);
+  if (input.type === "RECEIPT" && input.expiryDate && input.expiryDate <= new Date()) throw new AppError("Cannot receive stock with an expired date", 422);
   if (input.type === "EXPIRED" && input.expiryDate && input.expiryDate > new Date()) throw new AppError("The expiry date must not be in the future", 422);
   const result = await prisma.$transaction(async (tx) => {
     if (!scope.userId) throw new AppError("A valid user context is required", 400);
