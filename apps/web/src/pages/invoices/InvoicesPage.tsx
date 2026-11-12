@@ -62,6 +62,7 @@ export function InvoicesPage() {
   const canViewPayments = hasPermission(user, "payments.view");
 
   const [page, setPage] = useState(1);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
     null,
@@ -110,6 +111,7 @@ export function InvoicesPage() {
       {
         page,
         status,
+        search: invoiceSearch,
         branchId: activeBranchId,
       },
     ],
@@ -119,6 +121,7 @@ export function InvoicesPage() {
           page,
           pageSize: PAGE_SIZE,
           status: status || undefined,
+          search: invoiceSearch.trim() || undefined,
         },
         { accessToken },
         activeBranchId,
@@ -567,6 +570,10 @@ export function InvoicesPage() {
   return (
     <main>
       <h1>Invoices & Receipts</h1>
+      <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
+        Search invoices
+        <input type="search" name="invoices-search" autoComplete="off" placeholder="Invoice or order number, customer name, phone or email" value={invoiceSearch} onChange={(event) => { setInvoiceSearch(event.target.value); setPage(1); }} style={{ width: "100%", boxSizing: "border-box", marginTop: 6 }} />
+      </label>
 
       {printError && (
         <p role="alert">
