@@ -1946,7 +1946,7 @@ describe("Quick Operations routes - MA", () => {
         entityId: CUSTOMER_A,
         metadata: expect.objectContaining({
           operationCode: "MA",
-          operationName: "Merge Account",
+          operationName: "Merge Customer",
           targetCustomerId: CUSTOMER_B,
           mergedOrderCount: 1,
           mergedOrderIds: mergedOrders.map((order) => order.id),
