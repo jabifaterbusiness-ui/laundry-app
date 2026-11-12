@@ -1833,11 +1833,18 @@ export function OrdersPage() {
             newOrderContent={newOrderContent}
             onBack={() => {
               const customerId = activeWorkspace.customer.id;
+              // Read the latest workspace snapshot at click time. The workspace
+              // can be reused and updated after this page's initial URL render.
+              const latestWorkspace = useOrderWorkspaceStore
+                .getState()
+                .workspaces.find((workspace) => workspace.id === activeWorkspace.id);
               const shouldReturnToCustomerWorkstation =
+                latestWorkspace?.returnTo === "customer-workstation" ||
                 activeWorkspace.returnTo === "customer-workstation" ||
                 workspaceReturnToRef.current === "customer-workstation" ||
                 workspaceReturnTo === "customer-workstation" ||
                 returnToFromUrl === "customer-workstation" ||
+                new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
                 returnToCustomerWorkstation;
               markOrderFormDirty(false);
               closeWorkspace(activeWorkspace.id);
