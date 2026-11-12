@@ -160,6 +160,7 @@ export async function resendDigitalReceipt(
       };
     }
   } catch (error) {
+    if (error instanceof AppError) throw error;
     throw new AppError(
       error instanceof Error
         ? error.message
