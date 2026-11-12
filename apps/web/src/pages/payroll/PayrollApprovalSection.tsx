@@ -321,45 +321,126 @@ export function PayrollApprovalSection({
               </p>
             )}
             {reviewQuery.data && (
-              <div style={{ overflowX: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Basic salary</th>
-                      <th>Allowances</th>
-                      <th>Bonuses</th>
-                      <th>Gross pay</th>
-                      <th>Deductions</th>
-                      <th>Net pay</th>
-                      <th>Deduction details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reviewQuery.data.records.map((record) => (
-                      <tr key={record.payrollRecordId}>
-                        <td>{record.employee.fullName}</td>
-                        <td>{money(record.basicSalary)}</td>
-                        <td>{money(record.allowances)}</td>
-                        <td>{money(record.bonuses)}</td>
-                        <td>{money(record.grossPay)}</td>
-                        <td>{money(record.totalDeductions)}</td>
-                        <td>{money(record.netPay)}</td>
-                        <td>
-                          {record.deductions.length === 0
-                            ? "None"
-                            : record.deductions.map((deduction, index) => (
-                                <div key={deduction.id ?? `${deduction.type}-${index}`}>
-                                  {deduction.type.replaceAll("_", " ")}: {money(deduction.amount)}
-                                  {deduction.description ? ` — ${deduction.description}` : ""}
-                                </div>
-                              ))}
-                        </td>
+              <>
+                <div
+                  aria-label="Payroll approval totals"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: 12,
+                    marginBottom: 18,
+                  }}
+                >
+                  {[
+                    ["Employees", reviewQuery.data.summary.employeeCount.toLocaleString("en-NG")],
+                    ["Total gross pay", money(reviewQuery.data.summary.totalGrossPay)],
+                    ["Total deductions", money(reviewQuery.data.summary.totalDeductions)],
+                    ["Total net pay", money(reviewQuery.data.summary.totalNetPay)],
+                    ["Total paid", money(reviewQuery.data.summary.totalPaid)],
+                    ["Outstanding", money(reviewQuery.data.summary.totalBalance)],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      style={{
+                        minWidth: 0,
+                        padding: "13px 14px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 12,
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+                        {label}
+                      </div>
+                      <strong style={{ display: "block", marginTop: 6, fontSize: 18 }}>
+                        {value}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 14,
+                    marginBottom: 16,
+                    color: "#475569",
+                    fontSize: 13,
+                  }}
+                >
+                  <span>Paid: <strong>{reviewQuery.data.summary.paidCount}</strong></span>
+                  <span>Partially paid: <strong>{reviewQuery.data.summary.partiallyPaidCount}</strong></span>
+                  <span>Unpaid: <strong>{reviewQuery.data.summary.unpaidCount}</strong></span>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Basic salary</th>
+                        <th>Allowances</th>
+                        <th>Bonuses</th>
+                        <th>Gross pay</th>
+                        <th>Deductions</th>
+                        <th>Net pay</th>
+                        <th>Paid</th>
+                        <th>Outstanding</th>
+                        <th>Payment status</th>
+                        <th>Deduction details</th>
+                        <th>Payment history</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {reviewQuery.data.records.map((record) => (
+                        <tr key={record.payrollRecordId}>
+                          <td>
+                            <strong>{record.employee.fullName}</strong>
+                            {record.employee.email && (
+                              <div style={{ color: "#64748b", fontSize: 12 }}>{record.employee.email}</div>
+                            )}
+                            {record.employee.role && (
+                              <div style={{ color: "#64748b", fontSize: 12 }}>{record.employee.role}</div>
+                            )}
+                          </td>
+                          <td>{money(record.basicSalary)}</td>
+                          <td>{money(record.allowances)}</td>
+                          <td>{money(record.bonuses)}</td>
+                          <td>{money(record.grossPay)}</td>
+                          <td>{money(record.totalDeductions)}</td>
+                          <td>{money(record.netPay)}</td>
+                          <td>{money(record.amountPaid)}</td>
+                          <td>{money(record.balance)}</td>
+                          <td>{record.paymentStatus.replaceAll("_", " ")}</td>
+                          <td>
+                            {record.deductions.length === 0
+                              ? "None"
+                              : record.deductions.map((deduction, index) => (
+                                  <div key={deduction.id ?? `${deduction.type}-${index}`}>
+                                    <strong>{deduction.type.replaceAll("_", " ")}: {money(deduction.amount)}</strong>
+                                    {deduction.description ? <div>{deduction.description}</div> : null}
+                                  </div>
+                                ))}
+                          </td>
+                          <td>
+                            {record.payments.length === 0
+                              ? "No payments posted"
+                              : record.payments.map((payment) => (
+                                  <div key={payment.id} style={{ marginBottom: 6 }}>
+                                    <strong>{money(payment.amount)} · {payment.method}</strong>
+                                    <div style={{ color: "#64748b", fontSize: 12 }}>
+                                      {date(payment.createdAt)} · {payment.status}
+                                    </div>
+                                    {payment.reference && <div>Ref: {payment.reference}</div>}
+                                    {payment.note && <div>{payment.note}</div>}
+                                  </div>
+                                ))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
         )}
