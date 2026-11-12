@@ -87,9 +87,12 @@ export interface WhatsAppBusinessConnection {
   tokenExpiresAt: string | null;
   lastVerifiedAt: string | null;
   lastError: string | null;
+  receiptTemplateName: string | null;
+  receiptTemplateLanguage: string | null;
 }
 export interface WhatsAppConnectionStatus {
   configured: boolean;
+  missingConfiguration: string[];
   appId: string | null;
   configurationId: string | null;
   apiVersion: string | null;
@@ -100,6 +103,12 @@ export async function getWhatsAppConnection(auth: { accessToken: string | null }
 }
 export async function completeWhatsAppConnection(input: { code: string; wabaId: string; phoneNumberId: string }, auth: { accessToken: string | null }) {
   return apiFetch<{ connection: WhatsAppBusinessConnection }>("/whatsapp/connection/embedded-signup", { method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input) });
+}
+export async function saveWhatsAppReceiptTemplate(input: { templateName: string | null; language: string | null }, auth: { accessToken: string | null }) {
+  return apiFetch<{ receiptTemplateName: string | null; receiptTemplateLanguage: string | null }>(
+    "/whatsapp/connection/receipt-template",
+    { method: "PATCH", accessToken: auth.accessToken, body: JSON.stringify(input) },
+  );
 }
 export async function disconnectWhatsAppConnection(auth: { accessToken: string | null }) {
   return apiFetch<void>("/whatsapp/connection", { method: "DELETE", accessToken: auth.accessToken });

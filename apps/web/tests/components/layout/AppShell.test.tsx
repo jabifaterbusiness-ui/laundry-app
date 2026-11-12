@@ -56,7 +56,7 @@ describe("AppShell", () => {
     renderShell();
 
     expect(
-      screen.getByRole("textbox", { name: /global search/i }),
+      screen.getByRole("searchbox", { name: /global search/i }),
     ).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();

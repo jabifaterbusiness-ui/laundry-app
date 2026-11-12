@@ -264,6 +264,7 @@ export interface ListInvoicesParams {
   pageSize: number;
   status?: InvoiceStatus;
   customerId?: string;
+  search?: string;
 }
 
 /**
@@ -669,6 +670,7 @@ export async function listInvoices(params: ListInvoicesParams) {
     pageSize,
     status,
     customerId,
+    search,
   } = params;
 
   const customerScope = await getBranchResourceScope({
@@ -697,6 +699,18 @@ export async function listInvoices(params: ListInvoicesParams) {
       },
     },
     ...(status ? { status } : {}),
+    ...(search ? {
+      AND: [{
+        OR: [
+          { invoiceNumber: { contains: search } },
+          { customerName: { contains: search, mode: "insensitive" } },
+          { order: { is: { orderNumber: { contains: search } } } },
+          { order: { is: { customer: { is: { name: { contains: search, mode: "insensitive" } } } } } },
+          { order: { is: { customer: { is: { phone: { contains: search } } } } } },
+          { order: { is: { customer: { is: { email: { contains: search, mode: "insensitive" } } } } } },
+        ],
+      }],
+    } : {}),
   };
 
   const [data, total] = await Promise.all([

@@ -25,7 +25,7 @@ vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
   normalizeWhatsAppRecipient: (value: string) => value.replace(/\\D/g, ""),
 }));
 
-import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
+import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
 
 function page(data: unknown[], next?: string) {
   return new Response(JSON.stringify({ data, ...(next ? { paging: { next } } : {}) }), {
@@ -63,9 +63,62 @@ describe("approved WhatsApp template pagination", () => {
 
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(result).toEqual([
-      { id: "template-1", name: "order_ready", language: "en", category: "UTILITY", bodyVariableCount: 1 },
-      { id: "template-2", name: "plain_notice", language: "en", category: "UTILITY", bodyVariableCount: 0 },
+      { id: "template-1", name: "order_ready", language: "en", category: "UTILITY", bodyVariableCount: 1, headerFormat: null },
+      { id: "template-2", name: "plain_notice", language: "en", category: "UTILITY", bodyVariableCount: 0, headerFormat: null },
     ]);
+  });
+
+  it("supports an approved UTILITY image-header template for a receipt", async () => {
+    const approvedPage = () => page([
+      {
+        id: "receipt-template",
+        name: "laundry_receipt",
+        language: "en",
+        status: "APPROVED",
+        category: "UTILITY",
+        components: [
+          { type: "HEADER", format: "IMAGE" },
+          { type: "BODY", text: "Hello {{1}}, invoice {{2}} total {{3}}, balance {{4}}" },
+        ],
+      },
+    ]);
+    mocks.fetch
+      .mockImplementationOnce(async () => approvedPage())
+      .mockImplementationOnce(async () => approvedPage())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [{ id: "wamid-receipt-1" }] }), { status: 200 }));
+
+    const result = await sendAutomatedWhatsAppTemplate({
+      businessId: "business-1",
+      customerId: "customer-1",
+      phone: "2348012345678",
+      templateName: "laundry_receipt",
+      language: "en",
+      templateCategory: "UTILITY",
+      headerImageId: "media-receipt-1",
+      variableValues: ["Ada", "INV-100", "₦12,000", "₦2,000"],
+    });
+
+    expect(result.providerMessageId).toBe("wamid-receipt-1");
+    const request = JSON.parse(String(mocks.fetch.mock.calls[2]?.[1]?.body));
+    expect(request.template.components).toEqual([
+      { type: "header", parameters: [{ type: "image", image: { id: "media-receipt-1" } }] },
+      { type: "body", parameters: [
+        { type: "text", text: "Ada" },
+        { type: "text", text: "INV-100" },
+        { type: "text", text: "₦12,000" },
+        { type: "text", text: "₦2,000" },
+      ] },
+    ]);
+  });
+
+  it("uploads receipt images to the connected business phone number", async () => {
+    mocks.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ id: "media-receipt-2" }), { status: 200 }));
+    const mediaId = await uploadWhatsAppTemplateImage("business-1", Buffer.from("receipt-image"));
+    expect(mediaId).toBe("media-receipt-2");
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://graph.facebook.com/v23.0/987654321/media",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("sends an approved notification template without requiring an inbound message when consent is recorded", async () => {

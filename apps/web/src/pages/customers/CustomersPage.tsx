@@ -96,6 +96,7 @@ export function CustomersPage() {
         );
       } else {
         queryClient.invalidateQueries({ queryKey: ["customers"] });
+        setOfflineMessage("Customer created successfully.");
       }
 
       setEditingCustomer(undefined);
@@ -121,6 +122,7 @@ export function CustomersPage() {
         );
       } else {
         queryClient.invalidateQueries({ queryKey: ["customers"] });
+        setOfflineMessage("Customer details saved successfully, including any WhatsApp consent changes.");
       }
 
       setEditingCustomer(undefined);
@@ -149,7 +151,10 @@ export function CustomersPage() {
   async function handleFormSubmit(input: CreateCustomerInput) {
     if (editingCustomer) {
       const sensitiveAuthorization = await requestSensitiveAuthorization();
-      if (!sensitiveAuthorization) return;
+      if (!sensitiveAuthorization) {
+        setOfflineMessage("Customer update cancelled. No changes were saved.");
+        return;
+      }
       await updateMutation.mutateAsync({
         id: editingCustomer.id,
         data: input,

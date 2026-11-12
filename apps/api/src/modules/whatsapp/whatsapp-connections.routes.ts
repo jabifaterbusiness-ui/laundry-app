@@ -7,6 +7,7 @@ import {
   completeWhatsAppEmbeddedSignup,
   disconnectWhatsAppBusiness,
   getWhatsAppConnectionStatus,
+  updateWhatsAppReceiptTemplate,
 } from "./whatsapp-connections.service.js";
 
 export const whatsappConnectionsRouter = Router();
@@ -29,6 +30,15 @@ whatsappConnectionsRouter.post("/embedded-signup", requirePermission("business.u
   }).strict().parse(req.body);
   const connection = await completeWhatsAppEmbeddedSignup({ businessId: businessId(req), ...input });
   res.status(201).json({ connection });
+}));
+
+whatsappConnectionsRouter.patch("/receipt-template", requirePermission("business.update"), asyncHandler(async (req, res) => {
+  const input = z.object({
+    templateName: z.string().trim().min(1).max(512).nullable(),
+    language: z.string().trim().min(1).max(64).nullable(),
+  }).strict().parse(req.body);
+  const settings = await updateWhatsAppReceiptTemplate(businessId(req), input.templateName, input.language);
+  res.status(200).json(settings);
 }));
 
 whatsappConnectionsRouter.delete("/", requirePermission("business.update"), asyncHandler(async (req, res) => {

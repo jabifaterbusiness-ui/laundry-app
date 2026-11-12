@@ -96,6 +96,7 @@ export function OrdersPage() {
     );
 
   const customerIdFromUrl = searchParams.get("customerId");
+  const openCustomerAccountFromUrl = searchParams.get("openAccount") === "1";
   const returnToFromUrl = searchParams.get("returnTo");
   const orderIdFromUrl = searchParams.get("orderId");
   const editOrderFromUrl = searchParams.get("edit") === "1";
@@ -169,6 +170,7 @@ export function OrdersPage() {
   const canManageColors = hasPermission(user, "colors.manage");
 
   const [page, setPage] = useState(1);
+  const [orderSearch, setOrderSearch] = useState("");
   const [openFolder, setOpenFolder] = useState<
     | "received"
     | "outstanding"
@@ -223,13 +225,18 @@ export function OrdersPage() {
   }, [activeWorkspaceId]);
 
 
+  const orderListCustomerId = activeWorkspace?.mode === "view"
+    ? activeWorkspace.customer.id
+    : customerId;
+
   const ordersQuery = useQuery({
     queryKey: [
       "orders",
       {
         page,
         status,
-        customerId,
+        customerId: orderListCustomerId,
+        search: orderSearch,
         branchId: activeBranchId,
       },
     ],
@@ -239,7 +246,8 @@ export function OrdersPage() {
           page,
           pageSize: PAGE_SIZE,
           status: status || undefined,
-          customerId: customerId || undefined,
+          customerId: orderListCustomerId || undefined,
+          search: orderSearch.trim() || undefined,
         },
         { accessToken },
         activeBranchId,
@@ -607,12 +615,19 @@ export function OrdersPage() {
     }
 
     openedCustomerFromUrlRef.current = navigationKey;
-    openCustomerWorkspace(customer);
+    if (openCustomerAccountFromUrl) {
+      openCustomerAccount(customer);
+    } else {
+      openCustomerWorkspace(customer);
+    }
+    navigate("/orders", { replace: true });
   }, [
     location.key,
     customerIdFromUrl,
+    openCustomerAccountFromUrl,
     customerFromUrlQuery.data,
     openCustomerWorkspace,
+    navigate,
   ]);
 
   const services = servicesQuery.data?.data ?? [];
@@ -736,6 +751,16 @@ export function OrdersPage() {
     setFormError(null);
     setCustomerPickerOpen(false);
     setFormOpen(true);
+  }
+
+  function openCustomerAccount(customer: Customer) {
+    const workspaceId = openWorkspace(customer);
+    switchWorkspace(workspaceId);
+    updateWorkspace(workspaceId, { mode: "view", activeOrder: null });
+    setSelectedOrder(null);
+    setFormError(null);
+    setCustomerPickerOpen(false);
+    setFormOpen(false);
   }
 
   function selectCustomerForNewOrder(customer: Customer) {
@@ -1617,7 +1642,19 @@ export function OrdersPage() {
 
   return (
     <main>
-      <h1>Orders</h1>
+      <h1>{activeWorkspace?.mode === "view" ? `Order Management · ${activeWorkspace.customer.name}` : "Orders"}</h1>
+      <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
+        Search orders
+        <input
+          type="search"
+          name="orders-search"
+          autoComplete="off"
+          placeholder="Order number, customer name, phone or email"
+          value={orderSearch}
+          onChange={(event) => { setOrderSearch(event.target.value); setPage(1); }}
+          style={{ width: "100%", boxSizing: "border-box", marginTop: 6 }}
+        />
+      </label>
 
       {canCreateOrder ? (
         <div>

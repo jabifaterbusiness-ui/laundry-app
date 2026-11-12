@@ -79,4 +79,5 @@ export interface ListInvoicesParams {
   pageSize?: number;
   status?: InvoiceStatus;
   customerId?: string;
+  search?: string;
 }

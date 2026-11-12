@@ -75,7 +75,7 @@ export function WhatsAppInboxPanel() {
   });
   const conversations = conversationsQuery.data?.data ?? [];
   const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken && isConnected), staleTime: 60000 });
-  const templates = templatesQuery.data?.data ?? [];
+  const templates = (templatesQuery.data?.data ?? []).filter((template) => template.headerFormat !== "IMAGE");
   const selectedTemplate = templates.find((item) => item.name === templateName && item.language === templateLanguage) ?? templates[0] ?? null;
   useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id, selectedTemplate?.bodyVariableCount]);
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;

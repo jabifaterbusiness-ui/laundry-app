@@ -61,6 +61,7 @@ export interface ListPaymentsParams {
   pageSize?: number;
   invoiceId?: string;
   status?: PaymentStatus;
+  search?: string;
 }
 
 interface AuthOptions {
@@ -111,6 +112,10 @@ export async function listPayments(
 
   if (params.status) {
     searchParams.set("status", params.status);
+  }
+
+  if (params.search?.trim()) {
+    searchParams.set("search", params.search.trim());
   }
 
   const query = searchParams.toString();

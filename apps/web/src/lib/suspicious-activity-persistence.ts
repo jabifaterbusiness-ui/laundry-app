@@ -78,3 +78,40 @@ export function markSuspiciousActivityEventSeen(
     JSON.stringify(next),
   );
 }
+
+
+const CATEGORY_ORDER_PREFIX = "laundry-app:suspicious-activity-order";
+
+function categoryOrderKey(userId: string, branchId: string) {
+  return `${CATEGORY_ORDER_PREFIX}:${userId}:${branchId}`;
+}
+
+export function loadSuspiciousActivityCategoryOrder(
+  userId: string,
+  branchId: string,
+  defaultOrder: readonly string[],
+): string[] {
+  try {
+    const raw = localStorage.getItem(categoryOrderKey(userId, branchId));
+    if (!raw) return [...defaultOrder];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+      return [...defaultOrder];
+    }
+
+    const available = new Set(defaultOrder);
+    const saved = parsed.filter((item): item is string => available.has(item));
+    return [...new Set([...saved, ...defaultOrder.filter((item) => !saved.includes(item))])];
+  } catch {
+    return [...defaultOrder];
+  }
+}
+
+export function saveSuspiciousActivityCategoryOrder(
+  userId: string,
+  branchId: string,
+  order: readonly string[],
+) {
+  localStorage.setItem(categoryOrderKey(userId, branchId), JSON.stringify(order));
+}

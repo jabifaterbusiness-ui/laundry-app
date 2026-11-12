@@ -92,6 +92,7 @@ export async function list(req: Request, res: Response) {
     ...(query.status !== undefined && {
       status: query.status,
     }),
+    ...(query.search !== undefined && { search: query.search }),
   });
 
   res.status(200).json(result);

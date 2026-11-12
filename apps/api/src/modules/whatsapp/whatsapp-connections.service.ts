@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { encryptWhatsAppAccessToken, decryptWhatsAppAccessToken } from "./whatsapp-token-crypto.js";
+import { listApprovedWhatsAppTemplates } from "./whatsapp-templates.service.js";
 
 type GraphError = { error?: { message?: string; code?: number; error_subcode?: number } };
 type TokenResponse = { access_token?: string; token_type?: string; expires_in?: number } & GraphError;
@@ -36,19 +37,63 @@ export async function getWhatsAppConnectionStatus(businessId: string) {
       id: true, wabaId: true, phoneNumberId: true, displayPhoneNumber: true,
       verifiedName: true, status: true, connectedAt: true, tokenExpiresAt: true,
       lastVerifiedAt: true, lastError: true,
+      receiptTemplateName: true, receiptTemplateLanguage: true,
     },
   });
+  const requiredSettings = [
+    ["WHATSAPP_API_VERSION", config.receiptDelivery.whatsappApiVersion],
+    ["WHATSAPP_APP_ID", config.receiptDelivery.whatsappAppId],
+    ["WHATSAPP_APP_SECRET", config.receiptDelivery.whatsappAppSecret],
+    ["WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID", config.receiptDelivery.whatsappEmbeddedSignupConfigId],
+    ["WHATSAPP_TOKEN_ENCRYPTION_KEY", config.receiptDelivery.whatsappTokenEncryptionKey],
+    ["WHATSAPP_VERIFY_TOKEN", config.receiptDelivery.whatsappVerifyToken],
+  ] as const;
+  const missingConfiguration = requiredSettings
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
   return {
-    configured: Boolean(
-      config.receiptDelivery.whatsappApiVersion && config.receiptDelivery.whatsappAppId &&
-      config.receiptDelivery.whatsappAppSecret && config.receiptDelivery.whatsappEmbeddedSignupConfigId &&
-      config.receiptDelivery.whatsappTokenEncryptionKey && config.receiptDelivery.whatsappVerifyToken
-    ),
+    configured: missingConfiguration.length === 0,
+    missingConfiguration,
     appId: config.receiptDelivery.whatsappAppId ?? null,
     configurationId: config.receiptDelivery.whatsappEmbeddedSignupConfigId ?? null,
     apiVersion: config.receiptDelivery.whatsappApiVersion ?? null,
     connection,
   };
+}
+
+export async function updateWhatsAppReceiptTemplate(
+  businessId: string,
+  templateName: string | null,
+  language: string | null,
+) {
+  if (templateName === null && language === null) {
+    return prisma.whatsAppBusinessConnection.update({
+      where: { businessId },
+      data: { receiptTemplateName: null, receiptTemplateLanguage: null },
+      select: { receiptTemplateName: true, receiptTemplateLanguage: true },
+    });
+  }
+  if (!templateName?.trim() || !language?.trim()) {
+    throw new AppError("Choose both an approved receipt template and its language", 422);
+  }
+  const connection = await prisma.whatsAppBusinessConnection.findUnique({
+    where: { businessId },
+    select: { status: true },
+  });
+  if (!connection || connection.status !== "CONNECTED") {
+    throw new AppError("Connect this business's WhatsApp number before choosing a receipt template", 409);
+  }
+  const templates = await listApprovedWhatsAppTemplates(businessId);
+  const selected = templates.find((item) => item.name === templateName && item.language === language);
+  if (!selected || selected.category !== "UTILITY" || selected.headerFormat !== "IMAGE" || selected.bodyVariableCount !== 4) {
+    throw new AppError("Choose an approved UTILITY template with an IMAGE header and exactly four BODY variables for customer name, invoice number, total amount, and balance due", 422);
+  }
+  return prisma.whatsAppBusinessConnection.update({
+    where: { businessId },
+    data: { receiptTemplateName: selected.name, receiptTemplateLanguage: selected.language },
+    select: { receiptTemplateName: true, receiptTemplateLanguage: true },
+  });
 }
 
 export async function completeWhatsAppEmbeddedSignup(input: {
@@ -109,7 +154,7 @@ export async function completeWhatsAppEmbeddedSignup(input: {
         encryptedAccessToken: encryptWhatsAppAccessToken(accessToken), tokenExpiresAt: expiresAt,
         status: "CONNECTED", connectedAt: new Date(), lastVerifiedAt: new Date(), lastError: null,
       },
-      select: { id: true, wabaId: true, phoneNumberId: true, displayPhoneNumber: true, verifiedName: true, status: true, connectedAt: true, tokenExpiresAt: true },
+      select: { id: true, wabaId: true, phoneNumberId: true, displayPhoneNumber: true, verifiedName: true, status: true, connectedAt: true, tokenExpiresAt: true, receiptTemplateName: true, receiptTemplateLanguage: true },
     });
     return connection;
   } catch (error) {

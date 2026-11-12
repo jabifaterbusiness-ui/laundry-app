@@ -490,6 +490,23 @@ describe("OrdersPage quick customer switching", () => {
     await selectCustomerFromPicker(customer);
   }
 
+  it("opens a searched customer in that customer's Order Management account", async () => {
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    renderPage([`/orders?customerId=${customerA.id}&openAccount=1`]);
+
+    expect(
+      await screen.findByRole("heading", { name: /Order Management · Jane Doe/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /new order/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(listOrders).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customerId: customerA.id }),
+        { accessToken: "test-token" },
+        "branch-a",
+      );
+    });
+  });
+
   it("opens a non-active customer from the customer details Add New Order flow", async () => {
     const dormantCustomer: Customer = {
       ...customerA,

@@ -25,11 +25,13 @@ vi.mock("../../state/auth-store.js", () => ({
     selector: (state: {
       user: typeof mockUser;
       accessToken: string;
+      activeBranchId: string;
     }) => unknown,
   ) =>
     selector({
       user: mockUser,
       accessToken: mockAccessToken,
+      activeBranchId: "branch-1",
     }),
 }));
 
@@ -79,6 +81,27 @@ describe("SuspiciousActivityPage", () => {
     };
 
     mockAccessToken = "token";
+    localStorage.clear();
+  });
+
+  it("lets an authorized user reorder sections and remembers the chosen order", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { unmount } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize section order" }));
+    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("Backup & recovery");
+    expect(screen.getAllByRole("heading", { level: 3 })[1]).toHaveTextContent("Inventory");
+    fireEvent.click(screen.getByRole("button", { name: "Move Inventory up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    const savedOrder = JSON.parse(localStorage.getItem("laundry-app:suspicious-activity-order:manager-1:branch-1") ?? "[]");
+    expect(savedOrder.slice(0, 2)).toEqual(["inventory", "backup"]);
+    unmount();
+
+    renderPage();
+    const headings = await screen.findAllByRole("heading", { level: 3 });
+    expect(headings[0]).toHaveTextContent("Inventory");
+    expect(headings[1]).toHaveTextContent("Backup & recovery");
   });
 
   it("blocks users without the suspicious activity permission", () => {
@@ -243,7 +266,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(customerButton);
 
     const customerId = screen.getByRole("button", {
-      name: "customer-123",
+      name: "Customer",
     });
     fireEvent.click(customerId);
 
@@ -276,7 +299,7 @@ describe("SuspiciousActivityPage", () => {
     fireEvent.click(migrationEventButton);
 
     const migrationJobId = screen.getByRole("button", {
-      name: "migration-job-123",
+      name: "Migration Job",
     });
 
     fireEvent.click(migrationJobId);

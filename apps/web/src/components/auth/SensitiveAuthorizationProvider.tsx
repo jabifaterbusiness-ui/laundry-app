@@ -81,6 +81,7 @@ export function SensitiveAuthorizationProvider({
       setPassword("");
       setError(null);
       setResolveRequest(() => resolve);
+      window.dispatchEvent(new Event("sensitive-authorization:started"));
       setOpen(true);
     });
   }, [
@@ -94,6 +95,7 @@ export function SensitiveAuthorizationProvider({
   ]);
 
   const closeDialog = useCallback((result: string | null) => {
+    window.dispatchEvent(new Event("sensitive-authorization:finished"));
     setOpen(false);
     setPassword("");
     setError(null);
@@ -119,6 +121,7 @@ export function SensitiveAuthorizationProvider({
       setSensitiveAuthorization(authorization);
       closeDialog(authorization.token);
     } catch (requestError) {
+      setPassword("");
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -168,6 +171,7 @@ export function SensitiveAuthorizationProvider({
 
             <input
               id="sensitive-authorization-password"
+              name="sensitive-authorization-password"
               type="password"
               autoComplete="current-password"
               value={password}

@@ -119,6 +119,45 @@ describe("getOne - cross-business access", () => {
 });
 
 describe("update - audit metadata", () => {
+  it("passes WhatsApp consent and its source through to the customer update", async () => {
+    vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "Adam",
+      phone: "08012345678",
+      whatsappOptIn: false,
+      whatsappOptInSource: null,
+    } as never);
+    vi.mocked(service.updateCustomer).mockResolvedValue({
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "Adam",
+      phone: "08012345678",
+      whatsappOptIn: true,
+      whatsappOptInSource: "CUSTOMER_WRITTEN",
+    } as never);
+
+    const req = makeReq({
+      params: { id: "11111111-1111-1111-1111-111111111111" },
+      body: { whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN" },
+    });
+    await update(req, makeRes());
+
+    expect(service.updateCustomer).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      "biz-1",
+      "branch-A",
+      "user-1",
+      { whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN" },
+    );
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "customer.updated",
+      metadata: expect.objectContaining({
+        changedFields: ["whatsappOptIn", "whatsappOptInSource"],
+        before: { whatsappOptIn: false, whatsappOptInSource: null },
+        after: { whatsappOptIn: true, whatsappOptInSource: "CUSTOMER_WRITTEN" },
+      }),
+    }));
+  });
+
   it("records only the changed field names, never full customer data", async () => {
     vi.mocked(service.getCustomerForBusiness).mockResolvedValue({
       id: "11111111-1111-1111-1111-111111111111",

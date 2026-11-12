@@ -16,8 +16,9 @@ const RESULT_GROUPS: {
   type: GlobalSearchResultType;
   label: string;
 }[] = [
-  { type: "INVOICE", label: "Invoices" },
   { type: "CUSTOMER", label: "Customers" },
+  { type: "ORDER", label: "Orders" },
+  { type: "INVOICE", label: "Invoices" },
 ];
 
 function groupResults(results: GlobalSearchResult[]) {
@@ -59,14 +60,15 @@ export function GlobalSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedQuery, setCompletedQuery] = useState("");
+  const [authorizationInProgress, setAuthorizationInProgress] = useState(false);
   const pendingEnterRef = useRef(false);
   const requestIdRef = useRef(0);
   const exactOrderMatch = findExactOrderMatch(results, query);
   const hasOrderCandidate = results.some((result) => result.type === "ORDER");
   const orderMatchAvailable = Boolean(exactOrderMatch);
-  const groups = groupResults(
-    results.filter((result) => result.type !== "ORDER"),
-  );
+  // Keep every result type visible. Order matches used to be available only
+  // to the Enter-key shortcut, which made the dropdown appear invoice-only.
+  const groups = groupResults(results);
   const quickOperations = searchQuickOperations(query).filter((operation) =>
     hasPermission(user, operation.permission),
   );
@@ -91,6 +93,37 @@ export function GlobalSearch() {
     setCompletedQuery("");
     pendingEnterRef.current = false;
   }, [location.key, location.pathname, location.search, location.hash, user?.id, user?.businessId, accessToken, activeBranchId]);
+
+  useEffect(() => {
+    const clearForAuthorization = () => {
+      setAuthorizationInProgress(true);
+      setQuery("");
+      setResults([]);
+      setIsOpen(false);
+      setIsLoading(false);
+      setError(null);
+      setCompletedQuery("");
+      pendingEnterRef.current = false;
+      requestIdRef.current += 1;
+    };
+    const restoreAfterAuthorization = () => {
+      setAuthorizationInProgress(false);
+      setQuery("");
+      setResults([]);
+      setIsOpen(false);
+      setIsLoading(false);
+      setError(null);
+      setCompletedQuery("");
+      pendingEnterRef.current = false;
+      requestIdRef.current += 1;
+    };
+    window.addEventListener("sensitive-authorization:started", clearForAuthorization);
+    window.addEventListener("sensitive-authorization:finished", restoreAfterAuthorization);
+    return () => {
+      window.removeEventListener("sensitive-authorization:started", clearForAuthorization);
+      window.removeEventListener("sensitive-authorization:finished", restoreAfterAuthorization);
+    };
+  }, []);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -218,7 +251,8 @@ export function GlobalSearch() {
         return;
       }
 
-      // Keep matching orders available to Enter without listing them in the dropdown.
+      // Enter opens an exact order-number match first; otherwise it follows
+      // the first visible customer or invoice result.
       const firstResult =
         exactOrderMatch ??
         results.find((result) => result.type !== "ORDER");
@@ -270,6 +304,11 @@ export function GlobalSearch() {
       }}
     >
       <input
+        disabled={authorizationInProgress}
+        type="search"
+        name="global-search"
+        autoComplete="off"
+        data-lpignore="true"
         aria-label="Global search"
         placeholder="Search name, phone, email, order/invoice number, or an operation..."
         value={query}

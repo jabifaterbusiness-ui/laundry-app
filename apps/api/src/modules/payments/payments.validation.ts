@@ -32,6 +32,7 @@ export const createPaymentSchema = z
 export const listPaymentsQuerySchema = z.object({
   invoiceId: z.string().uuid().optional(),
   status: z.enum(["POSTED", "VOID"]).optional(),
+  search: z.string().trim().max(120).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25),
 });

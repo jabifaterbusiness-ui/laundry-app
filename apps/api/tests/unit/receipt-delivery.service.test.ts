@@ -7,6 +7,9 @@ const {
   renderCustomerReceiptImageMock,
   sendReceiptEmailMock,
   sendWhatsAppReceiptMock,
+  connectionFindUniqueMock,
+  sendAutomatedWhatsAppTemplateMock,
+  uploadWhatsAppTemplateImageMock,
 } = vi.hoisted(() => ({
   customerFindFirstMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
@@ -14,6 +17,9 @@ const {
   renderCustomerReceiptImageMock: vi.fn(),
   sendReceiptEmailMock: vi.fn(),
   sendWhatsAppReceiptMock: vi.fn(),
+  connectionFindUniqueMock: vi.fn(),
+  sendAutomatedWhatsAppTemplateMock: vi.fn(),
+  uploadWhatsAppTemplateImageMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -33,6 +39,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
     },
     customer: {
       findFirst: customerFindFirstMock,
+    },
+    whatsAppBusinessConnection: {
+      findUnique: connectionFindUniqueMock,
     },
   },
 }));
@@ -61,6 +70,11 @@ vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
 
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
   sendWhatsAppReceipt: sendWhatsAppReceiptMock,
+}));
+
+vi.mock("../../src/modules/whatsapp/whatsapp-templates.service.js", () => ({
+  sendAutomatedWhatsAppTemplate: sendAutomatedWhatsAppTemplateMock,
+  uploadWhatsAppTemplateImage: uploadWhatsAppTemplateImageMock,
 }));
 
 import { resendDigitalReceipt } from "../../src/modules/invoices/receipt-delivery.service.js";
@@ -98,6 +112,14 @@ beforeEach(() => {
   renderCustomerReceiptImageMock.mockResolvedValue(
     Buffer.from("receipt-png"),
   );
+  connectionFindUniqueMock.mockResolvedValue({
+    receiptTemplateName: "laundry_receipt",
+    receiptTemplateLanguage: "en",
+  });
+  uploadWhatsAppTemplateImageMock.mockResolvedValue("media-receipt-1");
+  sendAutomatedWhatsAppTemplateMock.mockResolvedValue({
+    providerMessageId: "wamid.template-receipt",
+  });
 });
 
 describe("receipt-delivery.service", () => {
@@ -220,6 +242,37 @@ describe("receipt-delivery.service", () => {
     });
 
     expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends the receipt image through an approved UTILITY template when the 24-hour window is closed", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A",
+      name: "John Doe",
+      email: null,
+      phone: "08000000000",
+    });
+    getCustomerReceiptMock.mockResolvedValue(RECEIPT);
+    sendWhatsAppReceiptMock.mockRejectedValue(
+      new Error("The 24-hour WhatsApp customer-service window is closed. Use an approved template for this customer instead."),
+    );
+
+    await expect(resendDigitalReceipt({ ...INPUT, channel: "WHATSAPP" })).resolves.toEqual({
+      channel: "WHATSAPP",
+      destination: "08000000000",
+      providerMessageId: "wamid.template-receipt",
+    });
+
+    expect(uploadWhatsAppTemplateImageMock).toHaveBeenCalledWith(INPUT.businessId, Buffer.from("receipt-png"));
+    expect(sendAutomatedWhatsAppTemplateMock).toHaveBeenCalledWith(expect.objectContaining({
+      businessId: INPUT.businessId,
+      customerId: "customer-A",
+      phone: "08000000000",
+      templateName: "laundry_receipt",
+      language: "en",
+      templateCategory: "UTILITY",
+      headerImageId: "media-receipt-1",
+      variableValues: ["John Doe", "INV-00001", "₦9,000", "₦9,000"],
+    }));
   });
 
   it("returns 503 when WhatsApp delivery fails", async () => {

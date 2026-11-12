@@ -14,6 +14,7 @@ export const listInvoicesQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   status: z.enum(["ISSUED", "VOID"]).optional(),
   customerId: z.string().uuid().optional(),
+  search: z.string().trim().max(120).optional(),
 });
 
 export const invoiceOrderParamSchema = z.object({

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalSearch } from "../../../src/components/search/GlobalSearch.js";
 
@@ -33,22 +33,43 @@ describe("GlobalSearch", () => {
     searchQuickOperationsMock.mockReturnValue([]);
   });
 
-  it("keeps order matches out of suggestions and opens the exact match on Enter", async () => {
+  it("shows order matches in suggestions and opens the exact order selected", async () => {
     globalSearchMock.mockResolvedValue([{
       type: "ORDER", id: "order-42", title: "Order #00042",
       subtitle: "Ada Laundry · RECEIVED", href: "/orders?orderId=order-42",
     }]);
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "00042" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), { target: { value: "00042" } });
 
-    expect(await screen.findByText("Matching order found. Press Enter to open Order Management.")).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Order #00042/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /Order #00042/ })).toBeInTheDocument();
+    expect(screen.getByText("Orders")).toBeInTheDocument();
     await waitFor(() => expect(globalSearchMock).toHaveBeenCalledWith(
       { q: "00042", limit: 10 }, { accessToken: "access-token" }, "branch-main",
     ));
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Global search" }), { key: "Enter" });
+    fireEvent.click(screen.getByRole("option", { name: /Order #00042/ }));
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-42");
-    expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("");
+    expect(screen.getByRole("searchbox", { name: "Global search" })).toHaveValue("");
+  });
+
+  it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "CUSTOMER", id: "customer-1", title: "Adam", subtitle: "08012345678", href: "/orders?customerId=customer-1" },
+      { type: "ORDER", id: "order-1", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-1" },
+      { type: "INVOICE", id: "invoice-1", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-1" },
+    ]);
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+
+    const customer = await screen.findByRole("option", { name: /Adam\s+08012345678/ });
+    const order = screen.getByRole("option", { name: /Order #00022/ });
+    const invoice = screen.getByRole("option", { name: /Invoice #00022/ });
+    expect(customer).toBeInTheDocument();
+    expect(order).toBeInTheDocument();
+    expect(invoice).toBeInTheDocument();
+
+    fireEvent.click(invoice);
+    expect(navigateMock).toHaveBeenCalledWith("/invoices?invoiceId=invoice-1");
   });
 
   it("opens the order when Enter is pressed before the debounced search finishes", async () => {
@@ -64,7 +85,7 @@ describe("GlobalSearch", () => {
     );
 
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00005" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -95,9 +116,9 @@ describe("GlobalSearch", () => {
     ]);
 
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00005" } });
-    await screen.findByText("Matching order found. Press Enter to open Order Management.");
+    await screen.findByRole("option", { name: /Order #00005/ });
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(navigateMock).toHaveBeenCalledWith("/order-management?orderId=order-5");
@@ -110,20 +131,20 @@ describe("GlobalSearch", () => {
     }]);
 
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "00005" } });
 
-    expect(await screen.findByText("No exact order-number match. Check the order number and try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Order #100005")).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(navigateMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("textbox", { name: "Global search" })).toHaveValue("00005");
+    expect(screen.getByRole("searchbox", { name: "Global search" })).toHaveValue("00005");
     expect(screen.queryByRole("option", { name: /Add New Customer/ })).not.toBeInTheDocument();
   });
 
   it("offers customer creation and carries a phone-like query into the new customer flow", async () => {
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "08012345678" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), { target: { value: "08012345678" } });
     fireEvent.click(await screen.findByRole("option", { name: /Add New Customer/ }));
     expect(navigateMock).toHaveBeenCalledWith("/orders?addCustomer=1&customerPhone=08012345678");
   });
@@ -136,7 +157,7 @@ describe("GlobalSearch", () => {
     searchQuickOperationsMock.mockReturnValue([operation]);
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), { target: { value: "manual cloud backup" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), { target: { value: "manual cloud backup" } });
     fireEvent.click(await screen.findByRole("option", { name: /MCB Manual Cloud Backup/ }));
 
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "quick-operation:open", detail: operation }));
@@ -155,12 +176,31 @@ describe("GlobalSearch", () => {
     );
 
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Global search" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Global search" }), {
       target: { value: "manual cloud backup" },
     });
 
     await screen.findByText("No results found.");
     expect(screen.queryByText("MCB")).not.toBeInTheDocument();
+  });
+
+  it("clears and disables search while sensitive password authorization is open", async () => {
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "staff@example.com" } });
+    expect(input).toHaveValue("staff@example.com");
+
+    act(() => {
+      window.dispatchEvent(new Event("sensitive-authorization:started"));
+    });
+    expect(input).toHaveValue("");
+    expect(input).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(new Event("sensitive-authorization:finished"));
+    });
+    expect(input).toHaveValue("");
+    expect(input).toBeEnabled();
   });
 
   it("clears the search query when the current route changes", async () => {
@@ -169,7 +209,7 @@ describe("GlobalSearch", () => {
       subtitle: "08012345678", href: "/orders?customerId=customer-1",
     }]);
     const { rerender } = render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "Ada" } });
     expect(await screen.findByRole("option", { name: /Ada Laundry/ })).toBeInTheDocument();
 
@@ -186,7 +226,7 @@ describe("GlobalSearch", () => {
     let resolveSearch!: (value: Array<{ type: "CUSTOMER"; id: string; title: string; subtitle: string; href: string }>) => void;
     globalSearchMock.mockImplementation(() => new Promise((resolve) => { resolveSearch = resolve; }));
     const { rerender } = render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "private customer" } });
     await waitFor(() => expect(globalSearchMock).toHaveBeenCalledOnce());
 
@@ -210,7 +250,7 @@ describe("GlobalSearch", () => {
       subtitle: "08012345678", href: "/orders?customerId=customer-1",
     }]);
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox", { name: "Global search" });
+    const input = screen.getByRole("searchbox", { name: "Global search" });
     fireEvent.change(input, { target: { value: "Ada" } });
     expect(await screen.findByRole("option", { name: /Ada Laundry/ })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Escape" });

@@ -100,6 +100,26 @@ describe("SensitiveAuthorizationProvider", () => {
     );
   });
 
+  it("announces the authorization window so global search can clear and disable itself", async () => {
+    const started = vi.fn();
+    const finished = vi.fn();
+    window.addEventListener("sensitive-authorization:started", started);
+    window.addEventListener("sensitive-authorization:finished", finished);
+    render(
+      <SensitiveAuthorizationProvider>
+        <TestConsumer />
+      </SensitiveAuthorizationProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Protect action" }));
+    expect(started).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(finished).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener("sensitive-authorization:started", started);
+    window.removeEventListener("sensitive-authorization:finished", finished);
+  });
+
   it("cancels without authorizing the action", async () => {
     render(
       <SensitiveAuthorizationProvider>

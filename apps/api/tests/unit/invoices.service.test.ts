@@ -552,5 +552,34 @@ describe("invoices.service", () => {
         },
       });
     });
+    it("searches invoice/order numbers and customer contact details within the current branch", async () => {
+      prismaMock.invoice.findMany.mockResolvedValue([]);
+      prismaMock.invoice.count.mockResolvedValue(0);
+
+      await listInvoices({
+        businessId: "business-1",
+        branchId: "branch-1",
+        userId: "user-1",
+        page: 1,
+        pageSize: 20,
+        search: "Adam",
+      });
+
+      expect(prismaMock.invoice.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: "business-1",
+          branchId: "branch-1",
+          AND: [{
+            OR: expect.arrayContaining([
+              { invoiceNumber: { contains: "Adam" } },
+              { customerName: { contains: "Adam", mode: "insensitive" } },
+              { order: { is: { orderNumber: { contains: "Adam" } } } },
+              { order: { is: { customer: { is: { phone: { contains: "Adam" } } } } } },
+              { order: { is: { customer: { is: { email: { contains: "Adam", mode: "insensitive" } } } } } },
+            ]),
+          }],
+        }),
+      }));
+    });
   });
 });

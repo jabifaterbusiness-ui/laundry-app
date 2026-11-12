@@ -81,7 +81,7 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
       const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
       const unsupportedBodyVariables = bodyVariableIndexes(template) === null;
       const unsupportedComponents = (template.components ?? []).some((component) =>
-        (component.type === "HEADER" && ((component.format && component.format !== "TEXT") || (typeof component.text === "string" && component.text.includes("{{")))) ||
+        (component.type === "HEADER" && ((component.format && !["TEXT", "IMAGE"].includes(component.format)) || (typeof component.text === "string" && component.text.includes("{{")))) ||
         (component.type === "BUTTONS" && (component.buttons ?? []).some((button) => button.type === "URL" || button.type === "OTP" || (typeof button.url === "string" && /\{\{\s*\d+\s*\}\}/.test(button.url))))
       );
       return !unsupportedBodyVariables && !unsupportedComponents;
@@ -89,11 +89,13 @@ export async function listApprovedWhatsAppTemplates(businessId: string) {
     .map((template) => ({
       id: template.id, name: template.name, language: template.language, category: template.category,
       bodyVariableCount: bodyVariableCount(template),
+      headerFormat: template.components?.find((component) => component.type === "HEADER")?.format ?? null,
     }));
 }
 
 export async function sendApprovedWhatsAppTemplate(input: {
   businessId: string; customerId?: string | null; phone: string; templateName: string; language: string; variables: string[];
+  headerImageId?: string;
   requireInboundConversation?: boolean;
 }) {
   const connection = await getConnection(input.businessId);
@@ -127,20 +129,33 @@ export async function sendApprovedWhatsAppTemplate(input: {
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
   const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
   if (!template) throw new AppError("Choose an approved WhatsApp template belonging to this business", 422);
+  if (template.headerFormat === "IMAGE" && !input.headerImageId) {
+    throw new AppError("This approved template requires a receipt image in its IMAGE header", 422);
+  }
+  if (input.headerImageId && template.headerFormat !== "IMAGE") {
+    throw new AppError("The selected template does not support an IMAGE header", 422);
+  }
   if (input.variables.length !== template.bodyVariableCount || input.variables.some((value) => !value.trim() || value.length > 1024)) {
     throw new AppError(`This template requires ${template.bodyVariableCount} non-empty body variable(s)`, 422);
   }
 
-  const components = template.bodyVariableCount ? [{
-    type: "body",
-    parameters: input.variables.map((text) => ({ type: "text", text })),
-  }] : undefined;
+  const components = [
+    ...(input.headerImageId ? [{
+      type: "header",
+      parameters: [{ type: "image", image: { id: input.headerImageId } }],
+    }] : []),
+    ...(template.bodyVariableCount ? [{
+      type: "body",
+      parameters: input.variables.map((text) => ({ type: "text", text })),
+    }] : []),
+  ];
+
   const response = await fetch(`https://graph.facebook.com/${connection.apiVersion}/${connection.phoneNumberId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       messaging_product: "whatsapp", recipient_type: "individual", to: recipient, type: "template",
-      template: { name: template.name, language: { code: template.language }, ...(components ? { components } : {}) },
+      template: { name: template.name, language: { code: template.language }, ...(components.length ? { components } : {}) },
     }),
   });
   const result = await response.json() as { messages?: Array<{ id?: string }>; error?: { message?: string } };
@@ -167,6 +182,7 @@ export async function sendApprovedWhatsAppTemplate(input: {
 export async function sendAutomatedWhatsAppTemplate(input: {
   businessId: string; customerId: string; phone: string; templateName: string; language: string; variableValues: string[];
   templateCategory?: "UTILITY" | "MARKETING";
+  headerImageId?: string;
 }) {
   const templates = await listApprovedWhatsAppTemplates(input.businessId);
   const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
@@ -189,6 +205,24 @@ export async function sendAutomatedWhatsAppTemplate(input: {
     templateName: input.templateName,
     language: input.language,
     variables,
+    ...(input.headerImageId ? { headerImageId: input.headerImageId } : {}),
     requireInboundConversation: false,
   });
+}
+
+export async function uploadWhatsAppTemplateImage(businessId: string, image: Buffer) {
+  const connection = await getConnection(businessId);
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", new Blob([image], { type: "image/png" }), "receipt.png");
+  form.append("type", "image/png");
+  const response = await fetch(
+    `https://graph.facebook.com/${connection.apiVersion}/${connection.phoneNumberId}/media`,
+    { method: "POST", headers: { Authorization: `Bearer ${connection.token}` }, body: form },
+  );
+  const payload = await response.json() as { id?: string; error?: { message?: string } };
+  if (!response.ok || !payload.id) {
+    throw new AppError(payload.error?.message ?? "WhatsApp could not upload the receipt image for its approved template", 502);
+  }
+  return payload.id;
 }

@@ -5,6 +5,8 @@ import { hasPermission } from "../../lib/permissions.js";
 import { listSuspiciousActivity } from "../../lib/audit-api.js";
 import {
   loadSuspiciousActivityReadState,
+  loadSuspiciousActivityCategoryOrder,
+  saveSuspiciousActivityCategoryOrder,
   markSuspiciousActivityEventSeen,
 } from "../../lib/suspicious-activity-persistence.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -310,6 +312,19 @@ const ACTIVITY_DEFINITIONS: readonly ActivityDefinition[] = [
   },
 ];
 
+const DEFAULT_ACTIVITY_CATEGORY_ORDER = [
+  "backup",
+  "inventory",
+  "security",
+  "users",
+  "permissions",
+  "financial",
+  "invoices",
+  "customers",
+  "operations",
+  "system",
+];
+
 function formatTimestamp(value: string) {
   const date = new Date(value);
 
@@ -390,6 +405,16 @@ const AUDIT_TECHNICAL_KEYS = new Set([
   "id",
   "businessId",
   "branchId",
+  "customerId",
+  "orderId",
+  "invoiceId",
+  "paymentId",
+  "actorUserId",
+  "submittedById",
+  "newCustomerId",
+  "previousCustomerId",
+  "createdAt",
+  "updatedAt",
   "historyId",
   "correlationId",
   "logoUrl",
@@ -567,36 +592,16 @@ function AuditSnapshot({
   if (!record) return null;
 
   const invoice = asAuditRecord(record.invoice);
-  const orderItems = record.items;
-  const invoiceItems = invoice?.items;
-  const orderExcluded = new Set(["items", "garments", "invoice"]);
-  const invoiceExcluded = new Set(["items"]);
+  const combined = invoice ? { ...record, ...invoice } : record;
+  const items = invoice?.items ?? record.items;
 
   return (
     <section className="suspicious-activity-detail-snapshot">
       <h3>{title}</h3>
-      {invoice ? (
-        <>
-          <h4>Order context</h4>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(record).filter(([key]) => !orderExcluded.has(key)),
-          )} />
-          <AuditLineItems title="Order service lines" items={orderItems} />
-          <AuditLineItems title="Invoice line items" items={invoiceItems} />
-          <h4>Invoice details</h4>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(invoice).filter(([key]) => !invoiceExcluded.has(key)),
-          )} />
-        </>
-      ) : (
-        <>
-          <AuditFieldList data={Object.fromEntries(
-            Object.entries(record).filter(([key]) => key !== "items" && key !== "garments"),
-          )} />
-          <AuditLineItems title="Line items" items={orderItems} />
-          <AuditLineItems title="Invoice line items" items={invoiceItems} />
-        </>
-      )}
+      <AuditFieldList data={Object.fromEntries(
+        Object.entries(combined).filter(([key]) => !["items", "garments", "invoice"].includes(key)),
+      )} />
+      <AuditLineItems title="Items and services" items={items} />
     </section>
   );
 }
@@ -620,6 +625,7 @@ function collectAuditChanges(
 
     for (const key of keys) {
       if (AUDIT_TECHNICAL_KEYS.has(key)) continue;
+      if (key === "items" && path.endsWith(".invoice")) continue;
       collectAuditChanges(
         left[key],
         right[key],
@@ -658,6 +664,56 @@ function formatChangePath(path: string): string {
     .split(".")
     .map((part) => auditFieldLabel(part))
     .join(" · ");
+}
+
+function activityRecordLabel(activity: {
+  entityType: string;
+  metadata: unknown;
+}) {
+  const metadata = asAuditRecord(activity.metadata) ?? {};
+  const invoiceNumber = metadata.invoiceNumber;
+  const orderNumber = metadata.orderNumber;
+  const customerName = metadata.customerName;
+  const name = metadata.name;
+  if (typeof invoiceNumber === "string" && invoiceNumber) return `Invoice #${invoiceNumber}`;
+  if (typeof orderNumber === "string" && orderNumber) return `Order #${orderNumber}`;
+  if (typeof customerName === "string" && customerName) return customerName;
+  if (typeof name === "string" && name) return name;
+  return activity.entityType.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
+function activitySummary(activity: {
+  entityType: string;
+  metadata: unknown;
+}, definition: ActivityDefinition) {
+  const metadata = asAuditRecord(activity.metadata) ?? {};
+  const before = metadata.before ?? (
+    metadata.beforeStatus !== undefined ? { status: metadata.beforeStatus } : undefined
+  );
+  const after = metadata.after ?? (
+    metadata.afterStatus !== undefined ? { status: metadata.afterStatus } : undefined
+  );
+  const changes = before !== undefined || after !== undefined
+    ? collectAuditChanges(before, after)
+    : [];
+  const totalChange = changes.find((change) =>
+    /(^|\.)(totalAmount|orderTotal|totalPrice|amount)$/.test(change.path),
+  );
+  const quantityChange = changes.find((change) => /(^|\.)quantity$/.test(change.path));
+  const statusChange = changes.find((change) => /(^|\.)status$/.test(change.path));
+  const highlights = [quantityChange, totalChange, statusChange]
+    .filter((change): change is NonNullable<typeof change> => Boolean(change))
+    .slice(0, 2)
+    .map((change) =>
+      `${formatChangePath(change.path)}: ${formatAuditValue(change.before, change.path.split(".").pop())} → ${formatAuditValue(change.after, change.path.split(".").pop())}`,
+    );
+  const recordTitle = activityRecordLabel(activity);
+  const reason = typeof metadata.reason === "string" && metadata.reason.trim()
+    ? metadata.reason.trim()
+    : null;
+  if (highlights.length) return `${recordTitle} changed. ${highlights.join(". ")}.`;
+  if (reason) return `${recordTitle}. Reason: ${reason}`;
+  return definition.description;
 }
 
 function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
@@ -700,20 +756,8 @@ function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
 
       {Object.keys(context).length ? (
         <>
-          <h4>Business context and recorded details</h4>
+          <h4>Key details</h4>
           <AuditFieldList data={context} />
-          {Object.entries(context).filter(([, value]) => {
-            const item = asAuditRecord(value);
-            return item !== null;
-          }).map(([key, value]) => (
-            <section className="suspicious-activity-detail-subsection" key={key}>
-              <h4>{auditFieldLabel(key)}</h4>
-              <AuditFieldList data={asAuditRecord(value)!} />
-              {asAuditRecord(value)?.items !== undefined ? (
-                <AuditLineItems title="Line items" items={asAuditRecord(value)?.items} />
-              ) : null}
-            </section>
-          ))}
         </>
       ) : null}
 
@@ -740,10 +784,13 @@ function AuditMetadataDetails({ metadata }: { metadata: unknown }) {
             <p>No field-level differences were detected in the available snapshots.</p>
           )}
           {changes.length >= 40 ? <p>Change list limited to the first 40 differences.</p> : null}
-          <div className="suspicious-activity-detail-snapshot-grid">
-            <AuditSnapshot title="Before the change" snapshot={before} />
-            <AuditSnapshot title="After the change" snapshot={after} />
-          </div>
+          <details className="suspicious-activity-technical-details">
+            <summary>View full before-and-after snapshots</summary>
+            <div className="suspicious-activity-detail-snapshot-grid">
+              <AuditSnapshot title="Before the change" snapshot={before} />
+              <AuditSnapshot title="After the change" snapshot={after} />
+            </div>
+          </details>
         </>
       ) : (
         <p className="suspicious-activity-detail-hint">
@@ -865,6 +912,19 @@ export function SuspiciousActivityPage() {
     ).lastSeenEventIds;
   });
 
+  const [categoryOrder, setCategoryOrder] = useState(() => {
+    if (typeof window === "undefined" || !user?.id || !activeBranchId) {
+      return [...DEFAULT_ACTIVITY_CATEGORY_ORDER];
+    }
+    return loadSuspiciousActivityCategoryOrder(
+      user.id,
+      activeBranchId,
+      DEFAULT_ACTIVITY_CATEGORY_ORDER,
+    );
+  });
+  const [draftCategoryOrder, setDraftCategoryOrder] = useState(categoryOrder);
+  const [isCustomizingOrder, setIsCustomizingOrder] = useState(false);
+
   const canView = hasPermission(
     user,
     "security.suspicious_activity.view",
@@ -934,6 +994,54 @@ export function SuspiciousActivityPage() {
       ).lastSeenEventIds,
     );
   }, [user?.id, activeBranchId]);
+
+  const categoryGroups = useMemo(() => {
+    const grouped = new Map<string, ActivityDefinition[]>();
+    for (const definition of ACTIVITY_DEFINITIONS) {
+      const category = getActivityCategory(definition);
+      const entries = grouped.get(category) ?? [];
+      entries.push(definition);
+      grouped.set(category, entries);
+    }
+    return categoryOrder
+      .map((category) => ({ category, definitions: grouped.get(category) ?? [] }))
+      .filter((group) => group.definitions.length > 0);
+  }, [categoryOrder]);
+
+  useEffect(() => {
+    if (!user?.id || !activeBranchId) {
+      setCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
+      setDraftCategoryOrder([...DEFAULT_ACTIVITY_CATEGORY_ORDER]);
+      setIsCustomizingOrder(false);
+      return;
+    }
+    const savedOrder = loadSuspiciousActivityCategoryOrder(
+      user.id,
+      activeBranchId,
+      DEFAULT_ACTIVITY_CATEGORY_ORDER,
+    );
+    setCategoryOrder(savedOrder);
+    setDraftCategoryOrder(savedOrder);
+    setIsCustomizingOrder(false);
+  }, [user?.id, activeBranchId]);
+
+  function moveCategory(category: string, direction: -1 | 1) {
+    setDraftCategoryOrder((current) => {
+      const index = current.indexOf(category);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  }
+
+  function saveCategoryOrder() {
+    if (!user?.id || !activeBranchId) return;
+    saveSuspiciousActivityCategoryOrder(user.id, activeBranchId, draftCategoryOrder);
+    setCategoryOrder(draftCategoryOrder);
+    setIsCustomizingOrder(false);
+  }
 
   const activityCounts = useMemo(() => {
     return new Map(
@@ -1116,11 +1224,48 @@ export function SuspiciousActivityPage() {
                 <p className="dashboard-panel-eyebrow">Event centre</p>
                 <h2>Unusual activity</h2>
               </div>
-              <span>{ACTIVITY_DEFINITIONS.length} event types</span>
+              <div className="suspicious-activity-order-actions">
+                <span>{ACTIVITY_DEFINITIONS.length} event types</span>
+                {!isCustomizingOrder ? (
+                  <button type="button" onClick={() => {
+                    setDraftCategoryOrder(categoryOrder);
+                    setIsCustomizingOrder(true);
+                  }}>
+                    Customize section order
+                  </button>
+                ) : (
+                  <>
+                    <span>Move sections into the order you prefer.</span>
+                    <button type="button" onClick={saveCategoryOrder}>Save order</button>
+                    <button type="button" onClick={() => {
+                      setDraftCategoryOrder(categoryOrder);
+                      setIsCustomizingOrder(false);
+                    }}>Cancel</button>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="suspicious-activity-event-grid">
-              {ACTIVITY_DEFINITIONS.map((definition) => {
+            <div className="suspicious-activity-category-list">
+              {(isCustomizingOrder
+                ? draftCategoryOrder.map((category) => ({
+                    category,
+                    definitions: categoryGroups.find((group) => group.category === category)?.definitions ?? [],
+                  })).filter((group) => group.definitions.length > 0)
+                : categoryGroups
+              ).map(({ category, definitions }, categoryIndex) => (
+                <section className="suspicious-activity-category-section" key={category}>
+                  <header className="suspicious-activity-category-heading">
+                    <h3>{getCategoryLabel(category)}</h3>
+                    {isCustomizingOrder ? (
+                      <div>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} up`} disabled={categoryIndex === 0} onClick={() => moveCategory(category, -1)}>Move up</button>
+                        <button type="button" aria-label={`Move ${getCategoryLabel(category)} down`} disabled={categoryIndex === draftCategoryOrder.length - 1} onClick={() => moveCategory(category, 1)}>Move down</button>
+                      </div>
+                    ) : null}
+                  </header>
+                  <div className="suspicious-activity-event-grid">
+                    {definitions.map((definition) => {
                 const activitySummary = activityCounts.get(definition.id);
                 const count = activitySummary?.count ?? 0;
                 const latestActivityId =
@@ -1130,8 +1275,6 @@ export function SuspiciousActivityPage() {
                   Boolean(latestActivityId) &&
                   latestActivityId !== lastSeenActivityId;
                 const selected = definition.id === selectedEventId;
-                const category = getActivityCategory(definition);
-
                 return (
                   <button
                     key={definition.id}
@@ -1177,7 +1320,6 @@ export function SuspiciousActivityPage() {
                     </div>
 
                     <div className="suspicious-activity-event-card-body">
-                      <p>{getCategoryLabel(category)}</p>
                       <strong>{definition.label}</strong>
                       <span>{definition.description}</span>
                     </div>
@@ -1188,7 +1330,10 @@ export function SuspiciousActivityPage() {
                     </div>
                   </button>
                 );
-              })}
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           </section>
 
@@ -1218,6 +1363,9 @@ export function SuspiciousActivityPage() {
                         <h3>{selectedDefinition.label}</h3>
                         <span>{selectedDefinition.risk}</span>
                       </header>
+                      <p className="suspicious-activity-record-summary">
+                        {activitySummary(activity, selectedDefinition)}
+                      </p>
 
                       <dl>
                         <div>
@@ -1226,97 +1374,55 @@ export function SuspiciousActivityPage() {
                         </div>
 
                         <div>
-                          <dt>Action</dt>
-                          <dd>{activity.action}</dd>
-                        </div>
-
-                        <div>
-                          <dt>Actor</dt>
+                          <dt>Changed by</dt>
                           <dd>{activity.actorName ?? "System"}</dd>
                         </div>
 
                         <div>
-                          <dt>Record</dt>
+                          <dt>Affected record</dt>
                           <dd>
-                            {activity.entityType}
                             {activity.entityId ? (
-                              <>
-                                {" · "}
-                                {activity.entityType.toLowerCase() === "customer" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/customer-workstation?customerId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "order" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/orders?orderId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "invoice" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/invoices?invoiceId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "payment" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/payments?paymentId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : activity.entityType.toLowerCase() === "migrationjob" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/data-management?jobId=${encodeURIComponent(activity.entityId!)}`,
-                                      )
-                                    }
-                                  >
-                                    {activity.entityId}
-                                  </button>
-                                ) : (
-                                  activity.entityId
-                                )}
-                              </>
-                            ) : null}
+                              activity.entityType.toLowerCase() === "customer" ? (
+                                <button type="button" onClick={() => navigate(`/customer-workstation?customerId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "order" ? (
+                                <button type="button" onClick={() => navigate(`/orders?orderId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "invoice" ? (
+                                <button type="button" onClick={() => navigate(`/invoices?invoiceId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "payment" ? (
+                                <button type="button" onClick={() => navigate(`/payments?paymentId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activity.entityType.toLowerCase() === "migrationjob" ? (
+                                <button type="button" onClick={() => navigate(`/data-management?jobId=${encodeURIComponent(activity.entityId!)}`)}>
+                                  {activityRecordLabel(activity)}
+                                </button>
+                              ) : activityRecordLabel(activity)
+                            ) : activityRecordLabel(activity)}
                           </dd>
                         </div>
 
-                        <div>
-                          <dt>Reason</dt>
-                          <dd>{activity.reason ?? "—"}</dd>
-                        </div>
-
-                        {activity.correlationId ? (
+                        {activity.reason ? (
                           <div>
-                            <dt>Correlation</dt>
-                            <dd>{activity.correlationId}</dd>
+                            <dt>Reason</dt>
+                            <dd>{activity.reason}</dd>
                           </div>
                         ) : null}
                       </dl>
+
+                      <details className="suspicious-activity-technical-details">
+                        <summary>Technical event information</summary>
+                        <dl>
+                          <div><dt>Action type</dt><dd>{activity.action}</dd></div>
+                          <div><dt>Record ID</dt><dd>{activity.entityId ?? "Not recorded"}</dd></div>
+                          <div><dt>Correlation ID</dt><dd>{activity.correlationId ?? "Not recorded"}</dd></div>
+                        </dl>
+                      </details>
 
                       <AuditMetadataDetails metadata={activity.metadata} />
                     </article>

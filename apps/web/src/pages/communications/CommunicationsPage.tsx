@@ -227,7 +227,7 @@ export function CommunicationsPage() {
                   setAnnouncementTemplateLanguage(selected?.language ?? "");
                 }} required>
                   <option value="">Choose an approved marketing template</option>
-                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING" && template.bodyVariableCount === 3).map((template) => (
+                  {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "MARKETING" && template.headerFormat !== "IMAGE" && template.bodyVariableCount === 3).map((template) => (
                     <option key={template.id} value={`${template.name}|${template.language}`}>
                       {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
                     </option>
@@ -281,13 +281,13 @@ export function CommunicationsPage() {
         </div>
         <label>WhatsApp message<textarea rows={3} value={whatsappTemplate} onChange={(event) => setWhatsappTemplate(event.target.value)} /></label>
         <label>Approved WhatsApp template fallback (outside the 24-hour window)
-          <select value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
-            const selected = approvedTemplatesQuery.data?.data.find((item) => `${item.name}|${item.language}` === event.target.value);
+          <select required={ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH")} value={whatsappTemplateName && whatsappTemplateLanguage ? `${whatsappTemplateName}|${whatsappTemplateLanguage}` : ""} onChange={(event) => {
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.headerFormat !== "IMAGE" && `${item.name}|${item.language}` === event.target.value);
             setWhatsappTemplateName(selected?.name ?? "");
             setWhatsappTemplateLanguage(selected?.language ?? "");
           }}>
             <option value="">No approved template fallback</option>
-            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount <= 4).map((template) => (
               <option key={template.id} value={`${template.name}|${template.language}`}>
                 {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
               </option>
@@ -299,7 +299,8 @@ export function CommunicationsPage() {
         </small>
         <label>Email subject<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
         <label>Email message<textarea rows={3} value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)} /></label>
-        <button type="button" disabled={ruleMutation.isPending} onClick={() => ruleMutation.mutate()}>Save status notification</button>
+        {ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH") && !whatsappTemplateName && <small role="alert" style={{ display: "block", color: "#b45309" }}>Select an approved UTILITY template. Free-form messages cannot be sent after the customer's 24-hour reply window closes.</small>}
+        <button type="button" disabled={ruleMutation.isPending || (ruleEnabled && (ruleChannel === "WHATSAPP" || ruleChannel === "BOTH") && (!whatsappTemplateName || !whatsappTemplateLanguage))} onClick={() => ruleMutation.mutate()}>Save status notification</button>
         <h3>Configured rules</h3>
         {(rulesQuery.data?.data ?? []).map((rule) => <div key={rule.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
           <span><strong>{rule.status.replaceAll("_", " ")}</strong> · {rule.channel} · {rule.enabled ? "Enabled" : "Disabled"}</span>
@@ -327,12 +328,12 @@ export function CommunicationsPage() {
         <label>Reminder message<textarea rows={3} value={reminderMessage} onChange={(event) => setReminderMessage(event.target.value)} /></label>
         <label>Approved WhatsApp template fallback (outside the 24-hour window)
           <select value={reminderTemplateName && reminderTemplateLanguage ? `${reminderTemplateName}|${reminderTemplateLanguage}` : ""} onChange={(event) => {
-            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.bodyVariableCount <= 4 && `${item.name}|${item.language}` === event.target.value);
+            const selected = approvedTemplatesQuery.data?.data.find((item) => item.category === "UTILITY" && item.headerFormat !== "IMAGE" && item.bodyVariableCount <= 4 && `${item.name}|${item.language}` === event.target.value);
             setReminderTemplateName(selected?.name ?? "");
             setReminderTemplateLanguage(selected?.language ?? "");
           }}>
             <option value="">No approved template fallback</option>
-            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.bodyVariableCount <= 4).map((template) => (
+            {(approvedTemplatesQuery.data?.data ?? []).filter((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount <= 4).map((template) => (
               <option key={template.id} value={`${template.name}|${template.language}`}>
                 {template.name} · {template.language} · {template.bodyVariableCount} variable(s)
               </option>
@@ -347,24 +348,26 @@ export function CommunicationsPage() {
         <button type="button" disabled={!activeBranchId || reminderMutation.isPending || !selectedOrderIds.length || !reminderChannels.length || !reminderMessage.trim() || !remindersEnabled} onClick={() => reminderMutation.mutate()}>{reminderMutation.isPending ? "Sending reminders..." : `Send reminders to ${selectedOrderIds.length} selected orders`}</button>
       </section>
 
-      <section style={{ padding: "1.25rem", border: "1px solid #d8dee8", borderRadius: 16 }}>
-        <h2>Delivery history</h2>
-        <p>Most recent 200 communication attempts for the selected branch. Business-wide announcement deliveries remain visible across branches.</p>
-        {!activeBranchId && <p role="status">Select an active branch to view delivery history.</p>}
-        {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
-        {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
-          <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
-          <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
-          <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
-          {delivery.retryAttempt > 0 && <small style={{ gridColumn: "1 / -1", color: "#64748b" }}>Retry attempt {delivery.retryAttempt}</small>}
-          {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
-          {delivery.retryAvailable && <span style={{ gridColumn: "1 / -1" }}>
-            <button type="button" disabled={retryDeliveryMutation.isPending} onClick={() => retryDeliveryMutation.mutate(delivery.id)}>
-              {retryDeliveryMutation.isPending ? "Retrying..." : "Retry WhatsApp delivery"}
-            </button>
-          </span>}
-        </div>)}
-      </section>
+      <details style={{ border: "1px solid #d8dee8", borderRadius: 16, padding: "1rem 1.25rem" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, color: "#0f172a" }}>Delivery history · Most recent 200 attempts</summary>
+        <div style={{ paddingTop: 12 }}>
+          <p>Communication attempts for the selected branch. Business-wide announcement deliveries remain visible across branches.</p>
+          {!activeBranchId && <p role="status">Select an active branch to view delivery history.</p>}
+          {deliveriesQuery.isLoading && <p>Loading delivery history...</p>}
+          {(deliveriesQuery.data?.data ?? []).map((delivery) => <div key={delivery.id} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1fr) minmax(100px,1fr) minmax(90px,auto)", gap: 8, padding: 9, borderBottom: "1px solid #e5e7eb" }}>
+            <span><strong>{delivery.customer.name}</strong><small style={{ display: "block" }}>{delivery.messageType.replaceAll("_", " ")}</small></span>
+            <span>{delivery.channel} · {delivery.status}<small style={{ display: "block" }}>{new Date(delivery.createdAt).toLocaleString("en-NG")}</small></span>
+            <span>{delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : delivery.campaign?.title ?? "—"}</span>
+            {delivery.retryAttempt > 0 && <small style={{ gridColumn: "1 / -1", color: "#64748b" }}>Retry attempt {delivery.retryAttempt}</small>}
+            {delivery.errorMessage && <small role="alert" style={{ gridColumn: "1 / -1", color: "#b91c1c" }}>{delivery.errorMessage}</small>}
+            {delivery.retryAvailable && <span style={{ gridColumn: "1 / -1" }}>
+              <button type="button" disabled={retryDeliveryMutation.isPending} onClick={() => retryDeliveryMutation.mutate(delivery.id)}>
+                {retryDeliveryMutation.isPending ? "Retrying..." : "Retry WhatsApp delivery"}
+              </button>
+            </span>}
+          </div>)}
+        </div>
+      </details>
     </main>
   );
 }

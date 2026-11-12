@@ -154,6 +154,10 @@ export async function globalSearch(
             OR: [
               { invoiceNumber: { contains: query } },
               { customerName: { contains: query, mode: "insensitive" } },
+              { order: { is: { orderNumber: { contains: query } } } },
+              { order: { is: { customer: { is: { name: { contains: query, mode: "insensitive" } } } } } },
+              { order: { is: { customer: { is: { phone: { contains: query } } } } } },
+              { order: { is: { customer: { is: { email: { contains: query, mode: "insensitive" } } } } } },
             ],
           },
           orderBy: {
@@ -170,38 +174,42 @@ export async function globalSearch(
       : Promise.resolve([]),
   ]);
 
-  return [
-    // When a customer query also finds one or more of that customer's
-    // existing orders, show the order results instead of a customer shortcut
-    // that would start a new order. This keeps name/phone/email searches in
-    // Order Management whenever matching orders exist.
-    ...customers
-      .filter((customer) => !orders.some((order) => order.customerId === customer.id))
-      .map((customer) => ({
-      type: "CUSTOMER" as const,
+  // Keep result types balanced so a long list of customer matches cannot
+  // push every matching order or invoice out of the dropdown.
+  const groupedResults: GlobalSearchResult[][] = [
+    customers.map((customer) => ({
+      type: "CUSTOMER",
       id: customer.id,
       title: customer.name,
       subtitle: [customer.phone, customer.email].filter(Boolean).join(" · "),
-      // Customer search must open the customer workspace, not silently
-      // jump into whichever order happens to be newest in this branch.
-      href: `/orders?customerId=${encodeURIComponent(customer.id)}`,
+      href: `/orders?customerId=${encodeURIComponent(customer.id)}&openAccount=1`,
     })),
-
-    ...orders.map((order) => ({
-      type: "ORDER" as const,
+    orders.map((order) => ({
+      type: "ORDER",
       id: order.id,
       title: `Order #${order.orderNumber}`,
       subtitle: `${order.customer.name} · ${order.status}`,
       href: `/orders?orderId=${encodeURIComponent(order.id)}`,
     })),
-
-    ...invoices.map((invoice) => ({
-      type: "INVOICE" as const,
+    invoices.map((invoice) => ({
+      type: "INVOICE",
       id: invoice.id,
       title: `Invoice #${invoice.invoiceNumber}`,
       subtitle: `${invoice.customerName} · ${invoice.status}`,
-      // InvoicesPage reads invoiceId from the URL and opens that exact invoice.
       href: `/invoices?invoiceId=${encodeURIComponent(invoice.id)}`,
     })),
-  ].slice(0, input.limit);
+  ];
+  const results: GlobalSearchResult[] = [];
+  for (let index = 0; results.length < input.limit; index += 1) {
+    let added = false;
+    for (const group of groupedResults) {
+      const result = group[index];
+      if (result && results.length < input.limit) {
+        results.push(result);
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  return results;
 }
