@@ -93,6 +93,38 @@ describe("GlobalSearch", () => {
     expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42");
   });
 
+  it("opens an exact payment reference with Enter even when a customer result is also present", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "CUSTOMER", id: "customer-1", title: "Bank Reference Services", subtitle: "08012345678", href: "/orders?customerId=customer-1&openAccount=1" },
+      { type: "PAYMENT", id: "payment-42", title: "Payment · BANK-REF-42", subtitle: "Ada Laundry · Invoice #00042 · POSTED", href: "/payments?paymentId=payment-42" },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "BANK-REF-42" } });
+    await screen.findByRole("option", { name: /Payment · BANK-REF-42/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).toHaveBeenCalledWith("/payments?paymentId=payment-42");
+  });
+
+  it("does not guess when an exact order number also matches an invoice number", async () => {
+    globalSearchMock.mockResolvedValue([
+      { type: "ORDER", id: "order-22", title: "Order #00022", subtitle: "Adam · RECEIVED", href: "/orders?orderId=order-22" },
+      { type: "INVOICE", id: "invoice-22", title: "Invoice #00022", subtitle: "Adam · ISSUED", href: "/invoices?invoiceId=invoice-22" },
+    ]);
+
+    render(<GlobalSearch />);
+    const input = screen.getByRole("searchbox", { name: "Global search" });
+    fireEvent.change(input, { target: { value: "00022" } });
+    await screen.findByRole("option", { name: /Invoice #00022/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("option", { name: /Order #00022/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Invoice #00022/ })).toBeInTheDocument();
+  });
+
   it("shows customer, order, and invoice results separately when identifiers overlap", async () => {
     globalSearchMock.mockResolvedValue([
       { type: "CUSTOMER", id: "customer-1", title: "Adam", subtitle: "08012345678", href: "/orders?customerId=customer-1" },
