@@ -19,7 +19,7 @@ vi.mock("../../../src/state/auth-store.js", () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({
     accessToken: "access-token",
     activeBranchId: "branch-main",
-    user: { id: "user-1", permissions: ["customers.create"] },
+    user: { id: "user-1", email: "staff@example.com", permissions: ["customers.create"] },
   }),
 }));
 vi.mock("../../../src/lib/permissions.js", () => ({ hasPermission: hasPermissionMock }));
