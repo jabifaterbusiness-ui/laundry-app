@@ -66,7 +66,22 @@ export function CustomerFormDialog({ customer, onCancel, onSubmit, initialPhone 
         </label>
         <label>
           Phone
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="(555) 123-4567" />
+          <input
+            value={phone}
+            onChange={(e) => {
+              const nextPhone = e.target.value;
+              setPhone(nextPhone);
+              const digits = (value: string) => value.replace(/\\D/g, "");
+              if (customer && digits(nextPhone) !== digits(customer.phone)) {
+                // Consent applies to the number the customer agreed to use.
+                // A changed destination must be explicitly opted in again.
+                setWhatsappOptIn(false);
+                setWhatsappOptInSource("CUSTOMER_VERBAL");
+              }
+            }}
+            required
+            placeholder="(555) 123-4567"
+          />
         </label>
         <label>
           Email (optional)
