@@ -220,7 +220,7 @@ describe("Quick Operations routes - authentication", () => {
     const res = await request(app)
       .post("/api/v1/quick-operations/execute")
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -237,7 +237,7 @@ describe("Quick Operations routes - authentication", () => {
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -255,7 +255,7 @@ describe("Quick Operations routes - branch context", () => {
       .post("/api/v1/quick-operations/execute")
       .set("Authorization", `Bearer ${OWNER_A}`)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -274,7 +274,7 @@ describe("Quick Operations routes - branch context", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -301,7 +301,7 @@ describe("Quick Operations routes - branch context", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_B)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -348,7 +348,7 @@ describe("Quick Operations routes - validation and authorization", () => {
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -636,7 +636,7 @@ describe("Quick Operations routes - TI", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -646,7 +646,7 @@ describe("Quick Operations routes - TI", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.code).toBe("TI");
+    expect(res.body.data.code).toBe("TO");
     expect(orderFindFirst).toHaveBeenCalledWith({
       where: {
         id: ORDER_A,
@@ -1315,7 +1315,7 @@ describe("Quick Operations routes - branch/business isolation", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_B)
       .send({
-        code: "TI",
+        code: "TO",
         input: {
           orderId: ORDER_A,
           customerId: CUSTOMER_B,
@@ -1888,7 +1888,7 @@ describe("Quick Operations routes - MA", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "MA",
+        code: "MC",
         input: {
           customerId: CUSTOMER_A,
           targetCustomerId: CUSTOMER_B,
@@ -1898,7 +1898,7 @@ describe("Quick Operations routes - MA", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.code).toBe("MA");
+    expect(res.body.data.code).toBe("MC");
 
     expect(orderFindMany).toHaveBeenCalledWith({
       where: {
@@ -1945,7 +1945,7 @@ describe("Quick Operations routes - MA", () => {
         entityType: "Customer",
         entityId: CUSTOMER_A,
         metadata: expect.objectContaining({
-          operationCode: "MA",
+          operationCode: "MC",
           operationName: "Merge Customer",
           targetCustomerId: CUSTOMER_B,
           mergedOrderCount: 1,
@@ -1976,7 +1976,7 @@ describe("Quick Operations routes - MA", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "MA",
+        code: "MC",
         input: {
           customerId: CUSTOMER_A,
           targetCustomerId: CUSTOMER_B,
@@ -1999,7 +1999,7 @@ describe("Quick Operations routes - MA", () => {
       .set("Authorization", `Bearer ${OWNER_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "MA",
+        code: "MC",
         input: {
           customerId: CUSTOMER_A,
           targetCustomerId: CUSTOMER_B,
@@ -2032,7 +2032,7 @@ describe("Quick Operations routes - MA", () => {
       .set("Authorization", `Bearer ${STAFF_A}`)
       .set("X-Branch-Id", BRANCH_A)
       .send({
-        code: "MA",
+        code: "MC",
         input: {
           customerId: CUSTOMER_A,
           targetCustomerId: CUSTOMER_B,
