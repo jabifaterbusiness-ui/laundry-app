@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { within,  render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, within, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -172,6 +172,27 @@ beforeEach(() => {
 });
 
 describe("PaymentsPage void workflow", () => {
+  it("passes customer email and other payment search terms to the server", async () => {
+    renderPage("BUSINESS_OWNER");
+
+    const search = screen.getByRole("searchbox", { name: "Search payments" });
+    fireEvent.change(search, { target: { value: "john@example.com" } });
+
+    await waitFor(() => {
+      expect(mockedPaymentsApi.listPayments).toHaveBeenLastCalledWith(
+        {
+          page: 1,
+          pageSize: 25,
+          status: undefined,
+          search: "john@example.com",
+        },
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+  });
+
+
   it("shows the customer account balance for Pay from Account", async () => {
     const user = userEvent.setup();
     renderPage("BUSINESS_OWNER");
