@@ -509,9 +509,11 @@ export async function transferCustomer(
     if (customer.id === targetCustomerId) {
       throw new AppError("Customer cannot be transferred to the same customer", 422);
     }
-    const targetCustomer = await getEditableCustomerForBranch(
-      tx, targetCustomerId, businessId, branchId, userId, "Target customer not found",
-    );
+    const targetCustomer = await tx.customer.findFirst({
+      where: { id: targetCustomerId, businessId },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
+    });
+    if (!targetCustomer) throw new AppError("Target customer not found", 404);
 
     const orders = await tx.order.findMany({
       where: { businessId, branchId, customerId: customer.id },
@@ -569,9 +571,14 @@ export async function mergeCustomer(
   targetCustomerId: string,
 ) {
   return prisma.$transaction(async (tx) => {
-    const customer = await getEditableCustomerForBranch(
-      tx, customerId, businessId, branchId, userId, "Customer not found",
-    );
+    const customer = await tx.customer.findFirst({
+      where: { id: customerId, businessId },
+      include: { ownerBranch: { select: { id: true, name: true } }, mergedIntoCustomer: { select: { id: true, name: true } } },
+    });
+    if (!customer) throw new AppError("Customer not found", 404);
+    if (customer.ownerBranchId !== branchId) {
+      throw new AppError("Both customers must belong to the currently selected branch to be merged", 409);
+    }
     if (customer.id === targetCustomerId) {
       throw new AppError("Customer cannot be merged into the same customer", 422);
     }
