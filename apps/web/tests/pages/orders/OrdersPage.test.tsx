@@ -772,7 +772,7 @@ describe("OrdersPage quick customer switching", () => {
 
   it("keeps editing, new orders and customer switching inside Order Management", async () => {
     vi.mocked(getOrder).mockResolvedValue(orderA);
-    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    vi.mocked(getCustomer).mockImplementation(async (id) => id === customerB.id ? customerB : customerA);
     vi.mocked(listOrders).mockResolvedValue({
       data: [],
       pagination: { page: 1, pageSize: 1, total: 0, totalPages: 1 },
