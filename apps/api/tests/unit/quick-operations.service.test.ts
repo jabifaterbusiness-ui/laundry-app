@@ -373,7 +373,7 @@ describe("quick-operations.service", () => {
 
       const response = await executeQuickOperation(
         CONTEXT,
-        "TI",
+        "TO",
         {
           orderId: "11111111-1111-4111-8111-111111111111",
           customerId: "22222222-2222-4222-8222-222222222222",
@@ -392,7 +392,7 @@ describe("quick-operations.service", () => {
       );
 
       expect(response).toEqual({
-        code: "TI",
+        code: "TO",
         result,
       });
 
@@ -405,7 +405,7 @@ describe("quick-operations.service", () => {
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
-          operationCode: "TI",
+          operationCode: "TO",
           operationName: "Transfer Order",
           orderNumber: "00042",
           customerId: "22222222-2222-4222-8222-222222222222",
@@ -726,7 +726,7 @@ describe("quick-operations.service", () => {
 
       const response = await executeQuickOperation(
         CONTEXT,
-        "MA",
+        "MC",
         {
           customerId: result.customer.id,
           targetCustomerId: result.targetCustomer.id,
@@ -744,7 +744,7 @@ describe("quick-operations.service", () => {
       );
 
       expect(response).toEqual({
-        code: "MA",
+        code: "MC",
         result,
       });
 
@@ -757,7 +757,7 @@ describe("quick-operations.service", () => {
         actorUserId: "user-A",
         correlationId: "corr-123",
         metadata: {
-          operationCode: "MA",
+          operationCode: "MC",
           operationName: "Merge Customer",
           reason: "test quick operation reason",
           targetCustomerId: result.targetCustomer.id,
@@ -779,7 +779,7 @@ describe("quick-operations.service", () => {
       await expect(
         executeQuickOperation(
           CONTEXT,
-          "MA",
+          "MC",
           {
             customerId: "not-a-uuid",
             targetCustomerId: "also-not-a-uuid",
@@ -796,7 +796,7 @@ describe("quick-operations.service", () => {
       await expect(
         executeQuickOperation(
           CONTEXT,
-          "MA",
+          "MC",
           {
             customerId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             targetCustomerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -1872,7 +1872,7 @@ describe("quick-operations.service", () => {
       await expect(
         executeQuickOperation(
           CONTEXT,
-          "TI",
+          "TO",
           {
             orderId: "not-a-uuid",
             customerId: "also-not-a-uuid",
