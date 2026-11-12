@@ -150,4 +150,4 @@ jobs:
         shell: bash
         run: |
           if [[ -f /tmp/cloudflared.pid ]]; then kill "$(cat /tmp/cloudflared.pid)" 2>/dev/null || true; fi
-          pkill -f 'ssh -N' 2>/dev/null || true
+          if [[ -f /tmp/staging-ssh.pid ]]; then kill "$(cat /tmp/staging-ssh.pid)" 2>/dev/null || true; fi
