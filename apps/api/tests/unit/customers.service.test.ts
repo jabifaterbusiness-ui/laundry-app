@@ -735,7 +735,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     await expect(
       mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
     ).rejects.toMatchObject({
-      message: "Source customer has records or sharing links in another branch and cannot be merged here",
+      message: "Customer records have links or records in another branch and cannot be merged here",
       statusCode: 409,
     });
 
@@ -856,7 +856,7 @@ describe("mergeCustomer - duplicate account merge", () => {
     await expect(
       mergeCustomer(sourceCustomer.id, "biz-A", "branch-A", "user-A", targetCustomer.id),
     ).rejects.toMatchObject({
-      message: "Source customer has records or sharing links in another branch and cannot be merged here",
+      message: "Customer records have links or records in another branch and cannot be merged here",
       statusCode: 409,
     });
 
