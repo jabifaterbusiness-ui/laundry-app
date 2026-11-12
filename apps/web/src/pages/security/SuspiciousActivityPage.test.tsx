@@ -167,6 +167,21 @@ describe("SuspiciousActivityPage", () => {
     expect(savedOrder[savedOrder.length - 1]).toBe("quick-void-operation");
   });
 
+  it("clears a pointer drag when the user releases outside the activity list", async () => {
+    mockedListSuspiciousActivity.mockResolvedValue([]);
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Customize activity order" }));
+    const dragHandle = screen.getByRole("button", { name: "Drag Void Operation to reposition" });
+    const card = container.querySelector('[data-activity-sort-id="quick-void-operation"]');
+    expect(card).not.toBeNull();
+
+    fireEvent.pointerDown(dragHandle, { pointerId: 3, pointerType: "touch" });
+    expect(card).toHaveClass("suspicious-activity-event-card-dragging");
+    fireEvent.pointerUp(window, { pointerId: 3, pointerType: "touch" });
+    expect(card).not.toHaveClass("suspicious-activity-event-card-dragging");
+  });
+
   it("summarizes permission changes clearly and starts every secondary audit section collapsed", async () => {
     mockedListSuspiciousActivity.mockResolvedValue([
       {
