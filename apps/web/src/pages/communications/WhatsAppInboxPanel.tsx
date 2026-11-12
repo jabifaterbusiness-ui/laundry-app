@@ -58,6 +58,7 @@ function formatTime(value: string) {
 
 export function WhatsAppInboxPanel() {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const businessId = useAuthStore((state) => state.user?.businessId);
   const queryClient = useQueryClient();
   const [selectedPhone, setSelectedPhone] = useState("");
   const [draft, setDraft] = useState("");
@@ -65,30 +66,40 @@ export function WhatsAppInboxPanel() {
   const [templateName, setTemplateName] = useState("");
   const [templateLanguage, setTemplateLanguage] = useState("");
   const [templateVariables, setTemplateVariables] = useState<string[]>([]);
-  const connectionQuery = useQuery({ queryKey: ["whatsapp", "connection"], queryFn: () => getWhatsAppConnection({ accessToken }), enabled: Boolean(accessToken) });
+
+  useEffect(() => {
+    setSelectedPhone("");
+    setDraft("");
+    setFeedback("");
+    setTemplateName("");
+    setTemplateLanguage("");
+    setTemplateVariables([]);
+  }, [businessId]);
+
+  const connectionQuery = useQuery({ queryKey: ["whatsapp", "connection", businessId], queryFn: () => getWhatsAppConnection({ accessToken }), enabled: Boolean(accessToken && businessId) });
   const isConnected = connectionQuery.data?.connection?.status === "CONNECTED";
   const conversationsQuery = useQuery({
-    queryKey: ["whatsapp", "conversations"],
+    queryKey: ["whatsapp", "conversations", businessId],
     queryFn: () => getWhatsAppConversations(accessToken),
-    enabled: Boolean(accessToken && isConnected),
+    enabled: Boolean(accessToken && businessId && isConnected),
     refetchInterval: 15000,
   });
   const conversations = conversationsQuery.data?.data ?? [];
-  const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates"], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken && isConnected), staleTime: 60000 });
+  const templatesQuery = useQuery({ queryKey: ["whatsapp", "approved-templates", businessId], queryFn: () => getApprovedWhatsAppTemplates(accessToken), enabled: Boolean(accessToken && businessId && isConnected), staleTime: 60000 });
   const templates = (templatesQuery.data?.data ?? []).filter((template) => template.headerFormat !== "IMAGE");
   const selectedTemplate = templates.find((item) => item.name === templateName && item.language === templateLanguage) ?? templates[0] ?? null;
   useEffect(() => { if (selectedTemplate) setTemplateVariables(Array(selectedTemplate.bodyVariableCount).fill("")); }, [selectedTemplate?.id, selectedTemplate?.bodyVariableCount]);
   const selected = conversations.find((item) => item.phone === selectedPhone) ?? conversations[0] ?? null;
   const readMutation = useMutation({
     mutationFn: (conversation: WhatsAppConversation) => markWhatsAppConversationRead({ customerId: conversation.customerId, phone: conversation.phone }, accessToken),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations", businessId] }),
   });
   const templateMutation = useMutation({
     mutationFn: () => {
       if (!selected || !selectedTemplate) throw new Error("Select a conversation and an approved template.");
       return sendWhatsAppTemplate({ customerId: selected.customerId, phone: selected.phone, templateName: selectedTemplate.name, language: selectedTemplate.language, variables: templateVariables }, accessToken);
     },
-    onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables(Array(selectedTemplate?.bodyVariableCount ?? 0).fill("")); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] }); },
+    onSuccess: async (result) => { setFeedback("Approved template “" + result.template + "” sent."); setTemplateVariables(Array(selectedTemplate?.bodyVariableCount ?? 0).fill("")); await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations", businessId] }); },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send approved template."),
   });
   const sendMutation = useMutation({
@@ -99,7 +110,7 @@ export function WhatsAppInboxPanel() {
     onSuccess: async () => {
       setDraft("");
       setFeedback("Reply sent to the customer.");
-      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations"] });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp", "conversations", businessId] });
     },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to send this reply."),
   });
