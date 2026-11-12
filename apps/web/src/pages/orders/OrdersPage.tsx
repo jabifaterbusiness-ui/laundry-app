@@ -803,7 +803,7 @@ export function OrdersPage() {
         activeOrder: null,
         mode: "new",
         isDirty: false,
-        draft:
+        draft: {
           customerId: customer.id,
           lines: [{ serviceId: "", quantity: 1, colors: [] }],
           garmentNote: "",
