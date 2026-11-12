@@ -1282,6 +1282,7 @@ enum InventoryMovementType {
   ADJUSTMENT
   RETURN
   WASTE
+  DAMAGED
   EXPIRED
   TRANSFER_IN
   TRANSFER_OUT
@@ -1392,6 +1393,8 @@ model InventoryMovement {
 
   type InventoryMovementType
   unitCost Int @default(0)
+  batchNumber String?
+  expiryDate DateTime?
 
   // Stock balance immediately after this movement.
   resultingQuantity Int
@@ -1622,6 +1625,8 @@ model InventoryGoodsReceiptLine {
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   quantity Int
   unitCost Int
+  batchNumber String?
+  expiryDate DateTime?
   createdAt DateTime @default(now())
   @@index([inventoryItemId, createdAt])
   @@map("inventory_goods_receipt_lines")
