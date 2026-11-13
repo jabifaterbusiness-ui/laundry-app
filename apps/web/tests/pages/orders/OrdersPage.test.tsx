@@ -616,6 +616,23 @@ describe("OrdersPage quick customer switching", () => {
     });
   });
 
+  it("clears the saved workspace when the final customer workspace is closed", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")?.workspaces).toHaveLength(1);
+    });
+
+    useOrderWorkspaceStore.getState().clearWorkspaces();
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")).toBeNull();
+    });
+  });
+
   it("opens three customer workspaces", async () => {
     renderPage();
 
