@@ -70,6 +70,7 @@ interface OrderManagementProps {
   onNewOrder: (customer: Customer) => void;
   onSelectOrder: (order: Order) => void;
   onEditOrder: (order: Order) => void;
+  onTransferInvoiceSuccess: (customer: Customer, order: Order) => void;
 }
 
 function OrderManagementContent({
@@ -83,6 +84,7 @@ function OrderManagementContent({
   onNewOrder,
   onSelectOrder,
   onEditOrder,
+  onTransferInvoiceSuccess,
 }: OrderManagementProps) {
   const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -186,6 +188,7 @@ function OrderManagementContent({
     },
     onSuccess: async () => {
       const orderId = order?.id;
+      const targetCustomerId = invoiceTransferCustomerId;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
         queryClient.invalidateQueries({ queryKey: ["order-management", "invoice", orderId, activeBranchId] }),
@@ -197,7 +200,13 @@ function OrderManagementContent({
       setInvoiceTransferCustomerId("");
       setInvoiceTransferReason("");
       setInvoiceTransferConfirmed(false);
-      if (orderId) navigate(`/order-management?orderId=${encodeURIComponent(orderId)}`, { replace: true });
+      if (orderId && targetCustomerId) {
+        const [updatedOrder, updatedCustomer] = await Promise.all([
+          getOrder(orderId, { accessToken }, activeBranchId),
+          getCustomer(targetCustomerId, { accessToken }),
+        ]);
+        onTransferInvoiceSuccess(updatedCustomer, updatedOrder);
+      }
       setStatusFeedback("Invoice transferred successfully.");
     },
     onError: (error: unknown) => setInvoiceCorrectionError(error instanceof Error ? error.message : "Unable to transfer this invoice."),
