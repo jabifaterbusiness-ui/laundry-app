@@ -634,6 +634,7 @@ export async function listInventorySuppliers(scope: BusinessScope, input: {
 
 export async function createInventoryPurchaseOrder(scope: BranchScope, input: {
   supplierId: string; orderNumber: string; expectedAt?: Date; notes?: string;
+  notificationChannel?: "EMAIL" | "WHATSAPP";
   createdById: string; lines: Array<{ inventoryItemId: string; quantityOrdered: number; unitCost: number }>;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -643,6 +644,8 @@ export async function createInventoryPurchaseOrder(scope: BranchScope, input: {
     ]);
     if (!branch) throw new AppError("Branch not found or inactive", 404);
     if (!supplier) throw new AppError("Supplier not found or inactive for this business", 404);
+    if (input.notificationChannel === "EMAIL" && !supplier.email?.trim()) throw new AppError("Add an email address to this supplier or choose WhatsApp delivery", 422);
+    if (input.notificationChannel === "WHATSAPP" && !supplier.phone?.trim()) throw new AppError("Add a WhatsApp phone number to this supplier or choose email delivery", 422);
     const itemIds = [...new Set(input.lines.map((line) => line.inventoryItemId))];
     if (itemIds.length !== input.lines.length) throw new AppError("Each inventory item may appear only once on a purchase order", 422);
     if (!scope.userId) throw new AppError("A valid user context is required", 400);
