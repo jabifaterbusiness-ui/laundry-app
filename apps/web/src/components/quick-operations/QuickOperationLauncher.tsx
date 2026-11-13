@@ -252,6 +252,7 @@ export function QuickOperationLauncher({
       return;
     }
     let active = true;
+    setSourceCustomersError(null);
     setSourceCustomersLoading(true);
     listCustomers({ page: 1, pageSize: 100, search: sourceCustomerSearch.trim() || undefined, status: "all" }, { accessToken })
       .then((response) => {
