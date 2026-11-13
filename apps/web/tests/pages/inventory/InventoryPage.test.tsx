@@ -15,6 +15,7 @@ const mockListInventoryMovements = vi.fn();
 const mockCreateInventoryMovement = vi.fn();
 const mockAdjustInventoryStock = vi.fn();
 const mockListInventorySuppliers = vi.fn();
+const mockListInventorySupplierNotificationTemplates = vi.fn();
 const mockCreateInventorySupplier = vi.fn();
 const mockListInventoryPurchaseOrders = vi.fn();
 const mockCreateInventoryPurchaseOrder = vi.fn();
@@ -51,6 +52,7 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
   adjustInventoryStock: (...args: unknown[]) =>
     mockAdjustInventoryStock(...args),
   listInventorySuppliers: (...args: unknown[]) => mockListInventorySuppliers(...args),
+  listInventorySupplierNotificationTemplates: (...args: unknown[]) => mockListInventorySupplierNotificationTemplates(...args),
   createInventorySupplier: (...args: unknown[]) => mockCreateInventorySupplier(...args),
   listInventoryPurchaseOrders: (...args: unknown[]) => mockListInventoryPurchaseOrders(...args),
   createInventoryPurchaseOrder: (...args: unknown[]) => mockCreateInventoryPurchaseOrder(...args),
@@ -155,6 +157,7 @@ function mockSuccessfulQueries() {
     },
   });
   mockListInventorySuppliers.mockResolvedValue({ suppliers: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } });
+  mockListInventorySupplierNotificationTemplates.mockResolvedValue({ templates: [] });
   mockListInventoryPurchaseOrders.mockResolvedValue({ purchaseOrders: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } });
   mockListInventoryItems.mockResolvedValue({
     items: [item],
@@ -259,6 +262,7 @@ describe("InventoryPage", () => {
       }],
       pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
     });
+    mockListInventorySupplierNotificationTemplates.mockResolvedValue({ templates: [{ id: "template-1", name: "purchase_order_notice", language: "en", category: "UTILITY", bodyVariableCount: 4, headerFormat: null }] });
     mockCreateInventoryPurchaseOrder.mockResolvedValue({
       data: {},
       notification: { channel: "WHATSAPP", status: "SENT", destination: "2348012345678", providerMessageId: "message-1" },
@@ -268,6 +272,9 @@ describe("InventoryPage", () => {
     const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
     fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
     fireEvent.change(within(form).getByLabelText("Purchase order delivery channel"), { target: { value: "WHATSAPP" } });
+    await screen.findByRole("option", { name: "purchase_order_notice (en)" });
+    fireEvent.change(within(form).getByLabelText("Approved WhatsApp purchase-order template"), { target: { value: "purchase_order_notice::en" } });
+    fireEvent.click(within(form).getByLabelText("Supplier has agreed to receive purchase orders by WhatsApp."));
     fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-1001" } });
     fireEvent.change(within(form).getByLabelText("Inventory item"), { target: { value: item.id } });
     fireEvent.change(within(form).getByLabelText("Order line 1 quantity"), { target: { value: "2" } });
@@ -279,6 +286,9 @@ describe("InventoryPage", () => {
         supplierId: "supplier-1",
         orderNumber: "PO-1001",
         notificationChannel: "WHATSAPP",
+        notificationTemplateName: "purchase_order_notice",
+        notificationTemplateLanguage: "en",
+        whatsappConsentConfirmed: true,
         lines: [{ inventoryItemId: item.id, quantityOrdered: 2, unitCost: 500 }],
       }, { accessToken: "test-token" }, "branch-1");
     });
