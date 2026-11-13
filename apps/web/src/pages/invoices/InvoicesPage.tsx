@@ -1187,9 +1187,10 @@ export function InvoicesPage() {
                 <input
                   type="search"
                   value={customerSearch}
-                  onChange={(event) =>
-                    setCustomerSearch(event.target.value)
-                  }
+                  onChange={(event) => {
+                    setCustomerSearch(event.target.value);
+                    setTargetCustomerId("");
+                  }}
                   placeholder="Search by customer name, phone, email or order number"
                   style={{ display: "block", width: "100%" }}
                 />
