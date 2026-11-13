@@ -538,7 +538,7 @@ describe("OrdersPage quick customer switching", () => {
       }),
     ).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+      expect(screen.getByTestId("current-location")).toHaveTextContent(`/order-management?orderId=${orderA.id}`);
     });
 
     expect(
