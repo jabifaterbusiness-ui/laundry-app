@@ -845,10 +845,10 @@ describe("OrdersPage quick customer switching", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "← Back" }));
 
-    // Distinguish a swallowed Back click from a route change that is later
-    // overwritten by another navigation effect.
+    // The customer workspace is intentionally retained when returning to
+    // its Customer Workstation so the last attended customer remains available.
     await waitFor(() => {
-      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(`customer:${customerA.id}`);
     });
 
     await waitFor(() => {
