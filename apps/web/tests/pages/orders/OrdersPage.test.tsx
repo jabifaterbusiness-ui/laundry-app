@@ -496,9 +496,8 @@ describe("OrdersPage quick customer switching", () => {
     vi.mocked(getCustomer).mockResolvedValue(customerA);
     renderPage([`/orders?customerId=${customerA.id}&openAccount=1`]);
 
-    expect(
-      await screen.findByRole("heading", { name: /Order Management · Jane Doe/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "ORDER MANAGEMENT" })).toBeInTheDocument();
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /new order/i })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(listOrders).toHaveBeenLastCalledWith(
@@ -784,6 +783,8 @@ describe("OrdersPage quick customer switching", () => {
 
     renderPage([`/order-management?orderId=${orderA.id}`]);
     await screen.findByRole("region", { name: "Order Management" });
+    await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
     expect(await screen.findByRole("heading", { name: /Edit Invoice/i })).toBeInTheDocument();
@@ -808,6 +809,8 @@ describe("OrdersPage quick customer switching", () => {
     renderPage([`/order-management?orderId=${orderA.id}`]);
 
     await screen.findByRole("region", { name: "Order Management" });
+    await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
     fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
     await screen.findByRole("heading", { name: /Edit Invoice/i });
 
@@ -1012,6 +1015,8 @@ describe("OrdersPage quick customer switching", () => {
   });
 
   it("keeps Order Management outside the Orders route after selecting an order", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
     vi.mocked(listOrders).mockResolvedValue({
       data: [orderA],
       pagination: {
@@ -1037,6 +1042,7 @@ describe("OrdersPage quick customer switching", () => {
       await screen.findByRole("region", { name: "Order Management" }),
     ).toBeInTheDocument();
     await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
     expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
   });
 
