@@ -513,7 +513,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Source order"), {
       target: { value: "order-1" },
     });
-    await screen.findByRole("option", { name: /Target Customer/ });
+    await within(screen.getByLabelText("Destination customer")).findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-2" },
     });
