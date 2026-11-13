@@ -1,6 +1,9 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import {
   createInventoryItemSchema,
   updateInventoryItemSchema,
@@ -378,6 +381,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
   const order = await createInventoryPurchaseOrder({ businessId, branchId, userId: req.user!.id }, {
     supplierId: input.supplierId,
     orderNumber: input.orderNumber,
+    notificationChannel: input.notificationChannel,
     createdById: req.user!.id,
     lines: input.lines,
     ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt } : {}),
@@ -386,7 +390,44 @@ export async function createPurchaseOrder(req: Request, res: Response) {
   await recordAuditEvent({ action: "inventory.purchase_order_created", entityType: "InventoryPurchaseOrder", entityId: order.id,
     businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
     metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length } });
-  res.status(201).json({ data: order });
+  const notificationChannel = input.notificationChannel;
+  const destination = notificationChannel === "EMAIL" ? order.supplier.email : order.supplier.phone;
+  let notification: { channel: "EMAIL" | "WHATSAPP"; status: "SENT" | "FAILED"; destination: string | null; providerMessageId?: string; error?: string } = {
+    channel: notificationChannel,
+    status: "FAILED",
+    destination,
+  };
+  try {
+    if (!destination) throw new Error(notificationChannel === "EMAIL" ? "Supplier email address is missing" : "Supplier WhatsApp phone number is missing");
+    const lines = order.lines.map((line) => `${line.inventoryItem.name}: ${line.quantityOrdered} × ₦${line.unitCost.toLocaleString("en-NG")}`);
+    const total = order.lines.reduce((sum, line) => sum + line.quantityOrdered * line.unitCost, 0);
+    if (notificationChannel === "EMAIL") {
+      const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+      const html = `<div style="font-family:Arial,sans-serif;color:#172033"><h2>Purchase Order ${escapeHtml(order.orderNumber)}</h2><p>Hello ${escapeHtml(order.supplier.contactName || order.supplier.name)},</p><p>Please find our purchase order details below.</p><table style="border-collapse:collapse;width:100%"><thead><tr><th align="left">Item</th><th align="right">Quantity</th><th align="right">Unit cost</th><th align="right">Line total</th></tr></thead><tbody>${order.lines.map((line) => `<tr><td>${escapeHtml(line.inventoryItem.name)}</td><td align="right">${line.quantityOrdered}</td><td align="right">₦${line.unitCost.toLocaleString("en-NG")}</td><td align="right">₦${(line.quantityOrdered * line.unitCost).toLocaleString("en-NG")}</td></tr>`).join("")}</tbody></table><p><strong>Estimated total: ₦${total.toLocaleString("en-NG")}</strong></p>${order.expectedAt ? `<p>Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}</p>` : ""}${order.notes ? `<p>Notes: ${escapeHtml(order.notes)}</p>` : ""}<p>Please confirm receipt of this purchase order.</p></div>`;
+      const sent = await sendHtmlEmail({ to: destination, subject: `Purchase Order ${order.orderNumber}`, html });
+      notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
+    } else {
+      await assertWhatsAppMessagingEnabled();
+      const body = [
+        `PURCHASE ORDER ${order.orderNumber}`,
+        ...lines,
+        `Estimated total: ₦${total.toLocaleString("en-NG")}`,
+        ...(order.expectedAt ? [`Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}`] : []),
+        ...(order.notes ? [`Notes: ${order.notes}`] : []),
+        "Please confirm receipt of this purchase order.",
+      ].join("\\n");
+      const sent = await sendWhatsAppText({ businessId, to: destination, body });
+      notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
+    }
+  } catch (error) {
+    notification = {
+      channel: notificationChannel,
+      status: "FAILED",
+      destination,
+      error: error instanceof Error ? error.message : "Supplier notification delivery failed",
+    };
+  }
+  res.status(201).json({ data: order, notification });
 }
 
 export async function listPurchaseOrders(req: Request, res: Response) {
