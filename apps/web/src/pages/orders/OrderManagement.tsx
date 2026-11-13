@@ -920,9 +920,6 @@ function OrderManagementContent({
           Notes
         </button>
 
-        <button type="button" onClick={beginEdit}>
-          Customer
-        </button>
         <button
           type="button"
           disabled={mode !== "view" || !order}
@@ -931,7 +928,7 @@ function OrderManagementContent({
             setLayer("payment");
           }}
         >
-          Pay
+          Customer Pay
         </button>
         <button
           type="button"
@@ -1812,6 +1809,7 @@ function OrderManagementContent({
           {layer === "more" && (
             <>
               <h3>More</h3>
+              <button type="button" disabled={!canUpdateCustomer} onClick={beginEdit} style={{ marginBottom: 12 }}>Edit Customer</button>
               {!invoiceQuery.data ? (
                 <p>No invoice is available for this order.</p>
               ) : (
