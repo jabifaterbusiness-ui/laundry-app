@@ -576,12 +576,17 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Order ID"), {
+    await screen.findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
+      target: { value: "customer-1" },
+    });
+    await screen.findByRole("option", { name: /#00001/ });
+    fireEvent.change(screen.getByLabelText("Source order"), {
       target: { value: "order-1" },
     });
-    await screen.findByRole("option", { name: /Source Customer/ });
+    await screen.findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Destination customer"), {
-      target: { value: "customer-1" },
+      target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Invoice was entered on the wrong customer account" },
