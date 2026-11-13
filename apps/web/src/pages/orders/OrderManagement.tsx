@@ -69,7 +69,7 @@ interface OrderManagementProps {
   onNewOrder: (customer: Customer) => void;
   onSelectOrder: (order: Order) => void;
   onEditOrder: (order: Order) => void;
-  onTransferInvoiceSuccess: (customer: Customer, order: Order) => void;
+  onTransferInvoiceSuccess?: (customer: Customer, order: Order) => void;
 }
 
 function OrderManagementContent({
@@ -111,6 +111,13 @@ function OrderManagementContent({
   const [email, setEmail] = useState(customer.email ?? "");
   const [address, setAddress] = useState(customer.address ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");
+
+  useEffect(() => {
+    setPhone(customer.phone ?? "");
+    setEmail(customer.email ?? "");
+    setAddress(customer.address ?? "");
+    setNotes(customer.notes ?? "");
+  }, [customer.id, customer.phone, customer.email, customer.address, customer.notes]);
   const [error, setError] = useState<string | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
@@ -203,7 +210,7 @@ function OrderManagementContent({
           getOrder(orderId, { accessToken }, activeBranchId),
           getCustomer(targetCustomerId, { accessToken }),
         ]);
-        onTransferInvoiceSuccess(updatedCustomer, updatedOrder);
+        onTransferInvoiceSuccess?.(updatedCustomer, updatedOrder);
       }
       setStatusFeedback("Invoice transferred successfully.");
     },
