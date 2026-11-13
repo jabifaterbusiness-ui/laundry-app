@@ -635,7 +635,7 @@ export function InventoryPage() {
           <p>Jump to a task</p>
           <nav aria-label="Inventory sections">
             <a href="#inventory-items">Inventory Items</a>
-            {userPermissions.includes("inventory.manage") ? <a href="#inventory-item-form">New / Edit Inventory Item</a> : null}
+            {userPermissions.includes("inventory.manage") ? <a href="#inventory-item-form" onClick={() => setItemFormOpen(true)}>New / Edit Inventory Item</a> : null}
             <a href="#inventory-current-stock">Current Stock</a>
             <a href="#inventory-stock-movement">Receive / Issue Stock</a>
             <a href="#inventory-stock-adjustment">Adjust Stock</a>
