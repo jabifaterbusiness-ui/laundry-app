@@ -654,7 +654,7 @@ describe("QuickOperationLauncher", () => {
         { accessToken: "access-token" },
       );
     });
-    await screen.findByRole("option", { name: /Source Customer/ });
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
     });
@@ -667,7 +667,7 @@ describe("QuickOperationLauncher", () => {
         { accessToken: "access-token" },
       );
     });
-    await screen.findByRole("option", { name: /Target Customer/ });
+    await within(screen.getByLabelText("Destination customer")).findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-2" },
     });
