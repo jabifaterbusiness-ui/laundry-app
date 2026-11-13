@@ -22,7 +22,7 @@ vi.mock("../../src/modules/whatsapp/whatsapp-token-crypto.js", () => ({
   decryptWhatsAppAccessToken: vi.fn(() => "decrypted-test-token"),
 }));
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
-  normalizeWhatsAppRecipient: (value: string) => value.replace(/\\D/g, ""),
+  normalizeWhatsAppRecipient: (value: string) => value.replace(/\D/g, ""),
 }));
 
 import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate, sendSupplierPurchaseOrderTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
@@ -243,7 +243,7 @@ describe("approved WhatsApp template pagination", () => {
 
     expect(result).toMatchObject({
       providerMessageId: "wamid-supplier-1",
-      phone: "+234 801 234 5678",
+      phone: "2348012345678",
       template: "purchase_order_notice",
       status: "SENT",
     });
