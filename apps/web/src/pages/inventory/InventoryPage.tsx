@@ -398,6 +398,8 @@ export function InventoryPage() {
   const [supplierPhone, setSupplierPhone] = useState("");
   const [supplierEmail, setSupplierEmail] = useState("");
   const [poSupplierId, setPoSupplierId] = useState("");
+  const [poNotificationChannel, setPoNotificationChannel] = useState<"EMAIL" | "WHATSAPP">("EMAIL");
+  const [procurementNotice, setProcurementNotice] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState("");
   const [poLines, setPoLines] = useState<Array<{ inventoryItemId: string; quantityOrdered: string; unitCost: string }>>([
     { inventoryItemId: "", quantityOrdered: "1", unitCost: "0" },
@@ -426,10 +428,10 @@ export function InventoryPage() {
   });
   const purchaseOrderMutation = useMutation({
     mutationFn: () => createInventoryPurchaseOrder({
-      supplierId: poSupplierId, orderNumber: poNumber.trim(),
+      supplierId: poSupplierId, orderNumber: poNumber.trim(), notificationChannel: poNotificationChannel,
       lines: poLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityOrdered: Number(line.quantityOrdered), unitCost: Number(line.unitCost) })),
     }, { accessToken }, activeBranchId),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setProcurementError(null); },
+    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setProcurementError(null); setProcurementNotice(result.notification?.status === "SENT" ? `Purchase order sent to supplier by ${result.notification.channel}.` : `Purchase order created, but supplier notification failed: ${result.notification?.error ?? "No delivery confirmation was returned."}`); },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to create purchase order."),
   });
   const receiveMutation = useMutation({
@@ -1391,6 +1393,7 @@ export function InventoryPage() {
           <div><h2>Suppliers &amp; Procurement</h2><p>Raise branch purchase orders and record full or partial deliveries directly into stock.</p></div>
           <span className="inventory-procurement-count">{purchaseOrders.length} recent orders</span>
         </div>
+        {procurementNotice ? <p role="status" className="inventory-procurement-notice">{procurementNotice}</p> : null}
         <div className="inventory-procurement-grid">
           <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (supplierName.trim()) supplierMutation.mutate(); }}>
             <h3>Add supplier</h3>
@@ -1402,6 +1405,7 @@ export function InventoryPage() {
           <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
             <h3>Create purchase order</h3>
             <label>Supplier<select value={poSupplierId} onChange={(event) => setPoSupplierId(event.target.value)} required><option value="">Select supplier</option>{suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+            <label>Send purchase order via<select aria-label="Purchase order delivery channel" value={poNotificationChannel} onChange={(event) => setPoNotificationChannel(event.target.value as "EMAIL" | "WHATSAPP")}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option></select></label>
             <label>Order number<input value={poNumber} onChange={(event) => setPoNumber(event.target.value)} required maxLength={100} /></label>
             {poLines.map((line, index) => <div className="inventory-po-line" key={index}>
               <strong>Line {index + 1}</strong>
