@@ -249,9 +249,9 @@ export function OrdersPage() {
   }, [activeWorkspaceId]);
 
 
-  const orderListCustomerId = activeWorkspace?.mode === "view"
+  const orderListCustomerId = isOrderManagementRoute && activeWorkspace?.mode === "view"
     ? activeWorkspace.customer.id
-    : customerId;
+    : isOrderManagementRoute ? customerId : "";
 
   const ordersQuery = useQuery({
     queryKey: [
