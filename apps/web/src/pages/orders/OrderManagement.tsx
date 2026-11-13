@@ -1309,7 +1309,7 @@ function OrderManagementContent({
                 Destination customer
                 <select aria-label="Invoice destination customer" value={invoiceTransferCustomerId} onChange={(event) => setInvoiceTransferCustomerId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 6 }}>
                   <option value="">Select a customer</option>
-                  {(invoiceTransferCustomersQuery.data?.data ?? []).filter((entry) => entry.lifecycleStatus !== "MERGED" && entry.ownerBranchId === activeBranchId && entry.id !== currentCustomer.id).map((entry) => (
+                  {(invoiceTransferCustomersQuery.data?.data ?? []).filter((entry) => entry.lifecycleStatus !== "MERGED" && entry.id !== currentCustomer.id).map((entry) => (
                     <option key={entry.id} value={entry.id}>{entry.name}{entry.phone ? " — " + entry.phone : ""}{entry.email ? " · " + entry.email : ""}</option>
                   ))}
                 </select>
