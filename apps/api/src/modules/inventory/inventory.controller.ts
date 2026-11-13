@@ -434,7 +434,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
         variables: [
           order.supplier.contactName || order.supplier.name,
           order.orderNumber,
-          lines.join("; "),
+          lines.join("; ") + (order.expectedAt ? "; Expected delivery: " + new Date(order.expectedAt).toLocaleDateString("en-NG") : "") + (order.notes ? "; Notes: " + order.notes : ""),
           "₦" + total.toLocaleString("en-NG"),
         ],
         consentConfirmed: input.whatsappConsentConfirmed === true,
