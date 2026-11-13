@@ -62,6 +62,7 @@ export function InvoicesPage() {
   const canViewPayments = hasPermission(user, "payments.view");
 
   const [page, setPage] = useState(1);
+  const [invoiceListExpanded, setInvoiceListExpanded] = useState(true);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
@@ -596,7 +597,7 @@ export function InvoicesPage() {
         </select>
       </div>
 
-      <details className="invoice-list-disclosure" open>
+      <details className="invoice-list-disclosure" open={invoiceListExpanded} onToggle={(event) => setInvoiceListExpanded(event.currentTarget.open)}>
         <summary>Invoice list ({pagination?.total ?? invoices.length})</summary>
 
       {invoicesQuery.isLoading && <p>Loading invoices...</p>}
