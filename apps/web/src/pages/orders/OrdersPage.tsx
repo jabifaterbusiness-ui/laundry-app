@@ -222,15 +222,19 @@ export function OrdersPage() {
 
   useEffect(() => {
     if (searchParams.get("addCustomer") !== "1") return;
+    if (location.pathname !== "/order-management") {
+      navigate(`/order-management${location.search}`, { replace: true });
+      return;
+    }
     if (!hasPermission(user, "customers.create")) {
-      navigate("/orders", { replace: true });
+      navigate("/order-management", { replace: true });
       return;
     }
     setInitialCustomerPhone(searchParams.get("customerPhone") ?? "");
     setCustomerPickerOpen(false);
     setNewCustomerOpen(true);
-    navigate("/orders", { replace: true });
-  }, [searchParams, user, navigate]);
+    navigate("/order-management", { replace: true });
+  }, [searchParams, location.pathname, location.search, user, navigate]);
   const [formError, setFormError] = useState<string | null>(null);
   const [editReason, setEditReason] = useState("");
   const [editConfirmed, setEditConfirmed] = useState(false);
