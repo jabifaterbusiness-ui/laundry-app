@@ -57,8 +57,9 @@ function fieldLabel(code: string) {
     case "TO":
     case "SO":
       return "Order ID";
-    case "TC":
     case "MC":
+      return "Source customer";
+    case "TC":
     case "SC":
       return "Customer ID";
     case "VO":
@@ -160,7 +161,10 @@ export function QuickOperationLauncher({
   const [recordId, setRecordId] = useState(initialRecordId);
   const [customerId, setCustomerId] = useState("");
   const [targetCustomerSearch, setTargetCustomerSearch] = useState("");
-  const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string; ownerBranchId: string | null }>>([]);
+  const [sourceCustomerSearch, setSourceCustomerSearch] = useState("");
+  const [sourceCustomers, setSourceCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
+  const [sourceCustomersLoading, setSourceCustomersLoading] = useState(false);
+  const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
   const [targetCustomersLoading, setTargetCustomersLoading] = useState(false);
   const [targetCustomersError, setTargetCustomersError] = useState<string | null>(null);
   const [sourceOrderCustomerId, setSourceOrderCustomerId] = useState<string | null>(null);
@@ -183,6 +187,9 @@ export function QuickOperationLauncher({
     setRecordId(initialRecordId);
     setCustomerId("");
     setTargetCustomerSearch("");
+    setSourceCustomerSearch("");
+    setSourceCustomers([]);
+    setSourceCustomersLoading(false);
     setTargetCustomers([]);
     setTargetCustomersError(null);
     setSourceOrderCustomerId(null);
@@ -222,8 +229,8 @@ export function QuickOperationLauncher({
         if (!active) return;
         const sourceCustomerId = operation.code === "MC" ? recordId : sourceOrderCustomerId;
         setTargetCustomers(response.data
-          .filter((customer) => customer.lifecycleStatus !== "MERGED" && (operation.code !== "MC" || customer.ownerBranchId === activeBranchId) && customer.id !== sourceCustomerId)
-          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, ownerBranchId: customer.ownerBranchId ?? null })));
+          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.ownerBranchId === activeBranchId && customer.id !== sourceCustomerId)
+          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, email: customer.email ?? null })));
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -235,6 +242,28 @@ export function QuickOperationLauncher({
 
     return () => { active = false; };
   }, [operation?.code, accessToken, activeBranchId, targetCustomerSearch, recordId, sourceOrderCustomerId]);
+
+  useEffect(() => {
+    if (!operation || operation.code !== "MC" || !accessToken || !activeBranchId) {
+      setSourceCustomers([]);
+      setSourceCustomersLoading(false);
+      return;
+    }
+    let active = true;
+    setSourceCustomersLoading(true);
+    listCustomers({ page: 1, pageSize: 100, search: sourceCustomerSearch.trim() || undefined, status: "all" }, { accessToken })
+      .then((response) => {
+        if (!active) return;
+        setSourceCustomers(response.data
+          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.ownerBranchId === activeBranchId)
+          .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, email: customer.email ?? null })));
+      })
+      .catch((error: unknown) => {
+        if (active) setTargetCustomersError(error instanceof Error ? error.message : "Unable to search source customers.");
+      })
+      .finally(() => { if (active) setSourceCustomersLoading(false); });
+    return () => { active = false; };
+  }, [operation?.code, accessToken, activeBranchId, sourceCustomerSearch]);
 
   useEffect(() => {
     if (operation?.code !== "TO" || !recordId.trim() || !accessToken || !activeBranchId) {
@@ -287,7 +316,7 @@ export function QuickOperationLauncher({
 
       case "TO":
         if (!customerId.trim()) {
-          setError("Target Customer ID is required.");
+          setError("Select a destination customer.");
           return null;
         }
 
@@ -299,7 +328,7 @@ export function QuickOperationLauncher({
       case "TC":
       case "MC":
         if (!customerId.trim()) {
-          setError("Target Customer ID is required.");
+          setError("Select a destination customer.");
           return null;
         }
 
@@ -691,7 +720,7 @@ export function QuickOperationLauncher({
     }
   }
 
-  const showRecordId = activeOperation.code !== "SOS" && activeOperation.code !== "MCB" && activeOperation.code !== "MLB";
+  const showRecordId = activeOperation.code !== "SOS" && activeOperation.code !== "MCB" && activeOperation.code !== "MLB" && activeOperation.code !== "MC";
 
   return (
     <div
@@ -836,6 +865,19 @@ export function QuickOperationLauncher({
                 </div>
               ) : null}
 
+              {activeOperation.code === "MC" ? (
+                <div style={{ marginTop: 14 }}>
+                  <label style={labelStyle}>Find source customer</label>
+                  <input aria-label="Find source customer" value={sourceCustomerSearch} onChange={(event) => { setSourceCustomerSearch(event.target.value); setRecordId(""); }} placeholder="Search by name, phone, email or order number" disabled={isSubmitting} style={inputStyle} />
+                  <label style={{ ...labelStyle, marginTop: 12 }}>Customer to merge from</label>
+                  <select aria-label="Source customer" value={recordId} onChange={(event) => setRecordId(event.target.value)} disabled={isSubmitting || sourceCustomersLoading} style={inputStyle}>
+                    <option value="">Select source customer</option>
+                    {sourceCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}</option>)}
+                  </select>
+                  {sourceCustomersLoading ? <p role="status">Searching source customers…</p> : null}
+                </div>
+              ) : null}
+
               {activeOperation.code === "TO" || activeOperation.code === "MC" ? (
                 <div style={{ marginTop: 14 }}>
                   <label style={labelStyle}>Find destination customer</label>
@@ -843,13 +885,13 @@ export function QuickOperationLauncher({
                     aria-label="Find destination customer"
                     value={targetCustomerSearch}
                     onChange={(event) => setTargetCustomerSearch(event.target.value)}
-                    placeholder="Search by customer name, phone or email"
+                    placeholder="Search by name, phone, email or order number"
                     disabled={isSubmitting}
                     style={inputStyle}
                   />
-                  <label style={{ ...labelStyle, marginTop: 12 }}>Target Customer</label>
+                  <label style={{ ...labelStyle, marginTop: 12 }}>Destination customer</label>
                   <select
-                    aria-label="Target Customer ID"
+                    aria-label="Destination customer"
                     value={customerId}
                     onChange={(event) => setCustomerId(event.target.value)}
                     disabled={isSubmitting || targetCustomersLoading}
@@ -858,7 +900,7 @@ export function QuickOperationLauncher({
                     <option value="">Select a customer in this branch</option>
                     {targetCustomers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
-                        {customer.name} — {customer.phone}
+                        {customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}
                       </option>
                     ))}
                   </select>
