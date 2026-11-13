@@ -1864,7 +1864,7 @@ export function OrdersPage() {
                 new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
                 returnToCustomerWorkstation;
               markOrderFormDirty(false);
-              updateWorkspace(activeWorkspace.id, { mode: "view", isDirty: false });
+              updateWorkspace(activeWorkspace.id, { mode: "view", activeOrder: null, isDirty: false });
               setFormOpen(false);
               if (shouldReturnToCustomerWorkstation) {
                 workspaceReturnToRef.current = null;
@@ -1872,6 +1872,7 @@ export function OrdersPage() {
                 navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
                 return;
               }
+              navigate("/order-management", { replace: true });
             }}
             onSwitchCustomer={() => {
               setSwitchingCustomer(true);
