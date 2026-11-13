@@ -618,7 +618,7 @@ export function InventoryPage() {
         <aside className="inventory-sidebar" aria-label="Inventory navigation">
           <h2>Inventory</h2>
           <p>Jump to a task</p>
-          <nav>
+          <nav aria-label="Inventory sections">
             <a href="#inventory-items">Inventory Items</a>
             <a href="#inventory-current-stock">Current Stock</a>
             <a href="#inventory-stock-movement">Receive / Issue Stock</a>
