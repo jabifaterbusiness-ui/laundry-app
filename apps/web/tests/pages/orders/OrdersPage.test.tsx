@@ -1218,3 +1218,31 @@ describe("OrdersPage customer-specific discounts", () => {
     });
   });
 });
+
+describe("Orders and Order Management section separation", () => {
+  it("shows only the order search and order folders in the Orders section", async () => {
+    renderPage(["/orders"]);
+    expect(screen.getByRole("heading", { name: "Orders" })).toBeInTheDocument();
+    expect(await screen.findByText("No orders found.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search orders")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Order Details" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the last customer workspace in Order Management instead of returning to Orders", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    renderPage([`/order-management?orderId=${orderA.id}`]);
+
+    expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+      expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
+    });
+  });
+});
