@@ -30,7 +30,7 @@ import {
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
-import { loadOrderWorkspaceState, saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
+import { clearOrderWorkspaceState, loadOrderWorkspaceState, saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { OrderManagement } from "./OrderManagement.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
@@ -123,6 +123,7 @@ export function OrdersPage() {
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
   const newOrderFromUrl = searchParams.get("newOrder") === "1";
 
+  const workspaceHydratedRef = useRef(false);
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
 
@@ -161,7 +162,8 @@ export function OrdersPage() {
   ]);
 
   useEffect(() => {
-    if (!user?.businessId || !activeBranchId) {
+    workspaceHydratedRef.current = false;
+    if (!user?.businessId || !user?.id || !activeBranchId) {
       return;
     }
 
@@ -177,6 +179,7 @@ export function OrdersPage() {
         saved.activeWorkspaceId,
       );
     }
+    workspaceHydratedRef.current = true;
   }, [
     user?.businessId,
     user?.id,
@@ -188,11 +191,15 @@ export function OrdersPage() {
   // refresh restores the last attended account for this user and branch.
   // The empty initial store is deliberately not written before hydration.
   useEffect(() => {
-    if (!user?.businessId || !user?.id || !activeBranchId || workspaces.length === 0) {
+    if (!workspaceHydratedRef.current || !user?.businessId || !user?.id || !activeBranchId) {
       return;
     }
 
     try {
+      if (workspaces.length === 0) {
+        clearOrderWorkspaceState(user.businessId, user.id, activeBranchId);
+        return;
+      }
       saveOrderWorkspaceState(
         user.businessId,
         user.id,
