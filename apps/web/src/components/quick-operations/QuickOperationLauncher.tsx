@@ -164,6 +164,7 @@ export function QuickOperationLauncher({
   const [sourceCustomerSearch, setSourceCustomerSearch] = useState("");
   const [sourceCustomers, setSourceCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
   const [sourceCustomersLoading, setSourceCustomersLoading] = useState(false);
+  const [sourceCustomersError, setSourceCustomersError] = useState<string | null>(null);
   const [targetCustomers, setTargetCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string | null }>>([]);
   const [targetCustomersLoading, setTargetCustomersLoading] = useState(false);
   const [targetCustomersError, setTargetCustomersError] = useState<string | null>(null);
@@ -190,6 +191,7 @@ export function QuickOperationLauncher({
     setSourceCustomerSearch("");
     setSourceCustomers([]);
     setSourceCustomersLoading(false);
+    setSourceCustomersError(null);
     setTargetCustomers([]);
     setTargetCustomersError(null);
     setSourceOrderCustomerId(null);
@@ -229,7 +231,7 @@ export function QuickOperationLauncher({
         if (!active) return;
         const sourceCustomerId = operation.code === "MC" ? recordId : sourceOrderCustomerId;
         setTargetCustomers(response.data
-          .filter((customer) => customer.lifecycleStatus !== "MERGED" && customer.ownerBranchId === activeBranchId && customer.id !== sourceCustomerId)
+          .filter((customer) => customer.lifecycleStatus !== "MERGED" && (operation.code !== "MC" || customer.ownerBranchId === activeBranchId) && customer.id !== sourceCustomerId)
           .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, email: customer.email ?? null })));
       })
       .catch((error: unknown) => {
@@ -259,7 +261,7 @@ export function QuickOperationLauncher({
           .map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, email: customer.email ?? null })));
       })
       .catch((error: unknown) => {
-        if (active) setTargetCustomersError(error instanceof Error ? error.message : "Unable to search source customers.");
+        if (active) setSourceCustomersError(error instanceof Error ? error.message : "Unable to search source customers.");
       })
       .finally(() => { if (active) setSourceCustomersLoading(false); });
     return () => { active = false; };
@@ -875,6 +877,7 @@ export function QuickOperationLauncher({
                     {sourceCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}</option>)}
                   </select>
                   {sourceCustomersLoading ? <p role="status">Searching source customers…</p> : null}
+                  {sourceCustomersError ? <p role="alert">{sourceCustomersError}</p> : null}
                 </div>
               ) : null}
 
