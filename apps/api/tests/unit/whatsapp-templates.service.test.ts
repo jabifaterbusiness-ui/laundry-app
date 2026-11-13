@@ -25,7 +25,7 @@ vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
   normalizeWhatsAppRecipient: (value: string) => value.replace(/\\D/g, ""),
 }));
 
-import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
+import { listApprovedWhatsAppTemplates, sendAutomatedWhatsAppTemplate, sendSupplierPurchaseOrderTemplate, uploadWhatsAppTemplateImage } from "../../src/modules/whatsapp/whatsapp-templates.service.js";
 
 function page(data: unknown[], next?: string) {
   return new Response(JSON.stringify({ data, ...(next ? { paging: { next } } : {}) }), {
@@ -203,4 +203,59 @@ describe("approved WhatsApp template pagination", () => {
       .rejects.toThrow("more than 1,000 templates");
     expect(mocks.fetch).toHaveBeenCalledTimes(10);
   });
+ 
+  it("requires explicit supplier WhatsApp consent before making any provider request", async () => {
+    await expect(sendSupplierPurchaseOrderTemplate({
+      businessId: "business-1",
+      phone: "+234 801 234 5678",
+      templateName: "purchase_order_notice",
+      language: "en",
+      variables: ["PO-100", "Laundry Supplies", "5", "₦25,000"],
+      consentConfirmed: false,
+    })).rejects.toThrow("supplier has agreed to receive purchase orders by WhatsApp");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends a supplier purchase order only through an approved four-variable UTILITY template", async () => {
+    const approvedPage = () => page([
+      {
+        id: "supplier-template",
+        name: "purchase_order_notice",
+        language: "en",
+        status: "APPROVED",
+        category: "UTILITY",
+        components: [{ type: "BODY", text: "PO {{1}} for {{2}}: {{3}} units, total {{4}}" }],
+      },
+    ]);
+    mocks.fetch
+      .mockImplementationOnce(async () => approvedPage())
+      .mockImplementationOnce(async () => approvedPage())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [{ id: "wamid-supplier-1" }] }), { status: 200 }));
+
+    const result = await sendSupplierPurchaseOrderTemplate({
+      businessId: "business-1",
+      phone: "+234 801 234 5678",
+      templateName: "purchase_order_notice",
+      language: "en",
+      variables: ["PO-100", "Laundry Supplies", "5", "₦25,000"],
+      consentConfirmed: true,
+    });
+
+    expect(result).toMatchObject({
+      providerMessageId: "wamid-supplier-1",
+      phone: "2348012345678",
+      template: "purchase_order_notice",
+      status: "SENT",
+    });
+    const request = JSON.parse(String(mocks.fetch.mock.calls[2]?.[1]?.body));
+    expect(request.to).toBe("2348012345678");
+    expect(request.template.name).toBe("purchase_order_notice");
+    expect(request.template.components[0].parameters).toEqual([
+      { type: "text", text: "PO-100" },
+      { type: "text", text: "Laundry Supplies" },
+      { type: "text", text: "5" },
+      { type: "text", text: "₦25,000" },
+    ]);
+  });
+
 });
