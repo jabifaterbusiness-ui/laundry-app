@@ -12,6 +12,7 @@ const {
   getCustomerMock,
   listCustomersMock,
   getOrderMock,
+  listAllOrdersMock,
   exportBackupMock,
   listCloudBackupConnectionsMock,
   getCloudBackupSettingsMock,
@@ -28,6 +29,7 @@ const {
   getCustomerMock: vi.fn(),
   listCustomersMock: vi.fn(),
   getOrderMock: vi.fn(),
+  listAllOrdersMock: vi.fn(),
   exportBackupMock: vi.fn(),
   listCloudBackupConnectionsMock: vi.fn(),
   getCloudBackupSettingsMock: vi.fn(),
@@ -69,6 +71,7 @@ vi.mock("../../../src/lib/customers-api.js", () => ({
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
   getOrder: getOrderMock,
+  listAllOrders: listAllOrdersMock,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -310,6 +313,8 @@ describe("QuickOperationLauncher", () => {
     });
 
     getOrderMock.mockReset();
+    listAllOrdersMock.mockReset();
+    listAllOrdersMock.mockResolvedValue([{ id: "order-1", orderNumber: "00001", status: "RECEIVED" }]);
     exportBackupMock.mockReset();
     exportBackupMock.mockResolvedValue(new Blob(["backup"]));
     createManualLocalBackupMock.mockReset();
@@ -500,12 +505,17 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Order ID"), {
+    await screen.findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
+      target: { value: "customer-1" },
+    });
+    await screen.findByRole("option", { name: /#00001/ });
+    fireEvent.change(screen.getByLabelText("Source order"), {
       target: { value: "order-1" },
     });
-    await screen.findByRole("option", { name: /Source Customer/ });
+    await screen.findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Destination customer"), {
-      target: { value: "customer-1" },
+      target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Safely stopping the current workflow" },
@@ -585,7 +595,7 @@ describe("QuickOperationLauncher", () => {
           code: "TO",
           input: {
             orderId: "order-1",
-            customerId: "customer-1",
+            customerId: "customer-2",
           },
           confirmed: true,
           reason: "Invoice was entered on the wrong customer account",
