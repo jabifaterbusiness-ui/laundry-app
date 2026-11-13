@@ -1868,7 +1868,6 @@ export function OrdersPage() {
                 navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
                 return;
               }
-              navigate(location.pathname === "/order-management" ? "/order-management" : "/orders");
             }}
             onSwitchCustomer={() => {
               setSwitchingCustomer(true);
