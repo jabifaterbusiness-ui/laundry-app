@@ -1911,8 +1911,22 @@ export function OrdersPage() {
         </>
       ) : (
         <section aria-label="Order Management">
-          <p>No customer or order is currently open in Order Management.</p>
-          {canCreateOrder ? <button type="button" onClick={openCreate}>New Order</button> : null}
+          {orderIdFromUrl && orderFromUrlQuery.isLoading ? (
+            <p role="status">Loading the selected order and customer…</p>
+          ) : orderIdFromUrl && orderFromUrlQuery.isError ? (
+            <p role="alert">Unable to load the selected order. Please return to Orders and try again.</p>
+          ) : customerIdFromUrl && customerFromUrlQuery.isLoading ? (
+            <p role="status">Loading the selected customer…</p>
+          ) : customerIdFromUrl && customerFromUrlQuery.isError ? (
+            <p role="alert">Unable to load the selected customer. Please try again.</p>
+          ) : orderIdFromUrl || customerIdFromUrl ? (
+            <p role="status">Opening the selected customer workspace…</p>
+          ) : (
+            <>
+              <p>No customer or order is currently open in Order Management.</p>
+              {canCreateOrder ? <button type="button" onClick={openCreate}>New Order</button> : null}
+            </>
+          )}
         </section>
       )) : (
         <>
