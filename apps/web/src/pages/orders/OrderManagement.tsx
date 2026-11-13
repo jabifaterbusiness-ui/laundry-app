@@ -806,6 +806,46 @@ function OrderManagementContent({
     companyReceiptQuery.data,
   ]);
 
+  // A customer can have no existing orders yet. Keep the customer workspace
+  // usable in that state instead of rendering order-only details with a null order.
+  if (mode === "view" && !order) {
+    return (
+      <section
+        aria-label="Order Management"
+        style={{
+          background: "#fff",
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          padding: 20,
+          marginTop: 20,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 13 }}>ORDER MANAGEMENT</p>
+        <h2 style={{ margin: "4px 0 8px" }}>No order selected</h2>
+        <strong>{currentCustomer.name}</strong>
+        <div>
+          {currentCustomer.phone || "No phone"}
+          {currentCustomer.email ? ` · ${currentCustomer.email}` : ""}
+        </div>
+        <p style={{ marginTop: 16 }}>
+          This customer does not have an order open. Create a new order or choose another customer.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button type="button" disabled={!hasPermission(user, "orders.create")} onClick={() => onNewOrder(currentCustomer)}>
+            New Order
+          </button>
+          <button type="button" disabled={!hasPermission(user, "customers.view")} onClick={onSwitchCustomer}>
+            Switch Customer
+          </button>
+          <button type="button" disabled={!hasPermission(user, "customers.update")} onClick={() => openQuickOperation("MC", currentCustomer.id)}>
+            Merge Customer (MC)
+          </button>
+          <button type="button" onClick={requestBack}>← Back</button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label="Order Management"
