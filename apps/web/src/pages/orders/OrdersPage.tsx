@@ -1864,7 +1864,7 @@ export function OrdersPage() {
                 new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
                 returnToCustomerWorkstation;
               markOrderFormDirty(false);
-              updateWorkspace(activeWorkspace.id, { mode: "view", activeOrder: null, isDirty: false });
+              updateWorkspace(activeWorkspace.id, { mode: "view", isDirty: false });
               setFormOpen(false);
               if (shouldReturnToCustomerWorkstation) {
                 workspaceReturnToRef.current = null;
