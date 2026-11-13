@@ -15,6 +15,7 @@ import {
   type InventoryUnit,
   createInventorySupplier,
   listInventorySuppliers,
+  listInventorySupplierNotificationTemplates,
   createInventoryPurchaseOrder,
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
@@ -399,6 +400,9 @@ export function InventoryPage() {
   const [supplierEmail, setSupplierEmail] = useState("");
   const [poSupplierId, setPoSupplierId] = useState("");
   const [poNotificationChannel, setPoNotificationChannel] = useState<"EMAIL" | "WHATSAPP">("EMAIL");
+  const [poNotificationTemplateName, setPoNotificationTemplateName] = useState("");
+  const [poNotificationTemplateLanguage, setPoNotificationTemplateLanguage] = useState("");
+  const [poWhatsappConsentConfirmed, setPoWhatsappConsentConfirmed] = useState(false);
   const [procurementNotice, setProcurementNotice] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState("");
   const [poLines, setPoLines] = useState<Array<{ inventoryItemId: string; quantityOrdered: string; unitCost: string }>>([
@@ -416,6 +420,11 @@ export function InventoryPage() {
     queryKey: ["inventory", "suppliers"],
     queryFn: () => listInventorySuppliers({ page: 1, pageSize: 100 }, { accessToken }),
   });
+  const supplierNotificationTemplatesQuery = useQuery({
+    queryKey: ["inventory", "supplier-notification-templates", activeBranchId],
+    queryFn: () => listInventorySupplierNotificationTemplates({ accessToken }),
+    enabled: Boolean(accessToken && activeBranchId && poNotificationChannel === "WHATSAPP"),
+  });
   const purchaseOrdersQuery = useQuery({
     queryKey: ["inventory", "purchase-orders", activeBranchId],
     enabled: Boolean(activeBranchId),
@@ -429,9 +438,10 @@ export function InventoryPage() {
   const purchaseOrderMutation = useMutation({
     mutationFn: () => createInventoryPurchaseOrder({
       supplierId: poSupplierId, orderNumber: poNumber.trim(), notificationChannel: poNotificationChannel,
+      ...(poNotificationChannel === "WHATSAPP" ? { notificationTemplateName: poNotificationTemplateName, notificationTemplateLanguage: poNotificationTemplateLanguage, whatsappConsentConfirmed: poWhatsappConsentConfirmed } : {}),
       lines: poLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityOrdered: Number(line.quantityOrdered), unitCost: Number(line.unitCost) })),
     }, { accessToken }, activeBranchId),
-    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setProcurementError(null); setProcurementNotice(result.notification?.status === "SENT" ? `Purchase order sent to supplier by ${result.notification.channel}.` : `Purchase order created, but supplier notification failed: ${result.notification?.error ?? "No delivery confirmation was returned."}`); },
+    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setPoNotificationTemplateName(""); setPoNotificationTemplateLanguage(""); setPoWhatsappConsentConfirmed(false); setProcurementError(null); setProcurementNotice(result.notification?.status === "SENT" ? `Purchase order sent to supplier by ${result.notification.channel}.` : `Purchase order created, but supplier notification failed: ${result.notification?.error ?? "No delivery confirmation was returned."}`); },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to create purchase order."),
   });
   const receiveMutation = useMutation({
@@ -1404,10 +1414,27 @@ export function InventoryPage() {
             <label>Email<input type="email" value={supplierEmail} onChange={(event) => setSupplierEmail(event.target.value)} maxLength={254} /></label>
             <button type="submit" disabled={supplierMutation.isPending}>{supplierMutation.isPending ? "Saving..." : "Save supplier"}</button>
           </form>
-          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (poNotificationChannel === "WHATSAPP" && (!poNotificationTemplateName || !poNotificationTemplateLanguage || !poWhatsappConsentConfirmed)) { setProcurementError("Select an approved WhatsApp Utility template and confirm supplier consent."); return; } if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
             <h3>Create purchase order</h3>
             <label>Supplier<select value={poSupplierId} onChange={(event) => setPoSupplierId(event.target.value)} required><option value="">Select supplier</option>{suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
             <label>Send purchase order via<select aria-label="Purchase order delivery channel" value={poNotificationChannel} onChange={(event) => setPoNotificationChannel(event.target.value as "EMAIL" | "WHATSAPP")}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option></select></label>
+            {poNotificationChannel === "WHATSAPP" ? (
+              <>
+                <label>Approved WhatsApp purchase-order template
+                  <select aria-label="Approved WhatsApp purchase-order template" value={poNotificationTemplateName && poNotificationTemplateLanguage ? poNotificationTemplateName + "::" + poNotificationTemplateLanguage : ""} onChange={(event) => { const [name, language] = event.target.value.split("::"); setPoNotificationTemplateName(name ?? ""); setPoNotificationTemplateLanguage(language ?? ""); }} required>
+                    <option value="">Select an approved Utility template</option>
+                    {(supplierNotificationTemplatesQuery.data?.templates ?? []).filter((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount === 4).map((template) => <option key={template.id} value={template.name + "::" + template.language}>{template.name} ({template.language})</option>)}
+                  </select>
+                </label>
+                {supplierNotificationTemplatesQuery.isLoading ? <p role="status">Loading approved WhatsApp templates…</p> : null}
+                {supplierNotificationTemplatesQuery.isError ? <p role="alert">Unable to load approved WhatsApp templates. Check the business WhatsApp connection.</p> : null}
+                {!supplierNotificationTemplatesQuery.isLoading && !supplierNotificationTemplatesQuery.isError && !(supplierNotificationTemplatesQuery.data?.templates ?? []).some((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount === 4) ? <p role="alert">Create an approved UTILITY template with four body placeholders (supplier, order number, item list and total) before sending purchase orders by WhatsApp.</p> : null}
+                <label style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={poWhatsappConsentConfirmed} onChange={(event) => setPoWhatsappConsentConfirmed(event.target.checked)} />
+                  Supplier has agreed to receive purchase orders by WhatsApp.
+                </label>
+              </>
+            ) : null}
             <label>Order number<input value={poNumber} onChange={(event) => setPoNumber(event.target.value)} required maxLength={100} /></label>
             {poLines.map((line, index) => <div className="inventory-po-line" key={index}>
               <strong>Line {index + 1}</strong>
