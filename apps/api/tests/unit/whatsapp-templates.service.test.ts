@@ -243,7 +243,7 @@ describe("approved WhatsApp template pagination", () => {
 
     expect(result).toMatchObject({
       providerMessageId: "wamid-supplier-1",
-      phone: "2348012345678",
+      phone: "+234 801 234 5678",
       template: "purchase_order_notice",
       status: "SENT",
     });
