@@ -270,9 +270,14 @@ describe("InventoryPage", () => {
 
     renderPage();
     const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
+    // Supplier and item queries resolve independently from the form render.
+    // Wait for their options before selecting; changing a native select before
+    // its option exists silently leaves its value empty and blocks submission.
+    await within(form).findByRole("option", { name: "Trusted Supplier" });
+    await within(form).findByRole("option", { name: "Detergent" });
     fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
     fireEvent.change(within(form).getByLabelText("Purchase order delivery channel"), { target: { value: "WHATSAPP" } });
-    await screen.findByRole("option", { name: "purchase_order_notice (en)" });
+    await within(form).findByRole("option", { name: "purchase_order_notice (en)" });
     fireEvent.change(within(form).getByLabelText("Approved WhatsApp purchase-order template"), { target: { value: "purchase_order_notice::en" } });
     fireEvent.click(within(form).getByLabelText("Supplier has agreed to receive purchase orders by WhatsApp."));
     fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-1001" } });
