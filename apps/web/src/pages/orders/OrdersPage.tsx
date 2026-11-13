@@ -74,6 +74,7 @@ export function OrdersPage() {
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const navigate = useNavigate();
   const location = useLocation();
+  const isOrderManagementRoute = location.pathname === "/order-management";
   const [searchParams] = useSearchParams();
 
   const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
@@ -275,7 +276,7 @@ export function OrdersPage() {
         { accessToken },
         activeBranchId,
       ),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && !isOrderManagementRoute),
   });
 
   const customersQuery = useQuery({
@@ -1249,7 +1250,7 @@ export function OrdersPage() {
     queryKey: ["orders", "all-orders", activeBranchId],
     queryFn: () =>
       listAllOrders({}, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && !isOrderManagementRoute),
   });
 
   const allOrders = allOrdersQuery.data ?? [];
@@ -1834,8 +1835,8 @@ export function OrdersPage() {
 
   return (
     <main>
-      <h1>{activeWorkspace ? `Order Management · ${activeWorkspace.customer.name}` : location.pathname === "/order-management" ? "Order Management" : "Orders"}</h1>
-      {activeWorkspace && (activeWorkspace.mode !== "view" || activeWorkspace.activeOrder) ? (
+      <h1>{isOrderManagementRoute ? (activeWorkspace ? `Order Management · ${activeWorkspace.customer.name}` : "Order Management") : "Orders"}</h1>
+      {isOrderManagementRoute ? (activeWorkspace && (activeWorkspace.mode !== "view" || activeWorkspace.activeOrder) ? (
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
@@ -1859,7 +1860,8 @@ export function OrdersPage() {
                 new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
                 returnToCustomerWorkstation;
               markOrderFormDirty(false);
-              closeWorkspace(activeWorkspace.id);
+              updateWorkspace(activeWorkspace.id, { mode: "view", isDirty: false });
+              setFormOpen(false);
               if (shouldReturnToCustomerWorkstation) {
                 workspaceReturnToRef.current = null;
                 setWorkspaceReturnTo(null);
@@ -1900,6 +1902,11 @@ export function OrdersPage() {
           )}
         </>
       ) : (
+        <section aria-label="Order Management">
+          <p>No customer or order is currently open in Order Management.</p>
+          {canCreateOrder ? <button type="button" onClick={openCreate}>New Order</button> : null}
+        </section>
+      )) : (
         <>
       <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
         Search orders
