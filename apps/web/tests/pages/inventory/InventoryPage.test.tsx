@@ -248,6 +248,43 @@ describe("InventoryPage", () => {
     expect(within(navigation).getByRole("link", { name: "Valuation & Performance" })).toHaveAttribute("href", "#inventory-reports");
   });
 
+  it("sends a purchase order through the selected supplier notification channel", async () => {
+    mockUserPermissions.push("inventory.manage");
+    mockListInventorySuppliers.mockResolvedValue({
+      suppliers: [{
+        id: "supplier-1", businessId: "business-1", name: "Trusted Supplier",
+        contactName: "Sales Desk", email: "sales@supplier.test", phone: "2348012345678",
+        address: null, taxId: null, notes: null, isActive: true,
+        createdAt: "", updatedAt: "",
+      }],
+      pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+    });
+    mockCreateInventoryPurchaseOrder.mockResolvedValue({
+      data: {},
+      notification: { channel: "WHATSAPP", status: "SENT", destination: "2348012345678", providerMessageId: "message-1" },
+    });
+
+    renderPage();
+    const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
+    fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
+    fireEvent.change(within(form).getByLabelText("Purchase order delivery channel"), { target: { value: "WHATSAPP" } });
+    fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-1001" } });
+    fireEvent.change(within(form).getByLabelText("Inventory item"), { target: { value: item.id } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 quantity"), { target: { value: "2" } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 unit cost"), { target: { value: "500" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Create purchase order" }));
+
+    await waitFor(() => {
+      expect(mockCreateInventoryPurchaseOrder).toHaveBeenCalledWith({
+        supplierId: "supplier-1",
+        orderNumber: "PO-1001",
+        notificationChannel: "WHATSAPP",
+        lines: [{ inventoryItemId: item.id, quantityOrdered: 2, unitCost: 500 }],
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+    expect(await screen.findByText("Purchase order sent to supplier by WHATSAPP.")).toBeInTheDocument();
+  });
+
   it("enforces the stocktake submit, approve and apply workflow in the UI", async () => {
     mockUserPermissions.push("inventory.approve");
     const lines = [{
