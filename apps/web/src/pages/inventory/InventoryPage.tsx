@@ -642,10 +642,10 @@ export function InventoryPage() {
             <a href="#inventory-movement-history">Movement History</a>
             <a href="#inventory-procurement">Suppliers &amp; Procurement</a>
             <a href="#inventory-transfers">Transfers &amp; Stocktaking</a>
-            {currentStocktake ? <a href="#inventory-stocktake-approval">Stocktake Approval</a> : null}
+            <a href="#inventory-stocktake-approval">Stocktake Approval &amp; Register</a>
             <a href="#inventory-reservations">Reservations &amp; Reorder</a>
             <a href="#inventory-reports">Valuation &amp; Performance</a>
-            <a href="#inventory-branch-comparison">Branch Comparison</a>
+            {userPermissions.includes("inventory.reports_all_branches") ? <a href="#inventory-branch-comparison">Branch Comparison</a> : null}
           </nav>
         </aside>
         <div className="inventory-main-content">
@@ -1493,7 +1493,7 @@ export function InventoryPage() {
             {stocktakeError && <p role="alert">{stocktakeError}</p>}
           </form>
         </div>
-        {currentStocktake && <section className="inventory-stocktake-review" id="inventory-stocktake-approval" aria-label="Stocktake approval workflow">
+        {currentStocktake && <section className="inventory-stocktake-review" id="inventory-selected-stocktake-review" aria-label="Stocktake approval workflow">
           <h3>Stocktake {currentStocktake.reference}</h3>
           <p>Status: <strong>{currentStocktake.status.replaceAll("_", " ")}</strong></p>
           <p>{currentStocktake.lines.map((line) => `${line.inventoryItem.name}: expected ${line.expectedQuantity}, counted ${line.countedQuantity}, variance ${line.variance}`).join(" · ")}</p>
@@ -1502,7 +1502,7 @@ export function InventoryPage() {
           {currentStocktake.status === "APPROVED" && <button type="button" disabled={stocktakeApplyMutation.isPending} onClick={() => stocktakeApplyMutation.mutate()}>Apply approved count</button>}
           {currentStocktake.status === "APPLIED" && <p role="status">Stock reconciliation applied successfully.</p>}
         </section>}
-        <h3>Stocktake register</h3>
+        <h3 id="inventory-stocktake-approval">Stocktake Approval &amp; Register</h3>
         {stocktakesQuery.isLoading ? <p>Loading stocktakes…</p> : stocktakesQuery.data?.stocktakes.length ? <div className="inventory-stocktake-register">
           {stocktakesQuery.data.stocktakes.map((stocktake) => <button type="button" key={stocktake.id} className="inventory-stocktake-register-row" onClick={() => setCurrentStocktake(stocktake)}>
             <span><strong>{stocktake.reference}</strong><small>{stocktake.lines.length} counted item(s)</small></span>
