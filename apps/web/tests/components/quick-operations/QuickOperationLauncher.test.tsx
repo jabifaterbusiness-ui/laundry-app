@@ -504,7 +504,7 @@ describe("QuickOperationLauncher", () => {
       target: { value: "order-1" },
     });
     await screen.findByRole("option", { name: /Source Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
@@ -570,7 +570,7 @@ describe("QuickOperationLauncher", () => {
       target: { value: "order-1" },
     });
     await screen.findByRole("option", { name: /Source Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-1" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
@@ -611,7 +611,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Customer ID"), {
       target: { value: "customer-1" },
     });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
@@ -645,13 +645,16 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Customer ID"), {
+    await screen.findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
     });
     await screen.findByRole("option", { name: /Target Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-2" },
     });
+    expect(screen.queryByLabelText("Customer ID")).not.toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText("Search by name, phone, email or order number")).toHaveLength(2);
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Customer account correction requested" },
     });
