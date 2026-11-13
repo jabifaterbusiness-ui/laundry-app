@@ -449,6 +449,16 @@ export async function createPurchaseOrder(req: Request, res: Response) {
       error: error instanceof Error ? error.message : "Supplier notification delivery failed",
     };
   }
+  await recordAuditEvent({
+    action: notification.status === "SENT" ? "inventory.purchase_order_notification_sent" : "inventory.purchase_order_notification_failed",
+    entityType: "InventoryPurchaseOrder",
+    entityId: order.id,
+    businessId,
+    branchId,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: { channel: notification.channel, status: notification.status, providerMessageId: notification.providerMessageId ?? null, error: notification.error ?? null },
+  });
   res.status(201).json({ data: order, notification });
 }
 
