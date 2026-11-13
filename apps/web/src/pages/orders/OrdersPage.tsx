@@ -2026,26 +2026,7 @@ export function OrdersPage() {
         </section>
       )}
 
-      {newOrderContent}
 
-      {orderFormWorkspaces.length > 0 && (
-        <OrderWorkspaceSwitcher
-          workspaces={orderFormWorkspaces}
-          activeWorkspaceId={activeOrderFormWorkspaceId}
-          onOpenCustomer={() => {
-            setCustomerSearch("");
-            setCustomerPickerOpen(true);
-          }}
-          onSwitch={(workspaceId) => {
-            switchWorkspace(workspaceId);
-            setCustomerPickerOpen(false);
-            setFormError(null);
-          }}
-          onClose={(workspaceId) => {
-            closeWorkspace(workspaceId);
-          }}
-        />
-      )}
 
 
 
@@ -2053,7 +2034,7 @@ export function OrdersPage() {
         </>
       )}
 
-      {customerPickerOpen && (
+      {isOrderManagementRoute && customerPickerOpen && (
         <section aria-labelledby="customer-picker-heading">
           <h2 id="customer-picker-heading">Find Customer</h2>
 
@@ -2127,7 +2108,7 @@ export function OrdersPage() {
       )}
 
       {customerCreateMessage ? <p role="status">{customerCreateMessage}</p> : null}
-      {newCustomerOpen ? (
+      {isOrderManagementRoute && newCustomerOpen ? (
         <CustomerFormDialog
           customer={null}
           initialPhone={initialCustomerPhone}
