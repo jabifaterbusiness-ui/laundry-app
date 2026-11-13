@@ -620,12 +620,14 @@ export function InventoryPage() {
           <p>Jump to a task</p>
           <nav aria-label="Inventory sections">
             <a href="#inventory-items">Inventory Items</a>
+            <a href="#inventory-item-form">New / Edit Inventory Item</a>
             <a href="#inventory-current-stock">Current Stock</a>
             <a href="#inventory-stock-movement">Receive / Issue Stock</a>
             <a href="#inventory-stock-adjustment">Adjust Stock</a>
             <a href="#inventory-movement-history">Movement History</a>
             <a href="#inventory-procurement">Suppliers &amp; Procurement</a>
             <a href="#inventory-transfers">Transfers &amp; Stocktaking</a>
+            <a href="#inventory-stocktake-approval">Stocktake Approval</a>
             <a href="#inventory-reservations">Reservations &amp; Reorder</a>
             <a href="#inventory-reports">Valuation &amp; Performance</a>
             <a href="#inventory-branch-comparison">Branch Comparison</a>
@@ -773,7 +775,7 @@ export function InventoryPage() {
       </section>
 
       {itemFormOpen && (
-        <section className="inventory-panel inventory-editor" aria-label="Inventory item form">
+        <section className="inventory-panel inventory-editor" id="inventory-item-form" aria-label="Inventory item form">
           <h2>
             {editingItem
               ? "Edit inventory item"
@@ -1459,7 +1461,7 @@ export function InventoryPage() {
             {stocktakeError && <p role="alert">{stocktakeError}</p>}
           </form>
         </div>
-        {currentStocktake && <section className="inventory-stocktake-review" aria-label="Stocktake approval workflow">
+        {currentStocktake && <section className="inventory-stocktake-review" id="inventory-stocktake-approval" aria-label="Stocktake approval workflow">
           <h3>Stocktake {currentStocktake.reference}</h3>
           <p>Status: <strong>{currentStocktake.status.replaceAll("_", " ")}</strong></p>
           <p>{currentStocktake.lines.map((line) => `${line.inventoryItem.name}: expected ${line.expectedQuantity}, counted ${line.countedQuantity}, variance ${line.variance}`).join(" · ")}</p>
