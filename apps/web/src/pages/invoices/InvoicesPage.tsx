@@ -167,12 +167,12 @@ export function InvoicesPage() {
   }, [invoiceIdFromUrl, selectedInvoiceId]);
 
   const customersQuery = useQuery({
-    queryKey: ["invoice-transfer-customers", customerSearch],
+    queryKey: ["invoice-transfer-customers", activeBranchId, customerSearch],
     queryFn: () =>
       listCustomers(
         {
           page: 1,
-          pageSize: 25,
+          pageSize: 100,
           search: customerSearch.trim() || undefined,
           status: "all",
         },
@@ -596,6 +596,9 @@ export function InvoicesPage() {
         </select>
       </div>
 
+      <details className="invoice-list-disclosure" open>
+        <summary>Invoice list ({pagination?.total ?? invoices.length})</summary>
+
       {invoicesQuery.isLoading && <p>Loading invoices...</p>}
 
       {invoicesQuery.isError && (
@@ -668,6 +671,8 @@ export function InvoicesPage() {
           </button>
         </div>
       )}
+
+      </details>
 
       {selectedInvoice && (
         <section aria-label="Invoice details">
@@ -1184,7 +1189,7 @@ export function InvoicesPage() {
                   onChange={(event) =>
                     setCustomerSearch(event.target.value)
                   }
-                  placeholder="Search by customer name or phone"
+                  placeholder="Search by customer name, phone, email or order number"
                   style={{ display: "block", width: "100%" }}
                 />
               </label>
@@ -1205,7 +1210,7 @@ export function InvoicesPage() {
                         key={customer.id}
                         value={customer.id}
                       >
-                        {customer.name} — {customer.phone}
+                        {customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}
                       </option>
                     ),
                   )}
