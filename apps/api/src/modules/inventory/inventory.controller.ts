@@ -439,7 +439,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
         ],
         consentConfirmed: input.whatsappConsentConfirmed === true,
       });
-      notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
+      notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.providerMessageId };
     }
   } catch (error) {
     notification = {
