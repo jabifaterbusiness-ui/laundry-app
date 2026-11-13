@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
-import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
+import { listApprovedWhatsAppTemplates, sendSupplierPurchaseOrderTemplate } from "../whatsapp/whatsapp-templates.service.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import {
   createInventoryItemSchema,
@@ -374,6 +374,12 @@ export async function listSuppliers(req: Request, res: Response) {
   }));
 }
 
+export async function listSupplierNotificationTemplates(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const templates = await listApprovedWhatsAppTemplates(businessId);
+  res.status(200).json({ templates });
+}
+
 export async function createPurchaseOrder(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
@@ -382,6 +388,9 @@ export async function createPurchaseOrder(req: Request, res: Response) {
     supplierId: input.supplierId,
     orderNumber: input.orderNumber,
     notificationChannel: input.notificationChannel,
+    notificationTemplateName: input.notificationTemplateName,
+    notificationTemplateLanguage: input.notificationTemplateLanguage,
+    whatsappConsentConfirmed: input.whatsappConsentConfirmed,
     createdById: req.user!.id,
     lines: input.lines,
     ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt } : {}),
@@ -389,7 +398,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
   });
   await recordAuditEvent({ action: "inventory.purchase_order_created", entityType: "InventoryPurchaseOrder", entityId: order.id,
     businessId, branchId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null,
-    metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length } });
+    metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length, notificationChannel: input.notificationChannel, whatsappConsentConfirmed: input.whatsappConsentConfirmed ?? false } });
   const notificationChannel = input.notificationChannel;
   const destination = notificationChannel === "EMAIL" ? order.supplier.email : order.supplier.phone;
   let notification: { channel: "EMAIL" | "WHATSAPP"; status: "SENT" | "FAILED"; destination: string | null; providerMessageId?: string; error?: string } = {
@@ -417,15 +426,19 @@ export async function createPurchaseOrder(req: Request, res: Response) {
       notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
     } else {
       await assertWhatsAppMessagingEnabled();
-      const body = [
-        `PURCHASE ORDER ${order.orderNumber}`,
-        ...lines,
-        `Estimated total: ₦${total.toLocaleString("en-NG")}`,
-        ...(order.expectedAt ? [`Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}`] : []),
-        ...(order.notes ? [`Notes: ${order.notes}`] : []),
-        "Please confirm receipt of this purchase order.",
-      ].join("\n");
-      const sent = await sendWhatsAppText({ businessId, to: destination, body });
+      const sent = await sendSupplierPurchaseOrderTemplate({
+        businessId,
+        phone: destination,
+        templateName: input.notificationTemplateName!,
+        language: input.notificationTemplateLanguage!,
+        variables: [
+          order.supplier.contactName || order.supplier.name,
+          order.orderNumber,
+          lines.join("; "),
+          "₦" + total.toLocaleString("en-NG"),
+        ],
+        consentConfirmed: input.whatsappConsentConfirmed === true,
+      });
       notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
     }
   } catch (error) {
