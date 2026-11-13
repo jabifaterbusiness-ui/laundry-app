@@ -173,12 +173,13 @@ export function OrdersPage() {
       activeBranchId,
     );
 
-    if (saved && saved.workspaces.length > 0) {
-      restoreWorkspaces(
-        saved.workspaces,
-        saved.activeWorkspaceId,
-      );
-    }
+    // Always replace the in-memory workspaces for the active identity.
+    // If this user/business/branch has no saved snapshot, retaining the
+    // previous scope's store would leak another branch's customer workspaces.
+    restoreWorkspaces(
+      saved?.workspaces ?? [],
+      saved?.activeWorkspaceId ?? null,
+    );
     workspaceHydratedRef.current = true;
   }, [
     user?.businessId,
