@@ -16,6 +16,7 @@ import {
   listMovements,
   createSupplier,
   listSuppliers,
+  listSupplierNotificationTemplates,
   createPurchaseOrder,
   listPurchaseOrders,
   receivePurchaseOrder,
@@ -93,6 +94,7 @@ inventoryRouter.post(
 
 
 inventoryRouter.get("/suppliers", requirePermission("inventory.view"), asyncHandler(listSuppliers));
+inventoryRouter.get("/supplier-notification-templates", requirePermission("inventory.view"), asyncHandler(listSupplierNotificationTemplates));
 inventoryRouter.post("/suppliers", requirePermission("inventory.manage"), asyncHandler(createSupplier));
 inventoryRouter.get("/purchase-orders", requirePermission("inventory.view"), asyncHandler(requireBranchContext), asyncHandler(listPurchaseOrders));
 inventoryRouter.post("/purchase-orders", requirePermission("inventory.manage"), asyncHandler(requireBranchContext), asyncHandler(createPurchaseOrder));
