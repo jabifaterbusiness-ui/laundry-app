@@ -89,6 +89,11 @@ export function InventoryPage() {
   const [itemPage, setItemPage] = useState(1);
 
   const [itemFormOpen, setItemFormOpen] = useState(false);
+
+  useEffect(() => {
+    if (!itemFormOpen) return;
+    document.getElementById("inventory-item-form")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [itemFormOpen]);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
   const [itemFormError, setItemFormError] = useState<string | null>(null);
