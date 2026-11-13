@@ -637,7 +637,7 @@ export function InventoryPage() {
             <a href="#inventory-movement-history">Movement History</a>
             <a href="#inventory-procurement">Suppliers &amp; Procurement</a>
             <a href="#inventory-transfers">Transfers &amp; Stocktaking</a>
-            <a href="#inventory-stocktake-approval">Stocktake Approval</a>
+            {currentStocktake ? <a href="#inventory-stocktake-approval">Stocktake Approval</a> : null}
             <a href="#inventory-reservations">Reservations &amp; Reorder</a>
             <a href="#inventory-reports">Valuation &amp; Performance</a>
             <a href="#inventory-branch-comparison">Branch Comparison</a>
