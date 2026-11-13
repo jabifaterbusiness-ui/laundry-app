@@ -232,3 +232,14 @@
   .inventory-workspace .inventory-sidebar { position: static; }
   .inventory-workspace .inventory-sidebar nav { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 }
+
+.inventory-workspace .inventory-procurement-notice {
+  margin: 12px 0;
+  padding: 11px 14px;
+  border: 1px solid #d9c9f5;
+  border-radius: 10px;
+  background: #f8f4ff;
+  color: #51328a;
+  font-size: 12px;
+  font-weight: 700;
+}
