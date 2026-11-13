@@ -633,6 +633,25 @@ describe("OrdersPage quick customer switching", () => {
     });
   });
 
+  it("clears the previous branch workspace when switching to a branch with no saved workspace", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")?.workspaces).toHaveLength(1);
+    });
+
+    useAuthStore.setState({ activeBranchId: "branch-b" });
+
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().workspaces).toHaveLength(0);
+    });
+    expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+    expect(loadOrderWorkspaceState("business-a", "user-a", "branch-b")).toBeNull();
+  });
+
   it("opens three customer workspaces", async () => {
     renderPage();
 
