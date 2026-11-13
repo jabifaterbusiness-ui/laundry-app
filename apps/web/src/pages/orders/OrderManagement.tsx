@@ -4,13 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Customer, Order, OrderStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import { QUICK_OPERATIONS } from "../../lib/quick-operations-catalog.js";
-import { getCustomer, updateCustomer } from "../../lib/customers-api.js";
+import { getCustomer, listCustomers, updateCustomer } from "../../lib/customers-api.js";
 import {
   deleteInvoice,
   getCompanyReceipt,
   getCustomerReceipt,
   getInvoiceByOrder,
   getInvoiceHistory,
+  transferInvoice,
   voidInvoice,
   type InvoiceHistoryEntry,
 } from "../../lib/invoices-api.js";
@@ -101,6 +102,7 @@ function OrderManagementContent({
     | "more"
     | "invoice-void"
     | "invoice-delete"
+    | "invoice-transfer"
     | "invoice-history"
   >("none");
   const [dirty, setDirty] = useState(false);
@@ -129,6 +131,10 @@ function OrderManagementContent({
   const [invoiceCorrectionError, setInvoiceCorrectionError] = useState<
     string | null
   >(null);
+  const [invoiceTransferSearch, setInvoiceTransferSearch] = useState("");
+  const [invoiceTransferCustomerId, setInvoiceTransferCustomerId] = useState("");
+  const [invoiceTransferReason, setInvoiceTransferReason] = useState("");
+  const [invoiceTransferConfirmed, setInvoiceTransferConfirmed] = useState(false);
 
   const canUpdateCustomer = hasPermission(user, "customers.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
@@ -147,6 +153,12 @@ function OrderManagementContent({
 
   const currentCustomer = customerQuery.data ?? customer;
 
+  const invoiceTransferCustomersQuery = useQuery({
+    queryKey: ["order-management", "invoice-transfer-customers", activeBranchId, invoiceTransferSearch],
+    queryFn: () => listCustomers({ page: 1, pageSize: 100, search: invoiceTransferSearch.trim() || undefined, status: "all" }, { accessToken }),
+    enabled: Boolean(accessToken && activeBranchId && layer === "invoice-transfer"),
+  });
+
   const invoiceQuery = useQuery({
     queryKey: ["order-management", "invoice", order?.id, activeBranchId],
     queryFn: () =>
@@ -158,6 +170,37 @@ function OrderManagementContent({
         order?.id &&
         canViewInvoices,
     ),
+  });
+
+  const invoiceTransferMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoiceQuery.data) throw new Error("The current order has no invoice to transfer.");
+      if (!invoiceTransferCustomerId) throw new Error("Select a destination customer.");
+      if (!invoiceTransferReason.trim()) throw new Error("Enter a reason for transferring this invoice.");
+      if (!invoiceTransferConfirmed) throw new Error("Confirm the invoice transfer before continuing.");
+      return transferInvoice(invoiceQuery.data.id, {
+        customerId: invoiceTransferCustomerId,
+        reason: invoiceTransferReason.trim(),
+        confirmed: true,
+      }, { accessToken }, activeBranchId);
+    },
+    onSuccess: async () => {
+      const orderId = order?.id;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["order-management", "invoice", orderId, activeBranchId] }),
+        queryClient.invalidateQueries({ queryKey: ["order-management", "invoice-payment-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["orders"] }),
+      ]);
+      setLayer("none");
+      setInvoiceTransferSearch("");
+      setInvoiceTransferCustomerId("");
+      setInvoiceTransferReason("");
+      setInvoiceTransferConfirmed(false);
+      if (orderId) navigate(`/order-management?orderId=${encodeURIComponent(orderId)}`, { replace: true });
+      setStatusFeedback("Invoice transferred successfully.");
+    },
+    onError: (error: unknown) => setInvoiceCorrectionError(error instanceof Error ? error.message : "Unable to transfer this invoice."),
   });
 
   const paymentSummaryQuery = useQuery({
@@ -845,13 +888,14 @@ function OrderManagementContent({
             !invoiceQuery.data ||
             !canViewInvoices
           }
-          onClick={() =>
-            navigate(
-              `/invoices?invoiceId=${encodeURIComponent(
-                invoiceQuery.data!.id,
-              )}&action=transfer`,
-            )
-          }
+          onClick={() => {
+            setInvoiceTransferSearch("");
+            setInvoiceTransferCustomerId("");
+            setInvoiceTransferReason("");
+            setInvoiceTransferConfirmed(false);
+            setInvoiceCorrectionError(null);
+            setLayer("invoice-transfer");
+          }}
         >
           Transfer Invoice
         </button>
@@ -1249,6 +1293,42 @@ function OrderManagementContent({
                   </button>
                 </form>
               )}
+            </>
+          )}
+
+
+          {layer === "invoice-transfer" && (
+            <>
+              <h3>Transfer Invoice {invoiceQuery.data?.invoiceNumber ?? ""}</h3>
+              <p>The invoice will be transferred to the selected customer while its invoice number and history are retained.</p>
+              <label style={{ display: "block", marginTop: 12 }}>
+                Search destination customer
+                <input type="search" value={invoiceTransferSearch} onChange={(event) => { setInvoiceTransferSearch(event.target.value); setInvoiceTransferCustomerId(""); setInvoiceCorrectionError(null); }} placeholder="Search by name, phone, email or order number" style={{ display: "block", width: "100%", marginTop: 6 }} />
+              </label>
+              <label style={{ display: "block", marginTop: 12 }}>
+                Destination customer
+                <select aria-label="Invoice destination customer" value={invoiceTransferCustomerId} onChange={(event) => setInvoiceTransferCustomerId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 6 }}>
+                  <option value="">Select a customer</option>
+                  {(invoiceTransferCustomersQuery.data?.data ?? []).filter((entry) => entry.lifecycleStatus !== "MERGED" && entry.ownerBranchId === activeBranchId && entry.id !== currentCustomer.id).map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}{entry.phone ? " — " + entry.phone : ""}{entry.email ? " · " + entry.email : ""}</option>
+                  ))}
+                </select>
+              </label>
+              {invoiceTransferCustomersQuery.isLoading ? <p role="status">Searching customers…</p> : null}
+              {invoiceTransferCustomersQuery.isError ? <p role="alert">Unable to search destination customers.</p> : null}
+              <label style={{ display: "block", marginTop: 12 }}>
+                Reason for transfer
+                <textarea value={invoiceTransferReason} onChange={(event) => setInvoiceTransferReason(event.target.value)} maxLength={1000} rows={3} style={{ display: "block", width: "100%", marginTop: 6 }} />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+                <input type="checkbox" checked={invoiceTransferConfirmed} onChange={(event) => setInvoiceTransferConfirmed(event.target.checked)} />
+                I confirm that this invoice should be transferred to the selected customer.
+              </label>
+              {invoiceCorrectionError ? <p role="alert">{invoiceCorrectionError}</p> : null}
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button type="button" disabled={invoiceTransferMutation.isPending} onClick={() => invoiceTransferMutation.mutate()}>{invoiceTransferMutation.isPending ? "Transferring…" : "Confirm Transfer"}</button>
+                <button type="button" disabled={invoiceTransferMutation.isPending} onClick={() => setLayer("none")}>Cancel</button>
+              </div>
             </>
           )}
 
