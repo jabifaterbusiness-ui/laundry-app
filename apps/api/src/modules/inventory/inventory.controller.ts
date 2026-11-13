@@ -402,7 +402,16 @@ export async function createPurchaseOrder(req: Request, res: Response) {
     const lines = order.lines.map((line) => `${line.inventoryItem.name}: ${line.quantityOrdered} × ₦${line.unitCost.toLocaleString("en-NG")}`);
     const total = order.lines.reduce((sum, line) => sum + line.quantityOrdered * line.unitCost, 0);
     if (notificationChannel === "EMAIL") {
-      const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+      const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => {
+        switch (character) {
+          case "&": return "&amp;";
+          case "<": return "&lt;";
+          case ">": return "&gt;";
+          case '"': return "&quot;";
+          case "'": return "&#39;";
+          default: return character;
+        }
+      });
       const html = `<div style="font-family:Arial,sans-serif;color:#172033"><h2>Purchase Order ${escapeHtml(order.orderNumber)}</h2><p>Hello ${escapeHtml(order.supplier.contactName || order.supplier.name)},</p><p>Please find our purchase order details below.</p><table style="border-collapse:collapse;width:100%"><thead><tr><th align="left">Item</th><th align="right">Quantity</th><th align="right">Unit cost</th><th align="right">Line total</th></tr></thead><tbody>${order.lines.map((line) => `<tr><td>${escapeHtml(line.inventoryItem.name)}</td><td align="right">${line.quantityOrdered}</td><td align="right">₦${line.unitCost.toLocaleString("en-NG")}</td><td align="right">₦${(line.quantityOrdered * line.unitCost).toLocaleString("en-NG")}</td></tr>`).join("")}</tbody></table><p><strong>Estimated total: ₦${total.toLocaleString("en-NG")}</strong></p>${order.expectedAt ? `<p>Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}</p>` : ""}${order.notes ? `<p>Notes: ${escapeHtml(order.notes)}</p>` : ""}<p>Please confirm receipt of this purchase order.</p></div>`;
       const sent = await sendHtmlEmail({ to: destination, subject: `Purchase Order ${order.orderNumber}`, html });
       notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
@@ -415,7 +424,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
         ...(order.expectedAt ? [`Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}`] : []),
         ...(order.notes ? [`Notes: ${order.notes}`] : []),
         "Please confirm receipt of this purchase order.",
-      ].join("\\n");
+      ].join("\n");
       const sent = await sendWhatsAppText({ businessId, to: destination, body });
       notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
     }
