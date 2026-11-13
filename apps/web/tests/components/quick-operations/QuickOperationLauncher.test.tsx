@@ -645,9 +645,27 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Find source customer"), {
+      target: { value: "08000000001" },
+    });
+    await waitFor(() => {
+      expect(listCustomersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 100, search: "08000000001", status: "all" }),
+        { accessToken: "access-token" },
+      );
+    });
     await screen.findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Find destination customer"), {
+      target: { value: "00005" },
+    });
+    await waitFor(() => {
+      expect(listCustomersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 100, search: "00005", status: "all" }),
+        { accessToken: "access-token" },
+      );
     });
     await screen.findByRole("option", { name: /Target Customer/ });
     fireEvent.change(screen.getByLabelText("Destination customer"), {
