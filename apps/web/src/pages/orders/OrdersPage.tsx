@@ -1882,6 +1882,10 @@ export function OrdersPage() {
               setFormOpen(false);
             }}
             onEditOrder={(selected) => { void startEditInvoice(selected); }}
+            onTransferInvoiceSuccess={(nextCustomer, nextOrder) => {
+              updateWorkspace(activeWorkspace.id, { customer: nextCustomer, activeOrder: nextOrder, mode: "view", isDirty: false });
+              setSelectedOrder(nextOrder);
+            }}
           />
           {orderFormWorkspaces.length > 0 && (
             <OrderWorkspaceSwitcher
