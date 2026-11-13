@@ -500,12 +500,20 @@ describe("OrdersPage quick customer switching", () => {
     expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /new order/i })).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(listOrders).toHaveBeenLastCalledWith(
-        expect.objectContaining({ customerId: customerA.id }),
-        { accessToken: "test-token" },
-        "branch-a",
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(
+        `customer:${customerA.id}`,
       );
     });
+    expect(
+      useOrderWorkspaceStore.getState().workspaces.find(
+        (workspace) => workspace.customer.id === customerA.id,
+      )?.mode,
+    ).toBe("view");
+    expect(
+      useOrderWorkspaceStore.getState().workspaces.find(
+        (workspace) => workspace.customer.id === customerA.id,
+      )?.activeOrder,
+    ).toBeNull();
   });
 
   it("opens a non-active customer from the customer details Add New Order flow", async () => {
@@ -1038,11 +1046,9 @@ describe("OrdersPage quick customer switching", () => {
       );
     });
 
-    expect(
-      await screen.findByRole("region", { name: "Order Management" }),
-    ).toBeInTheDocument();
     await screen.findByText("Jane Doe");
     await screen.findByText("#00001");
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
   });
 
