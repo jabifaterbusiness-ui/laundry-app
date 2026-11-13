@@ -1836,7 +1836,7 @@ export function OrdersPage() {
   return (
     <main>
       <h1>{isOrderManagementRoute ? (activeWorkspace ? `Order Management · ${activeWorkspace.customer.name}` : "Order Management") : "Orders"}</h1>
-      {isOrderManagementRoute ? (activeWorkspace && (activeWorkspace.mode !== "view" || activeWorkspace.activeOrder) ? (
+      {isOrderManagementRoute ? (activeWorkspace ? (
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
