@@ -30,7 +30,7 @@ import {
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
-import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
+import { loadOrderWorkspaceState, saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { OrderManagement } from "./OrderManagement.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
@@ -182,6 +182,34 @@ export function OrdersPage() {
     user?.id,
     activeBranchId,
     restoreWorkspaces,
+  ]);
+
+  // Persist the active customer/order workspace so a direct visit or page
+  // refresh restores the last attended account for this user and branch.
+  // The empty initial store is deliberately not written before hydration.
+  useEffect(() => {
+    if (!user?.businessId || !user?.id || !activeBranchId || workspaces.length === 0) {
+      return;
+    }
+
+    try {
+      saveOrderWorkspaceState(
+        user.businessId,
+        user.id,
+        activeBranchId,
+        workspaces,
+        activeWorkspaceId,
+      );
+    } catch {
+      // Storage may be unavailable (for example, private browsing/quota).
+      // Keep the live workspace usable even when persistence is unavailable.
+    }
+  }, [
+    user?.businessId,
+    user?.id,
+    activeBranchId,
+    workspaces,
+    activeWorkspaceId,
   ]);
 
 
