@@ -240,6 +240,14 @@ beforeEach(() => {
 });
 
 describe("InventoryPage", () => {
+  it("provides direct sidebar navigation to the main inventory workflows", async () => {
+    renderPage();
+    const navigation = screen.getByRole("navigation", { name: "Inventory sections" });
+    expect(within(navigation).getByRole("link", { name: "Inventory Items" })).toHaveAttribute("href", "#inventory-items");
+    expect(within(navigation).getByRole("link", { name: "Suppliers & Procurement" })).toHaveAttribute("href", "#inventory-procurement");
+    expect(within(navigation).getByRole("link", { name: "Valuation & Performance" })).toHaveAttribute("href", "#inventory-reports");
+  });
+
   it("enforces the stocktake submit, approve and apply workflow in the UI", async () => {
     mockUserPermissions.push("inventory.approve");
     const lines = [{
