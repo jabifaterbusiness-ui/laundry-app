@@ -505,7 +505,7 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    await screen.findByRole("option", { name: /Source Customer/ });
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
     });
@@ -576,7 +576,7 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    await screen.findByRole("option", { name: /Source Customer/ });
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
     fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
     });
