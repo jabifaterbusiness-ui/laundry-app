@@ -611,7 +611,7 @@ describe("QuickOperationLauncher", () => {
     fireEvent.change(screen.getByLabelText("Customer ID"), {
       target: { value: "customer-1" },
     });
-    fireEvent.change(screen.getByLabelText("Destination customer"), {
+    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
       target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
