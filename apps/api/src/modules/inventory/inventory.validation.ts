@@ -114,6 +114,7 @@ export const listInventorySuppliersQuerySchema = z.object({
 export const createInventoryPurchaseOrderSchema = z.object({
   supplierId: z.string().uuid(),
   orderNumber: z.string().trim().min(1).max(100),
+  notificationChannel: z.enum(["EMAIL", "WHATSAPP"]).default("EMAIL"),
   expectedAt: z.coerce.date().optional(),
   notes: z.string().trim().max(2000).optional(),
   lines: z.array(z.object({
