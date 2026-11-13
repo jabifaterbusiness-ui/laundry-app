@@ -871,9 +871,9 @@ export function QuickOperationLauncher({
               {activeOperation.code === "MC" ? (
                 <div style={{ marginTop: 14 }}>
                   <label style={labelStyle}>Find source customer</label>
-                  <input aria-label="Find source customer" value={sourceCustomerSearch} onChange={(event) => { setSourceCustomerSearch(event.target.value); setRecordId(""); }} placeholder="Search by name, phone, email or order number" disabled={isSubmitting} style={inputStyle} />
+                  <input aria-label="Find source customer" value={sourceCustomerSearch} onChange={(event) => { setSourceCustomerSearch(event.target.value); setRecordId(""); setCustomerId(""); }} placeholder="Search by name, phone, email or order number" disabled={isSubmitting} style={inputStyle} />
                   <label style={{ ...labelStyle, marginTop: 12 }}>Customer to merge from</label>
-                  <select aria-label="Source customer" value={recordId} onChange={(event) => setRecordId(event.target.value)} disabled={isSubmitting || sourceCustomersLoading} style={inputStyle}>
+                  <select aria-label="Source customer" value={recordId} onChange={(event) => { setRecordId(event.target.value); setCustomerId(""); }} disabled={isSubmitting || sourceCustomersLoading} style={inputStyle}>
                     <option value="">Select source customer</option>
                     {sourceCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}</option>)}
                   </select>
@@ -888,7 +888,7 @@ export function QuickOperationLauncher({
                   <input
                     aria-label="Find destination customer"
                     value={targetCustomerSearch}
-                    onChange={(event) => setTargetCustomerSearch(event.target.value)}
+                    onChange={(event) => { setTargetCustomerSearch(event.target.value); setCustomerId(""); }}
                     placeholder="Search by name, phone, email or order number"
                     disabled={isSubmitting}
                     style={inputStyle}
