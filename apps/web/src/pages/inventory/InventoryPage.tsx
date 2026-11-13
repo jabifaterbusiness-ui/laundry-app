@@ -612,7 +612,26 @@ export function InventoryPage() {
     <main className="inventory-workspace">
       <header className="inventory-header"><div><span className="inventory-eyebrow">OPERATIONS / CONTROL CENTRE</span><h1>Inventory Management</h1><p>Track your catalogue, branch stock levels and every stock movement in one place.</p></div><div className="inventory-header-meta"><span className="inventory-live-dot" /> Live branch data</div></header>
 
-      <section className="inventory-panel inventory-catalogue" aria-label="Inventory items">
+      <div className="inventory-layout">
+        <aside className="inventory-sidebar" aria-label="Inventory navigation">
+          <h2>Inventory</h2>
+          <p>Jump to a task</p>
+          <nav>
+            <a href="#inventory-items">Inventory Items</a>
+            <a href="#inventory-current-stock">Current Stock</a>
+            <a href="#inventory-stock-movement">Receive / Issue Stock</a>
+            <a href="#inventory-stock-adjustment">Adjust Stock</a>
+            <a href="#inventory-movement-history">Movement History</a>
+            <a href="#inventory-procurement">Suppliers &amp; Procurement</a>
+            <a href="#inventory-transfers">Transfers &amp; Stocktaking</a>
+            <a href="#inventory-reservations">Reservations &amp; Reorder</a>
+            <a href="#inventory-reports">Valuation &amp; Performance</a>
+            <a href="#inventory-branch-comparison">Branch Comparison</a>
+          </nav>
+        </aside>
+        <div className="inventory-main-content">
+
+      <section className="inventory-panel inventory-catalogue" id="inventory-items" aria-label="Inventory items">
         <h2>Inventory Items</h2>
 
         <div>
@@ -911,7 +930,7 @@ export function InventoryPage() {
         </section>
       )}
 
-      <section className="inventory-panel inventory-balances" aria-label="Current stock">
+      <section className="inventory-panel inventory-balances" id="inventory-current-stock" aria-label="Current stock">
         <h2>Current Stock</h2>
 
         {!activeBranchId && (
@@ -1021,7 +1040,7 @@ export function InventoryPage() {
         )}
       </section>
 
-      <section className="inventory-panel inventory-movements" aria-label="Stock movement">
+      <section className="inventory-panel inventory-movements" id="inventory-stock-movement" aria-label="Stock movement">
         <h2>Receive / Issue Stock</h2>
 
         <form onSubmit={submitMovement}>
@@ -1174,7 +1193,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel inventory-adjustments" aria-label="Stock adjustment">
+      <section className="inventory-panel inventory-adjustments" id="inventory-stock-adjustment" aria-label="Stock adjustment">
         <h2>Adjust Stock</h2>
 
         <form onSubmit={submitAdjustment}>
@@ -1269,7 +1288,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel inventory-ledger" aria-label="Stock movement history">
+      <section className="inventory-panel inventory-ledger" id="inventory-movement-history" aria-label="Stock movement history">
         <details className="inventory-ledger-details">
           <summary><h2>Stock Movement History</h2></summary>
           <div className="inventory-ledger-content">
@@ -1367,7 +1386,7 @@ export function InventoryPage() {
         </details>
       </section>
 
-      <section className="inventory-panel inventory-procurement" aria-label="Suppliers and procurement">
+      <section className="inventory-panel inventory-procurement" id="inventory-procurement" aria-label="Suppliers and procurement">
         <div className="inventory-ledger-heading">
           <div><h2>Suppliers &amp; Procurement</h2><p>Raise branch purchase orders and record full or partial deliveries directly into stock.</p></div>
           <span className="inventory-procurement-count">{purchaseOrders.length} recent orders</span>
@@ -1414,7 +1433,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel" aria-label="Advanced inventory operations">
+      <section className="inventory-panel" id="inventory-transfers" aria-label="Advanced inventory operations">
         <h2>Branch Transfers &amp; Stocktaking</h2>
         <p>Move stock between your branches, confirm incoming deliveries and reconcile physical counts against recorded balances.</p>
         <div className="inventory-procurement-grid">
@@ -1460,7 +1479,7 @@ export function InventoryPage() {
           })}
         </tbody></table> : <p>No branch transfers recorded.</p>}
       </section>
-      <section className="inventory-panel" aria-label="Stock reservations and reorder recommendations">
+      <section className="inventory-panel" id="inventory-reservations" aria-label="Stock reservations and reorder recommendations">
         <h2>Available Stock, Reservations &amp; Reorder</h2>
         <p>Reserved quantities are protected from issues and transfers. Reorder suggestions use each item's minimum threshold and configured replenishment quantity.</p>
         <form onSubmit={(event) => { event.preventDefault(); setReservationError(null); if (!reservationItemId || !Number.isInteger(Number(reservationQuantity)) || Number(reservationQuantity) <= 0) { setReservationError("Select an item and enter a positive reservation quantity."); return; } if (reservationExpiresAt && new Date(reservationExpiresAt).getTime() <= Date.now()) { setReservationError("Reservation expiry must be in the future."); return; } reservationCreateMutation.mutate(); }}>
@@ -1481,7 +1500,7 @@ export function InventoryPage() {
         </tbody></table> : <p>No reorder alerts for this branch.</p>}
       </section>
 
-      <section className="inventory-panel" aria-label="Inventory valuation and performance reports">
+      <section className="inventory-panel" id="inventory-reports" aria-label="Inventory valuation and performance reports">
         <div className="inventory-report-heading">
           <div><h2>Inventory Valuation &amp; Performance</h2><p>Valuation, stock movement and supplier performance for this branch.</p></div>
           <button
@@ -1534,13 +1553,15 @@ export function InventoryPage() {
           </tbody></table> : <p>No supplier orders in the last 30 days.</p>}
         </>}
       </section>
-      {userPermissions.includes("inventory.reports_all_branches") && <section className="inventory-panel" aria-label="Business-wide branch inventory comparison">
+      {userPermissions.includes("inventory.reports_all_branches") && <section className="inventory-panel" id="inventory-branch-comparison" aria-label="Business-wide branch inventory comparison">
         <h2>Branch Inventory Comparison</h2>
         <p>Business-wide stock visibility requires the dedicated cross-branch reporting permission. Figures include active branches only.</p>
         {branchComparisonQuery.isLoading ? <p>Loading branch comparison...</p> : branchComparisonQuery.isError ? <p role="alert">Unable to load branch comparison.</p> : branchComparisonQuery.data?.data.length ? <div className="inventory-table-wrap"><table><thead><tr><th>Branch</th><th>Catalogue items</th><th>Low-stock items</th><th>Stock valuation</th></tr></thead><tbody>
           {branchComparisonQuery.data.data.map((row) => <tr key={row.branchId}><td>{row.branchName}</td><td>{row.catalogueItemCount}</td><td>{row.lowStockItems}</td><td>{(row.totalValuation / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
         </tbody></table></div> : <p>No active branches have inventory balances yet.</p>}
       </section>}
+        </div>
+      </div>
     </main>
   );
 }
