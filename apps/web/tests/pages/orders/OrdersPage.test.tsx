@@ -1034,8 +1034,10 @@ describe("OrdersPage quick customer switching", () => {
     });
 
     expect(
-      screen.queryByRole("region", { name: "Order Management" }),
-    ).not.toBeInTheDocument();
+      await screen.findByRole("region", { name: "Order Management" }),
+    ).toBeInTheDocument();
+    await screen.findByText("Jane Doe");
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
   });
 
 describe("OrdersPage customer-specific pricing", () => {
@@ -1235,6 +1237,7 @@ describe("Orders and Order Management section separation", () => {
     renderPage([`/order-management?orderId=${orderA.id}`]);
 
     expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
+    await screen.findByText("Jane Doe");
     expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Customer Pay" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Merge Customer (MC)" })).toBeInTheDocument();
