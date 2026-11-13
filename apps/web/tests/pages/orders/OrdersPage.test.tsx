@@ -13,6 +13,7 @@ import { SensitiveAuthorizationProvider } from "../../../src/components/auth/Sen
 import { OrdersPage } from "../../../src/pages/orders/OrdersPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../../src/state/order-workspace-store.js";
+import { loadOrderWorkspaceState } from "../../../src/lib/order-workspace-persistence.js";
 
 const customerA: Customer = {
   id: "customer-a",
@@ -600,6 +601,19 @@ describe("OrdersPage quick customer switching", () => {
     });
 
     expect(useOrderWorkspaceStore.getState().workspaces).toHaveLength(2);
+  });
+
+  it("persists the last active customer workspace for restoration after a reload", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerB);
+
+    await waitFor(() => {
+      const saved = loadOrderWorkspaceState("business-a", "user-a", "branch-a");
+      expect(saved?.activeWorkspaceId).toBe(`customer:${customerB.id}`);
+      expect(saved?.workspaces.map((workspace) => workspace.customer.id)).toContain(customerB.id);
+    });
   });
 
   it("opens three customer workspaces", async () => {
