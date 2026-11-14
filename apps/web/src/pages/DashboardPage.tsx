@@ -6,6 +6,7 @@ import { getDashboardReport, getTodaysReport } from "../lib/reports-api.js";
 import { getBusinessBranding } from "../lib/businesses-api.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
+import "./DashboardPage.css";
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
