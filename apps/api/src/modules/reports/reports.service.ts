@@ -397,7 +397,7 @@ export async function getDashboardReport(
 
 /**
  * Daily operational snapshot for the active branch.
- * Laundry Angel's current Nigerian business timezone is Africa/Lagos.
+ * The business-configured timezone determines the local calendar day.
  * Payment and pickup events are dated by the event timestamp, not by the
  * invoice/order creation date.
  */
