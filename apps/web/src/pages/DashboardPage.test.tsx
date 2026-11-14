@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage.js";
-import { getDashboardReport } from "../lib/reports-api.js";
+import { getDashboardReport, getTodaysReport } from "../lib/reports-api.js";
 
 vi.mock("../lib/reports-api.js", () => ({
   getDashboardReport: vi.fn(),
+  getTodaysReport: vi.fn(),
 }));
 
 vi.mock("../state/auth-store.js", () => ({
@@ -23,6 +24,7 @@ vi.mock("../state/auth-store.js", () => ({
 }));
 
 const mockedGetDashboardReport = vi.mocked(getDashboardReport);
+const mockedGetTodaysReport = vi.mocked(getTodaysReport);
 
 const mockUser = {
   fullName: "Jane Manager",
@@ -129,6 +131,41 @@ describe("DashboardPage", () => {
     expect(screen.getByText("84")).toBeInTheDocument();
     expect(screen.getByText("31")).toBeInTheDocument();
     expect(screen.getByText("70%")).toBeInTheDocument();
+  });
+
+  it("opens the daily report with collections and pickup totals", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+    mockedGetTodaysReport.mockResolvedValue({
+      date: "2026-11-14",
+      timeZone: "Africa/Lagos",
+      period: {
+        from: "2026-11-13T23:00:00.000Z",
+        to: "2026-11-14T23:00:00.000Z",
+      },
+      payments: {
+        transactionCount: 4,
+        amountReceived: 125000,
+        refundAmount: 5000,
+        netCollected: 120000,
+      },
+      pickups: {
+        garmentCount: 18,
+        orderCount: 6,
+      },
+    });
+
+    renderDashboard();
+    fireEvent.click(await screen.findByRole("button", { name: "Today's Report" }));
+
+    expect(await screen.findByText("₦125,000")).toBeInTheDocument();
+    expect(screen.getByText("4 payment transactions")).toBeInTheDocument();
+    expect(screen.getByText("₦5,000")).toBeInTheDocument();
+    expect(screen.getByText("₦120,000")).toBeInTheDocument();
+    expect(screen.getByText("18 garments handed over")).toBeInTheDocument();
+    expect(mockedGetTodaysReport).toHaveBeenCalledWith(
+      { accessToken: "token" },
+      "branch-1",
+    );
   });
 
   it("shows loading skeletons while the report is loading", () => {
