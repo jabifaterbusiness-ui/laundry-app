@@ -104,7 +104,7 @@ describe("reports.service", () => {
         },
       }),
     });
-    expect(mocks.garmentCount).toHaveBeenCalledWith({
+    expect(mocks.orderCount).toHaveBeenCalledWith({
       where: expect.objectContaining({
         businessId: "business-7",
         branchId: "branch-4",
@@ -114,15 +114,6 @@ describe("reports.service", () => {
           lt: result.period.to,
         },
       }),
-    });
-    expect(mocks.garmentFindMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        businessId: "business-7",
-        branchId: "branch-4",
-        status: "PICKED_UP",
-      }),
-      distinct: ["orderId"],
-      select: { orderId: true },
     });
   });
 
