@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage.js";
 import { getDashboardReport, getTodaysReport } from "../lib/reports-api.js";
+import { getBusinessBranding } from "../lib/businesses-api.js";
+
+vi.mock("../lib/businesses-api.js", () => ({
+  getBusinessBranding: vi.fn(),
+}));
 
 vi.mock("../lib/reports-api.js", () => ({
   getDashboardReport: vi.fn(),
@@ -25,6 +30,7 @@ vi.mock("../state/auth-store.js", () => ({
 
 const mockedGetDashboardReport = vi.mocked(getDashboardReport);
 const mockedGetTodaysReport = vi.mocked(getTodaysReport);
+const mockedGetBusinessBranding = vi.mocked(getBusinessBranding);
 
 const mockUser = {
   fullName: "Jane Manager",
@@ -116,9 +122,54 @@ function renderDashboard() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedGetBusinessBranding.mockResolvedValue({
+    id: "business-1",
+    name: "Fresh Press Laundry",
+    phone: null,
+    email: null,
+    website: null,
+    address: null,
+    logoUrl: null,
+    receiptPrimaryColor: null,
+    receiptAccentColor: null,
+    receiptBackgroundColor: null,
+    receiptTextColor: null,
+    receiptHeaderStyle: null,
+  });
 });
 
 describe("DashboardPage", () => {
+  it("shows the saved business name instead of the product name", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+
+    renderDashboard();
+
+    expect(await screen.findByText("Fresh Press Laundry")).toBeInTheDocument();
+    expect(screen.queryByText("Laundry Angel")).not.toBeInTheDocument();
+  });
+
+  it("shows a distinctive Today's Report entry for users with report permission", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+
+    renderDashboard();
+
+    const reportButton = await screen.findByRole("button", { name: /Today's Report/ });
+    expect(reportButton).toHaveClass("dashboard-report-entry-button");
+    expect(reportButton).toHaveAttribute("aria-controls", "dashboard-todays-report");
+  });
+
+  it("explains report access requirements without exposing the report action", async () => {
+    mockedGetDashboardReport.mockResolvedValue(report);
+    mockUser.permissions = ["orders.view", "orders.create"];
+
+    renderDashboard();
+
+    expect(await screen.findByText(/Report access is restricted/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Today's Report/ })).not.toBeInTheDocument();
+    expect(mockedGetTodaysReport).not.toHaveBeenCalled();
+    mockUser.permissions = ["reports.view", "orders.view", "orders.create"];
+  });
+
   it("renders dashboard KPIs from the report", async () => {
     mockedGetDashboardReport.mockResolvedValue(report);
 
