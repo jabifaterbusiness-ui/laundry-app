@@ -18,6 +18,7 @@ export const manualUpdateQuickOperationSchema = z
       "RECEIVED",
       "IN_PROGRESS",
       "READY_FOR_PICKUP",
+      "PICKED_UP",
       "COMPLETED",
       "CANCELLED",
     ]),
