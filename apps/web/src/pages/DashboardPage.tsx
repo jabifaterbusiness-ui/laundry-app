@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../lib/api-client.js";
 import { getDashboardReport, getTodaysReport } from "../lib/reports-api.js";
+import { getBusinessBranding } from "../lib/businesses-api.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
+import "./DashboardPage.css";
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
@@ -52,6 +54,13 @@ export function DashboardPage() {
   const canViewPayments = hasPermission(user, "payments.view");
   const canViewInventory = hasPermission(user, "inventory.view");
   const canManageSubscription = user?.securityRole === "BUSINESS_OWNER";
+
+  const brandingQuery = useQuery({
+    queryKey: ["business-branding", activeBranchId],
+    queryFn: () => getBusinessBranding({ accessToken }, activeBranchId),
+    enabled: Boolean(accessToken),
+    staleTime: 60_000,
+  });
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
@@ -116,7 +125,7 @@ export function DashboardPage() {
     <main className="dashboard-page">
       <header className="dashboard-header">
         <div>
-          <p className="dashboard-eyebrow">Laundry Angel</p>
+          <p className="dashboard-eyebrow">{brandingQuery.data?.name?.trim() || "Your business"}</p>
           <h1>Good to see you, {user?.fullName ?? "there"}</h1>
           <p className="dashboard-subtitle">
             Here is your business performance overview for the selected period.
@@ -128,17 +137,29 @@ export function DashboardPage() {
             + New order
           </Link>
         ) : null}
-        {canViewReports ? (
-          <button
-            className="dashboard-primary-action"
-            type="button"
-            aria-expanded={todayReportOpen}
-            aria-controls="dashboard-todays-report"
-            onClick={() => setTodayReportOpen((open) => !open)}
-          >
-            {todayReportOpen ? "Close Today's Report" : "Today's Report"}
-          </button>
-        ) : null}
+        <div className="dashboard-report-entry">
+          {canViewReports ? (
+            <button
+              className="dashboard-report-entry-button"
+              type="button"
+              aria-expanded={todayReportOpen}
+              aria-controls="dashboard-todays-report"
+              onClick={() => setTodayReportOpen((open) => !open)}
+            >
+              <span className="dashboard-report-entry-icon" aria-hidden="true">▤</span>
+              <span className="dashboard-report-entry-copy">
+                <strong>{todayReportOpen ? "Close Today's Report" : "Today's Report"}</strong>
+                <small>Collections, refunds & pickups</small>
+              </span>
+              <span className="dashboard-report-entry-arrow" aria-hidden="true">↗</span>
+            </button>
+          ) : (
+            <div className="dashboard-report-access-note" role="note">
+              <strong>Today's Report</strong>
+              <span>Report access is restricted. Ask your business administrator to grant the reports.view permission.</span>
+            </div>
+          )}
+        </div>
       </header>
 
       {todayReportOpen && canViewReports ? (
