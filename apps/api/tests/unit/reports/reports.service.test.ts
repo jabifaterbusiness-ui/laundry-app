@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   orderCount: vi.fn(),
+  orderAggregate: vi.fn(),
   businessFindUnique: vi.fn(),
   invoiceFindMany: vi.fn(),
   paymentFindMany: vi.fn(),
@@ -18,7 +19,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../../src/lib/prisma.js", () => ({
   prisma: {
     business: { findUnique: mocks.businessFindUnique },
-    order: { count: mocks.orderCount },
+    order: {
+      count: mocks.orderCount,
+      aggregate: mocks.orderAggregate,
+    },
     invoice: { findMany: mocks.invoiceFindMany },
     payment: {
       findMany: mocks.paymentFindMany,
@@ -52,6 +56,7 @@ describe("reports.service", () => {
     vi.clearAllMocks();
 
     mocks.orderCount.mockResolvedValue(12);
+    mocks.orderAggregate.mockResolvedValue({ _sum: { orderTotal: null } });
     mocks.businessFindUnique.mockResolvedValue({ timezone: "Africa/Lagos" });
     mocks.invoiceFindMany.mockResolvedValue([]);
     mocks.paymentFindMany.mockResolvedValue([]);
@@ -73,6 +78,9 @@ describe("reports.service", () => {
       .mockResolvedValueOnce({ _sum: { amount: 85000 } })
       .mockResolvedValueOnce({ _sum: { amount: 5000 } });
     mocks.orderCount.mockResolvedValue(2);
+    mocks.orderAggregate
+      .mockResolvedValueOnce({ _sum: { orderTotal: 200000 } })
+      .mockResolvedValueOnce({ _sum: { orderTotal: 150000 } });
 
     const result = await getTodaysReport({
       businessId: "business-7",
@@ -81,6 +89,9 @@ describe("reports.service", () => {
     });
 
     expect(result.timeZone).toBe("Africa/Lagos");
+    expect(result.orders).toEqual({
+      orderValueReceived: 200000,
+    });
     expect(result.payments).toEqual({
       transactionCount: 3,
       amountReceived: 85000,
@@ -89,6 +100,7 @@ describe("reports.service", () => {
     });
     expect(result.pickups).toEqual({
       orderCount: 2,
+      orderValue: 150000,
     });
 
     expect(mocks.paymentCount).toHaveBeenCalledWith({
@@ -113,6 +125,29 @@ describe("reports.service", () => {
           lt: result.period.to,
         },
       }),
+    });
+    expect(mocks.orderAggregate).toHaveBeenNthCalledWith(1, {
+      where: expect.objectContaining({
+        businessId: "business-7",
+        branchId: "branch-4",
+        createdAt: {
+          gte: result.period.from,
+          lt: result.period.to,
+        },
+      }),
+      _sum: { orderTotal: true },
+    });
+    expect(mocks.orderAggregate).toHaveBeenNthCalledWith(2, {
+      where: expect.objectContaining({
+        businessId: "business-7",
+        branchId: "branch-4",
+        status: "PICKED_UP",
+        pickedUpAt: {
+          gte: result.period.from,
+          lt: result.period.to,
+        },
+      }),
+      _sum: { orderTotal: true },
     });
   });
 
