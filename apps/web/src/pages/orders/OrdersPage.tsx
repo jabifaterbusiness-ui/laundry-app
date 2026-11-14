@@ -30,7 +30,7 @@ import {
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../state/order-workspace-store.js";
-import { loadOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
+import { clearOrderWorkspaceState, loadOrderWorkspaceState, saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.js";
 import { OrderWorkspaceSwitcher } from "./OrderWorkspaceSwitcher.js";
 import { OrderManagement } from "./OrderManagement.js";
 import { CustomerFormDialog } from "../customers/CustomerFormDialog.js";
@@ -74,6 +74,7 @@ export function OrdersPage() {
   const { requestSensitiveAuthorization } = useSensitiveAuthorization();
   const navigate = useNavigate();
   const location = useLocation();
+  const isOrderManagementRoute = location.pathname === "/order-management";
   const [searchParams] = useSearchParams();
 
   const workspaces = useOrderWorkspaceStore((s) => s.workspaces);
@@ -122,6 +123,7 @@ export function OrdersPage() {
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
   const newOrderFromUrl = searchParams.get("newOrder") === "1";
 
+  const workspaceHydratedRef = useRef(false);
   const openedCustomerFromUrlRef = useRef<string | null>(null);
   const openedOrderFromUrlRef = useRef<string | null>(null);
 
@@ -160,7 +162,8 @@ export function OrdersPage() {
   ]);
 
   useEffect(() => {
-    if (!user?.businessId || !activeBranchId) {
+    workspaceHydratedRef.current = false;
+    if (!user?.businessId || !user?.id || !activeBranchId) {
       return;
     }
 
@@ -170,17 +173,51 @@ export function OrdersPage() {
       activeBranchId,
     );
 
-    if (saved && saved.workspaces.length > 0) {
-      restoreWorkspaces(
-        saved.workspaces,
-        saved.activeWorkspaceId,
-      );
-    }
+    // Always replace the in-memory workspaces for the active identity.
+    // If this user/business/branch has no saved snapshot, retaining the
+    // previous scope's store would leak another branch's customer workspaces.
+    restoreWorkspaces(
+      saved?.workspaces ?? [],
+      saved?.activeWorkspaceId ?? null,
+    );
+    workspaceHydratedRef.current = true;
   }, [
     user?.businessId,
     user?.id,
     activeBranchId,
     restoreWorkspaces,
+  ]);
+
+  // Persist the active customer/order workspace so a direct visit or page
+  // refresh restores the last attended account for this user and branch.
+  // The empty initial store is deliberately not written before hydration.
+  useEffect(() => {
+    if (!workspaceHydratedRef.current || !user?.businessId || !user?.id || !activeBranchId) {
+      return;
+    }
+
+    try {
+      if (workspaces.length === 0) {
+        clearOrderWorkspaceState(user.businessId, user.id, activeBranchId);
+        return;
+      }
+      saveOrderWorkspaceState(
+        user.businessId,
+        user.id,
+        activeBranchId,
+        workspaces,
+        activeWorkspaceId,
+      );
+    } catch {
+      // Storage may be unavailable (for example, private browsing/quota).
+      // Keep the live workspace usable even when persistence is unavailable.
+    }
+  }, [
+    user?.businessId,
+    user?.id,
+    activeBranchId,
+    workspaces,
+    activeWorkspaceId,
   ]);
 
 
@@ -221,15 +258,19 @@ export function OrdersPage() {
 
   useEffect(() => {
     if (searchParams.get("addCustomer") !== "1") return;
+    if (location.pathname !== "/order-management") {
+      navigate(`/order-management${location.search}`, { replace: true });
+      return;
+    }
     if (!hasPermission(user, "customers.create")) {
-      navigate("/orders", { replace: true });
+      navigate("/order-management", { replace: true });
       return;
     }
     setInitialCustomerPhone(searchParams.get("customerPhone") ?? "");
     setCustomerPickerOpen(false);
     setNewCustomerOpen(true);
-    navigate("/orders", { replace: true });
-  }, [searchParams, user, navigate]);
+    navigate("/order-management", { replace: true });
+  }, [searchParams, location.pathname, location.search, user, navigate]);
   const [formError, setFormError] = useState<string | null>(null);
   const [editReason, setEditReason] = useState("");
   const [editConfirmed, setEditConfirmed] = useState(false);
@@ -248,9 +289,9 @@ export function OrdersPage() {
   }, [activeWorkspaceId]);
 
 
-  const orderListCustomerId = activeWorkspace?.mode === "view"
+  const orderListCustomerId = isOrderManagementRoute && activeWorkspace?.mode === "view"
     ? activeWorkspace.customer.id
-    : customerId;
+    : isOrderManagementRoute ? customerId : "";
 
   const ordersQuery = useQuery({
     queryKey: [
@@ -275,7 +316,7 @@ export function OrdersPage() {
         { accessToken },
         activeBranchId,
       ),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && !isOrderManagementRoute),
   });
 
   const customersQuery = useQuery({
@@ -1249,7 +1290,7 @@ export function OrdersPage() {
     queryKey: ["orders", "all-orders", activeBranchId],
     queryFn: () =>
       listAllOrders({}, { accessToken }, activeBranchId),
-    enabled: Boolean(accessToken && activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && !isOrderManagementRoute),
   });
 
   const allOrders = allOrdersQuery.data ?? [];
@@ -1834,8 +1875,8 @@ export function OrdersPage() {
 
   return (
     <main>
-      <h1>{activeWorkspace ? `Order Management · ${activeWorkspace.customer.name}` : location.pathname === "/order-management" ? "Order Management" : "Orders"}</h1>
-      {activeWorkspace && (activeWorkspace.mode !== "view" || activeWorkspace.activeOrder) ? (
+      <h1>{isOrderManagementRoute ? "ORDER MANAGEMENT" : "Orders"}</h1>
+      {isOrderManagementRoute ? (activeWorkspace ? (
         <>
           <OrderManagement
             order={activeWorkspace.activeOrder}
@@ -1859,14 +1900,15 @@ export function OrdersPage() {
                 new URLSearchParams(location.search).get("returnTo") === "customer-workstation" ||
                 returnToCustomerWorkstation;
               markOrderFormDirty(false);
-              closeWorkspace(activeWorkspace.id);
+              updateWorkspace(activeWorkspace.id, { mode: "view", isDirty: false });
+              setFormOpen(false);
               if (shouldReturnToCustomerWorkstation) {
                 workspaceReturnToRef.current = null;
                 setWorkspaceReturnTo(null);
                 navigate(`/customer-workstation?customerId=${encodeURIComponent(customerId)}`);
                 return;
               }
-              navigate(location.pathname === "/order-management" ? "/order-management" : "/orders");
+              navigate("/order-management", { replace: true });
             }}
             onSwitchCustomer={() => {
               setSwitchingCustomer(true);
@@ -1880,6 +1922,10 @@ export function OrdersPage() {
               setFormOpen(false);
             }}
             onEditOrder={(selected) => { void startEditInvoice(selected); }}
+            onTransferInvoiceSuccess={(nextCustomer, nextOrder) => {
+              updateWorkspace(activeWorkspace.id, { customer: nextCustomer, activeOrder: nextOrder, mode: "view", isDirty: false });
+              setSelectedOrder(nextOrder);
+            }}
           />
           {orderFormWorkspaces.length > 0 && (
             <OrderWorkspaceSwitcher
@@ -1900,6 +1946,25 @@ export function OrdersPage() {
           )}
         </>
       ) : (
+        <section aria-label="Order Management">
+          {orderIdFromUrl && orderFromUrlQuery.isLoading ? (
+            <p role="status">Loading the selected order and customer…</p>
+          ) : orderIdFromUrl && orderFromUrlQuery.isError ? (
+            <p role="alert">Unable to load the selected order. Please return to Orders and try again.</p>
+          ) : customerIdFromUrl && customerFromUrlQuery.isLoading ? (
+            <p role="status">Loading the selected customer…</p>
+          ) : customerIdFromUrl && customerFromUrlQuery.isError ? (
+            <p role="alert">Unable to load the selected customer. Please try again.</p>
+          ) : orderIdFromUrl || customerIdFromUrl ? (
+            <p role="status">Opening the selected customer workspace…</p>
+          ) : (
+            <>
+              <p>No customer or order is currently open in Order Management.</p>
+              {canCreateOrder ? <button type="button" onClick={openCreate}>New Order</button> : null}
+            </>
+          )}
+        </section>
+      )) : (
         <>
       <label style={{ display: "block", maxWidth: 520, margin: "12px 0" }}>
         Search orders
@@ -2019,26 +2084,7 @@ export function OrdersPage() {
         </section>
       )}
 
-      {newOrderContent}
 
-      {orderFormWorkspaces.length > 0 && (
-        <OrderWorkspaceSwitcher
-          workspaces={orderFormWorkspaces}
-          activeWorkspaceId={activeOrderFormWorkspaceId}
-          onOpenCustomer={() => {
-            setCustomerSearch("");
-            setCustomerPickerOpen(true);
-          }}
-          onSwitch={(workspaceId) => {
-            switchWorkspace(workspaceId);
-            setCustomerPickerOpen(false);
-            setFormError(null);
-          }}
-          onClose={(workspaceId) => {
-            closeWorkspace(workspaceId);
-          }}
-        />
-      )}
 
 
 
@@ -2046,7 +2092,7 @@ export function OrdersPage() {
         </>
       )}
 
-      {customerPickerOpen && (
+      {isOrderManagementRoute && customerPickerOpen && (
         <section aria-labelledby="customer-picker-heading">
           <h2 id="customer-picker-heading">Find Customer</h2>
 
@@ -2120,7 +2166,7 @@ export function OrdersPage() {
       )}
 
       {customerCreateMessage ? <p role="status">{customerCreateMessage}</p> : null}
-      {newCustomerOpen ? (
+      {isOrderManagementRoute && newCustomerOpen ? (
         <CustomerFormDialog
           customer={null}
           initialPhone={initialCustomerPhone}

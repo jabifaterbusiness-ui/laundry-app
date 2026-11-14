@@ -114,6 +114,10 @@ export const listInventorySuppliersQuerySchema = z.object({
 export const createInventoryPurchaseOrderSchema = z.object({
   supplierId: z.string().uuid(),
   orderNumber: z.string().trim().min(1).max(100),
+  notificationChannel: z.enum(["EMAIL", "WHATSAPP"]).default("EMAIL"),
+  notificationTemplateName: z.string().trim().min(1).max(100).optional(),
+  notificationTemplateLanguage: z.string().trim().min(2).max(20).optional(),
+  whatsappConsentConfirmed: z.boolean().optional(),
   expectedAt: z.coerce.date().optional(),
   notes: z.string().trim().max(2000).optional(),
   lines: z.array(z.object({
@@ -121,7 +125,16 @@ export const createInventoryPurchaseOrderSchema = z.object({
     quantityOrdered: z.coerce.number().int().positive().max(100000000),
     unitCost: z.coerce.number().int().min(0).max(2147483647),
   }).strict()).min(1).max(200),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.notificationChannel === "WHATSAPP") {
+    if (!value.notificationTemplateName || !value.notificationTemplateLanguage) {
+      context.addIssue({ code: "custom", path: ["notificationTemplateName"], message: "Select an approved WhatsApp purchase-order template" });
+    }
+    if (value.whatsappConsentConfirmed !== true) {
+      context.addIssue({ code: "custom", path: ["whatsappConsentConfirmed"], message: "Confirm the supplier has agreed to receive WhatsApp purchase orders" });
+    }
+  }
+});
 
 export const listInventoryPurchaseOrdersQuerySchema = z.object({
   status: z.enum(["DRAFT", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"]).optional(),

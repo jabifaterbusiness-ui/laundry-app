@@ -285,11 +285,21 @@ export interface CreateInventorySupplierInput {
 }
 export interface CreateInventoryPurchaseOrderInput {
   supplierId: string; orderNumber: string; expectedAt?: string; notes?: string;
+  notificationChannel: "EMAIL" | "WHATSAPP";
+  notificationTemplateName?: string;
+  notificationTemplateLanguage?: string;
+  whatsappConsentConfirmed?: boolean;
   lines: Array<{ inventoryItemId: string; quantityOrdered: number; unitCost: number }>;
 }
 export interface ReceiveInventoryPurchaseOrderInput {
   receiptNumber: string; notes?: string;
   lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number; batchNumber?: string; expiryDate?: string }>;
+}
+export interface InventorySupplierNotificationTemplate {
+  id: string; name: string; language: string; category: string; bodyVariableCount: number; headerFormat: string | null;
+}
+export async function listInventorySupplierNotificationTemplates(auth: AuthOptions) {
+  return apiFetch<{ templates: InventorySupplierNotificationTemplate[] }>("/inventory/supplier-notification-templates", { accessToken: auth.accessToken });
 }
 export async function listInventorySuppliers(params: { search?: string; page?: number; pageSize?: number } = {}, auth: AuthOptions) {
   return apiFetch<{ suppliers: InventorySupplier[]; pagination: Pagination }>(`/inventory/suppliers${buildQuery(params)}`, { accessToken: auth.accessToken });
@@ -301,7 +311,7 @@ export async function listInventoryPurchaseOrders(params: { status?: InventoryPu
   return apiFetch<{ purchaseOrders: InventoryPurchaseOrder[]; pagination: Pagination }>(`/inventory/purchase-orders${buildQuery(params)}`, { accessToken: auth.accessToken, branchId });
 }
 export async function createInventoryPurchaseOrder(input: CreateInventoryPurchaseOrderInput, auth: AuthOptions, branchId: string | null) {
-  return apiFetch<{ data: InventoryPurchaseOrder }>("/inventory/purchase-orders", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
+  return apiFetch<{ data: InventoryPurchaseOrder; notification?: { channel: "EMAIL" | "WHATSAPP"; status: "SENT" | "FAILED"; destination: string | null; providerMessageId?: string; error?: string } }>("/inventory/purchase-orders", { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });
 }
 export async function receiveInventoryPurchaseOrder(id: string, input: ReceiveInventoryPurchaseOrderInput, auth: AuthOptions, branchId: string | null) {
   return apiFetch<{ data: unknown }>(`/inventory/purchase-orders/${id}/receive`, { method: "POST", accessToken: auth.accessToken, branchId, body: JSON.stringify(input) });

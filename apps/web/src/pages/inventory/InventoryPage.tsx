@@ -15,6 +15,7 @@ import {
   type InventoryUnit,
   createInventorySupplier,
   listInventorySuppliers,
+  listInventorySupplierNotificationTemplates,
   createInventoryPurchaseOrder,
   listInventoryPurchaseOrders,
   receiveInventoryPurchaseOrder,
@@ -88,6 +89,11 @@ export function InventoryPage() {
   const [itemPage, setItemPage] = useState(1);
 
   const [itemFormOpen, setItemFormOpen] = useState(false);
+
+  useEffect(() => {
+    if (!itemFormOpen) return;
+    document.getElementById("inventory-item-form")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [itemFormOpen]);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
   const [itemFormError, setItemFormError] = useState<string | null>(null);
@@ -398,6 +404,11 @@ export function InventoryPage() {
   const [supplierPhone, setSupplierPhone] = useState("");
   const [supplierEmail, setSupplierEmail] = useState("");
   const [poSupplierId, setPoSupplierId] = useState("");
+  const [poNotificationChannel, setPoNotificationChannel] = useState<"EMAIL" | "WHATSAPP">("EMAIL");
+  const [poNotificationTemplateName, setPoNotificationTemplateName] = useState("");
+  const [poNotificationTemplateLanguage, setPoNotificationTemplateLanguage] = useState("");
+  const [poWhatsappConsentConfirmed, setPoWhatsappConsentConfirmed] = useState(false);
+  const [procurementNotice, setProcurementNotice] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState("");
   const [poLines, setPoLines] = useState<Array<{ inventoryItemId: string; quantityOrdered: string; unitCost: string }>>([
     { inventoryItemId: "", quantityOrdered: "1", unitCost: "0" },
@@ -414,6 +425,11 @@ export function InventoryPage() {
     queryKey: ["inventory", "suppliers"],
     queryFn: () => listInventorySuppliers({ page: 1, pageSize: 100 }, { accessToken }),
   });
+  const supplierNotificationTemplatesQuery = useQuery({
+    queryKey: ["inventory", "supplier-notification-templates", activeBranchId],
+    queryFn: () => listInventorySupplierNotificationTemplates({ accessToken }),
+    enabled: Boolean(accessToken && activeBranchId && poNotificationChannel === "WHATSAPP"),
+  });
   const purchaseOrdersQuery = useQuery({
     queryKey: ["inventory", "purchase-orders", activeBranchId],
     enabled: Boolean(activeBranchId),
@@ -426,10 +442,11 @@ export function InventoryPage() {
   });
   const purchaseOrderMutation = useMutation({
     mutationFn: () => createInventoryPurchaseOrder({
-      supplierId: poSupplierId, orderNumber: poNumber.trim(),
+      supplierId: poSupplierId, orderNumber: poNumber.trim(), notificationChannel: poNotificationChannel,
+      ...(poNotificationChannel === "WHATSAPP" ? { notificationTemplateName: poNotificationTemplateName, notificationTemplateLanguage: poNotificationTemplateLanguage, whatsappConsentConfirmed: poWhatsappConsentConfirmed } : {}),
       lines: poLines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantityOrdered: Number(line.quantityOrdered), unitCost: Number(line.unitCost) })),
     }, { accessToken }, activeBranchId),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setProcurementError(null); },
+    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] }); setPoNumber(""); setPoLines([{ inventoryItemId: "", quantityOrdered: "1", unitCost: "0" }]); setPoNotificationTemplateName(""); setPoNotificationTemplateLanguage(""); setPoWhatsappConsentConfirmed(false); setProcurementError(null); setProcurementNotice(result.notification?.status === "SENT" ? `Purchase order sent to supplier by ${result.notification.channel}.` : `Purchase order created, but supplier notification failed: ${result.notification?.error ?? "No delivery confirmation was returned."}`); },
     onError: (error) => setProcurementError(error instanceof ApiError ? error.message : "Unable to create purchase order."),
   });
   const receiveMutation = useMutation({
@@ -612,7 +629,28 @@ export function InventoryPage() {
     <main className="inventory-workspace">
       <header className="inventory-header"><div><span className="inventory-eyebrow">OPERATIONS / CONTROL CENTRE</span><h1>Inventory Management</h1><p>Track your catalogue, branch stock levels and every stock movement in one place.</p></div><div className="inventory-header-meta"><span className="inventory-live-dot" /> Live branch data</div></header>
 
-      <section className="inventory-panel inventory-catalogue" aria-label="Inventory items">
+      <div className="inventory-layout">
+        <aside className="inventory-sidebar" aria-label="Inventory navigation">
+          <h2>Inventory</h2>
+          <p>Jump to a task</p>
+          <nav aria-label="Inventory sections">
+            <a href="#inventory-items">Inventory Items</a>
+            {userPermissions.includes("inventory.manage") ? <a href="#inventory-item-form" onClick={() => setItemFormOpen(true)}>New / Edit Inventory Item</a> : null}
+            <a href="#inventory-current-stock">Current Stock</a>
+            <a href="#inventory-stock-movement">Receive / Issue Stock</a>
+            <a href="#inventory-stock-adjustment">Adjust Stock</a>
+            <a href="#inventory-movement-history">Movement History</a>
+            <a href="#inventory-procurement">Suppliers &amp; Procurement</a>
+            <a href="#inventory-transfers">Transfers &amp; Stocktaking</a>
+            <a href="#inventory-stocktake-approval">Stocktake Approval &amp; Register</a>
+            <a href="#inventory-reservations">Reservations &amp; Reorder</a>
+            <a href="#inventory-reports">Valuation &amp; Performance</a>
+            {userPermissions.includes("inventory.reports_all_branches") ? <a href="#inventory-branch-comparison">Branch Comparison</a> : null}
+          </nav>
+        </aside>
+        <div className="inventory-main-content">
+
+      <section className="inventory-panel inventory-catalogue" id="inventory-items" aria-label="Inventory items">
         <h2>Inventory Items</h2>
 
         <div>
@@ -752,7 +790,7 @@ export function InventoryPage() {
       </section>
 
       {itemFormOpen && (
-        <section className="inventory-panel inventory-editor" aria-label="Inventory item form">
+        <section className="inventory-panel inventory-editor" id="inventory-item-form" aria-label="Inventory item form">
           <h2>
             {editingItem
               ? "Edit inventory item"
@@ -911,7 +949,7 @@ export function InventoryPage() {
         </section>
       )}
 
-      <section className="inventory-panel inventory-balances" aria-label="Current stock">
+      <section className="inventory-panel inventory-balances" id="inventory-current-stock" aria-label="Current stock">
         <h2>Current Stock</h2>
 
         {!activeBranchId && (
@@ -1021,7 +1059,7 @@ export function InventoryPage() {
         )}
       </section>
 
-      <section className="inventory-panel inventory-movements" aria-label="Stock movement">
+      <section className="inventory-panel inventory-movements" id="inventory-stock-movement" aria-label="Stock movement">
         <h2>Receive / Issue Stock</h2>
 
         <form onSubmit={submitMovement}>
@@ -1174,7 +1212,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel inventory-adjustments" aria-label="Stock adjustment">
+      <section className="inventory-panel inventory-adjustments" id="inventory-stock-adjustment" aria-label="Stock adjustment">
         <h2>Adjust Stock</h2>
 
         <form onSubmit={submitAdjustment}>
@@ -1269,7 +1307,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel inventory-ledger" aria-label="Stock movement history">
+      <section className="inventory-panel inventory-ledger" id="inventory-movement-history" aria-label="Stock movement history">
         <details className="inventory-ledger-details">
           <summary><h2>Stock Movement History</h2></summary>
           <div className="inventory-ledger-content">
@@ -1367,11 +1405,12 @@ export function InventoryPage() {
         </details>
       </section>
 
-      <section className="inventory-panel inventory-procurement" aria-label="Suppliers and procurement">
+      <section className="inventory-panel inventory-procurement" id="inventory-procurement" aria-label="Suppliers and procurement">
         <div className="inventory-ledger-heading">
           <div><h2>Suppliers &amp; Procurement</h2><p>Raise branch purchase orders and record full or partial deliveries directly into stock.</p></div>
           <span className="inventory-procurement-count">{purchaseOrders.length} recent orders</span>
         </div>
+        {procurementNotice ? <p role="status" className="inventory-procurement-notice">{procurementNotice}</p> : null}
         <div className="inventory-procurement-grid">
           <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (supplierName.trim()) supplierMutation.mutate(); }}>
             <h3>Add supplier</h3>
@@ -1380,9 +1419,27 @@ export function InventoryPage() {
             <label>Email<input type="email" value={supplierEmail} onChange={(event) => setSupplierEmail(event.target.value)} maxLength={254} /></label>
             <button type="submit" disabled={supplierMutation.isPending}>{supplierMutation.isPending ? "Saving..." : "Save supplier"}</button>
           </form>
-          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); setProcurementError(null); if (poNotificationChannel === "WHATSAPP" && (!poNotificationTemplateName || !poNotificationTemplateLanguage || !poWhatsappConsentConfirmed)) { setProcurementError("Select an approved WhatsApp Utility template and confirm supplier consent."); return; } if (!activeBranchId || !poSupplierId || !poNumber.trim() || poLines.some((line) => !line.inventoryItemId || !Number.isInteger(Number(line.quantityOrdered)) || Number(line.quantityOrdered) <= 0 || !Number.isInteger(Number(line.unitCost)) || Number(line.unitCost) < 0) || new Set(poLines.map((line) => line.inventoryItemId)).size !== poLines.length) { setProcurementError("Complete every purchase order line with a unique item, valid quantity and non-negative unit cost."); return; } purchaseOrderMutation.mutate(); }}>
             <h3>Create purchase order</h3>
             <label>Supplier<select value={poSupplierId} onChange={(event) => setPoSupplierId(event.target.value)} required><option value="">Select supplier</option>{suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+            <label>Send purchase order via<select aria-label="Purchase order delivery channel" value={poNotificationChannel} onChange={(event) => setPoNotificationChannel(event.target.value as "EMAIL" | "WHATSAPP")}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option></select></label>
+            {poNotificationChannel === "WHATSAPP" ? (
+              <>
+                <label>Approved WhatsApp purchase-order template
+                  <select aria-label="Approved WhatsApp purchase-order template" value={poNotificationTemplateName && poNotificationTemplateLanguage ? poNotificationTemplateName + "::" + poNotificationTemplateLanguage : ""} onChange={(event) => { const [name, language] = event.target.value.split("::"); setPoNotificationTemplateName(name ?? ""); setPoNotificationTemplateLanguage(language ?? ""); }} required>
+                    <option value="">Select an approved Utility template</option>
+                    {(supplierNotificationTemplatesQuery.data?.templates ?? []).filter((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount === 4).map((template) => <option key={template.id} value={template.name + "::" + template.language}>{template.name} ({template.language})</option>)}
+                  </select>
+                </label>
+                {supplierNotificationTemplatesQuery.isLoading ? <p role="status">Loading approved WhatsApp templates…</p> : null}
+                {supplierNotificationTemplatesQuery.isError ? <p role="alert">Unable to load approved WhatsApp templates. Check the business WhatsApp connection.</p> : null}
+                {!supplierNotificationTemplatesQuery.isLoading && !supplierNotificationTemplatesQuery.isError && !(supplierNotificationTemplatesQuery.data?.templates ?? []).some((template) => template.category === "UTILITY" && template.headerFormat !== "IMAGE" && template.bodyVariableCount === 4) ? <p role="alert">Create an approved UTILITY template with four body placeholders (supplier, order number, item list and total) before sending purchase orders by WhatsApp.</p> : null}
+                <label style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={poWhatsappConsentConfirmed} onChange={(event) => setPoWhatsappConsentConfirmed(event.target.checked)} />
+                  Supplier has agreed to receive purchase orders by WhatsApp.
+                </label>
+              </>
+            ) : null}
             <label>Order number<input value={poNumber} onChange={(event) => setPoNumber(event.target.value)} required maxLength={100} /></label>
             {poLines.map((line, index) => <div className="inventory-po-line" key={index}>
               <strong>Line {index + 1}</strong>
@@ -1414,7 +1471,7 @@ export function InventoryPage() {
         </form>
       </section>
 
-      <section className="inventory-panel" aria-label="Advanced inventory operations">
+      <section className="inventory-panel" id="inventory-transfers" aria-label="Advanced inventory operations">
         <h2>Branch Transfers &amp; Stocktaking</h2>
         <p>Move stock between your branches, confirm incoming deliveries and reconcile physical counts against recorded balances.</p>
         <div className="inventory-procurement-grid">
@@ -1436,7 +1493,7 @@ export function InventoryPage() {
             {stocktakeError && <p role="alert">{stocktakeError}</p>}
           </form>
         </div>
-        {currentStocktake && <section className="inventory-stocktake-review" aria-label="Stocktake approval workflow">
+        {currentStocktake && <section className="inventory-stocktake-review" id="inventory-selected-stocktake-review" aria-label="Stocktake approval workflow">
           <h3>Stocktake {currentStocktake.reference}</h3>
           <p>Status: <strong>{currentStocktake.status.replaceAll("_", " ")}</strong></p>
           <p>{currentStocktake.lines.map((line) => `${line.inventoryItem.name}: expected ${line.expectedQuantity}, counted ${line.countedQuantity}, variance ${line.variance}`).join(" · ")}</p>
@@ -1445,7 +1502,7 @@ export function InventoryPage() {
           {currentStocktake.status === "APPROVED" && <button type="button" disabled={stocktakeApplyMutation.isPending} onClick={() => stocktakeApplyMutation.mutate()}>Apply approved count</button>}
           {currentStocktake.status === "APPLIED" && <p role="status">Stock reconciliation applied successfully.</p>}
         </section>}
-        <h3>Stocktake register</h3>
+        <h3 id="inventory-stocktake-approval">Stocktake Approval &amp; Register</h3>
         {stocktakesQuery.isLoading ? <p>Loading stocktakes…</p> : stocktakesQuery.data?.stocktakes.length ? <div className="inventory-stocktake-register">
           {stocktakesQuery.data.stocktakes.map((stocktake) => <button type="button" key={stocktake.id} className="inventory-stocktake-register-row" onClick={() => setCurrentStocktake(stocktake)}>
             <span><strong>{stocktake.reference}</strong><small>{stocktake.lines.length} counted item(s)</small></span>
@@ -1460,7 +1517,7 @@ export function InventoryPage() {
           })}
         </tbody></table> : <p>No branch transfers recorded.</p>}
       </section>
-      <section className="inventory-panel" aria-label="Stock reservations and reorder recommendations">
+      <section className="inventory-panel" id="inventory-reservations" aria-label="Stock reservations and reorder recommendations">
         <h2>Available Stock, Reservations &amp; Reorder</h2>
         <p>Reserved quantities are protected from issues and transfers. Reorder suggestions use each item's minimum threshold and configured replenishment quantity.</p>
         <form onSubmit={(event) => { event.preventDefault(); setReservationError(null); if (!reservationItemId || !Number.isInteger(Number(reservationQuantity)) || Number(reservationQuantity) <= 0) { setReservationError("Select an item and enter a positive reservation quantity."); return; } if (reservationExpiresAt && new Date(reservationExpiresAt).getTime() <= Date.now()) { setReservationError("Reservation expiry must be in the future."); return; } reservationCreateMutation.mutate(); }}>
@@ -1481,7 +1538,7 @@ export function InventoryPage() {
         </tbody></table> : <p>No reorder alerts for this branch.</p>}
       </section>
 
-      <section className="inventory-panel" aria-label="Inventory valuation and performance reports">
+      <section className="inventory-panel" id="inventory-reports" aria-label="Inventory valuation and performance reports">
         <div className="inventory-report-heading">
           <div><h2>Inventory Valuation &amp; Performance</h2><p>Valuation, stock movement and supplier performance for this branch.</p></div>
           <button
@@ -1534,13 +1591,15 @@ export function InventoryPage() {
           </tbody></table> : <p>No supplier orders in the last 30 days.</p>}
         </>}
       </section>
-      {userPermissions.includes("inventory.reports_all_branches") && <section className="inventory-panel" aria-label="Business-wide branch inventory comparison">
+      {userPermissions.includes("inventory.reports_all_branches") && <section className="inventory-panel" id="inventory-branch-comparison" aria-label="Business-wide branch inventory comparison">
         <h2>Branch Inventory Comparison</h2>
         <p>Business-wide stock visibility requires the dedicated cross-branch reporting permission. Figures include active branches only.</p>
         {branchComparisonQuery.isLoading ? <p>Loading branch comparison...</p> : branchComparisonQuery.isError ? <p role="alert">Unable to load branch comparison.</p> : branchComparisonQuery.data?.data.length ? <div className="inventory-table-wrap"><table><thead><tr><th>Branch</th><th>Catalogue items</th><th>Low-stock items</th><th>Stock valuation</th></tr></thead><tbody>
           {branchComparisonQuery.data.data.map((row) => <tr key={row.branchId}><td>{row.branchName}</td><td>{row.catalogueItemCount}</td><td>{row.lowStockItems}</td><td>{(row.totalValuation / 100).toLocaleString(undefined, { style: "currency", currency: "NGN" })}</td></tr>)}
         </tbody></table></div> : <p>No active branches have inventory balances yet.</p>}
       </section>}
+        </div>
+      </div>
     </main>
   );
 }

@@ -62,6 +62,7 @@ export function InvoicesPage() {
   const canViewPayments = hasPermission(user, "payments.view");
 
   const [page, setPage] = useState(1);
+  const [invoiceListExpanded, setInvoiceListExpanded] = useState(true);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
@@ -167,12 +168,12 @@ export function InvoicesPage() {
   }, [invoiceIdFromUrl, selectedInvoiceId]);
 
   const customersQuery = useQuery({
-    queryKey: ["invoice-transfer-customers", customerSearch],
+    queryKey: ["invoice-transfer-customers", activeBranchId, customerSearch],
     queryFn: () =>
       listCustomers(
         {
           page: 1,
-          pageSize: 25,
+          pageSize: 100,
           search: customerSearch.trim() || undefined,
           status: "all",
         },
@@ -596,6 +597,9 @@ export function InvoicesPage() {
         </select>
       </div>
 
+      <details className="invoice-list-disclosure" open={invoiceListExpanded} onToggle={(event) => setInvoiceListExpanded(event.currentTarget.open)}>
+        <summary>Invoice list ({pagination?.total ?? invoices.length})</summary>
+
       {invoicesQuery.isLoading && <p>Loading invoices...</p>}
 
       {invoicesQuery.isError && (
@@ -668,6 +672,8 @@ export function InvoicesPage() {
           </button>
         </div>
       )}
+
+      </details>
 
       {selectedInvoice && (
         <section aria-label="Invoice details">
@@ -1181,10 +1187,11 @@ export function InvoicesPage() {
                 <input
                   type="search"
                   value={customerSearch}
-                  onChange={(event) =>
-                    setCustomerSearch(event.target.value)
-                  }
-                  placeholder="Search by customer name or phone"
+                  onChange={(event) => {
+                    setCustomerSearch(event.target.value);
+                    setTargetCustomerId("");
+                  }}
+                  placeholder="Search by customer name, phone, email or order number"
                   style={{ display: "block", width: "100%" }}
                 />
               </label>
@@ -1205,7 +1212,7 @@ export function InvoicesPage() {
                         key={customer.id}
                         value={customer.id}
                       >
-                        {customer.name} — {customer.phone}
+                        {customer.name}{customer.phone ? ` — ${customer.phone}` : ""}{customer.email ? ` · ${customer.email}` : ""}
                       </option>
                     ),
                   )}

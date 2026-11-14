@@ -97,6 +97,7 @@ export async function sendApprovedWhatsAppTemplate(input: {
   businessId: string; customerId?: string | null; phone: string; templateName: string; language: string; variables: string[];
   headerImageId?: string;
   requireInboundConversation?: boolean;
+  recipientConsentVerified?: boolean;
 }) {
   const connection = await getConnection(input.businessId);
   let recipient = normalizeWhatsAppRecipient(input.phone);
@@ -113,8 +114,8 @@ export async function sendApprovedWhatsAppTemplate(input: {
       throw new AppError("Customer has not explicitly opted in to business-initiated WhatsApp messages", 422);
     }
   }
-  if (input.requireInboundConversation === false && !customerId) {
-    throw new AppError("A saved customer with recorded WhatsApp consent is required for automated template delivery", 422);
+  if (input.requireInboundConversation === false && !customerId && !input.recipientConsentVerified) {
+    throw new AppError("A saved recipient with recorded WhatsApp consent or a verified supplier opt-in is required for automated template delivery", 422);
   }
   if (input.requireInboundConversation !== false) {
     const priorInbound = await prisma.whatsAppWebhookEvent.findFirst({
@@ -207,6 +208,33 @@ export async function sendAutomatedWhatsAppTemplate(input: {
     variables,
     ...(input.headerImageId ? { headerImageId: input.headerImageId } : {}),
     requireInboundConversation: false,
+  });
+}
+
+export async function sendSupplierPurchaseOrderTemplate(input: {
+  businessId: string;
+  phone: string;
+  templateName: string;
+  language: string;
+  variables: string[];
+  consentConfirmed: boolean;
+}) {
+  if (!input.consentConfirmed) {
+    throw new AppError("Confirm that the supplier has agreed to receive purchase orders by WhatsApp", 422);
+  }
+  const templates = await listApprovedWhatsAppTemplates(input.businessId);
+  const template = templates.find((item) => item.name === input.templateName && item.language === input.language);
+  if (!template || template.category !== "UTILITY" || template.headerFormat === "IMAGE" || template.bodyVariableCount !== 4) {
+    throw new AppError("Choose an approved UTILITY WhatsApp template with exactly four BODY variables and no IMAGE header", 422);
+  }
+  return sendApprovedWhatsAppTemplate({
+    businessId: input.businessId,
+    phone: input.phone,
+    templateName: template.name,
+    language: template.language,
+    variables: input.variables,
+    requireInboundConversation: false,
+    recipientConsentVerified: true,
   });
 }
 

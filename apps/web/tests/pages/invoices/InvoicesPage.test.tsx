@@ -257,6 +257,30 @@ beforeEach(() => {
 });
 
 describe("InvoicesPage invoice correction workflow", () => {
+  it("keeps invoice search available when the invoice list is collapsed", async () => {
+    renderPage();
+    await screen.findByText("INV-00001");
+
+    const summary = screen.getByText(/Invoice list/);
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    fireEvent.click(summary);
+    expect(details?.open).toBe(false);
+
+    const search = screen.getByLabelText("Search invoices");
+    fireEvent.change(search, { target: { value: "00001" } });
+
+    await waitFor(() => {
+      expect(mockedInvoicesApi.listInvoices).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: "00001" }),
+        { accessToken: "token" },
+        "branch-1",
+      );
+    });
+    expect(search).toBeVisible();
+    expect(details?.open).toBe(false);
+  });
+
   async function selectInvoice() {
     expect(await screen.findByText("INV-00001")).toBeInTheDocument();
 
@@ -596,6 +620,14 @@ describe("InvoicesPage invoice correction workflow", () => {
     });
 
     const user = userEvent.setup();
+    const customerSearch = within(transferDialog).getByPlaceholderText("Search by customer name, phone, email or order number");
+    await user.type(customerSearch, "00005");
+    await waitFor(() => {
+      expect(mockedCustomersApi.listCustomers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: "00005", pageSize: 100 }),
+        { accessToken: "token" },
+      );
+    });
 
     const targetCustomerSelect = within(transferDialog).getByRole(
       "combobox",

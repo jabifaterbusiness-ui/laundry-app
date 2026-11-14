@@ -15,6 +15,7 @@ const mockListInventoryMovements = vi.fn();
 const mockCreateInventoryMovement = vi.fn();
 const mockAdjustInventoryStock = vi.fn();
 const mockListInventorySuppliers = vi.fn();
+const mockListInventorySupplierNotificationTemplates = vi.fn();
 const mockCreateInventorySupplier = vi.fn();
 const mockListInventoryPurchaseOrders = vi.fn();
 const mockCreateInventoryPurchaseOrder = vi.fn();
@@ -51,6 +52,7 @@ vi.mock("../../../src/lib/inventory-api.js", () => ({
   adjustInventoryStock: (...args: unknown[]) =>
     mockAdjustInventoryStock(...args),
   listInventorySuppliers: (...args: unknown[]) => mockListInventorySuppliers(...args),
+  listInventorySupplierNotificationTemplates: (...args: unknown[]) => mockListInventorySupplierNotificationTemplates(...args),
   createInventorySupplier: (...args: unknown[]) => mockCreateInventorySupplier(...args),
   listInventoryPurchaseOrders: (...args: unknown[]) => mockListInventoryPurchaseOrders(...args),
   createInventoryPurchaseOrder: (...args: unknown[]) => mockCreateInventoryPurchaseOrder(...args),
@@ -155,6 +157,7 @@ function mockSuccessfulQueries() {
     },
   });
   mockListInventorySuppliers.mockResolvedValue({ suppliers: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } });
+  mockListInventorySupplierNotificationTemplates.mockResolvedValue({ templates: [] });
   mockListInventoryPurchaseOrders.mockResolvedValue({ purchaseOrders: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } });
   mockListInventoryItems.mockResolvedValue({
     items: [item],
@@ -240,6 +243,63 @@ beforeEach(() => {
 });
 
 describe("InventoryPage", () => {
+  it("provides direct sidebar navigation to the main inventory workflows", async () => {
+    renderPage();
+    const navigation = screen.getByRole("navigation", { name: "Inventory sections" });
+    expect(within(navigation).getByRole("link", { name: "Inventory Items" })).toHaveAttribute("href", "#inventory-items");
+    expect(within(navigation).getByRole("link", { name: "Suppliers & Procurement" })).toHaveAttribute("href", "#inventory-procurement");
+    expect(within(navigation).getByRole("link", { name: "Valuation & Performance" })).toHaveAttribute("href", "#inventory-reports");
+  });
+
+  it("sends a purchase order through the selected supplier notification channel", async () => {
+    mockUserPermissions.push("inventory.manage");
+    mockListInventorySuppliers.mockResolvedValue({
+      suppliers: [{
+        id: "supplier-1", businessId: "business-1", name: "Trusted Supplier",
+        contactName: "Sales Desk", email: "sales@supplier.test", phone: "2348012345678",
+        address: null, taxId: null, notes: null, isActive: true,
+        createdAt: "", updatedAt: "",
+      }],
+      pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+    });
+    mockListInventorySupplierNotificationTemplates.mockResolvedValue({ templates: [{ id: "template-1", name: "purchase_order_notice", language: "en", category: "UTILITY", bodyVariableCount: 4, headerFormat: null }] });
+    mockCreateInventoryPurchaseOrder.mockResolvedValue({
+      data: {},
+      notification: { channel: "WHATSAPP", status: "SENT", destination: "2348012345678", providerMessageId: "message-1" },
+    });
+
+    renderPage();
+    const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
+    // Supplier and item queries resolve independently from the form render.
+    // Wait for their options before selecting; changing a native select before
+    // its option exists silently leaves its value empty and blocks submission.
+    await within(form).findByRole("option", { name: "Trusted Supplier" });
+    await within(form).findByRole("option", { name: "Detergent" });
+    fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
+    fireEvent.change(within(form).getByLabelText("Purchase order delivery channel"), { target: { value: "WHATSAPP" } });
+    await within(form).findByRole("option", { name: "purchase_order_notice (en)" });
+    fireEvent.change(within(form).getByLabelText("Approved WhatsApp purchase-order template"), { target: { value: "purchase_order_notice::en" } });
+    fireEvent.click(within(form).getByLabelText("Supplier has agreed to receive purchase orders by WhatsApp."));
+    fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-1001" } });
+    fireEvent.change(within(form).getByLabelText("Inventory item"), { target: { value: item.id } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 quantity"), { target: { value: "2" } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 unit cost"), { target: { value: "500" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Create purchase order" }));
+
+    await waitFor(() => {
+      expect(mockCreateInventoryPurchaseOrder).toHaveBeenCalledWith({
+        supplierId: "supplier-1",
+        orderNumber: "PO-1001",
+        notificationChannel: "WHATSAPP",
+        notificationTemplateName: "purchase_order_notice",
+        notificationTemplateLanguage: "en",
+        whatsappConsentConfirmed: true,
+        lines: [{ inventoryItemId: item.id, quantityOrdered: 2, unitCost: 500 }],
+      }, { accessToken: "test-token" }, "branch-1");
+    });
+    expect(await screen.findByText("Purchase order sent to supplier by WHATSAPP.")).toBeInTheDocument();
+  });
+
   it("enforces the stocktake submit, approve and apply workflow in the UI", async () => {
     mockUserPermissions.push("inventory.approve");
     const lines = [{
@@ -836,4 +896,75 @@ describe("InventoryPage", () => {
 
     expect(mockAdjustInventoryStock).not.toHaveBeenCalled();
   });
+
+  it("sends a purchase order by email using the supplier email address", async () => {
+    mockUserPermissions.push("inventory.manage");
+    mockListInventorySuppliers.mockResolvedValue({
+      suppliers: [{
+        id: "supplier-1", businessId: "business-1", name: "Trusted Supplier",
+        contactName: "Sales Desk", email: "sales@supplier.test", phone: null,
+        address: null, taxId: null, notes: null, isActive: true,
+        createdAt: "", updatedAt: "",
+      }],
+      pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+    });
+    mockCreateInventoryPurchaseOrder.mockResolvedValue({
+      data: {},
+      notification: { channel: "EMAIL", status: "SENT", destination: "sales@supplier.test", providerMessageId: "email-1" },
+    });
+
+    renderPage();
+    const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
+    await within(form).findByRole("option", { name: "Trusted Supplier" });
+    await within(form).findByRole("option", { name: "Detergent" });
+    fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
+    expect(within(form).getByLabelText("Purchase order delivery channel")).toHaveValue("EMAIL");
+    fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-EMAIL-1" } });
+    fireEvent.change(within(form).getByLabelText("Inventory item"), { target: { value: item.id } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 quantity"), { target: { value: "2" } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 unit cost"), { target: { value: "500" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Create purchase order" }));
+
+    await waitFor(() => expect(mockCreateInventoryPurchaseOrder).toHaveBeenCalledWith({
+      supplierId: "supplier-1",
+      orderNumber: "PO-EMAIL-1",
+      notificationChannel: "EMAIL",
+      lines: [{ inventoryItemId: item.id, quantityOrdered: 2, unitCost: 500 }],
+    }, { accessToken: "test-token" }, "branch-1"));
+    expect(await screen.findByText("Purchase order sent to supplier by EMAIL.")).toBeInTheDocument();
+  });
+
+  it("clearly reports a failed supplier notification after creating the purchase order", async () => {
+    mockUserPermissions.push("inventory.manage");
+    mockListInventorySuppliers.mockResolvedValue({
+      suppliers: [{
+        id: "supplier-1", businessId: "business-1", name: "Trusted Supplier",
+        contactName: "Sales Desk", email: "sales@supplier.test", phone: null,
+        address: null, taxId: null, notes: null, isActive: true,
+        createdAt: "", updatedAt: "",
+      }],
+      pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+    });
+    mockCreateInventoryPurchaseOrder.mockResolvedValue({
+      data: {},
+      notification: { channel: "EMAIL", status: "FAILED", destination: "sales@supplier.test", error: "Email provider rejected the message" },
+    });
+
+    renderPage();
+    const form = (await screen.findByRole("heading", { name: "Create purchase order" })).closest("form")!;
+    await within(form).findByRole("option", { name: "Trusted Supplier" });
+    await within(form).findByRole("option", { name: "Detergent" });
+    fireEvent.change(within(form).getByLabelText("Supplier"), { target: { value: "supplier-1" } });
+    fireEvent.change(within(form).getByLabelText("Order number"), { target: { value: "PO-FAILED-1" } });
+    fireEvent.change(within(form).getByLabelText("Inventory item"), { target: { value: item.id } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 quantity"), { target: { value: "1" } });
+    fireEvent.change(within(form).getByLabelText("Order line 1 unit cost"), { target: { value: "500" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Create purchase order" }));
+
+    await waitFor(() => expect(mockCreateInventoryPurchaseOrder).toHaveBeenCalled());
+    expect(await screen.findByText(
+      "Purchase order created, but supplier notification failed: Email provider rejected the message",
+    )).toBeInTheDocument();
+  });
+
 });

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuickOperationLauncher } from "../../../src/components/quick-operations/QuickOperationLauncher.js";
 import type { QuickOperationDefinition } from "../../../src/lib/quick-operations-catalog.js";
@@ -12,6 +12,7 @@ const {
   getCustomerMock,
   listCustomersMock,
   getOrderMock,
+  listAllOrdersMock,
   exportBackupMock,
   listCloudBackupConnectionsMock,
   getCloudBackupSettingsMock,
@@ -28,6 +29,7 @@ const {
   getCustomerMock: vi.fn(),
   listCustomersMock: vi.fn(),
   getOrderMock: vi.fn(),
+  listAllOrdersMock: vi.fn(),
   exportBackupMock: vi.fn(),
   listCloudBackupConnectionsMock: vi.fn(),
   getCloudBackupSettingsMock: vi.fn(),
@@ -69,6 +71,7 @@ vi.mock("../../../src/lib/customers-api.js", () => ({
 
 vi.mock("../../../src/lib/orders-api.js", () => ({
   getOrder: getOrderMock,
+  listAllOrders: listAllOrdersMock,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -310,6 +313,8 @@ describe("QuickOperationLauncher", () => {
     });
 
     getOrderMock.mockReset();
+    listAllOrdersMock.mockReset();
+    listAllOrdersMock.mockResolvedValue([{ id: "order-1", orderNumber: "00001", status: "RECEIVED" }]);
     exportBackupMock.mockReset();
     exportBackupMock.mockResolvedValue(new Blob(["backup"]));
     createManualLocalBackupMock.mockReset();
@@ -500,12 +505,17 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Order ID"), {
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
+      target: { value: "customer-1" },
+    });
+    await screen.findByRole("option", { name: /#00001/ });
+    fireEvent.change(screen.getByLabelText("Source order"), {
       target: { value: "order-1" },
     });
-    await screen.findByRole("option", { name: /Source Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
-      target: { value: "customer-1" },
+    await within(screen.getByLabelText("Destination customer")).findByRole("option", { name: /Target Customer/ });
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
+      target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Safely stopping the current workflow" },
@@ -566,12 +576,17 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Order ID"), {
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
+      target: { value: "customer-1" },
+    });
+    await screen.findByRole("option", { name: /#00001/ });
+    fireEvent.change(screen.getByLabelText("Source order"), {
       target: { value: "order-1" },
     });
-    await screen.findByRole("option", { name: /Source Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
-      target: { value: "customer-1" },
+    await within(screen.getByLabelText("Destination customer")).findByRole("option", { name: /Target Customer/ });
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
+      target: { value: "customer-2" },
     });
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Invoice was entered on the wrong customer account" },
@@ -585,7 +600,7 @@ describe("QuickOperationLauncher", () => {
           code: "TO",
           input: {
             orderId: "order-1",
-            customerId: "customer-1",
+            customerId: "customer-2",
           },
           confirmed: true,
           reason: "Invoice was entered on the wrong customer account",
@@ -645,13 +660,34 @@ describe("QuickOperationLauncher", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Find source customer"), {
+      target: { value: "08000000001" },
+    });
+    await waitFor(() => {
+      expect(listCustomersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 100, search: "08000000001", status: "all" }),
+        { accessToken: "access-token" },
+      );
+    });
+    await within(screen.getByLabelText("Source customer")).findByRole("option", { name: /Source Customer/ });
+    fireEvent.change(screen.getByLabelText("Source customer"), {
       target: { value: "customer-1" },
     });
-    await screen.findByRole("option", { name: /Target Customer/ });
-    fireEvent.change(screen.getByLabelText("Target Customer ID"), {
+    fireEvent.change(screen.getByLabelText("Find destination customer"), {
+      target: { value: "00005" },
+    });
+    await waitFor(() => {
+      expect(listCustomersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 100, search: "00005", status: "all" }),
+        { accessToken: "access-token" },
+      );
+    });
+    await within(screen.getByLabelText("Destination customer")).findByRole("option", { name: /Target Customer/ });
+    fireEvent.change(screen.getByLabelText("Destination customer"), {
       target: { value: "customer-2" },
     });
+    expect(screen.queryByLabelText("Customer ID")).not.toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText("Search by name, phone, email or order number")).toHaveLength(2);
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Customer account correction requested" },
     });

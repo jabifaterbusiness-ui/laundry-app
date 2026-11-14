@@ -13,6 +13,7 @@ import { SensitiveAuthorizationProvider } from "../../../src/components/auth/Sen
 import { OrdersPage } from "../../../src/pages/orders/OrdersPage.js";
 import { useAuthStore } from "../../../src/state/auth-store.js";
 import { useOrderWorkspaceStore } from "../../../src/state/order-workspace-store.js";
+import { loadOrderWorkspaceState } from "../../../src/lib/order-workspace-persistence.js";
 
 const customerA: Customer = {
   id: "customer-a",
@@ -496,17 +497,24 @@ describe("OrdersPage quick customer switching", () => {
     vi.mocked(getCustomer).mockResolvedValue(customerA);
     renderPage([`/orders?customerId=${customerA.id}&openAccount=1`]);
 
-    expect(
-      await screen.findByRole("heading", { name: /Order Management · Jane Doe/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "ORDER MANAGEMENT" })).toBeInTheDocument();
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /new order/i })).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(listOrders).toHaveBeenLastCalledWith(
-        expect.objectContaining({ customerId: customerA.id }),
-        { accessToken: "test-token" },
-        "branch-a",
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(
+        `customer:${customerA.id}`,
       );
     });
+    expect(
+      useOrderWorkspaceStore.getState().workspaces.find(
+        (workspace) => workspace.customer.id === customerA.id,
+      )?.mode,
+    ).toBe("view");
+    expect(
+      useOrderWorkspaceStore.getState().workspaces.find(
+        (workspace) => workspace.customer.id === customerA.id,
+      )?.activeOrder,
+    ).toBeNull();
   });
 
   it("opens a non-active customer from the customer details Add New Order flow", async () => {
@@ -593,6 +601,55 @@ describe("OrdersPage quick customer switching", () => {
     });
 
     expect(useOrderWorkspaceStore.getState().workspaces).toHaveLength(2);
+  });
+
+  it("persists the last active customer workspace for restoration after a reload", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerB);
+
+    await waitFor(() => {
+      const saved = loadOrderWorkspaceState("business-a", "user-a", "branch-a");
+      expect(saved?.activeWorkspaceId).toBe(`customer:${customerB.id}`);
+      expect(saved?.workspaces.map((workspace) => workspace.customer.id)).toContain(customerB.id);
+    });
+  });
+
+  it("clears the saved workspace when the final customer workspace is closed", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")?.workspaces).toHaveLength(1);
+    });
+
+    useOrderWorkspaceStore.getState().clearWorkspaces();
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")).toBeNull();
+    });
+  });
+
+  it("clears the previous branch workspace when switching to a branch with no saved workspace", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    await openNewOrderForCustomer(customerA);
+
+    await waitFor(() => {
+      expect(loadOrderWorkspaceState("business-a", "user-a", "branch-a")?.workspaces).toHaveLength(1);
+    });
+
+    useAuthStore.setState({ activeBranchId: "branch-b" });
+
+    await waitFor(() => {
+      expect(useOrderWorkspaceStore.getState().workspaces).toHaveLength(0);
+    });
+    expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+    expect(loadOrderWorkspaceState("business-a", "user-a", "branch-b")).toBeNull();
   });
 
   it("opens three customer workspaces", async () => {
@@ -784,6 +841,8 @@ describe("OrdersPage quick customer switching", () => {
 
     renderPage([`/order-management?orderId=${orderA.id}`]);
     await screen.findByRole("region", { name: "Order Management" });
+    await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
     expect(await screen.findByRole("heading", { name: /Edit Invoice/i })).toBeInTheDocument();
@@ -808,6 +867,8 @@ describe("OrdersPage quick customer switching", () => {
     renderPage([`/order-management?orderId=${orderA.id}`]);
 
     await screen.findByRole("region", { name: "Order Management" });
+    await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
     fireEvent.click(screen.getByRole("button", { name: "Edit Order / Invoice" }));
     await screen.findByRole("heading", { name: /Edit Invoice/i });
 
@@ -845,10 +906,10 @@ describe("OrdersPage quick customer switching", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "← Back" }));
 
-    // Distinguish a swallowed Back click from a route change that is later
-    // overwritten by another navigation effect.
+    // The customer workspace is intentionally retained when returning to
+    // its Customer Workstation so the last attended customer remains available.
     await waitFor(() => {
-      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+      expect(useOrderWorkspaceStore.getState().activeWorkspaceId).toBe(`customer:${customerA.id}`);
     });
 
     await waitFor(() => {
@@ -1012,6 +1073,8 @@ describe("OrdersPage quick customer switching", () => {
   });
 
   it("keeps Order Management outside the Orders route after selecting an order", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
     vi.mocked(listOrders).mockResolvedValue({
       data: [orderA],
       pagination: {
@@ -1033,9 +1096,10 @@ describe("OrdersPage quick customer switching", () => {
       );
     });
 
-    expect(
-      screen.queryByRole("region", { name: "Order Management" }),
-    ).not.toBeInTheDocument();
+    await screen.findByText("Jane Doe");
+    await screen.findByText("#00001");
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
   });
 
 describe("OrdersPage customer-specific pricing", () => {
@@ -1215,6 +1279,38 @@ describe("OrdersPage customer-specific discounts", () => {
         customerA.id,
         "order",
       );
+    });
+  });
+});
+
+describe("Orders and Order Management section separation", () => {
+  it("shows only the order search and order folders in the Orders section", async () => {
+    renderPage(["/orders"]);
+    expect(screen.getByRole("heading", { name: "Orders" })).toBeInTheDocument();
+    expect(await screen.findByText("No orders found.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search orders")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Order Details" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the last customer workspace in Order Management instead of returning to Orders", async () => {
+    vi.mocked(getOrder).mockResolvedValue(orderA);
+    vi.mocked(getCustomer).mockResolvedValue(customerA);
+    renderPage([`/order-management?orderId=${orderA.id}`]);
+
+    expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
+    await screen.findByText("Jane Doe");
+    expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Customer Pay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Merge Customer (MC)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Customer$/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/order-management");
+      expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
     });
   });
 });
