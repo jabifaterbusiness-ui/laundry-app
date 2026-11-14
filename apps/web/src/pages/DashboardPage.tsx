@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../lib/api-client.js";
-import { getDashboardReport } from "../lib/reports-api.js";
+import { getDashboardReport, getTodaysReport } from "../lib/reports-api.js";
 import { hasPermission } from "../lib/permissions.js";
 import { useAuthStore } from "../state/auth-store.js";
 
@@ -55,6 +55,7 @@ export function DashboardPage() {
 
   const [from, setFrom] = useState(getFirstDayOfMonth);
   const [to, setTo] = useState(getToday);
+  const [todayReportOpen, setTodayReportOpen] = useState(false);
   const [appliedRange, setAppliedRange] = useState({
     from: getFirstDayOfMonth(),
     to: getToday(),
@@ -69,6 +70,13 @@ export function DashboardPage() {
         activeBranchId,
       ),
     enabled: Boolean(accessToken && activeBranchId && canViewReports),
+  });
+
+  const todayReportQuery = useQuery({
+    queryKey: ["reports", "today", activeBranchId],
+    queryFn: () => getTodaysReport({ accessToken }, activeBranchId),
+    enabled: Boolean(todayReportOpen && accessToken && activeBranchId && canViewReports),
+    refetchOnWindowFocus: true,
   });
 
   function applyDateRange(event: React.FormEvent<HTMLFormElement>) {
@@ -120,7 +128,70 @@ export function DashboardPage() {
             + New order
           </Link>
         ) : null}
+        {canViewReports ? (
+          <button
+            className="dashboard-primary-action"
+            type="button"
+            aria-expanded={todayReportOpen}
+            aria-controls="dashboard-todays-report"
+            onClick={() => setTodayReportOpen((open) => !open)}
+          >
+            {todayReportOpen ? "Close Today's Report" : "Today's Report"}
+          </button>
+        ) : null}
       </header>
+
+      {todayReportOpen && canViewReports ? (
+        <section
+          id="dashboard-todays-report"
+          className="dashboard-overview-card"
+          aria-labelledby="todays-report-heading"
+          aria-busy={todayReportQuery.isLoading}
+        >
+          <div className="dashboard-panel-heading">
+            <div>
+              <p className="dashboard-panel-eyebrow">Daily operations · Africa/Lagos</p>
+              <h2 id="todays-report-heading">Today's Report</h2>
+              <p>Collections and garment pickups recorded today for the active branch.</p>
+            </div>
+            <button type="button" onClick={() => todayReportQuery.refetch()} disabled={todayReportQuery.isFetching}>
+              {todayReportQuery.isFetching ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {todayReportQuery.isLoading ? (
+            <p role="status">Loading today's activity...</p>
+          ) : todayReportQuery.isError ? (
+            <div className="dashboard-feedback dashboard-error" role="alert">
+              <p>{todayReportQuery.error instanceof ApiError ? todayReportQuery.error.message : "Unable to load today's report."}</p>
+              <button type="button" onClick={() => todayReportQuery.refetch()}>Try again</button>
+            </div>
+          ) : todayReportQuery.data ? (
+            <div className="dashboard-kpi-grid" aria-label="Today's business totals">
+              <article className="dashboard-kpi-card">
+                <p>Collections received</p>
+                <strong>{formatMoney(todayReportQuery.data.payments.amountReceived)}</strong>
+                <span>{formatNumber(todayReportQuery.data.payments.transactionCount)} payment transactions</span>
+              </article>
+              <article className="dashboard-kpi-card">
+                <p>Refunds issued</p>
+                <strong>{formatMoney(todayReportQuery.data.payments.refundAmount)}</strong>
+                <span>Recorded today</span>
+              </article>
+              <article className="dashboard-kpi-card">
+                <p>Net collections</p>
+                <strong>{formatMoney(todayReportQuery.data.payments.netCollected)}</strong>
+                <span>Collections less refunds</span>
+              </article>
+              <article className="dashboard-kpi-card">
+                <p>Pickups completed</p>
+                <strong>{formatNumber(todayReportQuery.data.pickups.orderCount)}</strong>
+                <span>{formatNumber(todayReportQuery.data.pickups.garmentCount)} garments handed over</span>
+              </article>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="dashboard-toolbar" aria-labelledby="dashboard-period-heading">
         <div>
