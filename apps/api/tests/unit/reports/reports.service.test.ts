@@ -97,8 +97,7 @@ describe("reports.service", () => {
         branchId: "branch-4",
         status: "POSTED",
         type: "PAYMENT",
-        invoiceId: { not: null },
-        createdAt: {
+            createdAt: {
           gte: result.period.from,
           lt: result.period.to,
         },
