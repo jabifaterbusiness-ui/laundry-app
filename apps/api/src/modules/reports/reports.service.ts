@@ -471,44 +471,35 @@ export async function getTodaysReport(scope: ReportsScope) {
   const from = localMidnightAsUtc(localToday, timeZone);
   const to = localMidnightAsUtc(localTomorrow, timeZone);
 
-  const paymentWhere = {
+  const invoicePaymentWhere = {
     businessId: scope.businessId,
     branchId: scope.branchId,
     status: "POSTED" as const,
+    invoiceId: { not: null },
     createdAt: { gte: from, lt: to },
   };
-  const pickupWhere = {
+  const pickupOrderWhere = {
     businessId: scope.businessId,
     branchId: scope.branchId,
     status: "PICKED_UP" as const,
     pickedUpAt: { gte: from, lt: to },
   };
 
-  const [
-    paymentCount,
-    paymentsReceived,
-    refunds,
-    pickupGarmentCount,
-    pickupOrders,
-  ] = await Promise.all([
-    prisma.payment.count({
-      where: { ...paymentWhere, type: "PAYMENT" },
-    }),
-    prisma.payment.aggregate({
-      where: { ...paymentWhere, type: "PAYMENT" },
-      _sum: { amount: true },
-    }),
-    prisma.payment.aggregate({
-      where: { ...paymentWhere, type: "REFUND" },
-      _sum: { amount: true },
-    }),
-    prisma.garment.count({ where: pickupWhere }),
-    prisma.garment.findMany({
-      where: pickupWhere,
-      distinct: ["orderId"],
-      select: { orderId: true },
-    }),
-  ]);
+  const [paymentCount, paymentsReceived, refunds, pickupOrderCount] =
+    await Promise.all([
+      prisma.payment.count({
+        where: { ...invoicePaymentWhere, type: "PAYMENT" },
+      }),
+      prisma.payment.aggregate({
+        where: { ...invoicePaymentWhere, type: "PAYMENT" },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { ...invoicePaymentWhere, type: "REFUND" },
+        _sum: { amount: true },
+      }),
+      prisma.order.count({ where: pickupOrderWhere }),
+    ]);
 
   const received = paymentsReceived._sum.amount ?? 0;
   const refunded = refunds._sum.amount ?? 0;
@@ -524,8 +515,7 @@ export async function getTodaysReport(scope: ReportsScope) {
       netCollected: received - refunded,
     },
     pickups: {
-      garmentCount: pickupGarmentCount,
-      orderCount: pickupOrders.length,
+      orderCount: pickupOrderCount,
     },
   };
 }
