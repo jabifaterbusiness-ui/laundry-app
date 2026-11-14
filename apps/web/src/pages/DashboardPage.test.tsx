@@ -208,7 +208,6 @@ describe("DashboardPage", () => {
         netCollected: 120000,
       },
       pickups: {
-        garmentCount: 18,
         orderCount: 6,
       },
     });
@@ -217,7 +216,12 @@ describe("DashboardPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Today's Report" }));
 
     expect(await screen.findByText("₦125,000")).toBeInTheDocument();
-    expect(screen.getByText("4 payment transactions")).toBeInTheDocument();
+    expect(screen.getByText("Total Invoice Collected")).toBeInTheDocument();
+    expect(screen.getByText("Refunds")).toBeInTheDocument();
+    expect(screen.getByText("Net Payment Received")).toBeInTheDocument();
+    expect(screen.getByText("Total Pickups")).toBeInTheDocument();
+    expect(screen.getByText("Invoice payments collected today")).toBeInTheDocument();
+    expect(screen.getByText("Orders handed over to customers today")).toBeInTheDocument();
     expect(screen.getByText("₦5,000")).toBeInTheDocument();
     expect(screen.getByText("₦120,000")).toBeInTheDocument();
     expect(screen.getByText("18 garments handed over")).toBeInTheDocument();
