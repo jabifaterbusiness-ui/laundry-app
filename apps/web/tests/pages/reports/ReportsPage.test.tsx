@@ -170,11 +170,11 @@ describe("ReportsPage", () => {
 
     expect(await screen.findByText("Total orders: 12")).toBeInTheDocument();
     expect(screen.getByText("Total invoices: 10")).toBeInTheDocument();
-    expect(screen.getByText("Invoiced: ₦125,000")).toBeInTheDocument();
-    expect(screen.getAllByText("Outstanding: ₦35,000")).toHaveLength(2);
-    expect(screen.getByText("Received: ₦90,000")).toBeInTheDocument();
-    expect(screen.getByText("Refunded: ₦5,000")).toBeInTheDocument();
-    expect(screen.getByText("Net received: ₦85,000")).toBeInTheDocument();
+    expect(screen.getByText("Total Invoice Value: ₦125,000")).toBeInTheDocument();
+    expect(screen.getAllByText("Unpaid Invoice Balance: ₦35,000")).toHaveLength(2);
+    expect(screen.getByText("Payments Received: ₦90,000")).toBeInTheDocument();
+    expect(screen.getByText("Refunds Issued: ₦5,000")).toBeInTheDocument();
+    expect(screen.getByText("Net Payments Retained: ₦85,000")).toBeInTheDocument();
     expect(screen.getByText("Active customers: 24")).toBeInTheDocument();
     expect(screen.getByText("Stock items: 8")).toBeInTheDocument();
     expect(screen.getByText("Movements: 17")).toBeInTheDocument();
