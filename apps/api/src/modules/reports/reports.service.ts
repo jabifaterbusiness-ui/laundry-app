@@ -393,3 +393,132 @@ export async function getDashboardReport(
     managementInsights,
   };
 }
+
+
+/**
+ * Daily operational snapshot for the active branch.
+ * The business-configured timezone determines the local calendar day.
+ * Payment and pickup events are dated by the event timestamp, not by the
+ * invoice/order creation date.
+ */
+function localMidnightAsUtc(date: Date, timeZone: string) {
+  const target = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0,
+    0,
+    0,
+  );
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  let candidate = target;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(candidate));
+    const value = (type: string) => Number(
+      parts.find((item) => item.type === type)?.value ?? 0,
+    );
+    const represented = Date.UTC(
+      value("year"),
+      value("month") - 1,
+      value("day"),
+      value("hour"),
+      value("minute"),
+      value("second"),
+    );
+    const adjustment = target - represented;
+    candidate += adjustment;
+    if (adjustment === 0) break;
+  }
+
+  return new Date(candidate);
+}
+
+export async function getTodaysReport(scope: ReportsScope) {
+  const business = await prisma.business.findUnique({
+    where: { id: scope.businessId },
+    select: { timezone: true },
+  });
+  const timeZone = business?.timezone || "Africa/Lagos";
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const date = `${part("year")}-${part("month")}-${part("day")}`;
+  const [year, month, day] = date.split("-").map(Number);
+  const localToday = new Date(Date.UTC(year!, month! - 1, day!));
+  const localTomorrow = new Date(Date.UTC(year!, month! - 1, day! + 1));
+  const from = localMidnightAsUtc(localToday, timeZone);
+  const to = localMidnightAsUtc(localTomorrow, timeZone);
+
+  const paymentWhere = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    status: "POSTED" as const,
+    createdAt: { gte: from, lt: to },
+  };
+  const pickupWhere = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    status: "PICKED_UP" as const,
+    pickedUpAt: { gte: from, lt: to },
+  };
+
+  const [
+    paymentCount,
+    paymentsReceived,
+    refunds,
+    pickupGarmentCount,
+    pickupOrders,
+  ] = await Promise.all([
+    prisma.payment.count({
+      where: { ...paymentWhere, type: "PAYMENT" },
+    }),
+    prisma.payment.aggregate({
+      where: { ...paymentWhere, type: "PAYMENT" },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: { ...paymentWhere, type: "REFUND" },
+      _sum: { amount: true },
+    }),
+    prisma.garment.count({ where: pickupWhere }),
+    prisma.garment.findMany({
+      where: pickupWhere,
+      distinct: ["orderId"],
+      select: { orderId: true },
+    }),
+  ]);
+
+  const received = paymentsReceived._sum.amount ?? 0;
+  const refunded = refunds._sum.amount ?? 0;
+
+  return {
+    date,
+    timeZone,
+    period: { from, to },
+    payments: {
+      transactionCount: paymentCount,
+      amountReceived: received,
+      refundAmount: refunded,
+      netCollected: received - refunded,
+    },
+    pickups: {
+      garmentCount: pickupGarmentCount,
+      orderCount: pickupOrders.length,
+    },
+  };
+}

@@ -42,6 +42,7 @@ export function PermissionsPage() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   function requireActionReason(action: string): string | null {
     const reason = window.prompt(`Reason for ${action}:`);
@@ -176,17 +177,21 @@ export function PermissionsPage() {
         accessToken ?? "",
       );
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setError(null);
+      setSuccess("All " + result.count + " permissions were allowed successfully.");
       queryClient.invalidateQueries({
         queryKey: ["permissions", "user", selectedUserId],
       });
     },
     onError: (mutationError) => {
+      setSuccess(null);
       setError(
         mutationError instanceof ApiError
           ? mutationError.message
-          : "Unable to allow all permissions.",
+          : mutationError instanceof Error
+            ? mutationError.message
+            : "Unable to allow all permissions.",
       );
     },
   });
@@ -204,17 +209,21 @@ export function PermissionsPage() {
         accessToken ?? "",
       );
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setError(null);
+      setSuccess("All permissions were disallowed. " + result.count + " existing overrides were cleared.");
       queryClient.invalidateQueries({
         queryKey: ["permissions", "user", selectedUserId],
       });
     },
     onError: (mutationError) => {
+      setSuccess(null);
       setError(
         mutationError instanceof ApiError
           ? mutationError.message
-          : "Unable to disallow all permissions.",
+          : mutationError instanceof Error
+            ? mutationError.message
+            : "Unable to disallow all permissions.",
       );
     },
   });
@@ -255,6 +264,7 @@ export function PermissionsPage() {
               setSelectedUserId(event.target.value);
               setModuleFilter("");
               setError(null);
+              setSuccess(null);
             }}
           >
             <option value="">Select a user</option>
@@ -337,7 +347,8 @@ export function PermissionsPage() {
         </label>
       </section>
 
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <p role="alert" className="dashboard-feedback dashboard-error">{error}</p> : null}
+      {success ? <p role="status" className="dashboard-feedback dashboard-success">{success}</p> : null}
 
       {(permissionsQuery.isLoading ||
         usersQuery.isLoading ||

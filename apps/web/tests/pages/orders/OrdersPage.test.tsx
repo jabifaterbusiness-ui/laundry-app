@@ -300,6 +300,25 @@ beforeEach(() => {
 
 });
 
+describe("OrdersPage order search", () => {
+  it("passes the entered search term to the all-orders folder query", async () => {
+    renderPage();
+
+    await screen.findByText("No orders found.");
+    fireEvent.change(screen.getByLabelText("Search orders"), {
+      target: { value: "Jane Doe" },
+    });
+
+    await waitFor(() => {
+      expect(listAllOrders).toHaveBeenCalledWith(
+        { search: "Jane Doe" },
+        { accessToken: "test-token" },
+        "branch-a",
+      );
+    });
+  });
+});
+
 describe("OrdersPage colour selector", () => {
   async function openOrderColourSelector() {
     renderPage();

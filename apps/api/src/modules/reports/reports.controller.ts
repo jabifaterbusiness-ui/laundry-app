@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { reportDateRangeSchema } from "./reports.validation.js";
-import { getDashboardReport } from "./reports.service.js";
+import { getDashboardReport, getTodaysReport } from "./reports.service.js";
 import { getFinancialStatement } from "./financial-statement.service.js";
 import { getAnnualReport } from "./annual-report.service.js";
 import { annualReportYearSchema } from "./reports.validation.js";
@@ -48,6 +48,18 @@ export async function dashboard(req: Request, res: Response) {
   res.status(200).json(report);
 }
 
+
+export async function todaysReport(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const report = await getTodaysReport({
+    businessId,
+    branchId,
+    userId: req.user!.id,
+  });
+
+  res.status(200).json(report);
+}
 
 export async function collectionStatement(req: Request, res: Response) {
   const businessId = requireBusinessId(req);

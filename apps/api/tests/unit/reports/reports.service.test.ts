@@ -2,29 +2,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   orderCount: vi.fn(),
+  businessFindUnique: vi.fn(),
   invoiceFindMany: vi.fn(),
   paymentFindMany: vi.fn(),
   paymentAggregate: vi.fn(),
+  paymentCount: vi.fn(),
   customerCount: vi.fn(),
   branchResourceShareFindMany: vi.fn(),
   inventoryStockCount: vi.fn(),
   inventoryMovementCount: vi.fn(),
   garmentFindMany: vi.fn(),
+  garmentCount: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/prisma.js", () => ({
   prisma: {
+    business: { findUnique: mocks.businessFindUnique },
     order: { count: mocks.orderCount },
     invoice: { findMany: mocks.invoiceFindMany },
     payment: {
       findMany: mocks.paymentFindMany,
       aggregate: mocks.paymentAggregate,
+      count: mocks.paymentCount,
     },
     customer: { count: mocks.customerCount },
     branchResourceShare: { findMany: mocks.branchResourceShareFindMany },
     inventoryStock: { count: mocks.inventoryStockCount },
     inventoryMovement: { count: mocks.inventoryMovementCount },
-    garment: { findMany: mocks.garmentFindMany },
+    garment: { findMany: mocks.garmentFindMany, count: mocks.garmentCount },
   },
 }));
 
@@ -37,7 +42,7 @@ vi.mock("../../../src/modules/branches/branch-resource-scope.service.js", () => 
   })),
 }));
 
-import { getDashboardReport } from "../../../src/modules/reports/reports.service.js";
+import { getDashboardReport, getTodaysReport } from "../../../src/modules/reports/reports.service.js";
 
 describe("reports.service", () => {
   const from = new Date("2026-09-01T00:00:00.000Z");
@@ -47,6 +52,7 @@ describe("reports.service", () => {
     vi.clearAllMocks();
 
     mocks.orderCount.mockResolvedValue(12);
+    mocks.businessFindUnique.mockResolvedValue({ timezone: "Africa/Lagos" });
     mocks.invoiceFindMany.mockResolvedValue([]);
     mocks.paymentFindMany.mockResolvedValue([]);
     mocks.paymentAggregate.mockResolvedValue({
@@ -57,6 +63,71 @@ describe("reports.service", () => {
     mocks.inventoryStockCount.mockResolvedValue(8);
     mocks.inventoryMovementCount.mockResolvedValue(20);
     mocks.garmentFindMany.mockResolvedValue([]);
+    mocks.paymentCount.mockResolvedValue(0);
+    mocks.garmentCount.mockResolvedValue(0);
+  });
+
+  it("reports payment and pickup events recorded today in the active branch", async () => {
+    mocks.paymentCount.mockResolvedValue(3);
+    mocks.paymentAggregate
+      .mockResolvedValueOnce({ _sum: { amount: 85000 } })
+      .mockResolvedValueOnce({ _sum: { amount: 5000 } });
+    mocks.garmentCount.mockResolvedValue(8);
+    mocks.garmentFindMany.mockResolvedValue([
+      { orderId: "order-a" },
+      { orderId: "order-b" },
+    ]);
+
+    const result = await getTodaysReport({
+      businessId: "business-7",
+      branchId: "branch-4",
+      userId: "user-2",
+    });
+
+    expect(result.timeZone).toBe("Africa/Lagos");
+    expect(result.payments).toEqual({
+      transactionCount: 3,
+      amountReceived: 85000,
+      refundAmount: 5000,
+      netCollected: 80000,
+    });
+    expect(result.pickups).toEqual({
+      garmentCount: 8,
+      orderCount: 2,
+    });
+
+    expect(mocks.paymentCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        businessId: "business-7",
+        branchId: "branch-4",
+        status: "POSTED",
+        type: "PAYMENT",
+        createdAt: {
+          gte: result.period.from,
+          lt: result.period.to,
+        },
+      }),
+    });
+    expect(mocks.garmentCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        businessId: "business-7",
+        branchId: "branch-4",
+        status: "PICKED_UP",
+        pickedUpAt: {
+          gte: result.period.from,
+          lt: result.period.to,
+        },
+      }),
+    });
+    expect(mocks.garmentFindMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        businessId: "business-7",
+        branchId: "branch-4",
+        status: "PICKED_UP",
+      }),
+      distinct: ["orderId"],
+      select: { orderId: true },
+    });
   });
 
   it("returns a branch-scoped collection report", async () => {
