@@ -663,6 +663,10 @@ async function updateOrderStatusWithDb(
     data.readyAt = now;
   }
 
+  if (status === "PICKED_UP") {
+    data.pickedUpAt = now;
+  }
+
   if (status === "COMPLETED") {
     data.completedAt = now;
   }
