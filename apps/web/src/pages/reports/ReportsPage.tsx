@@ -183,7 +183,7 @@ export function ReportsPage() {
               {formatMoney(annualReportQuery.data.revenue.grossInvoiced)}
             </p>
             <p>
-              Refunds: {formatMoney(annualReportQuery.data.revenue.refunds)}
+              Refunds issued: {formatMoney(annualReportQuery.data.revenue.refunds)}
             </p>
             <p>
               Net revenue:{" "}
@@ -204,27 +204,30 @@ export function ReportsPage() {
               {annualReportQuery.data.collection.annualInvoiceCount.toLocaleString()}
             </p>
             <p>
-              Invoiced:{" "}
+              Total Invoice Value:{" "}
               {formatMoney(
                 annualReportQuery.data.collection.annualInvoiceAmount,
               )}
             </p>
+            <p><small>Value of all invoices issued</small></p>
             <p>
-              Collected:{" "}
+              Applied to invoices:{" "}
               {formatMoney(
                 annualReportQuery.data.collection.annualCollectedAmount,
               )}
             </p>
+            <p><small>Customer payments less refunds applied to invoices</small></p>
             <p>
               Collection rate:{" "}
               {annualReportQuery.data.collection.collectionRate.toFixed(1)}%
             </p>
             <p>
-              Year-end unpaid invoice balance:{" "}
+              Year-end Unpaid Invoice Balance:{" "}
               {formatMoney(
                 annualReportQuery.data.collection.yearEndOutstandingAmount,
               )}
             </p>
+            <p><small>Amount customers still owe</small></p>
 
             <h3>Monthly financial trend</h3>
             <table>
@@ -299,15 +302,18 @@ export function ReportsPage() {
             <p>
               Total Invoice Value: {formatMoney(report.invoices.totalAmount)}
             </p>
+            <p><small>Value of all invoices issued</small></p>
             <p>
               Unpaid Invoice Balance:{" "}
               {formatMoney(report.invoices.outstandingAmount)}
             </p>
+            <p><small>Amount customers still owe</small></p>
           </section>
 
           <section aria-labelledby="collection-report-heading">
             <h2 id="collection-report-heading">Collection Statement</h2>
             <p>Applied to invoices: {formatMoney(report.invoices.collectedAmount)}</p>
+            <p><small>Customer payments less refunds applied to invoices</small></p>
             <p>Unpaid Invoice Balance: {formatMoney(report.invoices.outstandingAmount)}</p>
             <p>Collection rate: {report.invoices.collectionRate.toFixed(1)}%</p>
             <p>Picked up garments: {report.pickup.pickedUpCount.toLocaleString()}</p>
@@ -334,6 +340,7 @@ export function ReportsPage() {
           <section aria-labelledby="payments-report-heading">
             <h2 id="payments-report-heading">Payments</h2>
             <p>Payments Received: {formatMoney(report.payments.received)}</p>
+            <p><small>Actual payments collected against invoices</small></p>
             <p>Refunds Issued: {formatMoney(report.payments.refunded)}</p>
             <p>Net Payments Retained: {formatMoney(report.payments.netReceived)}</p>
           </section>
