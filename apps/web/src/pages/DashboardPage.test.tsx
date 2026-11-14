@@ -52,16 +52,16 @@ const report = {
   invoices: {
     total: 100,
     totalAmount: 1000000,
-    collectedAmount: 700000,
-    outstandingAmount: 300000,
-    collectionRate: 70,
+    collectedAmount: 650000,
+    outstandingAmount: 350000,
+    collectionRate: 65,
     collectionStatement: [
       {
         invoiceId: "invoice-1",
         invoiceNumber: "INV-000001",
         amount: 1000000,
-        collected: 700000,
-        outstanding: 300000,
+        collected: 650000,
+        outstanding: 350000,
         date: "2026-09-02T00:00:00.000Z",
         status: "ISSUED",
       },
@@ -70,13 +70,13 @@ const report = {
       "2026": {
         September: {
           invoiceCount: 1,
-          outstandingAmount: 300000,
+          outstandingAmount: 350000,
           invoices: [
             {
               invoiceId: "invoice-1",
               invoiceNumber: "INV-000001",
               amount: 1000000,
-              outstanding: 300000,
+              outstanding: 350000,
               date: "2026-09-02T00:00:00.000Z",
             },
           ],
@@ -177,8 +177,16 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("120")).toBeInTheDocument();
     expect(screen.getByText("₦1,000,000")).toBeInTheDocument();
-    expect(screen.getAllByText("₦300,000")).toHaveLength(2);
+    expect(screen.getAllByText("₦350,000")).toHaveLength(2);
     expect(screen.getAllByText("₦650,000")).toHaveLength(2);
+    expect(screen.getAllByText("₦700,000")).toHaveLength(2);
+    expect(screen.getByText("Total Invoice Value")).toBeInTheDocument();
+    expect(screen.getByText("Value of all invoices issued · 100 invoices")).toBeInTheDocument();
+    expect(screen.getByText("Unpaid Invoice Balance")).toBeInTheDocument();
+    expect(screen.getByText("Amount customers still owe")).toBeInTheDocument();
+    expect(screen.getByText("Payments Received")).toBeInTheDocument();
+    expect(screen.getByText("Actual payments collected against invoices")).toBeInTheDocument();
+    expect(screen.getByText("Net payments retained")).toBeInTheDocument();
     expect(screen.getByText("84")).toBeInTheDocument();
     expect(screen.getByText("31")).toBeInTheDocument();
     expect(screen.getByText("70%")).toBeInTheDocument();
