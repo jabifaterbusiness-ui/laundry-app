@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   orderCount: vi.fn(),
+  businessFindUnique: vi.fn(),
   invoiceFindMany: vi.fn(),
   paymentFindMany: vi.fn(),
   paymentAggregate: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../../src/lib/prisma.js", () => ({
   prisma: {
+    business: { findUnique: mocks.businessFindUnique },
     order: { count: mocks.orderCount },
     invoice: { findMany: mocks.invoiceFindMany },
     payment: {
@@ -50,6 +52,7 @@ describe("reports.service", () => {
     vi.clearAllMocks();
 
     mocks.orderCount.mockResolvedValue(12);
+    mocks.businessFindUnique.mockResolvedValue({ timezone: "Africa/Lagos" });
     mocks.invoiceFindMany.mockResolvedValue([]);
     mocks.paymentFindMany.mockResolvedValue([]);
     mocks.paymentAggregate.mockResolvedValue({
