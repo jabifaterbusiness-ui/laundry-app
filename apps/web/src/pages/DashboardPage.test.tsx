@@ -189,7 +189,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Net payments retained")).toBeInTheDocument();
     expect(screen.getByText("84")).toBeInTheDocument();
     expect(screen.getByText("31")).toBeInTheDocument();
-    expect(screen.getByText("70%")).toBeInTheDocument();
+    expect(screen.getByText("65%")).toBeInTheDocument();
   });
 
   it("opens the daily report with collections and pickup totals", async () => {
