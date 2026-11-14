@@ -150,7 +150,7 @@ export function DashboardPage() {
         >
           <div className="dashboard-panel-heading">
             <div>
-              <p className="dashboard-panel-eyebrow">Daily operations · Africa/Lagos</p>
+              <p className="dashboard-panel-eyebrow">Daily operations · {todayReportQuery.data?.timeZone ?? "business timezone"}</p>
               <h2 id="todays-report-heading">Today's Report</h2>
               <p>Collections and garment pickups recorded today for the active branch.</p>
             </div>
