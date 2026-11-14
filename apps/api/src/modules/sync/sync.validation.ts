@@ -87,6 +87,7 @@ const orderUpdatePayloadSchema = z.discriminatedUnion("action", [
         "RECEIVED",
         "IN_PROGRESS",
         "READY_FOR_PICKUP",
+        "PICKED_UP",
         "COMPLETED",
         "CANCELLED",
       ]),

@@ -652,6 +652,7 @@ enum OrderStatus {
   RECEIVED
   IN_PROGRESS
   READY_FOR_PICKUP
+  PICKED_UP
   COMPLETED
   CANCELLED
 }
@@ -703,6 +704,7 @@ model Order {
   expectedReadyAt DateTime?
   readyAt         DateTime?
   completedAt     DateTime?
+  pickedUpAt      DateTime?
   cancelledAt     DateTime?
 
   // Visible to the customer.

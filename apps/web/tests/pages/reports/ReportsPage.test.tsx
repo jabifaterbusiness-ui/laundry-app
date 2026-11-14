@@ -18,16 +18,16 @@ const report = {
   invoices: {
     total: 10,
     totalAmount: 125000,
-    collectedAmount: 90000,
-    outstandingAmount: 35000,
-    collectionRate: 72,
+    collectedAmount: 85000,
+    outstandingAmount: 40000,
+    collectionRate: 68,
     collectionStatement: [
       {
         invoiceId: "invoice-1",
         invoiceNumber: "INV-000001",
         amount: 125000,
-        collected: 90000,
-        outstanding: 35000,
+        collected: 85000,
+        outstanding: 40000,
         date: "2026-09-02T00:00:00.000Z",
         status: "ISSUED",
       },
@@ -36,13 +36,13 @@ const report = {
       "2026": {
         September: {
           invoiceCount: 1,
-          outstandingAmount: 35000,
+          outstandingAmount: 40000,
           invoices: [
             {
               invoiceId: "invoice-1",
               invoiceNumber: "INV-000001",
               amount: 125000,
-              outstanding: 35000,
+              outstanding: 40000,
               date: "2026-09-02T00:00:00.000Z",
             },
           ],
@@ -62,7 +62,7 @@ const report = {
   },
   customers: { active: 24 },
   managementInsights: [
-    "Outstanding customer balances total ₦35,000.",
+    "Unpaid customer balances total ₦40,000.",
     "4 garments remain unpicked.",
     "Collection performance is 72.0%.",
   ],
@@ -170,11 +170,12 @@ describe("ReportsPage", () => {
 
     expect(await screen.findByText("Total orders: 12")).toBeInTheDocument();
     expect(screen.getByText("Total invoices: 10")).toBeInTheDocument();
-    expect(screen.getByText("Invoiced: ₦125,000")).toBeInTheDocument();
-    expect(screen.getAllByText("Outstanding: ₦35,000")).toHaveLength(2);
-    expect(screen.getByText("Received: ₦90,000")).toBeInTheDocument();
-    expect(screen.getByText("Refunded: ₦5,000")).toBeInTheDocument();
-    expect(screen.getByText("Net received: ₦85,000")).toBeInTheDocument();
+    expect(screen.getByText("Total Invoice Value: ₦125,000")).toBeInTheDocument();
+    expect(screen.getAllByText("Unpaid Invoice Balance: ₦40,000")).toHaveLength(2);
+    expect(screen.getByText("Payments Received: ₦90,000")).toBeInTheDocument();
+    expect(screen.getByText("Actual payments collected against invoices")).toBeInTheDocument();
+    expect(screen.getByText("Refunds Issued: ₦5,000")).toBeInTheDocument();
+    expect(screen.getByText("Net Payments Retained: ₦85,000")).toBeInTheDocument();
     expect(screen.getByText("Active customers: 24")).toBeInTheDocument();
     expect(screen.getByText("Stock items: 8")).toBeInTheDocument();
     expect(screen.getByText("Movements: 17")).toBeInTheDocument();
@@ -192,7 +193,15 @@ describe("ReportsPage", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("Collected: ₦800,000"),
+      screen.getByText("Total Invoice Value: ₦1,000,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getAllByText("Value of all invoices issued").length,
+    ).toBeGreaterThanOrEqual(1);
+
+    expect(
+      screen.getByText("Applied to invoices: ₦800,000"),
     ).toBeInTheDocument();
 
     expect(
@@ -200,7 +209,7 @@ describe("ReportsPage", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("Year-end outstanding: ₦200,000"),
+      screen.getByText("Year-end Unpaid Invoice Balance: ₦200,000"),
     ).toBeInTheDocument();
 
     expect(

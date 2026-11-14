@@ -72,11 +72,7 @@ describe("reports.service", () => {
     mocks.paymentAggregate
       .mockResolvedValueOnce({ _sum: { amount: 85000 } })
       .mockResolvedValueOnce({ _sum: { amount: 5000 } });
-    mocks.garmentCount.mockResolvedValue(8);
-    mocks.garmentFindMany.mockResolvedValue([
-      { orderId: "order-a" },
-      { orderId: "order-b" },
-    ]);
+    mocks.orderCount.mockResolvedValue(2);
 
     const result = await getTodaysReport({
       businessId: "business-7",
@@ -92,7 +88,6 @@ describe("reports.service", () => {
       netCollected: 80000,
     });
     expect(result.pickups).toEqual({
-      garmentCount: 8,
       orderCount: 2,
     });
 
@@ -102,13 +97,13 @@ describe("reports.service", () => {
         branchId: "branch-4",
         status: "POSTED",
         type: "PAYMENT",
-        createdAt: {
+            createdAt: {
           gte: result.period.from,
           lt: result.period.to,
         },
       }),
     });
-    expect(mocks.garmentCount).toHaveBeenCalledWith({
+    expect(mocks.orderCount).toHaveBeenCalledWith({
       where: expect.objectContaining({
         businessId: "business-7",
         branchId: "branch-4",
@@ -118,15 +113,6 @@ describe("reports.service", () => {
           lt: result.period.to,
         },
       }),
-    });
-    expect(mocks.garmentFindMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        businessId: "business-7",
-        branchId: "branch-4",
-        status: "PICKED_UP",
-      }),
-      distinct: ["orderId"],
-      select: { orderId: true },
     });
   });
 
@@ -235,9 +221,9 @@ describe("reports.service", () => {
     });
 
     expect(result.payments).toEqual({
-      received: 425000,
+      received: 450000,
       refunded: 25000,
-      netReceived: 400000,
+      netReceived: 425000,
     });
   });
 

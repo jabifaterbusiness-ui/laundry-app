@@ -886,6 +886,7 @@ export function QuickOperationLauncher({
                     <option value="RECEIVED">Received</option>
                     <option value="IN_PROGRESS">In Progress</option>
                     <option value="READY_FOR_PICKUP">Ready for Pickup</option>
+                    <option value="PICKED_UP">Picked Up</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>

@@ -194,6 +194,7 @@ export async function getDashboardReport(
         branchId: scope.branchId,
         status: "POSTED",
         type: "REFUND",
+        invoiceId: { in: invoiceIds },
         ...dateWhere,
       },
       _sum: {
@@ -235,6 +236,12 @@ export async function getDashboardReport(
 
   const collected = invoiceRows.reduce(
     (sum, row) => sum + row.collected,
+    0,
+  );
+
+  const grossReceived = payments.reduce(
+    (sum, payment) =>
+      sum + (payment.type === "PAYMENT" ? payment.amount : 0),
     0,
   );
 
@@ -333,8 +340,8 @@ export async function getDashboardReport(
 
   const managementInsights = [
     outstanding > 0
-      ? `Outstanding customer balances total ₦${outstanding.toLocaleString()}.`
-      : "There are no outstanding customer balances.",
+      ? `Unpaid customer balances total ₦${outstanding.toLocaleString()}.`
+      : "There are no unpaid customer balances.",
 
     unpickedGarments.length > 0
       ? `${unpickedGarments.length.toLocaleString()} garments remain unpicked from the selected order period.`
@@ -370,9 +377,9 @@ export async function getDashboardReport(
     },
 
     payments: {
-      received: collected,
+      received: grossReceived,
       refunded: refundAmount,
-      netReceived: collected - refundAmount,
+      netReceived: grossReceived - refundAmount,
     },
 
     pickup: {
@@ -464,44 +471,34 @@ export async function getTodaysReport(scope: ReportsScope) {
   const from = localMidnightAsUtc(localToday, timeZone);
   const to = localMidnightAsUtc(localTomorrow, timeZone);
 
-  const paymentWhere = {
+  const invoicePaymentWhere = {
     businessId: scope.businessId,
     branchId: scope.branchId,
     status: "POSTED" as const,
     createdAt: { gte: from, lt: to },
   };
-  const pickupWhere = {
+  const pickupOrderWhere = {
     businessId: scope.businessId,
     branchId: scope.branchId,
     status: "PICKED_UP" as const,
     pickedUpAt: { gte: from, lt: to },
   };
 
-  const [
-    paymentCount,
-    paymentsReceived,
-    refunds,
-    pickupGarmentCount,
-    pickupOrders,
-  ] = await Promise.all([
-    prisma.payment.count({
-      where: { ...paymentWhere, type: "PAYMENT" },
-    }),
-    prisma.payment.aggregate({
-      where: { ...paymentWhere, type: "PAYMENT" },
-      _sum: { amount: true },
-    }),
-    prisma.payment.aggregate({
-      where: { ...paymentWhere, type: "REFUND" },
-      _sum: { amount: true },
-    }),
-    prisma.garment.count({ where: pickupWhere }),
-    prisma.garment.findMany({
-      where: pickupWhere,
-      distinct: ["orderId"],
-      select: { orderId: true },
-    }),
-  ]);
+  const [paymentCount, paymentsReceived, refunds, pickupOrderCount] =
+    await Promise.all([
+      prisma.payment.count({
+        where: { ...invoicePaymentWhere, type: "PAYMENT" },
+      }),
+      prisma.payment.aggregate({
+        where: { ...invoicePaymentWhere, type: "PAYMENT" },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { ...invoicePaymentWhere, type: "REFUND" },
+        _sum: { amount: true },
+      }),
+      prisma.order.count({ where: pickupOrderWhere }),
+    ]);
 
   const received = paymentsReceived._sum.amount ?? 0;
   const refunded = refunds._sum.amount ?? 0;
@@ -517,8 +514,7 @@ export async function getTodaysReport(scope: ReportsScope) {
       netCollected: received - refunded,
     },
     pickups: {
-      garmentCount: pickupGarmentCount,
-      orderCount: pickupOrders.length,
+      orderCount: pickupOrderCount,
     },
   };
 }

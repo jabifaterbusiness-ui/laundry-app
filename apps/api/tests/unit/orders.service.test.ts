@@ -934,6 +934,37 @@ describe("createOrder", () => {
     );
   });
 
+  it("sets pickedUpAt when an order is handed over", async () => {
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A,
+      businessId: "biz-A",
+      branchId: BRANCH_A,
+      status: "READY_FOR_PICKUP",
+    } as never);
+
+    orderUpdate.mockResolvedValue({
+      id: ORDER_A,
+      status: "PICKED_UP",
+      pickedUpAt: new Date(),
+    } as never);
+
+    await updateOrderStatus(
+      ORDER_A,
+      "biz-A",
+      BRANCH_A,
+      "PICKED_UP",
+    );
+
+    expect(orderUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "PICKED_UP",
+          pickedUpAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
   it("sets completedAt when an order becomes completed", async () => {
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,

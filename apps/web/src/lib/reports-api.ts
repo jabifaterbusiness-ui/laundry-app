@@ -179,7 +179,6 @@ export interface TodaysReport {
     netCollected: number;
   };
   pickups: {
-    garmentCount: number;
     orderCount: number;
   };
 }
