@@ -72,11 +72,7 @@ describe("reports.service", () => {
     mocks.paymentAggregate
       .mockResolvedValueOnce({ _sum: { amount: 85000 } })
       .mockResolvedValueOnce({ _sum: { amount: 5000 } });
-    mocks.garmentCount.mockResolvedValue(8);
-    mocks.garmentFindMany.mockResolvedValue([
-      { orderId: "order-a" },
-      { orderId: "order-b" },
-    ]);
+    mocks.orderCount.mockResolvedValue(2);
 
     const result = await getTodaysReport({
       businessId: "business-7",
@@ -92,7 +88,6 @@ describe("reports.service", () => {
       netCollected: 80000,
     });
     expect(result.pickups).toEqual({
-      garmentCount: 8,
       orderCount: 2,
     });
 
@@ -102,6 +97,7 @@ describe("reports.service", () => {
         branchId: "branch-4",
         status: "POSTED",
         type: "PAYMENT",
+        invoiceId: { not: null },
         createdAt: {
           gte: result.period.from,
           lt: result.period.to,
