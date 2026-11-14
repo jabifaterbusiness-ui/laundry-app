@@ -475,7 +475,6 @@ export async function getTodaysReport(scope: ReportsScope) {
     businessId: scope.businessId,
     branchId: scope.branchId,
     status: "POSTED" as const,
-    invoiceId: { not: null },
     createdAt: { gte: from, lt: to },
   };
   const pickupOrderWhere = {
