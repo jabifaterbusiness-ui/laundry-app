@@ -107,7 +107,7 @@ export function DashboardPage() {
   const paymentPercentage = report
     ? collectionPercentage(
         report.invoices.totalAmount,
-        report.payments.received,
+        report.invoices.collectedAmount,
       )
     : 0;
 
@@ -306,25 +306,23 @@ export function DashboardPage() {
 
             <Link className="dashboard-kpi-card" to="/invoices" aria-label="View invoices">
               <div className="dashboard-kpi-icon">₦</div>
-              <p>Total invoiced</p>
+              <p>Total Invoice Value</p>
               <strong>{formatMoney(report.invoices.totalAmount)}</strong>
-              <span>{formatNumber(report.invoices.total)} invoices</span>
+              <span>Value of all invoices issued · {formatNumber(report.invoices.total)} invoices</span>
             </Link>
 
-            <Link className="dashboard-kpi-card dashboard-kpi-card-warning" to="/invoices" aria-label="View outstanding invoices">
+            <Link className="dashboard-kpi-card dashboard-kpi-card-warning" to="/invoices" aria-label="View unpaid invoices">
               <div className="dashboard-kpi-icon">!</div>
-              <p>Outstanding</p>
+              <p>Unpaid Invoice Balance</p>
               <strong>{formatMoney(report.invoices.outstandingAmount)}</strong>
-              <span>Amount still outstanding</span>
+              <span>Amount customers still owe</span>
             </Link>
 
             <Link className="dashboard-kpi-card" to="/payments" aria-label="View payments">
               <div className="dashboard-kpi-icon">✓</div>
-              <p>Net received</p>
-              <strong>{formatMoney(report.payments.netReceived)}</strong>
-              <span>
-                {formatMoney(report.payments.received)} received
-              </span>
+              <p>Payments Received</p>
+              <strong>{formatMoney(report.payments.received)}</strong>
+              <span>Actual payments collected against invoices</span>
             </Link>
 
             <Link className="dashboard-kpi-card" to="/customers" aria-label="View customers">
@@ -380,10 +378,10 @@ export function DashboardPage() {
 
                 <div className="dashboard-panel-stats">
                   <span>
-                    Received <strong>{formatMoney(report.payments.received)}</strong>
+                    Applied to invoices <strong>{formatMoney(report.invoices.collectedAmount)}</strong>
                   </span>
                   <span>
-                    Outstanding{" "}
+                    Unpaid balance{" "}
                     <strong>{formatMoney(report.invoices.outstandingAmount)}</strong>
                   </span>
                 </div>
@@ -403,11 +401,11 @@ export function DashboardPage() {
                     <strong>{formatMoney(report.payments.received)}</strong>
                   </div>
                   <div>
-                    <span>Refunds</span>
+                    <span>Refunds issued</span>
                     <strong>{formatMoney(report.payments.refunded)}</strong>
                   </div>
                   <div>
-                    <span>Net received</span>
+                    <span>Net payments retained</span>
                     <strong>{formatMoney(report.payments.netReceived)}</strong>
                   </div>
                 </div>
