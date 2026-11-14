@@ -1287,9 +1287,13 @@ export function OrdersPage() {
   }
 
   const allOrdersQuery = useQuery({
-    queryKey: ["orders", "all-orders", activeBranchId],
+    queryKey: ["orders", "all-orders", activeBranchId, orderSearch.trim()],
     queryFn: () =>
-      listAllOrders({}, { accessToken }, activeBranchId),
+      listAllOrders(
+        { search: orderSearch.trim() || undefined },
+        { accessToken },
+        activeBranchId,
+      ),
     enabled: Boolean(accessToken && activeBranchId && !isOrderManagementRoute),
   });
 
