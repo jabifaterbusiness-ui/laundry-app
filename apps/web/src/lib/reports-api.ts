@@ -166,3 +166,30 @@ export async function getAnnualReport(
     },
   );
 }
+
+
+export interface TodaysReport {
+  date: string;
+  timeZone: string;
+  period: { from: string; to: string };
+  payments: {
+    transactionCount: number;
+    amountReceived: number;
+    refundAmount: number;
+    netCollected: number;
+  };
+  pickups: {
+    garmentCount: number;
+    orderCount: number;
+  };
+}
+
+export async function getTodaysReport(
+  auth: AuthOptions,
+  branchId: string | null,
+): Promise<TodaysReport> {
+  return apiFetch<TodaysReport>("/reports/today", {
+    accessToken: auth.accessToken,
+    branchId,
+  });
+}
