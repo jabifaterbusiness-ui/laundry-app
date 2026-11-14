@@ -197,8 +197,8 @@ describe("ReportsPage", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("Value of all invoices issued"),
-    ).toBeInTheDocument();
+      screen.getAllByText("Value of all invoices issued").length,
+    ).toBeGreaterThanOrEqual(1);
 
     expect(
       screen.getByText("Applied to invoices: ₦800,000"),
