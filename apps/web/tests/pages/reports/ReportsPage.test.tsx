@@ -62,7 +62,7 @@ const report = {
   },
   customers: { active: 24 },
   managementInsights: [
-    "Outstanding customer balances total ₦35,000.",
+    "Unpaid customer balances total ₦40,000.",
     "4 garments remain unpicked.",
     "Collection performance is 72.0%.",
   ],
@@ -190,6 +190,14 @@ describe("ReportsPage", () => {
 
     expect(
       await screen.findByText("Gross revenue: ₦1,000,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Total Invoice Value: ₦1,000,000"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Value of all invoices issued"),
     ).toBeInTheDocument();
 
     expect(
