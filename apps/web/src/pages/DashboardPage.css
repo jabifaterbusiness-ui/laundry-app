@@ -1,0 +1,112 @@
+.dashboard-report-entry {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 340px;
+}
+
+.dashboard-report-entry-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 76px;
+  padding: 13px 17px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 17px;
+  background: linear-gradient(128deg, #7c245e 0%, #b52f79 54%, #e05b91 100%);
+  color: #fff;
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(157, 42, 105, 0.22), inset 0 1px 0 rgba(255,255,255,.18);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+.dashboard-report-entry-button:hover {
+  transform: translateY(-2px);
+  filter: saturate(1.08);
+  box-shadow: 0 15px 30px rgba(157, 42, 105, 0.3), inset 0 1px 0 rgba(255,255,255,.2);
+}
+
+.dashboard-report-entry-button:focus-visible {
+  outline: 3px solid #f3a9ce;
+  outline-offset: 3px;
+}
+
+.dashboard-report-entry-icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 13px;
+  background: rgba(255,255,255,.17);
+  font-size: 23px;
+}
+
+.dashboard-report-entry-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.dashboard-report-entry-copy strong {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+.dashboard-report-entry-copy small {
+  color: rgba(255,255,255,.84);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dashboard-report-entry-arrow {
+  margin-left: 5px;
+  font-size: 19px;
+  opacity: .9;
+}
+
+.dashboard-report-access-note {
+  display: grid;
+  gap: 5px;
+  max-width: 300px;
+  padding: 12px 15px;
+  border: 1px solid #f1d6e5;
+  border-left: 3px solid #b52f79;
+  border-radius: 12px;
+  background: #fff8fc;
+  color: #6d244c;
+}
+
+.dashboard-report-access-note strong {
+  font-size: 13px;
+}
+
+.dashboard-report-access-note span {
+  color: #79566b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .dashboard-report-entry {
+    width: 100%;
+    max-width: none;
+  }
+
+  .dashboard-report-entry-button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-report-entry-arrow {
+    margin-left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-report-entry-button {
+    transition: none;
+  }
+}
