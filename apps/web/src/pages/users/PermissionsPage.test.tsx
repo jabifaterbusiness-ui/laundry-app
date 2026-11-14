@@ -265,6 +265,10 @@ describe("PermissionsPage", () => {
         "token",
       );
     });
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "All 2 permissions were allowed successfully.",
+    );
   });
 
   it("supports Disallow All for an individual user", async () => {
