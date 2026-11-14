@@ -393,3 +393,83 @@ export async function getDashboardReport(
     managementInsights,
   };
 }
+
+
+/**
+ * Daily operational snapshot for the active branch.
+ * Laundry Angel's current Nigerian business timezone is Africa/Lagos.
+ * Payment and pickup events are dated by the event timestamp, not by the
+ * invoice/order creation date.
+ */
+export async function getTodaysReport(scope: ReportsScope) {
+  const timeZone = "Africa/Lagos";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const date = `${part("year")}-${part("month")}-${part("day")}`;
+  // Africa/Lagos is UTC+01:00 year-round.
+  const from = new Date(`${date}T00:00:00+01:00`);
+  const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+
+  const paymentWhere = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    status: "POSTED" as const,
+    createdAt: { gte: from, lt: to },
+  };
+  const pickupWhere = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    status: "PICKED_UP" as const,
+    pickedUpAt: { gte: from, lt: to },
+  };
+
+  const [
+    paymentCount,
+    paymentsReceived,
+    refunds,
+    pickupGarmentCount,
+    pickupOrders,
+  ] = await Promise.all([
+    prisma.payment.count({
+      where: { ...paymentWhere, type: "PAYMENT" },
+    }),
+    prisma.payment.aggregate({
+      where: { ...paymentWhere, type: "PAYMENT" },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: { ...paymentWhere, type: "REFUND" },
+      _sum: { amount: true },
+    }),
+    prisma.garment.count({ where: pickupWhere }),
+    prisma.garment.findMany({
+      where: pickupWhere,
+      distinct: ["orderId"],
+      select: { orderId: true },
+    }),
+  ]);
+
+  const received = paymentsReceived._sum.amount ?? 0;
+  const refunded = refunds._sum.amount ?? 0;
+
+  return {
+    date,
+    timeZone,
+    period: { from, to },
+    payments: {
+      transactionCount: paymentCount,
+      amountReceived: received,
+      refundAmount: refunded,
+      netCollected: received - refunded,
+    },
+    pickups: {
+      garmentCount: pickupGarmentCount,
+      orderCount: pickupOrders.length,
+    },
+  };
+}
