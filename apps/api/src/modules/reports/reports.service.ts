@@ -194,6 +194,7 @@ export async function getDashboardReport(
         branchId: scope.branchId,
         status: "POSTED",
         type: "REFUND",
+        invoiceId: { in: invoiceIds },
         ...dateWhere,
       },
       _sum: {
@@ -235,6 +236,12 @@ export async function getDashboardReport(
 
   const collected = invoiceRows.reduce(
     (sum, row) => sum + row.collected,
+    0,
+  );
+
+  const grossReceived = payments.reduce(
+    (sum, payment) =>
+      sum + (payment.type === "PAYMENT" ? payment.amount : 0),
     0,
   );
 
@@ -333,8 +340,8 @@ export async function getDashboardReport(
 
   const managementInsights = [
     outstanding > 0
-      ? `Outstanding customer balances total ₦${outstanding.toLocaleString()}.`
-      : "There are no outstanding customer balances.",
+      ? `Unpaid customer balances total ₦${outstanding.toLocaleString()}.`
+      : "There are no unpaid customer balances.",
 
     unpickedGarments.length > 0
       ? `${unpickedGarments.length.toLocaleString()} garments remain unpicked from the selected order period.`
@@ -370,9 +377,9 @@ export async function getDashboardReport(
     },
 
     payments: {
-      received: collected,
+      received: grossReceived,
       refunded: refundAmount,
-      netReceived: collected - refundAmount,
+      netReceived: grossReceived - refundAmount,
     },
 
     pickup: {
