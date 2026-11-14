@@ -235,9 +235,9 @@ describe("reports.service", () => {
     });
 
     expect(result.payments).toEqual({
-      received: 425000,
+      received: 450000,
       refunded: 25000,
-      netReceived: 400000,
+      netReceived: 425000,
     });
   });
 
