@@ -2,6 +2,7 @@ export const ORDER_STATUSES = [
   "RECEIVED",
   "IN_PROGRESS",
   "READY_FOR_PICKUP",
+  "PICKED_UP",
   "COMPLETED",
   "CANCELLED",
 ] as const;
@@ -38,6 +39,7 @@ export interface Order {
   expectedReadyAt: string | null;
   readyAt: string | null;
   completedAt: string | null;
+  pickedUpAt: string | null;
   cancelledAt: string | null;
   garmentNote: string | null;
   internalNote: string | null;
