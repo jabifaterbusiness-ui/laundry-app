@@ -173,7 +173,7 @@ export function DashboardPage() {
             <div>
               <p className="dashboard-panel-eyebrow">Daily operations · {todayReportQuery.data?.timeZone ?? "business timezone"}</p>
               <h2 id="todays-report-heading">Today's Report</h2>
-              <p>Invoice payments, refunds and orders handed over today for the active branch.</p>
+              <p>Orders received, payments, refunds and pickups for the active branch today.</p>
             </div>
             <button type="button" onClick={() => todayReportQuery.refetch()} disabled={todayReportQuery.isFetching}>
               {todayReportQuery.isFetching ? "Refreshing..." : "Refresh"}
@@ -190,9 +190,9 @@ export function DashboardPage() {
           ) : todayReportQuery.data ? (
             <div className="dashboard-kpi-grid" aria-label="Today's business totals">
               <article className="dashboard-kpi-card">
-                <p>Total Invoice Collected</p>
-                <strong>{formatMoney(todayReportQuery.data.payments.amountReceived)}</strong>
-                <span>Invoice payments collected today</span>
+                <p>Total Order Received</p>
+                <strong>{formatMoney(todayReportQuery.data.orders.orderValueReceived)}</strong>
+                <span>Full value of orders received today, paid or unpaid</span>
               </article>
               <article className="dashboard-kpi-card">
                 <p>Refunds</p>
@@ -202,12 +202,12 @@ export function DashboardPage() {
               <article className="dashboard-kpi-card">
                 <p>Net Payment Received</p>
                 <strong>{formatMoney(todayReportQuery.data.payments.netCollected)}</strong>
-                <span>Total invoice collected less refunds</span>
+                <span>Payments received today less refunds</span>
               </article>
               <article className="dashboard-kpi-card">
                 <p>Total Pickups</p>
                 <strong>{formatNumber(todayReportQuery.data.pickups.orderCount)}</strong>
-                <span>Orders handed over to customers today</span>
+                <span>Orders picked up today · Order value: {formatMoney(todayReportQuery.data.pickups.orderValue)}</span>
               </article>
             </div>
           ) : null}
