@@ -53,7 +53,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        OR: [{ ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: true,
       },
       orderBy: { name: "asc" },
@@ -78,7 +78,6 @@ describe("listServices", () => {
       where: {
         businessId: "biz-1",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: ["service-shared"] } },
         ],
@@ -99,7 +98,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        OR: [{ ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: false,
       },
       orderBy: { name: "asc" },
@@ -120,7 +119,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        OR: [{ ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       orderBy: { name: "asc" },
       include: { ownerBranch: { select: { id: true, name: true } } },
@@ -141,7 +140,7 @@ describe("listServices", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        OR: [{ ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
         isActive: true,
         name: {
           contains: "shirt",
@@ -164,7 +163,7 @@ describe("getServiceForBusiness", () => {
       where: {
         id: "service-1",
         businessId: "biz-1",
-        OR: [{ ownerBranchId: null }, { ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
+        OR: [{ ownerBranchId: { in: ["branch-A"] } }, { id: { in: [] } }],
       },
       include: { ownerBranch: { select: { id: true, name: true } } },
     });
