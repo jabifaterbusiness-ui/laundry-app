@@ -5,7 +5,7 @@ import { requireAnyPermission, requirePermission } from "../../middleware/permis
 import {
   addGroupMember, createDirectConversation, createGroupConversation, listConversations,
   listDirectory, listMessages, markConversationRead, removeGroupMember, sendMessage,
-  toggleReaction, updateGroup, uploadAttachment, downloadAttachment,
+  toggleReaction, updateGroup, uploadAttachment, downloadAttachment, setGroupMemberRole,
 } from "./chat.controller.js";
 
 export const chatRouter = Router();
@@ -20,6 +20,7 @@ chatRouter.post("/conversations/:id/attachments", requirePermission("chat.upload
 chatRouter.get("/attachments/:id", requirePermission("chat.view"), asyncHandler(downloadAttachment));
 chatRouter.post("/conversations/:id/read", requirePermission("chat.view"), asyncHandler(markConversationRead));
 chatRouter.patch("/groups/:id", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(updateGroup));
-chatRouter.post("/groups/:id/members", requirePermission("chat.manage_group"), asyncHandler(addGroupMember));
-chatRouter.delete("/groups/:id/members/:userId", requirePermission("chat.manage_group"), asyncHandler(removeGroupMember));
+chatRouter.post("/groups/:id/members", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(addGroupMember));
+chatRouter.delete("/groups/:id/members/:userId", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(removeGroupMember));
+chatRouter.patch("/groups/:id/members/:userId/role", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(setGroupMemberRole));
 chatRouter.post("/conversations/:id/messages/:messageId/reactions", requirePermission("chat.view"), asyncHandler(toggleReaction));
