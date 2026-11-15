@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../lib/api-client.js";
 import {
   createService,
+  listUnassignedLegacyPricing,
+  assignUnassignedLegacyPricing,
   createPriceAdjustment,
   createTaxRule,
   deletePriceAdjustment,
@@ -15,6 +17,7 @@ import {
   updateService,
   type CreateServiceInput,
   type Service,
+  type UnassignedLegacyPricing,
 } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
@@ -62,6 +65,7 @@ export function ServicesPage() {
   const [taxTreatment, setTaxTreatment] = useState<"ADDITIVE" | "WITHHOLDING">("ADDITIVE");
   const [taxEnabledByDefault, setTaxEnabledByDefault] = useState(false);
   const [taxAllowCombination, setTaxAllowCombination] = useState(true);
+  const [legacyTargets, setLegacyTargets] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setAdjustmentPage(1);
@@ -156,6 +160,22 @@ export function ServicesPage() {
     queryKey: ["branches", "service-owner-options"],
     queryFn: () => listBranches(accessToken!),
     enabled: Boolean(accessToken && canManageBranchSharing),
+  });
+
+  const isBusinessOwner = user?.securityRole === "BUSINESS_OWNER";
+  const legacyPricingQuery = useQuery({
+    queryKey: ["services", "legacy-unassigned", user?.businessId],
+    queryFn: () => listUnassignedLegacyPricing({ accessToken }),
+    enabled: Boolean(accessToken && isBusinessOwner),
+  });
+  const legacyAssignmentMutation = useMutation({
+    mutationFn: (input: { resourceType: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; resourceId: string; targetBranchId: string }) =>
+      assignUnassignedLegacyPricing(input, { accessToken }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["services", "legacy-unassigned"] });
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
+    },
   });
 
   const servicesQuery = useQuery({
@@ -267,6 +287,40 @@ export function ServicesPage() {
   return (
     <main>
       <h1>Services & Price List</h1>
+
+      {isBusinessOwner && (
+        <section aria-labelledby="legacy-pricing-heading" style={{ margin: "1.25rem 0", padding: "1.25rem", border: "1px solid #f0c36d", borderRadius: 14, background: "linear-gradient(135deg, #fffaf0, #ffffff)" }}>
+          <h2 id="legacy-pricing-heading">Needs Branch Assignment</h2>
+          <p>Older records without a recorded owning branch are held here. They are hidden from branch pricing until you assign each record to the correct branch. Nothing is automatically moved.</p>
+          {legacyPricingQuery.isLoading && <p>Checking unassigned legacy records…</p>}
+          {legacyPricingQuery.isError && <p role="alert">Unable to load unassigned records. Refresh and try again.</p>}
+          {legacyPricingQuery.data && (() => {
+            const data = legacyPricingQuery.data;
+            const rows: Array<{ type: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; id: string; label: string; detail: string; locked?: boolean }> = [
+              ...data.services.map((x) => ({ type: "SERVICE" as const, id: x.id, label: x.name, detail: `Service · ${x.pieces} pcs · ₦${x.unitPrice.toLocaleString()}` })),
+              ...data.discounts.map((x) => ({ type: "DISCOUNT" as const, id: x.id, label: x.name, detail: `Discount · ${x.percentage}% · ${x.targetScope}` })),
+              ...data.taxes.map((x) => ({ type: "TAX" as const, id: x.id, label: x.name, detail: `Tax · ${x.kind === "PERCENTAGE" ? `${x.value}%` : `₦${x.value.toLocaleString()}`}` })),
+              ...data.customerPrices.map((x) => ({ type: "CUSTOMER_PRICE" as const, id: x.id, label: `${x.customer.name} — ${x.service.name}`, detail: `Customer-specific price · ₦${x.unitPrice.toLocaleString()}`, locked: !x.service.ownerBranchId || (Boolean(x.customer.ownerBranchId) && x.customer.ownerBranchId !== x.service.ownerBranchId) })),
+            ];
+            if (!rows.length) return <p>No unassigned legacy pricing records remain.</p>;
+            return <div style={{ display: "grid", gap: 10 }}>
+              {rows.map((row) => {
+                const key = `${row.type}:${row.id}`;
+                const target = legacyTargets[key] ?? (activeBranchId ?? "");
+                return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 240px) auto", gap: 10, alignItems: "center", padding: 12, border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "#fff" }}>
+                  <div><strong>{row.label}</strong><div><small>{row.detail}{row.locked ? " · Assign its service and customer first" : ""}</small></div></div>
+                  <select aria-label={`Target branch for ${row.label}`} value={target} onChange={(event) => setLegacyTargets((current) => ({ ...current, [key]: event.target.value }))}>
+                    <option value="">Choose owning branch</option>
+                    {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                  </select>
+                  <button type="button" disabled={!target || row.locked || legacyAssignmentMutation.isPending || !branchesQuery.data?.some((branch) => branch.id === target)} onClick={() => legacyAssignmentMutation.mutate({ resourceType: row.type, resourceId: row.id, targetBranchId: target })}>Assign</button>
+                </div>;
+              })}
+            </div>;
+          })()}
+          {legacyAssignmentMutation.isError && <p role="alert">Assignment failed. Confirm the target branch and related customer/service ownership, then retry.</p>}
+        </section>
+      )}
 
       <section aria-labelledby="pricing-rules-heading" style={{ margin: "1.5rem 0", padding: "1.25rem", border: "1px solid var(--border, #d9dce3)", borderRadius: "14px" }}>
         <h2 id="pricing-rules-heading">Discounts, surcharges & taxes</h2>
