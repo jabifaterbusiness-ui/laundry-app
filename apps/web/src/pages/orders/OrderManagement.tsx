@@ -121,6 +121,7 @@ function OrderManagementContent({
   }, [customer.id, customer.phone, customer.email, customer.address, customer.notes]);
   const [error, setError] = useState<string | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [pickupOverrideReason, setPickupOverrideReason] = useState("");
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -146,6 +147,7 @@ function OrderManagementContent({
 
   const canUpdateCustomer = hasPermission(user, "customers.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
+  const canOverridePickup = hasPermission(user, "orders.pickup_override");
   const canViewPayments = hasPermission(user, "payments.view");
   const canManagePayments = hasPermission(user, "payments.manage");
   const canViewAccount = hasPermission(user, "customer_accounts.view");
@@ -555,19 +557,21 @@ function OrderManagementContent({
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: OrderStatus) =>
+    mutationFn: (input: { status: OrderStatus; pickupOverrideReason?: string }) =>
       updateOrderStatusWithOfflineQueue(
         order!.id,
-        status,
+        input.status,
         { accessToken },
         {
           businessId: user?.businessId ?? "",
           branchId: activeBranchId ?? "",
           actorUserId: user?.id ?? "",
         },
+        input.pickupOverrideReason,
       ),
     onSuccess: (result) => {
       setStatusFeedback(null);
+      setPickupOverrideReason("");
       if (!result.queued) {
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         queryClient.invalidateQueries({
@@ -1572,6 +1576,25 @@ function OrderManagementContent({
           {layer === "status" && (
             <>
               <h3>Change Order Status</h3>
+              {canOverridePickup && (
+                <label style={{ display: "block", marginBottom: 12 }}>
+                  <strong>Pickup override reason (management only)</strong>
+                  <textarea
+                    value={pickupOverrideReason}
+                    onChange={(event) => setPickupOverrideReason(event.target.value)}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="Required only when collecting an order with an outstanding balance"
+                    style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6 }}
+                  />
+                </label>
+              )}
+              {paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0 && (
+                <div role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <strong>Payment incomplete — pickup blocked.</strong>
+                  <div>Customer still owes {formatMoney(paymentSummaryQuery.data.balance)}. Only an authorized management user can override this restriction, and a reason is mandatory.</div>
+                </div>
+              )}
               {STATUSES.map((item) => (
                 <button
                   key={item}
@@ -1582,14 +1605,32 @@ function OrderManagementContent({
                     mode !== "view" ||
                     item === order!.status
                   }
-                  onClick={() => statusMutation.mutate(item)}
+                  onClick={() => {
+                    if (item === "PICKED_UP" && paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0) {
+                      if (!canOverridePickup) {
+                        setError(`Customer has not completed payment. Outstanding balance: ${formatMoney(paymentSummaryQuery.data.balance)}. Pickup is blocked.`);
+                        return;
+                      }
+                      if (!pickupOverrideReason.trim()) {
+                        setError("Enter a reason before authorizing pickup with an outstanding balance.");
+                        return;
+                      }
+                    }
+                    setError(null);
+                    statusMutation.mutate({
+                      status: item,
+                      ...(item === "PICKED_UP" && pickupOverrideReason.trim()
+                        ? { pickupOverrideReason: pickupOverrideReason.trim() }
+                        : {}),
+                    });
+                  }}
                   style={{
                     display: "block",
                     width: "100%",
                     marginBottom: 8,
                   }}
                 >
-                  {statusLabel(item)}
+                  {statusMutation.isPending ? "Saving..." : statusLabel(item)}
                 </button>
               ))}
             </>
