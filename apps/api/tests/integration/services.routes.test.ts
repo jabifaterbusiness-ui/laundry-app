@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    $transaction: vi.fn(),
     refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, deletedAt: null }) },
     platformConfig: {
@@ -118,6 +119,8 @@ beforeEach(() => {
   findRoleOverride.mockResolvedValue(null);
   findUserOverride.mockResolvedValue(null);
   branchFindFirst.mockImplementation((async ({ where }: any) => ({ id: where.id, businessId: where.businessId }) as never) as never);
+  vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma)) as never);
+  updateMany.mockResolvedValue({ count: 1 } as never);
   userBranchFindUnique.mockImplementation((async ({ where }: any) => {
     const { userId, branchId } = where.userId_branchId;
     const businessId = userId === "user-owner-b" ? "biz-B" : "biz-A";
@@ -269,5 +272,39 @@ describe("Legacy pricing assignment authorization", () => {
       .set("X-Branch-Id", "branch-A");
 
     expect(res.status).toBe(403);
+  });
+});
+
+
+describe("Legacy pricing assignment", () => {
+  it("rejects assigning a legacy record to a branch in another business", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    branchFindFirst.mockResolvedValueOnce(null as never);
+
+    const res = await request(app)
+      .post("/api/v1/services/legacy-unassigned/assign")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .send({ resourceType: "SERVICE", resourceId: "legacy-service", targetBranchId: "branch-B" });
+
+    expect(res.status).toBe(404);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("allows the Business Owner to assign a legacy service to a branch in the same business", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    branchFindFirst.mockResolvedValue({ id: "branch-A" } as never);
+
+    const res = await request(app)
+      .post("/api/v1/services/legacy-unassigned/assign")
+      .set("Authorization", `Bearer ${OWNER_A}`)
+      .set("X-Branch-Id", "branch-A")
+      .send({ resourceType: "SERVICE", resourceId: "legacy-service", targetBranchId: "branch-A" });
+
+    expect(res.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "legacy-service", businessId: "biz-A", ownerBranchId: null },
+      data: { ownerBranchId: "branch-A" },
+    });
   });
 });
