@@ -63,7 +63,7 @@ const branches = [
     businessId: "business-1",
     name: "Main Branch",
     address: "Gwarinpa",
-    orderReadyTimeFormat: "24H",
+    orderReadyTimeFormat: "24H" as const,
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
