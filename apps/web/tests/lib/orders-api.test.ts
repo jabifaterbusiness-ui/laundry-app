@@ -83,9 +83,32 @@ describe("orders-api offline queue", () => {
 
     expect(result.operation.operationType).toBe("ORDER_UPDATE");
     expect(result.operation.payload).toEqual({
+      action: "UPDATE_STATUS",
       orderId: "order-1",
-      operation: "UPDATE_STATUS",
       status: "READY_FOR_PICKUP",
+    });
+  });
+
+  it("preserves a management pickup override reason in the offline operation", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new NetworkError("Unable to reach the server"),
+    );
+
+    const result = await updateOrderStatusWithOfflineQueue(
+      "order-2",
+      "PICKED_UP",
+      auth,
+      syncContext,
+      "Approved by branch manager after customer confirmation",
+    );
+
+    expect(result.queued).toBe(true);
+    if (!result.queued) throw new Error("Expected operation to be queued");
+    expect(result.operation.payload).toEqual({
+      action: "UPDATE_STATUS",
+      orderId: "order-2",
+      status: "PICKED_UP",
+      pickupOverrideReason: "Approved by branch manager after customer confirmation",
     });
   });
 
