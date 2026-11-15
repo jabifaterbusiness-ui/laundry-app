@@ -1308,6 +1308,7 @@ describe("Orders and Order Management section separation", () => {
     expect(screen.getByRole("heading", { name: "Orders" })).toBeInTheDocument();
     expect(await screen.findByText("No orders found.")).toBeInTheDocument();
     expect(screen.getByLabelText("Search orders")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Picked Up \(0\)/ })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Order Details" })).not.toBeInTheDocument();
   });
