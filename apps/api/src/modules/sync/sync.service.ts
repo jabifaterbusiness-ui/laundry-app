@@ -644,7 +644,7 @@ async function applySyncOperation(
     });
 
     return { operation: applied, result };
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function replaySyncOperation(
