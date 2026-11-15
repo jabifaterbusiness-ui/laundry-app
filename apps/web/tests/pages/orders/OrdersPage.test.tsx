@@ -325,9 +325,9 @@ describe("OrdersPage order search", () => {
 
     renderPage();
 
-    const pickedUpFolder = await screen.findByRole("button", { name: /Picked Up \\(1\\)/ });
-    expect(screen.getByRole("button", { name: /Ready for Pickup \\/ Completed \\(0\\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /All Orders \\(1\\)/ })).toBeInTheDocument();
+    const pickedUpFolder = await screen.findByRole("button", { name: /Picked Up \(1\)/ });
+    expect(screen.getByRole("button", { name: /Ready for Pickup \/ Completed \(0\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /All Orders \(1\)/ })).toBeInTheDocument();
 
     fireEvent.click(pickedUpFolder);
     expect(await screen.findByText("00001")).toBeInTheDocument();
