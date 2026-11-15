@@ -247,6 +247,8 @@ function OrderManagementContent({
     queryFn: () => getPickupPaymentEligibility(order!.id, { accessToken }, activeBranchId),
     enabled: Boolean(accessToken && activeBranchId && order?.id && canUpdateStatus),
     staleTime: 0,
+    refetchInterval: layer === "status" ? 15000 : false,
+    refetchOnWindowFocus: true,
   });
 
   const invoiceHistoryQuery = useQuery<InvoiceHistoryEntry[]>({
@@ -424,6 +426,9 @@ function OrderManagementContent({
           ],
         }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+        }),
         queryClient.invalidateQueries({
           queryKey: [
             "order-management",
