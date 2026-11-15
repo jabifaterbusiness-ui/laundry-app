@@ -72,7 +72,7 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
           id: input.serviceId,
           businessId: input.businessId,
           OR: [
-            { ownerBranchId: null },
+            
             { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
