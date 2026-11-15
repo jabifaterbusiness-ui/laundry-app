@@ -12,6 +12,8 @@ import {
   getOne,
   list,
   update,
+  listUnassignedLegacyPricing,
+  assignUnassignedLegacyPricing,
 } from "./services.controller.js";
 
 // Services / Price List authorization:
