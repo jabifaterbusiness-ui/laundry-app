@@ -284,7 +284,9 @@ export async function enqueueSyncOperation(
     return operation;
   } catch (err) {
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err !== null &&
+      typeof err === "object" &&
+      "code" in err &&
       err.code === "P2002"
     ) {
       const duplicate = await resolveDuplicate(input);
