@@ -69,7 +69,6 @@ export async function listPricingRules(
     businessId,
     ...(purpose === "order" ? { isActive: true } : {}),
     OR: [
-      { branchId: null },
       { branchId: { in: discountScope.ownerBranchIds } },
       { id: { in: discountScope.resourceIds } },
     ],
@@ -87,7 +86,6 @@ export async function listPricingRules(
     businessId,
     ...(purpose === "order" ? { isActive: true } : {}),
     OR: [
-      { branchId: null },
       { branchId: { in: taxScope.ownerBranchIds } },
       { id: { in: taxScope.resourceIds } },
     ],
@@ -238,7 +236,7 @@ export async function createPriceAdjustment(input: {
 export async function setPriceAdjustmentActive(id: string, businessId: string, branchId: string, userId: string, isActive: boolean) {
   return prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
-    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
     if (!existing) throw new AppError("Price adjustment not found", 404);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
     const result = await tx.priceAdjustment.updateMany({
