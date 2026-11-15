@@ -29,6 +29,7 @@ import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
 import {
   getOrder,
+  getPickupPaymentEligibility,
   getOrderStatusHistory,
   listAllOrders,
   updateOrderStatusWithOfflineQueue,
@@ -239,6 +240,13 @@ function OrderManagementContent({
         invoiceQuery.data?.id &&
         canViewPayments,
     ),
+  });
+
+  const pickupEligibilityQuery = useQuery({
+    queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+    queryFn: () => getPickupPaymentEligibility(order!.id, { accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && order?.id && canUpdateStatus),
+    staleTime: 0,
   });
 
   const invoiceHistoryQuery = useQuery<InvoiceHistoryEntry[]>({
@@ -1594,10 +1602,23 @@ function OrderManagementContent({
                   />
                 </label>
               )}
-              {paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0 && (
+              {pickupEligibilityQuery.isLoading && (
+                <p role="status">Checking whether this order is fully paid before pickup...</p>
+              )}
+              {pickupEligibilityQuery.isError && (
+                <p role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  Pickup payment status could not be verified. Refresh this check before releasing the order.
+                </p>
+              )}
+              {pickupEligibilityQuery.data && !pickupEligibilityQuery.data.eligible && (
                 <div role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
                   <strong>This customer has not completed payment, so these items cannot be picked up.</strong>
-                  <div>Outstanding balance: {formatMoney(paymentSummaryQuery.data.balance)}. Only an authorized management user can override this restriction, and a reason is mandatory.</div>
+                  <div>
+                    {pickupEligibilityQuery.data.outstandingBalance !== null
+                      ? `Outstanding balance: ${formatMoney(pickupEligibilityQuery.data.outstandingBalance)}. `
+                      : "A valid invoice payment record was not found. "}
+                    Only an authorized management user can override this restriction, and a reason is mandatory.
+                  </div>
                 </div>
               )}
               {STATUSES.map((item) => (
@@ -1611,14 +1632,25 @@ function OrderManagementContent({
                     item === order!.status
                   }
                   onClick={() => {
-                    if (item === "PICKED_UP" && paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0) {
-                      if (!canOverridePickup) {
-                        setError(`This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(paymentSummaryQuery.data.balance)}.`);
+                    if (item === "PICKED_UP") {
+                      if (pickupEligibilityQuery.isLoading || pickupEligibilityQuery.isError || !pickupEligibilityQuery.data) {
+                        setError("Pickup payment status could not be verified. Please refresh and try again.");
                         return;
                       }
-                      if (!pickupOverrideReason.trim()) {
-                        setError("Enter a reason before authorizing pickup with an outstanding balance.");
-                        return;
+                      if (!pickupEligibilityQuery.data.eligible) {
+                        if (!canOverridePickup) {
+                          const balance = pickupEligibilityQuery.data.outstandingBalance;
+                          setError(
+                            balance !== null
+                              ? `This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(balance)}.`
+                              : "Pickup is blocked because this order has no valid invoice payment record.",
+                          );
+                          return;
+                        }
+                        if (!pickupOverrideReason.trim()) {
+                          setError("Enter a reason before authorizing pickup with an outstanding balance.");
+                          return;
+                        }
                       }
                     }
                     setError(null);
