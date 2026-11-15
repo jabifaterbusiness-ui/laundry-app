@@ -987,7 +987,7 @@ describe("createOrder", () => {
     } as never);
 
     await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP"))
-      .rejects.toThrow("Customer has not completed payment");
+      .rejects.toThrow("This customer has not completed payment");
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
