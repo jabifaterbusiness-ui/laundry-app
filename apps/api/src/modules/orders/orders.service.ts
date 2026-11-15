@@ -1,4 +1,5 @@
-import type { OrderStatus, Prisma } from "@prisma/client";
+import type { OrderStatus, Prisma, Role } from "@prisma/client";
+import { hasPermission } from "../permissions/permissions.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { createGarmentsForOrderWithTx } from "../garments/garments.service.js";
@@ -569,7 +570,9 @@ async function transferOrderWithTx(
 
 export interface OrderStatusHistoryContext {
   actorUserId: string;
+  actorRole?: Role;
   correlationId?: string | null;
+  pickupOverrideReason?: string;
 }
 
 export async function updateOrderStatus(
@@ -589,7 +592,7 @@ export async function updateOrderStatus(
       if (!existing) throw new AppError("Order not found", 404);
 
       const updated = await updateOrderStatusWithDb(
-        tx, id, businessId, branchId, status,
+        tx, id, businessId, branchId, status, history,
       );
 
       if (existing.status !== status) {
@@ -631,7 +634,7 @@ export async function updateOrderStatus(
     };
   }
 
-  return updateOrderStatusWithDb(db, id, businessId, branchId, status);
+  return updateOrderStatusWithDb(db, id, businessId, branchId, status, history);
 }
 
 async function updateOrderStatusWithDb(
@@ -640,6 +643,7 @@ async function updateOrderStatusWithDb(
   businessId: string,
   branchId: string,
   status: OrderStatus,
+  history?: OrderStatusHistoryContext,
 ) {
   const existing = await db.order.findFirst({
     where: {
@@ -651,6 +655,58 @@ async function updateOrderStatusWithDb(
 
   if (!existing) {
     throw new AppError("Order not found", 404);
+  }
+
+  let pickupOverride: { reason: string; outstandingBalance: number } | null = null;
+  if (status === "PICKED_UP") {
+    const invoice = await db.invoice.findFirst({
+      where: { orderId: id, businessId, branchId },
+      select: {
+        id: true,
+        totalAmount: true,
+        payments: {
+          select: { amount: true, type: true, status: true },
+        },
+      },
+    });
+
+    if (!invoice) {
+      throw new AppError("Pickup is blocked because this order has no valid invoice payment record.", 422);
+    }
+
+    const netPayments = invoice.payments
+      .filter((payment) => payment.status === "POSTED")
+      .reduce(
+        (total, payment) => total + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+        0,
+      );
+    const outstandingBalance = Math.max(0, invoice.totalAmount - netPayments);
+
+    if (outstandingBalance > 0) {
+      const reason = history?.pickupOverrideReason?.trim();
+      if (!reason) {
+        throw new AppError(
+          `Customer has not completed payment. Outstanding balance: ${outstandingBalance}. Pickup is blocked.`,
+          422,
+        );
+      }
+
+      if (!history?.actorUserId || !history.actorRole) {
+        throw new AppError("A verified management user is required to override the pickup payment block.", 403);
+      }
+
+      const allowed = await hasPermission(
+        history.actorUserId,
+        businessId,
+        history.actorRole,
+        "orders.pickup_override",
+      );
+      if (!allowed) {
+        throw new AppError("You do not have permission to override the pickup payment requirement.", 403);
+      }
+
+      pickupOverride = { reason, outstandingBalance };
+    }
   }
 
   const now = new Date();
@@ -684,6 +740,28 @@ async function updateOrderStatusWithDb(
       items: true,
     },
   });
+
+  if (pickupOverride && history?.actorUserId) {
+    await db.auditLog.create({
+      data: {
+        action: "order.pickup_payment_override",
+        entityType: "Order",
+        entityId: updated.id,
+        businessId,
+        branchId,
+        actorUserId: history.actorUserId,
+        correlationId: history.correlationId ?? null,
+        metadata: {
+          orderNumber: updated.orderNumber,
+          status: "PICKED_UP",
+          authorizedByUserId: history.actorUserId,
+          authorizedAt: now.toISOString(),
+          reason: pickupOverride.reason,
+          outstandingBalance: pickupOverride.outstandingBalance,
+        },
+      },
+    });
+  }
 
   // Send customer notification only after the status update has committed.
   // Return the recorded delivery outcome so the operator can see whether
