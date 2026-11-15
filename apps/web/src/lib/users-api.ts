@@ -55,6 +55,7 @@ export interface Branch {
   businessId: string;
   name: string;
   address: string | null;
+  orderReadyTimeFormat?: "12H" | "24H";
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -175,6 +176,7 @@ export interface CreateBranchInput {
 export interface UpdateBranchInput {
   name?: string;
   address?: string;
+  orderReadyTimeFormat?: "12H" | "24H";
 }
 
 export function createBranch(

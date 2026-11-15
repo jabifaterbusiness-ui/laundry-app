@@ -66,6 +66,7 @@ interface OrderManagementProps {
   mode: "view" | "new" | "edit";
   isDirty?: boolean;
   newOrderContent?: ReactNode;
+  workspaceSwitcherContent?: ReactNode;
   onBack: () => void;
   onSwitchCustomer: () => void;
   onNewOrder: (customer: Customer) => void;
@@ -80,6 +81,7 @@ function OrderManagementContent({
   mode,
   isDirty = false,
   newOrderContent,
+  workspaceSwitcherContent,
   onBack,
   onSwitchCustomer,
   onNewOrder,
@@ -626,6 +628,44 @@ function OrderManagementContent({
     },
   });
 
+  function changeOrderStatus(item: OrderStatus) {
+    if (statusMutation.isPending || mode !== "view" || !order || item === order.status) return;
+
+    if (item === "PICKED_UP") {
+      if (pickupEligibilityQuery.isLoading || pickupEligibilityQuery.isError || !pickupEligibilityQuery.data) {
+        setError("Pickup payment status could not be verified. Please refresh and try again.");
+        return;
+      }
+      if (!pickupEligibilityQuery.data.eligible) {
+        if (pickupEligibilityQuery.data.reason === "NO_VALID_INVOICE") {
+          setError("Pickup is blocked because this order has no valid invoice payment record. Resolve the invoice before release.");
+          return;
+        }
+        if (!canOverridePickup) {
+          const balance = pickupEligibilityQuery.data.outstandingBalance;
+          setError(
+            balance !== null
+              ? `This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(balance)}.`
+              : "Pickup is blocked because this order has no valid invoice payment record.",
+          );
+          return;
+        }
+        if (!pickupOverrideReason.trim()) {
+          setError("Enter a reason before authorizing pickup with an outstanding balance.");
+          return;
+        }
+      }
+    }
+
+    setError(null);
+    statusMutation.mutate({
+      status: item,
+      ...(item === "PICKED_UP" && pickupOverrideReason.trim()
+        ? { pickupOverrideReason: pickupOverrideReason.trim() }
+        : {}),
+    });
+  }
+
   const customerMutation = useMutation({
     mutationFn: () =>
       updateCustomer(
@@ -990,7 +1030,7 @@ function OrderManagementContent({
             setLayer("payment");
           }}
         >
-          Customer Pay
+          Pay
         </button>
         <button
           type="button"
@@ -1064,6 +1104,12 @@ function OrderManagementContent({
           More
         </button>
       </div>
+
+      {workspaceSwitcherContent ? (
+        <div style={{ marginTop: 16 }}>
+          {workspaceSwitcherContent}
+        </div>
+      ) : null}
 
       {mode === "new" || mode === "edit" ? (
         <section style={{ marginTop: 20 }}>
@@ -1604,9 +1650,16 @@ function OrderManagementContent({
                   <textarea
                     value={pickupOverrideReason}
                     onChange={(event) => setPickupOverrideReason(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        changeOrderStatus("PICKED_UP");
+                      }
+                    }}
+                    disabled={statusMutation.isPending}
                     rows={3}
                     maxLength={1000}
-                    placeholder="Required only when collecting an order with an outstanding balance"
+                    placeholder="Enter reason, then press Enter to authorize pickup. Shift+Enter adds a new line."
                     style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6 }}
                   />
                 </label>
@@ -1640,40 +1693,7 @@ function OrderManagementContent({
                     mode !== "view" ||
                     item === order!.status
                   }
-                  onClick={() => {
-                    if (item === "PICKED_UP") {
-                      if (pickupEligibilityQuery.isLoading || pickupEligibilityQuery.isError || !pickupEligibilityQuery.data) {
-                        setError("Pickup payment status could not be verified. Please refresh and try again.");
-                        return;
-                      }
-                      if (!pickupEligibilityQuery.data.eligible) {
-                        if (pickupEligibilityQuery.data.reason === "NO_VALID_INVOICE") {
-                          setError("Pickup is blocked because this order has no valid invoice payment record. Resolve the invoice before release.");
-                          return;
-                        }
-                        if (!canOverridePickup) {
-                          const balance = pickupEligibilityQuery.data.outstandingBalance;
-                          setError(
-                            balance !== null
-                              ? `This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(balance)}.`
-                              : "Pickup is blocked because this order has no valid invoice payment record.",
-                          );
-                          return;
-                        }
-                        if (!pickupOverrideReason.trim()) {
-                          setError("Enter a reason before authorizing pickup with an outstanding balance.");
-                          return;
-                        }
-                      }
-                    }
-                    setError(null);
-                    statusMutation.mutate({
-                      status: item,
-                      ...(item === "PICKED_UP" && pickupOverrideReason.trim()
-                        ? { pickupOverrideReason: pickupOverrideReason.trim() }
-                        : {}),
-                    });
-                  }}
+                  onClick={() => changeOrderStatus(item)}
                   style={{
                     display: "block",
                     width: "100%",

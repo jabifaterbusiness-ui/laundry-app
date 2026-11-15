@@ -63,6 +63,7 @@ const branches = [
     businessId: "business-1",
     name: "Main Branch",
     address: "Gwarinpa",
+    orderReadyTimeFormat: "24H",
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -112,6 +113,26 @@ describe("BranchesPage", () => {
     expect(
       screen.getByRole("button", { name: "Deactivate" }),
     ).toBeInTheDocument();
+  });
+
+  it("saves a branch expected-ready time format", async () => {
+    render(<BranchesPage />);
+
+    const selector = await screen.findByRole("combobox", {
+      name: "Expected Ready time format for Main Branch",
+    });
+    fireEvent.change(selector, { target: { value: "12H" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save format" }));
+
+    await waitFor(() => {
+      expect(mockedApiFetch).toHaveBeenCalledWith(
+        "/branches/branch-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ orderReadyTimeFormat: "12H" }),
+        }),
+      );
+    });
   });
 
   it("creates a branch", async () => {
@@ -246,5 +267,8 @@ describe("BranchesPage", () => {
     expect(
       screen.queryByRole("button", { name: "Manage users" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Expected Ready time format for Main Branch" }),
+    ).toBeDisabled();
   });
 });
