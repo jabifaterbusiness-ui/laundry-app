@@ -133,6 +133,24 @@ describe("Branches routes - authentication", () => {
 });
 
 describe("Branches routes - tenant isolation", () => {
+  it("allows an explicitly authorized branch updater to list branches for settings", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findMany.mockResolvedValue([{
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      orderReadyTimeFormat: "24H",
+      isActive: true,
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/branches?status=all")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].orderReadyTimeFormat).toBe("24H");
+  });
   it("returns the active branch time preference to an authorized order user", async () => {
     findUserOverride.mockResolvedValue({ allowed: true } as never);
     userBranchFindUnique.mockResolvedValue({

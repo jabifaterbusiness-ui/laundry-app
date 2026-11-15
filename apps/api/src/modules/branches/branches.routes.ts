@@ -27,7 +27,7 @@ branchesRouter.use(requireAuth, requireBusinessContext);
 
 branchesRouter.get(
   "/",
-  requirePermission("branches.view"),
+  requireAnyPermission(["branches.view", "branches.update"]),
   asyncHandler(list),
 );
 
