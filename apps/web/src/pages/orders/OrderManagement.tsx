@@ -535,6 +535,10 @@ function OrderManagementContent({
       });
 
       queryClient.invalidateQueries({
+        queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+      });
+
+      queryClient.invalidateQueries({
         queryKey: ["order-management", "customer-account"],
       });
 
@@ -1638,6 +1642,10 @@ function OrderManagementContent({
                         return;
                       }
                       if (!pickupEligibilityQuery.data.eligible) {
+                        if (pickupEligibilityQuery.data.reason === "NO_VALID_INVOICE") {
+                          setError("Pickup is blocked because this order has no valid invoice payment record. Resolve the invoice before release.");
+                          return;
+                        }
                         if (!canOverridePickup) {
                           const balance = pickupEligibilityQuery.data.outstandingBalance;
                           setError(
