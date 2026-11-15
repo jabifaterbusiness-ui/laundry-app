@@ -171,6 +171,23 @@ export async function createOrder(
   });
 }
 
+export interface PickupPaymentEligibility {
+  eligible: boolean;
+  outstandingBalance: number | null;
+  reason: "NO_VALID_INVOICE" | "OUTSTANDING_BALANCE" | null;
+}
+
+export async function getPickupPaymentEligibility(
+  id: string,
+  auth: { accessToken: string | null },
+  branchId?: string | null,
+): Promise<PickupPaymentEligibility> {
+  return apiFetch<PickupPaymentEligibility>(
+    `/orders/${encodeURIComponent(id)}/pickup-eligibility`,
+    { accessToken: auth.accessToken, branchId },
+  );
+}
+
 export async function getOrderStatusHistory(
   id: string,
   auth: { accessToken: string | null },
