@@ -15,4 +15,8 @@ export const toggleChatReaction=(conversationId:string,messageId:string,emoji:st
 export const uploadChatAttachment=(conversationId:string,file:File)=>apiFetch<{data:ChatAttachment}>(`/chat/conversations/${encodeURIComponent(conversationId)}/attachments`,{...auth(),method:"POST",body:file,headers:{"Content-Type":"application/octet-stream","X-File-Name":encodeURIComponent(file.name),"X-File-Mime-Type":file.type||"application/octet-stream"}});
 export async function downloadChatAttachment(id:string,name:string){const blob=await apiFetchBlob(`/chat/attachments/${encodeURIComponent(id)}`,auth());const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=name;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);}
 
+export const updateChatGroup=(id:string,input:{title?:string;description?:string|null})=>apiFetch<{data:ChatConversation}>(`/chat/groups/${encodeURIComponent(id)}`,{...auth(),method:"PATCH",body:JSON.stringify(input)});
+export const addChatGroupMember=(id:string,userId:string)=>apiFetch<void>(`/chat/groups/${encodeURIComponent(id)}/members`,{...auth(),method:"POST",body:JSON.stringify({userId})});
+export const removeChatGroupMember=(id:string,userId:string)=>apiFetch<void>(`/chat/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,{...auth(),method:"DELETE"});
+export const setChatGroupMemberRole=(id:string,userId:string,role:"ADMIN"|"MEMBER")=>apiFetch<void>(`/chat/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`,{...auth(),method:"PATCH",body:JSON.stringify({role})});
 export const markChatRead=(id:string)=>apiFetch<void>(`/chat/conversations/${encodeURIComponent(id)}/read`,{...auth(),method:"POST",body:"{}"});
