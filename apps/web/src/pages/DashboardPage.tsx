@@ -103,6 +103,23 @@ export function DashboardPage() {
   }
 
   const report = reportQuery.data;
+  const todayReport = todayReportQuery.data;
+  const todayReportOrdersHref = todayReport
+    ? `/orders?${new URLSearchParams({
+        reportMetric: "orders",
+        reportFrom: todayReport.period.from,
+        reportTo: todayReport.period.to,
+        reportDate: todayReport.date,
+      }).toString()}`
+    : "/orders";
+  const todayReportPickupsHref = todayReport
+    ? `/orders?${new URLSearchParams({
+        reportMetric: "pickups",
+        reportFrom: todayReport.period.from,
+        reportTo: todayReport.period.to,
+        reportDate: todayReport.date,
+      }).toString()}`
+    : "/orders";
 
   const paymentPercentage = report
     ? collectionPercentage(
@@ -189,26 +206,34 @@ export function DashboardPage() {
             </div>
           ) : todayReportQuery.data ? (
             <div className="dashboard-kpi-grid" aria-label="Today's business totals">
-              <article className="dashboard-kpi-card">
+              <Link
+                className="dashboard-kpi-card dashboard-kpi-card--link"
+                to={todayReportOrdersHref}
+                aria-label={`Open all orders received on ${todayReportQuery.data.date}`}
+              >
                 <p>Total Order Received</p>
                 <strong>{formatMoney(todayReportQuery.data.orders.orderValueReceived)}</strong>
-                <span>Full value of orders received today, paid or unpaid</span>
-              </article>
+                <span className="dashboard-kpi-note">Full value of orders received today, paid or unpaid</span>
+              </Link>
               <article className="dashboard-kpi-card">
                 <p>Refunds</p>
                 <strong>{formatMoney(todayReportQuery.data.payments.refundAmount)}</strong>
-                <span>Recorded today</span>
+                <span className="dashboard-kpi-note">Recorded today</span>
               </article>
               <article className="dashboard-kpi-card">
                 <p>Net Payment Received</p>
                 <strong>{formatMoney(todayReportQuery.data.payments.netCollected)}</strong>
-                <span>Payments received today less refunds</span>
+                <span className="dashboard-kpi-note">Payments received today less refunds</span>
               </article>
-              <article className="dashboard-kpi-card">
+              <Link
+                className="dashboard-kpi-card dashboard-kpi-card--link dashboard-kpi-card--pickup"
+                to={todayReportPickupsHref}
+                aria-label={`Open all orders picked up on ${todayReportQuery.data.date}`}
+              >
                 <p>Total Pickups</p>
                 <strong>{formatNumber(todayReportQuery.data.pickups.orderCount)}</strong>
-                <span>Orders picked up today · Order value: {formatMoney(todayReportQuery.data.pickups.orderValue)}</span>
-              </article>
+                <span className="dashboard-kpi-note">Orders picked up today · Order value: {formatMoney(todayReportQuery.data.pickups.orderValue)}</span>
+              </Link>
             </div>
           ) : null}
         </section>

@@ -221,9 +221,11 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("₦200,000")).toBeInTheDocument();
     expect(screen.getByText("Total Order Received")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open all orders received on 2026-11-14/ })).toHaveAttribute("href", expect.stringContaining("reportMetric=orders"));
     expect(screen.getByText("Refunds")).toBeInTheDocument();
     expect(screen.getByText("Net Payment Received")).toBeInTheDocument();
     expect(screen.getByText("Total Pickups")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open all orders picked up on 2026-11-14/ })).toHaveAttribute("href", expect.stringContaining("reportMetric=pickups"));
     expect(screen.getByText("Full value of orders received today, paid or unpaid")).toBeInTheDocument();
     expect(screen.getByText("Payments received today less refunds")).toBeInTheDocument();
     expect(screen.getByText("Orders picked up today · Order value: ₦150,000")).toBeInTheDocument();

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { prisma } from "../../lib/prisma.js";
 import {
   createServiceSchema,
   listServicesQuerySchema,
@@ -154,4 +155,82 @@ export async function activate(req: Request, res: Response) {
 
 export async function deactivate(req: Request, res: Response) {
   await setActiveStatus(req, res, false);
+}
+
+
+const LEGACY_RESOURCE_TYPES = ["SERVICE", "DISCOUNT", "TAX", "CUSTOMER_PRICE"] as const;
+
+function requireBusinessOwner(req: Request) {
+  if (req.user?.securityRole !== "BUSINESS_OWNER") {
+    throw new AppError("Only the Business Owner can assign unassigned legacy pricing records", 403);
+  }
+}
+
+export async function listUnassignedLegacyPricing(req: Request, res: Response) {
+  requireBusinessOwner(req);
+  const businessId = requireBusinessId(req);
+  const [services, discounts, taxes, customerPrices] = await Promise.all([
+    prisma.service.findMany({ where: { businessId, ownerBranchId: null }, orderBy: { name: "asc" } }),
+    prisma.priceAdjustment.findMany({ where: { businessId, branchId: null }, orderBy: { name: "asc" }, include: { customer: { select: { id: true, name: true } }, group: { select: { id: true, name: true } } } }),
+    prisma.taxRule.findMany({ where: { businessId, branchId: null }, orderBy: { name: "asc" } }),
+    prisma.customerServicePrice.findMany({ where: { businessId, branchId: null }, include: { customer: { select: { id: true, name: true, ownerBranchId: true } }, service: { select: { id: true, name: true, ownerBranchId: true } } }, orderBy: { createdAt: "asc" } }),
+  ]);
+  res.status(200).json({ services, discounts, taxes, customerPrices });
+}
+
+export async function assignUnassignedLegacyPricing(req: Request, res: Response) {
+  requireBusinessOwner(req);
+  const businessId = requireBusinessId(req);
+  const { resourceType, resourceId, targetBranchId } = req.body ?? {};
+  if (!LEGACY_RESOURCE_TYPES.includes(resourceType) || typeof resourceId !== "string" || !resourceId.trim() || typeof targetBranchId !== "string" || !targetBranchId.trim()) {
+    throw new AppError("A valid legacy resource, record ID and target branch are required", 422);
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+    const branch = await tx.branch.findFirst({ where: { id: targetBranchId, businessId }, select: { id: true } });
+    if (!branch) throw new AppError("Target branch not found in this business", 404);
+
+    let changed = 0;
+    if (resourceType === "SERVICE") {
+      const result = await tx.service.updateMany({ where: { id: resourceId, businessId, ownerBranchId: null }, data: { ownerBranchId: targetBranchId } });
+      changed = result.count;
+    } else if (resourceType === "DISCOUNT") {
+      const result = await tx.priceAdjustment.updateMany({ where: { id: resourceId, businessId, branchId: null }, data: { branchId: targetBranchId } });
+      changed = result.count;
+    } else if (resourceType === "TAX") {
+      const result = await tx.taxRule.updateMany({ where: { id: resourceId, businessId, branchId: null }, data: { branchId: targetBranchId } });
+      changed = result.count;
+    } else {
+      const price = await tx.customerServicePrice.findFirst({
+        where: { id: resourceId, businessId, branchId: null },
+        include: { customer: { select: { ownerBranchId: true } }, service: { select: { ownerBranchId: true } } },
+      });
+      if (!price) throw new AppError("Unassigned customer price not found", 404);
+      if (price.service.ownerBranchId !== targetBranchId || (price.customer.ownerBranchId !== null && price.customer.ownerBranchId !== targetBranchId)) {
+        throw new AppError("Assign the related service and customer to this branch before assigning its customer-specific price", 422);
+      }
+      const result = await tx.customerServicePrice.updateMany({ where: { id: resourceId, businessId, branchId: null }, data: { branchId: targetBranchId } });
+      changed = result.count;
+    }
+    if (!changed) throw new AppError("Unassigned legacy record not found or already assigned", 409);
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      throw new AppError("A record with the same name or customer/service combination already exists in the target branch", 409);
+    }
+    throw error;
+  }
+
+  await recordAuditEvent({
+    action: "pricing.legacy_record_assigned",
+    entityType: resourceType,
+    entityId: resourceId,
+    businessId,
+    actorUserId: req.user!.id,
+    branchId: targetBranchId,
+    correlationId: req.correlationId ?? null,
+    metadata: { resourceType, targetBranchId },
+  });
+  res.status(200).json({ success: true });
 }

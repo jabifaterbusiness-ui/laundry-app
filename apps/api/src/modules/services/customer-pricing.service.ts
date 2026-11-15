@@ -24,14 +24,13 @@ export async function listCustomerServicePrices(businessId: string, branchId: st
     where: {
       businessId,
       customerId,
-      OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+      OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
       // A price share must not disclose the name or base price of a service
       // that the active branch cannot independently see.
       service: {
         is: {
           businessId,
           OR: [
-            { ownerBranchId: null },
             { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
@@ -73,7 +72,7 @@ export async function setCustomerServicePrice(input: { businessId: string; branc
           id: input.serviceId,
           businessId: input.businessId,
           OR: [
-            { ownerBranchId: null },
+            
             { ownerBranchId: { in: serviceScope.ownerBranchIds } },
             { id: { in: serviceScope.resourceIds } },
           ],
@@ -121,7 +120,7 @@ export async function removeCustomerServicePrice(id: string, businessId: string,
   return prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "CUSTOMER_PRICING" }, tx);
     const existing = await tx.customerServicePrice.findFirst({
-      where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+      where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
     });
     if (!existing) throw new AppError("Customer-specific service price not found", 404);
     await assertBranchResourceWriteAccess({

@@ -133,6 +133,47 @@ describe("Branches routes - authentication", () => {
 });
 
 describe("Branches routes - tenant isolation", () => {
+  it("allows an explicitly authorized branch updater to list branches for settings", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    findMany.mockResolvedValue([{
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      name: "Main Branch",
+      address: null,
+      orderReadyTimeFormat: "24H",
+      isActive: true,
+    }] as never);
+
+    const res = await request(app)
+      .get("/api/v1/branches?status=all")
+      .set("Authorization", `Bearer ${STAFF_A}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].orderReadyTimeFormat).toBe("24H");
+  });
+  it("returns the active branch time preference to an authorized order user", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    userBranchFindUnique.mockResolvedValue({
+      branch: {
+        id: "22222222-2222-2222-2222-222222222222",
+        businessId: "biz-A",
+        isActive: true,
+      },
+    } as never);
+    findFirst.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      orderReadyTimeFormat: "12H",
+    } as never);
+
+    const res = await request(app)
+      .get("/api/v1/branches/current/order-preferences")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", "22222222-2222-2222-2222-222222222222");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ orderReadyTimeFormat: "12H" });
+  });
   it("business A can list its own branches", async () => {
     findMany.mockResolvedValue([{ id: "branch-a", businessId: "biz-A", name: "Main Branch" }] as never);
 
@@ -285,27 +326,40 @@ describe("Branches routes - authorization", () => {
 });
 
 describe("Branches routes - update and status", () => {
-  it("allows STAFF to update a branch when branches.update is explicitly granted", async () => {
-    findUserOverride.mockResolvedValue({
-      allowed: true,
-    } as never);
-
+  it("rejects an invalid branch expected-ready time format", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ orderReadyTimeFormat: "AMPM" });
+    expect(res.status).toBe(422);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+  it("allows STAFF to update a branch time format when branches.update is explicitly granted", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
     updateMany.mockResolvedValue({ count: 1 } as never);
     findFirst.mockResolvedValue({
       id: "22222222-2222-2222-2222-222222222222",
       businessId: "biz-A",
       name: "Granted Update",
       address: "Abuja",
+      orderReadyTimeFormat: "12H",
       isActive: true,
     } as never);
 
     const res = await request(app)
       .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
       .set("Authorization", `Bearer ${STAFF_A}`)
-      .send({ name: "Granted Update" });
+      .send({ orderReadyTimeFormat: "12H" });
 
     expect(res.status).toBe(200);
-    expect(updateMany).toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "22222222-2222-2222-2222-222222222222",
+        businessId: "biz-A",
+      }),
+      data: expect.objectContaining({ orderReadyTimeFormat: "12H" }),
+    }));
   });
 
   it("allows BUSINESS_OWNER to update a branch", async () => {

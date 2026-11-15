@@ -60,7 +60,6 @@ describe("customer-specific service pricing branch scope", () => {
             is: {
               businessId: "biz-A",
               OR: [
-                { ownerBranchId: null },
                 { ownerBranchId: { in: ["branch-A"] } },
                 { id: { in: [] } },
               ],
@@ -90,7 +89,6 @@ describe("customer-specific service pricing branch scope", () => {
             is: {
               businessId: "biz-A",
               OR: [
-                { ownerBranchId: null },
                 { ownerBranchId: { in: ["branch-A"] } },
                 { id: { in: [] } },
               ],
@@ -121,7 +119,6 @@ describe("customer-specific service pricing branch scope", () => {
             is: {
               businessId: "biz-A",
               OR: [
-                { ownerBranchId: null },
                 { ownerBranchId: { in: ["branch-A"] } },
                 { id: { in: ["service-shared"] } },
               ],

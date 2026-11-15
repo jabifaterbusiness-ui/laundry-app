@@ -56,6 +56,19 @@ export async function get(req: Request, res: Response) {
   res.status(200).json(branch);
 }
 
+export async function getCurrentOrderPreferences(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = req.branchId;
+  if (!branchId) throw new AppError("An active branch is required", 400);
+
+  const branch = await getBranchForBusiness(branchId, businessId);
+  if (!branch) throw new AppError("Branch not found", 404);
+
+  res.status(200).json({
+    orderReadyTimeFormat: branch.orderReadyTimeFormat ?? "24H",
+  });
+}
+
 export async function create(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const input = createBranchSchema.parse(req.body);
@@ -92,6 +105,9 @@ export async function update(req: Request, res: Response) {
     {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(input.orderReadyTimeFormat !== undefined
+        ? { orderReadyTimeFormat: input.orderReadyTimeFormat }
+        : {}),
     },
   );
 

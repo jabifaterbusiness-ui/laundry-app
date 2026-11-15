@@ -6,7 +6,7 @@ import type {
   Order,
   OrderStatus,
 } from "@laundry-app/shared";
-import { ApiError } from "../../lib/api-client.js";
+import { ApiError, apiFetch } from "../../lib/api-client.js";
 import {
   createOrderWithOfflineQueue,
   getOrder,
@@ -61,6 +61,30 @@ function formatDate(value: string | null) {
   if (!value) return "-";
 
   return new Date(value).toLocaleString();
+}
+
+type ReadyTimeFormat = "12H" | "24H";
+
+function formatReadyTimeInput(value: string, format: ReadyTimeFormat) {
+  const time = value.length >= 16 ? value.slice(11, 16) : "";
+  const match = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!match) return "";
+  if (format === "24H") return time;
+  const hour = Number(match[1]);
+  const displayHour = hour % 12 || 12;
+  return `${String(displayHour).padStart(2, "0")}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`;
+}
+
+function parseReadyTimeInput(value: string, format: ReadyTimeFormat): string | null {
+  const trimmed = value.trim().toUpperCase();
+  if (format === "24H") {
+    return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(trimmed) ? trimmed : null;
+  }
+  const match = /^(0?[1-9]|1[0-2]):([0-5]\d)\s*(AM|PM)$/.exec(trimmed);
+  if (!match) return null;
+  let hour = Number(match[1]) % 12;
+  if (match[3] === "PM") hour += 12;
+  return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
 function statusLabel(status: OrderStatus) {
@@ -123,6 +147,10 @@ export function OrdersPage() {
   const editOrderFromUrl = searchParams.get("edit") === "1";
   const customerPickerFromUrl = searchParams.get("customerPicker") === "1";
   const newOrderFromUrl = searchParams.get("newOrder") === "1";
+  const reportMetric = searchParams.get("reportMetric");
+  const reportFrom = searchParams.get("reportFrom");
+  const reportTo = searchParams.get("reportTo");
+  const reportDate = searchParams.get("reportDate");
 
   const workspaceHydratedRef = useRef(false);
   const openedCustomerFromUrlRef = useRef<string | null>(null);
@@ -249,6 +277,13 @@ export function OrdersPage() {
   const [initialCustomerPhone, setInitialCustomerPhone] = useState("");
   const [customerCreateMessage, setCustomerCreateMessage] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [readyDateInput, setReadyDateInput] = useState("");
+  const [readyTimeInput, setReadyTimeInput] = useState("");
+
+  useEffect(() => {
+    if (reportMetric === "pickups") setOpenFolder("pickedUp");
+    else if (reportMetric === "orders") setOpenFolder("all");
+  }, [reportMetric, reportFrom, reportTo]);
 
   useEffect(() => {
     if (!customerPickerFromUrl) return;
@@ -334,6 +369,17 @@ export function OrdersPage() {
         { accessToken },
       ),
     enabled: Boolean(accessToken && activeBranchId),
+  });
+
+  const branchOrderPreferencesQuery = useQuery({
+    queryKey: ["branches", "order-preferences", activeBranchId],
+    queryFn: () => apiFetch<{ orderReadyTimeFormat: ReadyTimeFormat }>(
+      "/branches/current/order-preferences",
+      { accessToken, branchId: activeBranchId },
+    ),
+    enabled: Boolean(accessToken && activeBranchId && (canCreateOrder || canUpdateOrder)),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const customerFromUrlQuery = useQuery({
@@ -458,9 +504,7 @@ export function OrdersPage() {
           taxRuleIds: selectedTaxRuleIds,
           garmentNote: garmentNote.trim() || undefined,
           internalNote: internalNote.trim() || undefined,
-          expectedReadyAt: expectedReadyAt
-            ? new Date(expectedReadyAt).toISOString()
-            : undefined,
+          expectedReadyAt: getExpectedReadyAtIso(),
         },
         { accessToken },
         {
@@ -555,9 +599,7 @@ export function OrdersPage() {
         })),
         garmentNote: garmentNote.trim() || null,
         internalNote: internalNote.trim() || null,
-        expectedReadyAt: expectedReadyAt
-          ? new Date(expectedReadyAt).toISOString()
-          : null,
+        expectedReadyAt: getExpectedReadyAtIso() ?? null,
       };
 
       return updateOrder(
@@ -802,6 +844,12 @@ export function OrdersPage() {
 
   const expectedReadyAt =
     activeWorkspace?.draft.expectedReadyAt ?? "";
+  const readyTimeFormat = branchOrderPreferencesQuery.data?.orderReadyTimeFormat ?? "24H";
+
+  useEffect(() => {
+    setReadyDateInput(expectedReadyAt ? expectedReadyAt.slice(0, 10) : "");
+    setReadyTimeInput(formatReadyTimeInput(expectedReadyAt, readyTimeFormat));
+  }, [activeWorkspaceId, activeWorkspace?.mode, expectedReadyAt, readyTimeFormat]);
 
   const formTotal = customerPricesReady
     ? lines.reduce((sum, line) => {
@@ -809,6 +857,31 @@ export function OrdersPage() {
         return sum + (service ? line.quantity * getEffectiveUnitPrice(service) : 0);
       }, 0)
     : null;
+
+  function syncExpectedReadyAtDraft(dateValue: string, timeValue: string) {
+    if (!activeWorkspaceId) return;
+    const normalizedTime = parseReadyTimeInput(timeValue, readyTimeFormat);
+    if (!dateValue && !timeValue.trim()) {
+      updateWorkspace(activeWorkspaceId, { draft: { expectedReadyAt: "" } });
+      return;
+    }
+    if (dateValue && normalizedTime) {
+      updateWorkspace(activeWorkspaceId, {
+        draft: { expectedReadyAt: `${dateValue}T${normalizedTime}` },
+      });
+    }
+  }
+
+  function getExpectedReadyAtIso(): string | undefined {
+    if (!readyDateInput && !readyTimeInput.trim()) return undefined;
+    const normalizedTime = parseReadyTimeInput(readyTimeInput, readyTimeFormat);
+    if (!readyDateInput || !normalizedTime) {
+      throw new Error(`Enter both an expected ready date and a valid ${readyTimeFormat === "12H" ? "12-hour" : "24-hour"} time, or leave both blank.`);
+    }
+    const date = new Date(`${readyDateInput}T${normalizedTime}:00`);
+    if (Number.isNaN(date.getTime())) throw new Error("Enter a valid expected ready date and time.");
+    return date.toISOString();
+  }
 
   function markOrderFormDirty(value: boolean) {
     setOrderFormDirty(value);
@@ -1300,30 +1373,32 @@ export function OrdersPage() {
   });
 
   const allOrders = allOrdersQuery.data ?? [];
+  const hasDailyReportFilter =
+    (reportMetric === "orders" || reportMetric === "pickups") &&
+    Boolean(reportFrom && reportTo) &&
+    Number.isFinite(Date.parse(reportFrom ?? "")) &&
+    Number.isFinite(Date.parse(reportTo ?? ""));
 
-  const receivedOrders = allOrders.filter(
-    (order) => order.status === "RECEIVED",
-  );
+  const reportScopedOrders = useMemo(() => {
+    if (!hasDailyReportFilter) return allOrders;
+    const fromTime = Date.parse(reportFrom!);
+    const toTime = Date.parse(reportTo!);
+    return allOrders.filter((order) => {
+      if (reportMetric === "pickups" && order.status !== "PICKED_UP") return false;
+      const eventDate = reportMetric === "pickups" ? order.pickedUpAt : order.createdAt;
+      if (!eventDate) return false;
+      const eventTime = new Date(eventDate).getTime();
+      return eventTime >= fromTime && eventTime < toTime;
+    });
+  }, [allOrders, hasDailyReportFilter, reportFrom, reportTo, reportMetric]);
 
-  const outstandingOrders = allOrders.filter(
-    (order) =>
-      order.status === "RECEIVED" ||
-      order.status === "IN_PROGRESS",
-  );
+  const folderOrders = hasDailyReportFilter ? reportScopedOrders : allOrders;
 
-  const readyOrders = allOrders.filter(
-    (order) =>
-      order.status === "READY_FOR_PICKUP" ||
-      order.status === "COMPLETED",
-  );
-
-  const pickedUpOrders = allOrders.filter(
-    (order) => order.status === "PICKED_UP",
-  );
-
-  const cancelledOrders = allOrders.filter(
-    (order) => order.status === "CANCELLED",
-  );
+  const receivedOrders = folderOrders.filter((order) => order.status === "RECEIVED");
+  const outstandingOrders = folderOrders.filter((order) => order.status === "RECEIVED" || order.status === "IN_PROGRESS");
+  const readyOrders = folderOrders.filter((order) => order.status === "READY_FOR_PICKUP" || order.status === "COMPLETED");
+  const pickedUpOrders = folderOrders.filter((order) => order.status === "PICKED_UP");
+  const cancelledOrders = folderOrders.filter((order) => order.status === "CANCELLED");
 
   const visibleFolderOrders =
     openFolder === "received"
@@ -1337,8 +1412,26 @@ export function OrdersPage() {
             : openFolder === "cancelled"
             ? cancelledOrders
             : openFolder === "all"
-              ? allOrders
+              ? folderOrders
               : [];
+
+    const workspaceSwitcherContent = orderFormWorkspaces.length > 0 ? (
+      <OrderWorkspaceSwitcher
+        workspaces={orderFormWorkspaces}
+        activeWorkspaceId={activeOrderFormWorkspaceId}
+        onOpenCustomer={() => {
+          setSwitchingCustomer(true);
+          setCustomerSearch("");
+          setCustomerPickerOpen(true);
+        }}
+        onSwitch={(workspaceId) => {
+          switchWorkspace(workspaceId);
+          setCustomerPickerOpen(false);
+          setFormError(null);
+        }}
+        onClose={(workspaceId) => closeWorkspace(workspaceId)}
+      />
+    ) : null;
 
     const showOrderForm = formOpen || Boolean(
       activeWorkspace
@@ -1703,23 +1796,44 @@ export function OrdersPage() {
               <strong>Order Total: {formTotal === null ? "Loading customer prices…" : formatMoney(formTotal)}</strong>
             </p>
 
-            <div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
               <label>
-                Expected Ready
+                Expected Ready date (optional)
                 <input
-                  type="datetime-local"
-                  value={expectedReadyAt}
+                  type="date"
+                  aria-label="Expected Ready date"
+                  value={readyDateInput}
                   onChange={(event) => {
-                    if (!activeWorkspaceId) return;
-
-                    updateWorkspace(activeWorkspaceId, {
-                      draft: {
-                        expectedReadyAt: event.target.value,
-                      },
-                    });
+                    setReadyDateInput(event.target.value);
+                    syncExpectedReadyAtDraft(event.target.value, readyTimeInput);
                   }}
+                  style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6 }}
                 />
               </label>
+              <label>
+                Expected Ready time ({readyTimeFormat === "12H" ? "12-hour" : "24-hour"})
+                <input
+                  type="text"
+                  aria-label="Expected Ready time"
+                  value={readyTimeInput}
+                  placeholder={readyTimeFormat === "12H" ? "02:30 PM" : "14:30"}
+                  disabled={branchOrderPreferencesQuery.isLoading || branchOrderPreferencesQuery.isError}
+                  onChange={(event) => {
+                    setReadyTimeInput(event.target.value);
+                    syncExpectedReadyAtDraft(readyDateInput, event.target.value);
+                  }}
+                  style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6 }}
+                />
+              </label>
+              {branchOrderPreferencesQuery.isError ? (
+                <p role="status" style={{ gridColumn: "1 / -1", margin: 0, color: "#991b1b" }}>
+                  Unable to load this branch's time preference. Refresh before entering an expected ready time.
+                </p>
+              ) : (
+                <p style={{ gridColumn: "1 / -1", margin: 0, color: "#64748b", fontSize: 13 }}>
+                  Optional. Select both a date and time, or leave both blank.
+                </p>
+              )}
             </div>
 
             <div>
@@ -1896,6 +2010,7 @@ export function OrdersPage() {
             customer={activeWorkspace.customer}
             mode={activeWorkspace.mode}
             newOrderContent={newOrderContent}
+            workspaceSwitcherContent={workspaceSwitcherContent}
             onBack={() => {
               const customerId = activeWorkspace.customer.id;
               // Read the latest workspace snapshot at click time. The workspace
@@ -1939,23 +2054,6 @@ export function OrdersPage() {
               setSelectedOrder(nextOrder);
             }}
           />
-          {orderFormWorkspaces.length > 0 && (
-            <OrderWorkspaceSwitcher
-              workspaces={orderFormWorkspaces}
-              activeWorkspaceId={activeOrderFormWorkspaceId}
-              onOpenCustomer={() => {
-                setSwitchingCustomer(true);
-                setCustomerSearch("");
-                setCustomerPickerOpen(true);
-              }}
-              onSwitch={(workspaceId) => {
-                switchWorkspace(workspaceId);
-                setCustomerPickerOpen(false);
-                setFormError(null);
-              }}
-              onClose={(workspaceId) => closeWorkspace(workspaceId)}
-            />
-          )}
         </>
       ) : (
         <section aria-label="Order Management">
@@ -1996,6 +2094,15 @@ export function OrdersPage() {
           <button type="button" onClick={openCreate}>
             New Order
           </button>
+        </div>
+      ) : null}
+
+      {hasDailyReportFilter && reportDate ? (
+        <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "12px 0", padding: 12, borderRadius: 10, background: "#fdf2f8", color: "#831843" }}>
+          <span>
+            Showing {reportMetric === "pickups" ? "all orders picked up" : "all orders received"} on {new Date(`${reportDate}T00:00:00`).toLocaleDateString()}.
+          </span>
+          <button type="button" onClick={() => navigate("/orders", { replace: true })}>Clear report filter</button>
         </div>
       ) : null}
 
@@ -2044,7 +2151,7 @@ export function OrdersPage() {
             {
               id: "all" as const,
               title: "All Orders",
-              count: allOrders.length,
+              count: folderOrders.length,
             },
           ].map((folder) => {
             const isOpen = openFolder === folder.id;

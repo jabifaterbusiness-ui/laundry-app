@@ -98,7 +98,7 @@ const MANAGEMENT: NavItem[] = [
     label: "Branches",
     href: "/branches",
     icon: "⌘",
-    permission: "branches.view",
+    permissionsAny: ["branches.view", "branches.update"],
   },
   {
     label: "Branch Sharing",

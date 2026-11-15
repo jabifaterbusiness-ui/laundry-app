@@ -186,3 +186,27 @@ export async function saveCustomerServicePrice(input: { customerId: string; serv
 export async function deleteCustomerServicePrice(id: string, auth: { accessToken: string | null }): Promise<void> {
   return apiFetch<void>(`/services/customer-prices/${id}`, { method: "DELETE", accessToken: auth.accessToken });
 }
+
+
+export interface UnassignedLegacyPricing {
+  services: Array<{ id: string; name: string; pieces: number; unitPrice: number }>;
+  discounts: Array<{ id: string; name: string; percentage: number; targetScope: string }>;
+  taxes: Array<{ id: string; name: string; kind: string; value: number }>;
+  customerPrices: Array<{
+    id: string; unitPrice: number;
+    customer: { id: string; name: string; ownerBranchId: string | null };
+    service: { id: string; name: string; ownerBranchId: string | null };
+  }>;
+}
+export async function listUnassignedLegacyPricing(auth: { accessToken: string | null }): Promise<UnassignedLegacyPricing> {
+  return apiFetch<UnassignedLegacyPricing>("/services/legacy-unassigned", { accessToken: auth.accessToken });
+}
+export async function assignUnassignedLegacyPricing(input: {
+  resourceType: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE";
+  resourceId: string;
+  targetBranchId: string;
+}, auth: { accessToken: string | null }): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>("/services/legacy-unassigned/assign", {
+    method: "POST", accessToken: auth.accessToken, body: JSON.stringify(input),
+  });
+}

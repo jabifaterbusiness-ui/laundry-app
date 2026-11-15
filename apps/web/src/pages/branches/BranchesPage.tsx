@@ -20,6 +20,7 @@ export function BranchesPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [readyTimeFormats, setReadyTimeFormats] = useState<Record<string, "12H" | "24H">>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -38,6 +39,9 @@ export function BranchesPage() {
     if (!accessToken) return;
     const result = await apiFetch<Branch[]>("/branches?status=all", { accessToken });
     setBranches(result);
+    setReadyTimeFormats(Object.fromEntries(
+      result.map((branch) => [branch.id, branch.orderReadyTimeFormat ?? "24H"]),
+    ));
   }
 
   useEffect(() => {
@@ -159,6 +163,24 @@ export function BranchesPage() {
     }
   }
 
+  async function saveReadyTimeFormat(branchId: string) {
+    if (!accessToken || !canUpdate) return;
+    setMessage("");
+    try {
+      await apiFetch(`/branches/${branchId}`, {
+        method: "PATCH",
+        accessToken,
+        body: JSON.stringify({
+          orderReadyTimeFormat: readyTimeFormats[branchId] ?? "24H",
+        }),
+      });
+      await load();
+      setMessage("Branch expected-ready time format updated successfully.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update the branch time format.");
+    }
+  }
+
   return (
     <section className="page-card">
       <h1>Branch Management</h1>
@@ -255,12 +277,33 @@ export function BranchesPage() {
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th align="left">Branch</th><th align="left">Address</th><th align="left">Status</th><th align="left">Actions</th></tr></thead>
+          <thead><tr><th align="left">Branch</th><th align="left">Address</th><th align="left">Expected Ready time</th><th align="left">Status</th><th align="left">Actions</th></tr></thead>
           <tbody>
             {branches.map((branch) => (
               <tr key={branch.id}>
                 <td>{branch.name}</td>
                 <td>{branch.address || "—"}</td>
+                <td>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <select
+                      aria-label={`Expected Ready time format for ${branch.name}`}
+                      value={readyTimeFormats[branch.id] ?? branch.orderReadyTimeFormat ?? "24H"}
+                      disabled={!canUpdate}
+                      onChange={(event) => setReadyTimeFormats((current) => ({
+                        ...current,
+                        [branch.id]: event.target.value as "12H" | "24H",
+                      }))}
+                    >
+                      <option value="24H">24-hour (14:30)</option>
+                      <option value="12H">12-hour (2:30 PM)</option>
+                    </select>
+                    {canUpdate ? (
+                      <button type="button" onClick={() => void saveReadyTimeFormat(branch.id)}>
+                        Save format
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
                 <td>{branch.isActive ? "Active" : "Inactive"}</td>
                 <td>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -286,7 +329,7 @@ export function BranchesPage() {
                 </td>
               </tr>
             ))}
-            {!branches.length ? <tr><td colSpan={4}>No branches found.</td></tr> : null}
+            {!branches.length ? <tr><td colSpan={5}>No branches found.</td></tr> : null}
           </tbody>
         </table>
       </div>

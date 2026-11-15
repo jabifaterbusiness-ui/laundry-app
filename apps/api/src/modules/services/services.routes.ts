@@ -12,6 +12,8 @@ import {
   getOne,
   list,
   update,
+  listUnassignedLegacyPricing,
+  assignUnassignedLegacyPricing,
 } from "./services.controller.js";
 
 // Services / Price List authorization:
@@ -29,6 +31,9 @@ export const servicesRouter = Router();
 servicesRouter.use(requireAuth, requireBusinessContext, asyncHandler(requireBranchContext));
 
 // Price adjustments and tax rules are part of the Price List settings.
+// Legacy unassigned records are quarantined for Business Owner review only.
+servicesRouter.get("/legacy-unassigned", requirePermission("services.update"), asyncHandler(listUnassignedLegacyPricing));
+servicesRouter.post("/legacy-unassigned/assign", requirePermission("services.update"), asyncHandler(assignUnassignedLegacyPricing));
 servicesRouter.get("/pricing-rules", requirePermission("services.view"), asyncHandler(listPricingRules));
 servicesRouter.get("/customer-prices", requirePermission("services.view"), asyncHandler(listCustomerPrices));
 servicesRouter.put("/customer-prices", requirePermission("services.update"), asyncHandler(saveCustomerPrice));

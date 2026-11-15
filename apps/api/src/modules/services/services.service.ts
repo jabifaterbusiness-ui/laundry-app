@@ -31,7 +31,7 @@ export async function listServices(params: ListServicesParams) {
 
   const where: Prisma.ServiceWhereInput = {
     businessId,
-    OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
+    OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }],
   };
 
   if (status !== "all") {
@@ -63,7 +63,7 @@ async function getServiceForBusinessWithDb(
 ) {
   const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "SERVICES" }, db);
   return db.service.findFirst({
-    where: { id, businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+    where: { id, businessId, OR: [{ ownerBranchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
     include: { ownerBranch: { select: { id: true, name: true } } },
   });
 }
