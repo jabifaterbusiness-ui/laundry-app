@@ -630,6 +630,10 @@ function OrderManagementContent({
 
   function changeOrderStatus(item: OrderStatus) {
     if (statusMutation.isPending || mode !== "view" || !order || item === order.status) return;
+    if (!canUpdateStatus) {
+      setError("You do not have permission to change this order's status.");
+      return;
+    }
 
     if (item === "PICKED_UP") {
       if (pickupEligibilityQuery.isLoading || pickupEligibilityQuery.isError || !pickupEligibilityQuery.data) {
