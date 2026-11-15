@@ -217,7 +217,7 @@ describe("DashboardPage", () => {
     });
 
     renderDashboard();
-    fireEvent.click(await screen.findByRole("button", { name: "Today's Report" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Today's Report/ }));
 
     expect(await screen.findByText("₦200,000")).toBeInTheDocument();
     expect(screen.getByText("Total Order Received")).toBeInTheDocument();
@@ -288,7 +288,7 @@ describe("DashboardPage", () => {
       "/invoices",
     );
     expect(
-      screen.getByRole("link", { name: "View outstanding invoices" }),
+      screen.getByRole("link", { name: "View unpaid invoices" }),
     ).toHaveAttribute("href", "/invoices");
     expect(screen.getByRole("link", { name: "View payments" })).toHaveAttribute(
       "href",
