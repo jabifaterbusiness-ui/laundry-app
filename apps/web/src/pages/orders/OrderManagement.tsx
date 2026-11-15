@@ -1596,8 +1596,8 @@ function OrderManagementContent({
               )}
               {paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0 && (
                 <div role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                  <strong>Payment incomplete — pickup blocked.</strong>
-                  <div>Customer still owes {formatMoney(paymentSummaryQuery.data.balance)}. Only an authorized management user can override this restriction, and a reason is mandatory.</div>
+                  <strong>This customer has not completed payment, so these items cannot be picked up.</strong>
+                  <div>Outstanding balance: {formatMoney(paymentSummaryQuery.data.balance)}. Only an authorized management user can override this restriction, and a reason is mandatory.</div>
                 </div>
               )}
               {STATUSES.map((item) => (
@@ -1613,7 +1613,7 @@ function OrderManagementContent({
                   onClick={() => {
                     if (item === "PICKED_UP" && paymentSummaryQuery.data && paymentSummaryQuery.data.balance > 0) {
                       if (!canOverridePickup) {
-                        setError(`Customer has not completed payment. Outstanding balance: ${formatMoney(paymentSummaryQuery.data.balance)}. Pickup is blocked.`);
+                        setError(`This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(paymentSummaryQuery.data.balance)}.`);
                         return;
                       }
                       if (!pickupOverrideReason.trim()) {
