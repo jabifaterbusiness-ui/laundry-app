@@ -14,6 +14,7 @@ import {
 import {
   createOrder,
   getOrderForBusiness,
+  getPickupPaymentEligibility,
   listOrders,
   transferOrder,
   updateOrderStatus,
@@ -203,6 +204,14 @@ export async function updateStatus(req: Request, res: Response) {
   );
 
   res.status(200).json(order);
+}
+
+export async function pickupEligibility(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = orderIdParamSchema.parse(req.params);
+  const eligibility = await getPickupPaymentEligibility(id, businessId, branchId);
+  res.status(200).json(eligibility);
 }
 
 export async function statusHistory(req: Request, res: Response) {
