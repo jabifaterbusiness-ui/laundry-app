@@ -288,36 +288,43 @@ export function ServicesPage() {
       <h1>Services & Price List</h1>
 
       {isBusinessOwner && (
-        <section aria-labelledby="legacy-pricing-heading" style={{ margin: "1.25rem 0", padding: "1.25rem", border: "1px solid #f0c36d", borderRadius: 14, background: "linear-gradient(135deg, #fffaf0, #ffffff)" }}>
-          <h2 id="legacy-pricing-heading">Needs Branch Assignment</h2>
-          <p>Older records without a recorded owning branch are held here. They are hidden from branch pricing until you assign each record to the correct branch. Nothing is automatically moved.</p>
-          {legacyPricingQuery.isLoading && <p>Checking unassigned legacy records…</p>}
-          {legacyPricingQuery.isError && <p role="alert">Unable to load unassigned records. Refresh and try again.</p>}
-          {legacyPricingQuery.data && (() => {
-            const data = legacyPricingQuery.data;
-            const rows: Array<{ type: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; id: string; label: string; detail: string; locked?: boolean }> = [
-              ...data.services.map((x) => ({ type: "SERVICE" as const, id: x.id, label: x.name, detail: `Service · ${x.pieces} pcs · ₦${x.unitPrice.toLocaleString()}` })),
-              ...data.discounts.map((x) => ({ type: "DISCOUNT" as const, id: x.id, label: x.name, detail: `Discount · ${x.percentage}% · ${x.targetScope}` })),
-              ...data.taxes.map((x) => ({ type: "TAX" as const, id: x.id, label: x.name, detail: `Tax · ${x.kind === "PERCENTAGE" ? `${x.value}%` : `₦${x.value.toLocaleString()}`}` })),
-              ...data.customerPrices.map((x) => ({ type: "CUSTOMER_PRICE" as const, id: x.id, label: `${x.customer.name} — ${x.service.name}`, detail: `Customer-specific price · ₦${x.unitPrice.toLocaleString()}`, locked: !x.service.ownerBranchId || (Boolean(x.customer.ownerBranchId) && x.customer.ownerBranchId !== x.service.ownerBranchId) })),
-            ];
-            if (!rows.length) return <p>No unassigned legacy pricing records remain.</p>;
-            return <div style={{ display: "grid", gap: 10 }}>
-              {rows.map((row) => {
-                const key = `${row.type}:${row.id}`;
-                const target = legacyTargets[key] ?? (activeBranchId ?? "");
-                return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 240px) auto", gap: 10, alignItems: "center", padding: 12, border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "#fff" }}>
-                  <div><strong>{row.label}</strong><div><small>{row.detail}{row.locked ? " · Assign its service and customer first" : ""}</small></div></div>
-                  <select aria-label={`Target branch for ${row.label}`} value={target} onChange={(event) => setLegacyTargets((current) => ({ ...current, [key]: event.target.value }))}>
-                    <option value="">Choose owning branch</option>
-                    {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                  </select>
-                  <button type="button" disabled={!target || row.locked || legacyAssignmentMutation.isPending || !branchesQuery.data?.some((branch) => branch.id === target)} onClick={() => legacyAssignmentMutation.mutate({ resourceType: row.type, resourceId: row.id, targetBranchId: target })}>Assign</button>
+        <section className="legacy-pricing-assignment" style={{ margin: "1.25rem 0", border: "1px solid #f0c36d", borderRadius: 14, background: "linear-gradient(135deg, #fffaf0, #ffffff)" }}>
+          <details>
+            <summary id="legacy-pricing-heading">
+              <strong>Needs Branch Assignment</strong>
+              <span>Legacy records awaiting an owner branch</span>
+            </summary>
+            <div className="legacy-pricing-assignment-content">
+              <p>Older records without a recorded owning branch are held here. They are hidden from branch pricing until you assign each record to the correct branch. Nothing is automatically moved.</p>
+              {legacyPricingQuery.isLoading && <p>Checking unassigned legacy records…</p>}
+              {legacyPricingQuery.isError && <p role="alert">Unable to load unassigned records. Refresh and try again.</p>}
+              {legacyPricingQuery.data && (() => {
+                const data = legacyPricingQuery.data;
+                const rows: Array<{ type: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; id: string; label: string; detail: string; locked?: boolean }> = [
+                  ...data.services.map((x) => ({ type: "SERVICE" as const, id: x.id, label: x.name, detail: `Service · ${x.pieces} pcs · ₦${x.unitPrice.toLocaleString()}` })),
+                  ...data.discounts.map((x) => ({ type: "DISCOUNT" as const, id: x.id, label: x.name, detail: `Discount · ${x.percentage}% · ${x.targetScope}` })),
+                  ...data.taxes.map((x) => ({ type: "TAX" as const, id: x.id, label: x.name, detail: `Tax · ${x.kind === "PERCENTAGE" ? `${x.value}%` : `₦${x.value.toLocaleString()}`}` })),
+                  ...data.customerPrices.map((x) => ({ type: "CUSTOMER_PRICE" as const, id: x.id, label: `${x.customer.name} — ${x.service.name}`, detail: `Customer-specific price · ₦${x.unitPrice.toLocaleString()}`, locked: !x.service.ownerBranchId || (Boolean(x.customer.ownerBranchId) && x.customer.ownerBranchId !== x.service.ownerBranchId) })),
+                ];
+                if (!rows.length) return <p>No unassigned legacy pricing records remain.</p>;
+                return <div style={{ display: "grid", gap: 10 }}>
+                  {rows.map((row) => {
+                    const key = `${row.type}:${row.id}`;
+                    const target = legacyTargets[key] ?? (activeBranchId ?? "");
+                    return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 240px) auto", gap: 10, alignItems: "center", padding: 12, border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "#fff" }}>
+                      <div><strong>{row.label}</strong><div><small>{row.detail}{row.locked ? " · Assign its service and customer first" : ""}</small></div></div>
+                      <select aria-label={`Target branch for ${row.label}`} value={target} onChange={(event) => setLegacyTargets((current) => ({ ...current, [key]: event.target.value }))}>
+                        <option value="">Choose owning branch</option>
+                        {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                      </select>
+                      <button type="button" disabled={!target || row.locked || legacyAssignmentMutation.isPending || !branchesQuery.data?.some((branch) => branch.id === target)} onClick={() => legacyAssignmentMutation.mutate({ resourceType: row.type, resourceId: row.id, targetBranchId: target })}>Assign</button>
+                    </div>;
+                  })}
                 </div>;
-              })}
-            </div>;
-          })()}
-          {legacyAssignmentMutation.isError && <p role="alert">Assignment failed. Confirm the target branch and related customer/service ownership, then retry.</p>}
+              })()}
+              {legacyAssignmentMutation.isError && <p role="alert">Assignment failed. Confirm the target branch and related customer/service ownership, then retry.</p>}
+            </div>
+          </details>
         </section>
       )}
 
