@@ -991,6 +991,24 @@ describe("createOrder", () => {
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
+  it("rejects a blank management override reason", async () => {
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
+    } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+      totalAmount: 4500,
+      payments: [],
+    } as never);
+
+    await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP", prisma, {
+      actorUserId: "manager-A",
+      actorRole: "STAFF",
+      pickupOverrideReason: "   ",
+    })).rejects.toThrow("This customer has not completed payment");
+    expect(hasPermission).not.toHaveBeenCalled();
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
   it("treats posted refunds as outstanding balance when enforcing pickup", async () => {
     orderFindFirst.mockResolvedValue({
       id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
