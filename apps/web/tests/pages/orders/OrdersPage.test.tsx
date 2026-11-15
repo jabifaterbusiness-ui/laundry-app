@@ -1336,7 +1336,7 @@ describe("Orders and Order Management section separation", () => {
     expect(await screen.findByRole("region", { name: "Order Management" })).toBeInTheDocument();
     await screen.findByText("Jane Doe");
     expect(screen.queryByLabelText("Search orders")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Customer Pay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pay" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Merge Customer (MC)" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Customer$/ })).not.toBeInTheDocument();
 
