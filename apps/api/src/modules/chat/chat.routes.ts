@@ -1,7 +1,7 @@
 import express, { Router } from "express";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireBranchContext } from "../../middleware/branch-context.js";
-import { requirePermission } from "../../middleware/permissions.js";
+import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
 import {
   addGroupMember, createDirectConversation, createGroupConversation, listConversations,
   listDirectory, listMessages, markConversationRead, removeGroupMember, sendMessage,
@@ -19,7 +19,7 @@ chatRouter.post("/conversations/:id/messages", requirePermission("chat.view"), a
 chatRouter.post("/conversations/:id/attachments", requirePermission("chat.upload_attachments"), express.raw({ type: "application/octet-stream", limit: "10mb" }), asyncHandler(uploadAttachment));
 chatRouter.get("/attachments/:id", requirePermission("chat.view"), asyncHandler(downloadAttachment));
 chatRouter.post("/conversations/:id/read", requirePermission("chat.view"), asyncHandler(markConversationRead));
-chatRouter.patch("/groups/:id", requirePermission("chat.manage_group"), asyncHandler(updateGroup));
+chatRouter.patch("/groups/:id", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(updateGroup));
 chatRouter.post("/groups/:id/members", requirePermission("chat.manage_group"), asyncHandler(addGroupMember));
 chatRouter.delete("/groups/:id/members/:userId", requirePermission("chat.manage_group"), asyncHandler(removeGroupMember));
 chatRouter.post("/conversations/:id/messages/:messageId/reactions", requirePermission("chat.view"), asyncHandler(toggleReaction));
