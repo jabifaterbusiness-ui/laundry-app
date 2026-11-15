@@ -4717,3 +4717,54 @@ a {
     --la-supporting-text-size: 14px;
   }
 }
+
+
+/* Legacy branch assignment is intentionally collapsed until the owner opens it. */
+.legacy-pricing-assignment {
+  overflow: hidden;
+}
+
+.legacy-pricing-assignment > details > summary {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 18px;
+  color: #563b16;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.legacy-pricing-assignment > details > summary strong {
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.legacy-pricing-assignment > details > summary span {
+  color: #765b30;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.legacy-pricing-assignment-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.legacy-pricing-assignment-content > p:first-child {
+  margin-top: 0;
+  color: #5a4a32;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .legacy-pricing-assignment > details > summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+}
