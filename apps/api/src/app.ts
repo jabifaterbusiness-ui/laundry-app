@@ -46,6 +46,7 @@ import { inboxRouter } from "./modules/inbox/inbox.routes.js";
 import { requirePlatformOperational } from "./modules/platform/platform-controls.middleware.js";
 import { subscriptionPaymentWebhookRouter } from "./modules/subscriptions/subscription-payment-webhook.routes.js";
 import { communicationsRouter } from "./modules/communications/communications.routes.js";
+import { chatRouter } from "./modules/chat/chat.routes.js";
 
 export function createApp() {
   const app = express();
@@ -116,6 +117,7 @@ export function createApp() {
   mountProtectedTenantRoute("/audit", auditRouter);
   mountProtectedTenantRoute("/services", servicesRouter);
   mountProtectedTenantRoute("/communications", communicationsRouter);
+  mountProtectedTenantRoute("/chat", chatRouter);
   mountProtectedTenantRoute("/whatsapp/connection", whatsappConnectionsRouter);
   mountProtectedTenantRoute("/whatsapp/inbox", whatsappInboxRouter);
   mountProtectedTenantRoute("/colors", colorsRouter);
