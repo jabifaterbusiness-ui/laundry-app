@@ -849,7 +849,7 @@ export function OrdersPage() {
   useEffect(() => {
     setReadyDateInput(expectedReadyAt ? expectedReadyAt.slice(0, 10) : "");
     setReadyTimeInput(formatReadyTimeInput(expectedReadyAt, readyTimeFormat));
-  }, [activeWorkspaceId, activeWorkspace?.mode, readyTimeFormat]);
+  }, [activeWorkspaceId, activeWorkspace?.mode, expectedReadyAt, readyTimeFormat]);
 
   const formTotal = customerPricesReady
     ? lines.reduce((sum, line) => {
@@ -861,11 +861,15 @@ export function OrdersPage() {
   function syncExpectedReadyAtDraft(dateValue: string, timeValue: string) {
     if (!activeWorkspaceId) return;
     const normalizedTime = parseReadyTimeInput(timeValue, readyTimeFormat);
-    updateWorkspace(activeWorkspaceId, {
-      draft: {
-        expectedReadyAt: dateValue && normalizedTime ? `${dateValue}T${normalizedTime}` : "",
-      },
-    });
+    if (!dateValue && !timeValue.trim()) {
+      updateWorkspace(activeWorkspaceId, { draft: { expectedReadyAt: "" } });
+      return;
+    }
+    if (dateValue && normalizedTime) {
+      updateWorkspace(activeWorkspaceId, {
+        draft: { expectedReadyAt: `${dateValue}T${normalizedTime}` },
+      });
+    }
   }
 
   function getExpectedReadyAtIso(): string | undefined {
