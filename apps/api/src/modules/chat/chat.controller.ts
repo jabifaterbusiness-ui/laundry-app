@@ -234,18 +234,18 @@ export async function markConversationRead(req: Request, res: Response) {
   res.status(204).end();
 }
 
-async function requireGroupAdmin(conversationId: string, userId: string, businessId: string) {
+async function requireGroupAdmin(conversationId: string, userId: string, businessId: string, securityRole: Role) {
   const participant = await requireMembership(conversationId, userId, businessId);
-  if (participant.conversation.kind !== "GROUP" || !["OWNER", "ADMIN"].includes(participant.role)) {
-    throw new AppError("Only group owners and administrators can perform this action", 403);
-  }
+  const isGroupAdmin = participant.conversation.kind === "GROUP" && ["OWNER", "ADMIN"].includes(participant.role);
+  const canModerateAll = await hasPermission(userId, businessId, securityRole, "chat.manage_all_groups");
+  if (!isGroupAdmin && !canModerateAll) throw new AppError("Only group owners, administrators, or explicitly authorised moderators can perform this action", 403);
   return participant;
 }
 
 export async function updateGroup(req: Request, res: Response) {
   const { userId, businessId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  await requireGroupAdmin(id, userId, businessId);
+  await requireGroupAdmin(id, userId, businessId, req.user!.securityRole);
   const input = groupUpdateSchema.parse(req.body);
   const conversation = await prisma.chatConversation.update({
     where: { id }, data: input,
