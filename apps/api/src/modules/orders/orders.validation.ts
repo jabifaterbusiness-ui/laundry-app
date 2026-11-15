@@ -70,7 +70,8 @@ export const updateOrderStatusSchema = z.object({
     "COMPLETED",
     "CANCELLED",
   ]),
-});
+  pickupOverrideReason: z.string().trim().min(1).max(1000).optional(),
+}).strict();
 
 
 export const editOrderSchema = z
