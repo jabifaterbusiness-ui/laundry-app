@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
@@ -195,7 +196,7 @@ export async function updateStatus(req: Request, res: Response) {
     prisma,
     {
       actorUserId: req.user!.id,
-      actorRole: req.user!.role,
+      actorRole: req.user!.role as Role,
       correlationId: req.correlationId ?? null,
       ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
     },
