@@ -91,6 +91,7 @@ const orderUpdatePayloadSchema = z.discriminatedUnion("action", [
         "COMPLETED",
         "CANCELLED",
       ]),
+      pickupOverrideReason: z.string().trim().min(1).max(1000).optional(),
     })
     .strict(),
 ]);
