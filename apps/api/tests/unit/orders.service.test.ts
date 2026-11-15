@@ -23,6 +23,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
 }));
 
 import { prisma } from "../../src/lib/prisma.js";
+import { hasPermission } from "../../src/modules/permissions/permissions.service.js";
 import {
   createOrder,
   getOrderForBusiness,
@@ -988,6 +989,69 @@ describe("createOrder", () => {
     await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP"))
       .rejects.toThrow("Customer has not completed payment");
     expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it("allows only a permission-authorized pickup override with a reason and records it", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A, orderNumber: "00042", status: "READY_FOR_PICKUP",
+    } as never);
+    tx.invoice.findFirst.mockResolvedValue({
+      totalAmount: 4500,
+      payments: [{ amount: 1000, type: "PAYMENT", status: "POSTED" }],
+    } as never);
+    tx.order.update.mockResolvedValue({
+      id: ORDER_A, orderNumber: "00042", status: "PICKED_UP",
+    } as never);
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+    vi.mocked(hasPermission).mockResolvedValueOnce(true);
+
+    await updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP", prisma, {
+      actorUserId: "manager-A",
+      actorRole: "STAFF",
+      pickupOverrideReason: "Customer approved by branch manager",
+    });
+
+    expect(hasPermission).toHaveBeenCalledWith(
+      "manager-A", "biz-A", "STAFF", "orders.pickup_override",
+    );
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "order.pickup_payment_override",
+        entityType: "Order",
+        entityId: ORDER_A,
+        businessId: "biz-A",
+        branchId: BRANCH_A,
+        actorUserId: "manager-A",
+        metadata: expect.objectContaining({
+          authorizedByUserId: "manager-A",
+          authorizedAt: expect.any(String),
+          reason: "Customer approved by branch manager",
+          outstandingBalance: 3500,
+        }),
+      }),
+    });
+  });
+
+  it("rejects an unpaid pickup override when the user lacks the override permission", async () => {
+    const tx = createTransactionClient();
+    tx.order.findFirst.mockResolvedValue({
+      id: ORDER_A, status: "READY_FOR_PICKUP",
+    } as never);
+    tx.invoice.findFirst.mockResolvedValue({
+      totalAmount: 4500,
+      payments: [],
+    } as never);
+    transaction.mockImplementation(async (callback) => callback(tx as never));
+    vi.mocked(hasPermission).mockResolvedValueOnce(false);
+
+    await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP", prisma, {
+      actorUserId: "staff-A",
+      actorRole: "STAFF",
+      pickupOverrideReason: "Please release",
+    })).rejects.toThrow("You do not have permission");
+    expect(tx.order.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it("sets completedAt when an order becomes completed", async () => {
