@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { createChatGroup, downloadChatAttachment, getChatConversations, getChatDirectory, getChatMessages, markChatRead, sendChatMessage, startDirectChat, uploadChatAttachment, type ChatAttachment, type ChatConversation, type ChatPerson } from "../../lib/chat-api.js";
 import "./ChatPage.css";
 
@@ -22,8 +23,9 @@ export function ChatPage(){
  const directory=directoryQ.data?.data??[];
  const send=useMutation({mutationFn:(input:{body:string;attachmentIds:string[]})=>sendChatMessage(activeId,input.body,input.attachmentIds),onSuccess:async()=>{setDraft("");setPendingFiles([]);await Promise.all([qc.invalidateQueries({queryKey:["chat-messages",activeId]}),qc.invalidateQueries({queryKey:["chat-conversations"]})]);}});
  const direct=useMutation({mutationFn:(person:ChatPerson)=>startDirectChat(person.id),onSuccess:async(r)=>{setActiveId(r.data.id);setShowNew(false);setSearch("");await qc.invalidateQueries({queryKey:["chat-conversations"]});}});
- const group=useMutation({mutationFn:()=>createChatGroup({title:groupName,participantIds:selected,includeAllEligible:allUsers,confirmLargeGroup:selected.length>50}),onSuccess:async(r)=>{setActiveId(r.data.id);setShowNew(false);setGroupMode(false);setGroupName("");setSelected([]);setAllUsers(false);await qc.invalidateQueries({queryKey:["chat-conversations"]});}});
+ const group=useMutation({mutationFn:()=>createChatGroup({title:groupName,participantIds:selected,includeAllEligible:allUsers,confirmLargeGroup:allUsers||selected.length>50}),onSuccess:async(r)=>{setActiveId(r.data.id);setShowNew(false);setGroupMode(false);setGroupName("");setSelected([]);setAllUsers(false);await qc.invalidateQueries({queryKey:["chat-conversations"]});}});
  const unread=useMemo(()=>chats.reduce((n,c)=>n+c.unreadCount,0),[chats]);
+ if(!hasPermission(user,"chat.view"))return <main className="chat-page"><section className="chat-welcome"><span>🔒</span><h2>Chat access is not enabled</h2><p>Ask your business administrator to grant you the Chat permission.</p></section></main>;
  function submit(e:FormEvent){e.preventDefault();if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending)send.mutate({body:draft.trim(),attachmentIds:pendingFiles.map(file=>file.id)});}
  async function handleFile(file:File){if(!activeId)return;setUploading(true);setUploadError("");try{const result=await uploadChatAttachment(activeId,file);setPendingFiles(current=>[...current,result.data]);}catch(error){setUploadError(error instanceof Error?error.message:"File upload failed");}finally{setUploading(false);}}
  return <main className="chat-page">
