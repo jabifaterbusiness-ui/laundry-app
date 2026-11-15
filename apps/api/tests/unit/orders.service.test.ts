@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
+  hasPermission: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     $transaction: vi.fn(),
+    invoice: { findFirst: vi.fn() },
     order: {
       findMany: vi.fn(),
       count: vi.fn(),
@@ -82,6 +87,10 @@ function createTransactionClient() {
     },
     invoice: {
       create: vi.fn().mockResolvedValue({ totalAmount: 0 }),
+      findFirst: vi.fn().mockResolvedValue({
+        totalAmount: 4500,
+        payments: [{ amount: 4500, type: "PAYMENT", status: "POSTED" }],
+      }),
     },
     auditLog: {
       create: vi.fn(),
@@ -110,6 +119,10 @@ function createTransactionClient() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(prisma.branchResourceShare.findMany).mockResolvedValue([] as never);
+  vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+    totalAmount: 4500,
+    payments: [{ amount: 4500, type: "PAYMENT", status: "POSTED" }],
+  } as never);
 });
 
 describe("createOrder", () => {
@@ -934,7 +947,7 @@ describe("createOrder", () => {
     );
   });
 
-  it("sets pickedUpAt when an order is handed over", async () => {
+  it("sets pickedUpAt when an order is fully paid and handed over", async () => {
     orderFindFirst.mockResolvedValue({
       id: ORDER_A,
       businessId: "biz-A",
@@ -948,13 +961,11 @@ describe("createOrder", () => {
       pickedUpAt: new Date(),
     } as never);
 
-    await updateOrderStatus(
-      ORDER_A,
-      "biz-A",
-      BRANCH_A,
-      "PICKED_UP",
-    );
+    await updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP");
 
+    expect(prisma.invoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { orderId: ORDER_A, businessId: "biz-A", branchId: BRANCH_A },
+    }));
     expect(orderUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -963,6 +974,20 @@ describe("createOrder", () => {
         }),
       }),
     );
+  });
+
+  it("blocks pickup when the invoice is unpaid or partially paid", async () => {
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
+    } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+      totalAmount: 4500,
+      payments: [{ amount: 1000, type: "PAYMENT", status: "POSTED" }],
+    } as never);
+
+    await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP"))
+      .rejects.toThrow("Customer has not completed payment");
+    expect(orderUpdate).not.toHaveBeenCalled();
   });
 
   it("sets completedAt when an order becomes completed", async () => {
