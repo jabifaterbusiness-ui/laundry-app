@@ -687,7 +687,7 @@ async function updateOrderStatusWithDb(
       const reason = history?.pickupOverrideReason?.trim();
       if (!reason) {
         throw new AppError(
-          `Customer has not completed payment. Outstanding balance: ${outstandingBalance}. Pickup is blocked.`,
+          `This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${outstandingBalance}.`,
           422,
         );
       }
