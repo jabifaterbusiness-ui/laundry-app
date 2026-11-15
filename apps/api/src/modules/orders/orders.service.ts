@@ -637,6 +637,44 @@ export async function updateOrderStatus(
   return updateOrderStatusWithDb(db, id, businessId, branchId, status, history);
 }
 
+export async function getPickupPaymentEligibility(
+  id: string,
+  businessId: string,
+  branchId: string,
+  db: OrderDb = prisma,
+) {
+  const order = await db.order.findFirst({
+    where: { id, businessId, branchId },
+    select: { id: true, status: true },
+  });
+  if (!order) throw new AppError("Order not found", 404);
+
+  const invoice = await db.invoice.findFirst({
+    where: { orderId: id, businessId, branchId },
+    select: {
+      status: true,
+      totalAmount: true,
+      payments: { select: { amount: true, type: true, status: true } },
+    },
+  });
+  if (!invoice || invoice.status === "VOID") {
+    return { eligible: false, outstandingBalance: null, reason: "NO_VALID_INVOICE" as const };
+  }
+
+  const netPayments = invoice.payments
+    .filter((payment) => payment.status === "POSTED")
+    .reduce(
+      (total, payment) => total + (payment.type === "REFUND" ? -payment.amount : payment.amount),
+      0,
+    );
+  const outstandingBalance = Math.max(0, invoice.totalAmount - netPayments);
+  return {
+    eligible: outstandingBalance === 0,
+    outstandingBalance,
+    reason: outstandingBalance > 0 ? "OUTSTANDING_BALANCE" as const : null,
+  };
+}
+
 async function updateOrderStatusWithDb(
   db: OrderDb,
   id: string,
