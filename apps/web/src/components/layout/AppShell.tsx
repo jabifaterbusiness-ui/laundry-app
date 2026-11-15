@@ -55,6 +55,7 @@ const OPERATIONS: NavItem[] = [
     icon: "₦",
     permission: "payments.view",
   },
+  { label: "Chat", href: "/chat", icon: "▣", permission: "chat.view" },
 ];
 
 const MANAGEMENT: NavItem[] = [
