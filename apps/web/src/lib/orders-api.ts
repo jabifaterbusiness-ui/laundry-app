@@ -187,12 +187,16 @@ export async function updateOrderStatus(
   status: OrderStatus,
   auth: { accessToken: string | null },
   branchId?: string | null,
+  pickupOverrideReason?: string,
 ): Promise<Order> {
   return apiFetch<Order>(`/orders/${id}/status`, {
     method: "PATCH",
     accessToken: auth.accessToken,
     branchId,
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({
+      status,
+      ...(pickupOverrideReason?.trim() ? { pickupOverrideReason: pickupOverrideReason.trim() } : {}),
+    }),
   });
 }
 
@@ -244,6 +248,7 @@ export async function updateOrderStatusWithOfflineQueue(
   status: OrderStatus,
   auth: { accessToken: string | null },
   syncContext: OfflineOrderSyncContext,
+  pickupOverrideReason?: string,
 ): Promise<OrderMutationResult> {
   try {
     const order = await updateOrderStatus(
@@ -251,6 +256,7 @@ export async function updateOrderStatusWithOfflineQueue(
       status,
       auth,
       syncContext.branchId,
+      pickupOverrideReason,
     );
 
     return {
@@ -275,9 +281,10 @@ export async function updateOrderStatusWithOfflineQueue(
       clientOperationId: crypto.randomUUID(),
       operationType: "ORDER_UPDATE",
       payload: {
+        action: "UPDATE_STATUS",
         orderId: id,
-        operation: "UPDATE_STATUS",
         status,
+        ...(pickupOverrideReason?.trim() ? { pickupOverrideReason: pickupOverrideReason.trim() } : {}),
       },
     });
 
