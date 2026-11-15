@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { readChatFile, storeChatFile } from "./chat-storage.service.js";
+import { deleteChatFile, readChatFile, storeChatFile } from "./chat-storage.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -310,7 +310,7 @@ export async function uploadAttachment(req: Request, res: Response) {
     });
     res.status(201).json({ data: attachment });
   } catch (error) {
-    // A failed metadata write leaves no public URL; the private file is not exposed.
+    await deleteChatFile(businessId, stored.storageKey);
     throw error;
   }
 }
