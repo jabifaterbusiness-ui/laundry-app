@@ -991,6 +991,24 @@ describe("createOrder", () => {
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
+  it("treats posted refunds as outstanding balance when enforcing pickup", async () => {
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
+    } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+      totalAmount: 4500,
+      payments: [
+        { amount: 4500, type: "PAYMENT", status: "POSTED" },
+        { amount: 500, type: "REFUND", status: "POSTED" },
+        { amount: 1000, type: "PAYMENT", status: "VOID" },
+      ],
+    } as never);
+
+    await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP"))
+      .rejects.toThrow("Outstanding balance: 500");
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
   it("allows only a permission-authorized pickup override with a reason and records it", async () => {
     const tx = createTransactionClient();
     tx.order.findFirst.mockResolvedValue({
