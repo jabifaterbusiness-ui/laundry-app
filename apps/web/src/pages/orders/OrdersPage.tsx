@@ -378,7 +378,8 @@ export function OrdersPage() {
       { accessToken, branchId: activeBranchId },
     ),
     enabled: Boolean(accessToken && activeBranchId && (canCreateOrder || canUpdateOrder)),
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const customerFromUrlQuery = useQuery({
