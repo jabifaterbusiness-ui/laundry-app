@@ -33,6 +33,7 @@ import { AccountPage } from "./pages/account/AccountPage.js";
 import { HelpCentrePage } from "./pages/help/HelpCentrePage.js";
 import { InboxPage } from "./pages/inbox/InboxPage.js";
 import { CommunicationsPage } from "./pages/communications/CommunicationsPage.js";
+import { ChatPage } from "./pages/chat/ChatPage.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
@@ -56,6 +57,7 @@ function AuthenticatedLayout() {
           <Route path="/customer-workstation" element={<CustomerWorkstationPage />} />
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/communications" element={<CommunicationsPage />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/colors" element={<ColorsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/order-management" element={<OrdersPage />} />
