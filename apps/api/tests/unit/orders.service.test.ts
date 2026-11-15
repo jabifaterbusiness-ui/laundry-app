@@ -27,6 +27,7 @@ import { hasPermission } from "../../src/modules/permissions/permissions.service
 import {
   createOrder,
   getOrderForBusiness,
+  getPickupPaymentEligibility,
   listOrders,
   updateOrderStatus,
   transferOrder,
@@ -124,6 +125,67 @@ beforeEach(() => {
     totalAmount: 4500,
     payments: [{ amount: 4500, type: "PAYMENT", status: "POSTED" }],
   } as never);
+});
+
+describe("getPickupPaymentEligibility", () => {
+  it("returns eligible only when posted payments cover the invoice", async () => {
+    orderFindFirst.mockResolvedValue({ id: ORDER_A, status: "READY_FOR_PICKUP" } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+      status: "ISSUED",
+      totalAmount: 4500,
+      payments: [{ amount: 4500, type: "PAYMENT", status: "POSTED" }],
+    } as never);
+
+    await expect(getPickupPaymentEligibility(ORDER_A, "biz-A", BRANCH_A)).resolves.toEqual({
+      eligible: true,
+      outstandingBalance: 0,
+      reason: null,
+    });
+    expect(orderFindFirst).toHaveBeenCalledWith({
+      where: { id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A },
+      select: { id: true, status: true },
+    });
+    expect(prisma.invoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { orderId: ORDER_A, businessId: "biz-A", branchId: BRANCH_A },
+    }));
+  });
+
+  it("returns the balance after posted refunds without exposing payment details", async () => {
+    orderFindFirst.mockResolvedValue({ id: ORDER_A, status: "READY_FOR_PICKUP" } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue({
+      status: "ISSUED",
+      totalAmount: 4500,
+      payments: [
+        { amount: 4500, type: "PAYMENT", status: "POSTED" },
+        { amount: 500, type: "REFUND", status: "POSTED" },
+        { amount: 900, type: "PAYMENT", status: "VOID" },
+      ],
+    } as never);
+
+    await expect(getPickupPaymentEligibility(ORDER_A, "biz-A", BRANCH_A)).resolves.toEqual({
+      eligible: false,
+      outstandingBalance: 500,
+      reason: "OUTSTANDING_BALANCE",
+    });
+  });
+
+  it("rejects an order outside the selected business or branch", async () => {
+    orderFindFirst.mockResolvedValue(null);
+    await expect(getPickupPaymentEligibility(ORDER_A, "biz-A", BRANCH_B))
+      .rejects.toThrow("Order not found");
+    expect(prisma.invoice.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("blocks pickup eligibility when there is no valid invoice", async () => {
+    orderFindFirst.mockResolvedValue({ id: ORDER_A, status: "READY_FOR_PICKUP" } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue(null);
+
+    await expect(getPickupPaymentEligibility(ORDER_A, "biz-A", BRANCH_A)).resolves.toEqual({
+      eligible: false,
+      outstandingBalance: null,
+      reason: "NO_VALID_INVOICE",
+    });
+  });
 });
 
 describe("createOrder", () => {
