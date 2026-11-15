@@ -314,7 +314,7 @@ describe("Branches routes - update and status", () => {
       .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
       .set("Authorization", `Bearer ${STAFF_A}`)
       .send({ orderReadyTimeFormat: "AMPM" });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     expect(updateMany).not.toHaveBeenCalled();
   });
   it("allows STAFF to update a branch time format when branches.update is explicitly granted", async () => {
