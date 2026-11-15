@@ -23,6 +23,7 @@ const groupUpdateSchema = z.object({
   description: z.string().trim().max(500).nullable().optional(),
 });
 const memberSchema = z.object({ userId: z.string().uuid() });
+const memberRoleSchema = z.object({ role: z.enum(["ADMIN", "MEMBER"]) });
 const reactionSchema = z.object({ emoji: z.string().trim().min(1).max(16) });
 
 function scope(req: Request) {
@@ -268,6 +269,7 @@ export async function addGroupMember(req: Request, res: Response) {
     create: { conversationId: id, userId: newUserId, role: "MEMBER" },
   });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member was added to the group" } });
+  await recordAuditEvent({ action: "chat.group.member_added", entityType: "ChatConversation", entityId: id, businessId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: newUserId } });
   res.status(204).end();
 }
 
@@ -281,6 +283,7 @@ export async function removeGroupMember(req: Request, res: Response) {
   if (target.role === "OWNER") throw new AppError("The group owner cannot be removed", 409);
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { leftAt: new Date() } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member left or was removed from the group" } });
+  await recordAuditEvent({ action: "chat.group.member_removed", entityType: "ChatConversation", entityId: id, businessId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId } });
   res.status(204).end();
 }
 
@@ -332,6 +335,23 @@ export async function downloadAttachment(req: Request, res: Response) {
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.status(200).send(file);
+}
+
+export async function setGroupMemberRole(req: Request, res: Response) {
+  const { userId, businessId } = scope(req);
+  const id = z.string().uuid().parse(req.params.id);
+  const actor = await requireGroupAdmin(id, userId, businessId, req.user!.securityRole);
+  if (actor.role !== "OWNER" && !(await hasPermission(userId, businessId, req.user!.securityRole, "chat.manage_all_groups"))) {
+    throw new AppError("Only the group owner can appoint or remove group administrators", 403);
+  }
+  const targetUserId = z.string().uuid().parse(req.params.userId);
+  const { role } = memberRoleSchema.parse(req.body);
+  const target = await prisma.chatParticipant.findFirst({ where: { conversationId: id, userId: targetUserId, leftAt: null } });
+  if (!target || target.role === "OWNER") throw new AppError("Group member not found or cannot be changed", 404);
+  await prisma.chatParticipant.update({ where: { id: target.id }, data: { role } });
+  await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: role === "ADMIN" ? "A group administrator was appointed" : "A group administrator role was removed" } });
+  await recordAuditEvent({ action: "chat.group.member_role_updated", entityType: "ChatConversation", entityId: id, businessId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId, role } });
+  res.status(204).end();
 }
 
 export async function toggleReaction(req: Request, res: Response) {
