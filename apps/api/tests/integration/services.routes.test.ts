@@ -149,9 +149,16 @@ describe("Services routes - tenant isolation", () => {
 
     expect(res.status).toBe(200);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ businessId: "biz-A" }),
+      where: expect.objectContaining({
+        businessId: "biz-A",
+        OR: [
+          { ownerBranchId: { in: ["branch-A"] } },
+          { id: { in: [] } },
+        ],
+      }),
       orderBy: { name: "asc" },
     }));
+    // Unassigned legacy services must not be included in any branch's list.
   });
 
   it("business B cannot access business A service by id", async () => {
