@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireBusinessContext } from "../auth/auth.middleware.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
+import { requireBranchContext } from "../../middleware/branch-context.js";
 import {
   listBranchResourceSharesController,
   createBranchResourceShareController,
@@ -10,6 +11,7 @@ import {
 import {
   list,
   get,
+  getCurrentOrderPreferences,
   create,
   update,
   activate,
@@ -32,6 +34,13 @@ branchesRouter.get(
 branchesRouter.get("/sharing", requirePermission("branches.view"), asyncHandler(listBranchResourceSharesController));
 branchesRouter.post("/sharing", requirePermission("branches.update"), asyncHandler(createBranchResourceShareController));
 branchesRouter.delete("/sharing/:id", requirePermission("branches.update"), asyncHandler(deleteBranchResourceShareController));
+
+branchesRouter.get(
+  "/current/order-preferences",
+  requireBranchContext,
+  requireAnyPermission(["orders.create", "orders.update", "orders.view"]),
+  asyncHandler(getCurrentOrderPreferences),
+);
 
 branchesRouter.get(
   "/:branchId",

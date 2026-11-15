@@ -54,6 +54,7 @@ export async function createBranch(data: CreateBranchData) {
 export interface UpdateBranchData {
   name?: string;
   address?: string;
+  orderReadyTimeFormat?: "12H" | "24H";
 }
 
 export async function updateBranch(
@@ -69,6 +70,10 @@ export async function updateBranch(
 
   if (data.address !== undefined) {
     patch.address = data.address;
+  }
+
+  if (data.orderReadyTimeFormat !== undefined) {
+    patch.orderReadyTimeFormat = data.orderReadyTimeFormat;
   }
 
   const result = await prisma.branch.updateMany({
