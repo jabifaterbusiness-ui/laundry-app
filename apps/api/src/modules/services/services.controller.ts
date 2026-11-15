@@ -186,7 +186,8 @@ export async function assignUnassignedLegacyPricing(req: Request, res: Response)
     throw new AppError("A valid legacy resource, record ID and target branch are required", 422);
   }
 
-  await prisma.$transaction(async (tx) => {
+  try {
+    await prisma.$transaction(async (tx) => {
     const branch = await tx.branch.findFirst({ where: { id: targetBranchId, businessId }, select: { id: true } });
     if (!branch) throw new AppError("Target branch not found in this business", 404);
 
@@ -213,7 +214,13 @@ export async function assignUnassignedLegacyPricing(req: Request, res: Response)
       changed = result.count;
     }
     if (!changed) throw new AppError("Unassigned legacy record not found or already assigned", 409);
-  }, { isolationLevel: "Serializable" });
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      throw new AppError("A record with the same name or customer/service combination already exists in the target branch", 409);
+    }
+    throw error;
+  }
 
   await recordAuditEvent({
     action: "pricing.legacy_record_assigned",
