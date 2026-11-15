@@ -20,7 +20,10 @@ const MIME = {
 } as const;
 
 export function sanitizeChatFilename(value: string): string {
-  const cleaned = value.replace(/[\/\\\u0000-\u001f\u007f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 160);
+  const cleaned = Array.from(value, (character) => {
+    const code = character.charCodeAt(0);
+    return character === "/" || character === "\\\\" || code < 32 || code === 127 ? "_" : character;
+  }).join("").replace(/\s+/g, " ").trim().slice(0, 160);
   return cleaned && cleaned !== "." && cleaned !== ".." ? cleaned : "attachment";
 }
 
