@@ -46,6 +46,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    priceAdjustment: { findMany: vi.fn(), updateMany: vi.fn() },
+    taxRule: { findMany: vi.fn(), updateMany: vi.fn() },
+    customerServicePrice: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     service: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -253,5 +256,18 @@ describe("Services routes - permission enforcement", () => {
 
     expect(res.status).toBe(403);
     expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Legacy pricing assignment authorization", () => {
+  it("does not expose unassigned legacy pricing to staff, even with services.update", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    const res = await request(app)
+      .get("/api/v1/services/legacy-unassigned")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .set("X-Branch-Id", "branch-A");
+
+    expect(res.status).toBe(403);
   });
 });
