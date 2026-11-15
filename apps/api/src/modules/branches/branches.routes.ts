@@ -37,7 +37,7 @@ branchesRouter.delete("/sharing/:id", requirePermission("branches.update"), asyn
 
 branchesRouter.get(
   "/current/order-preferences",
-  requireBranchContext,
+  asyncHandler(requireBranchContext),
   requireAnyPermission(["orders.create", "orders.update", "orders.view"]),
   asyncHandler(getCurrentOrderPreferences),
 );
