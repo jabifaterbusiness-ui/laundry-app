@@ -9,7 +9,7 @@ import {
 } from "./chat.controller.js";
 
 export const chatRouter = Router();
-chatRouter.use(asyncHandler(requireBranchContext));
+chatRouter.use(asyncHandler(requireBranchContext), requirePermission("chat.view"));
 chatRouter.get("/directory", requirePermission("chat.view"), asyncHandler(listDirectory));
 chatRouter.get("/conversations", requirePermission("chat.view"), asyncHandler(listConversations));
 chatRouter.post("/direct/:userId", requirePermission("chat.create_direct"), asyncHandler(createDirectConversation));
