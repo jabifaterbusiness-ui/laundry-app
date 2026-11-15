@@ -196,7 +196,7 @@ export async function updateStatus(req: Request, res: Response) {
     prisma,
     {
       actorUserId: req.user!.id,
-      actorRole: req.user!.role as Role,
+      actorRole: req.user!.securityRole as Role,
       correlationId: req.correlationId ?? null,
       ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
     },
