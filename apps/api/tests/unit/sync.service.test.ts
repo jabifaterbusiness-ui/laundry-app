@@ -1099,7 +1099,7 @@ describe("replaySyncOperation", () => {
     });
   });
 
-  it("replays an order status update through the order service", async () => {
+  it("replays a reasoned pickup override through the order service", async () => {
     const operation = {
       ...customerCreateOperation,
       id: "sync-order-status",
@@ -1108,7 +1108,8 @@ describe("replaySyncOperation", () => {
       payload: {
         action: "UPDATE_STATUS" as const,
         orderId: "550e8400-e29b-41d4-a716-446655440002",
-        status: "COMPLETED" as const,
+        status: "PICKED_UP" as const,
+        pickupOverrideReason: "Approved by branch manager",
       },
     };
 
@@ -1136,22 +1137,23 @@ describe("replaySyncOperation", () => {
       context: baseContext,
     });
 
-    expect(hasPermission).toHaveBeenCalledWith(
-      USER_A,
-      BUSINESS_A,
-      "BUSINESS_OWNER",
-      "orders.change_status",
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      1, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.change_status",
+    );
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      2, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.pickup_override",
     );
 
     expect(updateOrderStatus).toHaveBeenCalledWith(
       operation.payload.orderId,
       BUSINESS_A,
       BRANCH_A,
-      "COMPLETED",
+      "PICKED_UP",
       prismaMock,
       {
         actorUserId: USER_A,
         actorRole: "BUSINESS_OWNER",
+        pickupOverrideReason: "Approved by branch manager",
       },
     );
 
