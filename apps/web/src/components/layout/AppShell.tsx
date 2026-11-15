@@ -600,6 +600,18 @@ export function AppShell({ children }: PropsWithChildren) {
                   </Link>
                 );
               })}
+              {isWorkstationMode &&
+              (hasPermission(user, "branches.view") || hasPermission(user, "branches.update")) ? (
+                <Link
+                  to="/branches"
+                  className={`nav-item ${isActive("/branches") ? "active" : ""}`}
+                  style={{ fontWeight: isActive("/branches") ? 700 : undefined }}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">⌘</span>
+                  <span>Branch Management</span>
+                </Link>
+              ) : null}
             </section>
             {!isWorkstationMode ? (            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
               <span className="nav-icon" aria-hidden="true">✉</span>
