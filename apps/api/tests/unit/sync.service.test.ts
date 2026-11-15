@@ -245,13 +245,7 @@ describe("enqueueSyncOperation", () => {
     };
 
     prismaMock.offlineSyncOperation.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError(
-        "Unique constraint failed",
-        {
-          code: "P2002",
-          clientVersion: "5.22.0",
-        },
-      ),
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
     );
     prismaMock.offlineSyncOperation.findFirst.mockResolvedValue(existing);
 
@@ -273,13 +267,7 @@ describe("enqueueSyncOperation", () => {
 
   it("does not treat a duplicate from another business as the caller's operation", async () => {
     prismaMock.offlineSyncOperation.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError(
-        "Unique constraint failed",
-        {
-          code: "P2002",
-          clientVersion: "5.22.0",
-        },
-      ),
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
     );
     prismaMock.offlineSyncOperation.findFirst.mockResolvedValue(null);
 
