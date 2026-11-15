@@ -32,7 +32,7 @@ export async function listPricingRules(
         id: customerId,
         businessId,
         OR: [
-          { ownerBranchId: null },
+          
           { ownerBranchId: { in: customerScope.ownerBranchIds } },
           { id: { in: customerScope.resourceIds } },
         ],
