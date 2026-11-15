@@ -31,6 +31,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "orders.create", module: "orders", action: "create", description: "Create orders" },
   { code: "orders.update", module: "orders", action: "update", description: "Update orders" },
   { code: "orders.change_status", module: "orders", action: "change_status", description: "Change order status" },
+  { code: "orders.pickup_override", module: "orders", action: "pickup_override", description: "Authorize collection of orders with an outstanding balance; reason and audit record required" },
 
   { code: "garments.view", module: "garments", action: "view", description: "View garments" },
   { code: "garments.manage", module: "garments", action: "manage", description: "Manage garments" },
