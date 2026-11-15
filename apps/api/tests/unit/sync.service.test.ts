@@ -1149,6 +1149,10 @@ describe("replaySyncOperation", () => {
       BRANCH_A,
       "COMPLETED",
       prismaMock,
+      {
+        actorUserId: USER_A,
+        actorRole: "BUSINESS_OWNER",
+      },
     );
 
     expect(result).toMatchObject({
@@ -1591,6 +1595,32 @@ describe("offline sync permission enforcement", () => {
       expect(prismaMock.offlineSyncOperation.create).not.toHaveBeenCalled();
     },
   );
+
+  it("requires the separate pickup override permission when an offline pickup includes an override reason", async () => {
+    vi.mocked(hasPermission)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(enqueueSyncOperation({
+      context: baseContext,
+      clientOperationId: "client-pickup-override-denied",
+      operationType: "ORDER_UPDATE",
+      payload: {
+        action: "UPDATE_STATUS",
+        orderId: "550e8400-e29b-41d4-a716-446655440000",
+        status: "PICKED_UP",
+        pickupOverrideReason: "Customer requested release",
+      },
+    })).rejects.toMatchObject({
+      message: "Insufficient permissions to authorize an unpaid pickup.",
+      statusCode: 403,
+    });
+
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      2, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.pickup_override",
+    );
+    expect(prismaMock.offlineSyncOperation.create).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["TRANSFER_CUSTOMER", "orders.update"],
