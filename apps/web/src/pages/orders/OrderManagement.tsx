@@ -1256,7 +1256,7 @@ function OrderManagementContent({
         </p>
       )}
       {error && (
-        <p role="alert" style={{ marginTop: 12 }}>
+        <p role="alert" style={{ marginTop: 12, border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12 }}>
           {error}
         </p>
       )}
@@ -1576,6 +1576,11 @@ function OrderManagementContent({
           {layer === "status" && (
             <>
               <h3>Change Order Status</h3>
+              {error && (
+                <p role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12 }}>
+                  {error}
+                </p>
+              )}
               {canOverridePickup && (
                 <label style={{ display: "block", marginBottom: 12 }}>
                   <strong>Pickup override reason (management only)</strong>
