@@ -196,13 +196,13 @@ export async function createPriceAdjustment(input: {
   const excludedServiceIds = [...new Set(input.excludedServiceIds ?? [])];
   const [customer, group, services] = await Promise.all([
     input.customerId
-      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }] }, select: { id: true } })
+      ? prisma.customer.findFirst({ where: { id: input.customerId, businessId: input.businessId, OR: [{ ownerBranchId: { in: customerScope.ownerBranchIds } }, { id: { in: customerScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve(null),
     input.groupId
       ? prisma.customerGroup.findFirst({ where: { id: input.groupId, businessId: input.businessId }, select: { id: true } })
       : Promise.resolve(null),
     excludedServiceIds.length
-      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds }, OR: [{ ownerBranchId: null }, { ownerBranchId: { in: serviceScope.ownerBranchIds } }, { id: { in: serviceScope.resourceIds } }] }, select: { id: true } })
+      ? prisma.service.findMany({ where: { businessId: input.businessId, id: { in: excludedServiceIds }, OR: [{ ownerBranchId: { in: serviceScope.ownerBranchIds } }, { id: { in: serviceScope.resourceIds } }] }, select: { id: true } })
       : Promise.resolve([]),
   ]);
   if (input.customerId && !customer) throw new AppError("Selected customer is unavailable", 404);
@@ -254,7 +254,7 @@ export async function setPriceAdjustmentActive(id: string, businessId: string, b
 export async function deletePriceAdjustment(id: string, businessId: string, branchId: string, userId: string) {
   await prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
-    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
     if (!existing) throw new AppError("Price adjustment not found", 404);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
     const result = await tx.priceAdjustment.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
@@ -282,7 +282,7 @@ export async function createTaxRule(input: {
 export async function deleteTaxRule(id: string, businessId: string, branchId: string, userId: string) {
   await prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "TAX_RULES" }, tx);
-    const existing = await tx.taxRule.findFirst({ where: { id, businessId, OR: [{ branchId: null }, { branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
+    const existing = await tx.taxRule.findFirst({ where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
     if (!existing) throw new AppError("Tax rule not found", 404);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "TAX_RULES", ownerBranchId: existing.branchId, resourceId: id }, tx);
     const result = await tx.taxRule.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
