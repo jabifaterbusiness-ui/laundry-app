@@ -17,7 +17,6 @@ import {
   updateService,
   type CreateServiceInput,
   type Service,
-  type UnassignedLegacyPricing,
 } from "../../lib/services-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
