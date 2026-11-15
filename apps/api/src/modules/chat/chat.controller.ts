@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { readChatFile, storeChatFile } from "./chat-storage.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -12,7 +13,8 @@ const groupSchema = z.object({
   confirmLargeGroup: z.boolean().default(false),
 });
 const messageSchema = z.object({
-  body: z.string().trim().min(1).max(5000),
+  body: z.string().trim().max(5000).optional().default(""),
+  attachmentIds: z.array(z.string().uuid()).max(10).optional().default([]),
   clientMessageId: z.string().min(1).max(100).optional(),
   replyToMessageId: z.string().uuid().optional(),
 });
@@ -186,6 +188,14 @@ export async function sendMessage(req: Request, res: Response) {
   const conversationId = z.string().uuid().parse(req.params.id);
   await requireMembership(conversationId, userId, businessId);
   const input = messageSchema.parse(req.body);
+  if (!input.body && input.attachmentIds.length === 0) throw new AppError("Write a message or attach a file", 422);
+  if (input.attachmentIds.length) {
+    const owned = await prisma.chatAttachment.findMany({
+      where: { id: { in: input.attachmentIds }, businessId, conversationId, uploadedByUserId: userId, messageId: null, deletedAt: null },
+      select: { id: true },
+    });
+    if (owned.length !== input.attachmentIds.length) throw new AppError("One or more attachments are unavailable", 404);
+  }
   if (input.replyToMessageId) {
     const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId } });
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
@@ -202,8 +212,9 @@ export async function sendMessage(req: Request, res: Response) {
         conversationId, senderUserId: userId, body: input.body,
         ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
         ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+        ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
       },
-      include: { sender: { select: { id: true, fullName: true } } },
+      include: { sender: { select: { id: true, fullName: true } }, attachments: { select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } } },
     });
     await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
     return created;
@@ -271,6 +282,56 @@ export async function removeGroupMember(req: Request, res: Response) {
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { leftAt: new Date() } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member left or was removed from the group" } });
   res.status(204).end();
+}
+
+export async function uploadAttachment(req: Request, res: Response) {
+  const { userId, businessId } = scope(req);
+  const conversationId = z.string().uuid().parse(req.params.id);
+  await requireMembership(conversationId, userId, businessId);
+  if (!Buffer.isBuffer(req.body)) throw new AppError("Upload a file using application/octet-stream", 415);
+  const encodedName = req.header("x-file-name") ?? "attachment";
+  let originalName = encodedName;
+  try { originalName = decodeURIComponent(encodedName); } catch { throw new AppError("Invalid file name", 422); }
+  const mime = req.header("x-file-mime-type") ?? "application/octet-stream";
+  const stored = await storeChatFile(businessId, req.body, mime, originalName);
+  try {
+    const attachment = await prisma.chatAttachment.create({
+      data: {
+        businessId, conversationId, uploadedByUserId: userId,
+        storageKey: stored.storageKey, originalName: stored.originalName,
+        safeMimeType: stored.safeMimeType, sizeBytes: stored.sizeBytes, checksum: stored.checksum,
+      },
+      select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true },
+    });
+    await recordAuditEvent({
+      action: "chat.attachment.uploaded", entityType: "ChatAttachment", entityId: attachment.id,
+      businessId, actorUserId: userId, branchId: null, correlationId: req.correlationId ?? null,
+      metadata: { mimeType: attachment.safeMimeType, sizeBytes: attachment.sizeBytes },
+    });
+    res.status(201).json({ data: attachment });
+  } catch (error) {
+    // A failed metadata write leaves no public URL; the private file is not exposed.
+    throw error;
+  }
+}
+
+export async function downloadAttachment(req: Request, res: Response) {
+  const { userId, businessId } = scope(req);
+  const id = z.string().uuid().parse(req.params.id);
+  const attachment = await prisma.chatAttachment.findFirst({
+    where: { id, businessId, deletedAt: null },
+    select: { id: true, conversationId: true, storageKey: true, originalName: true, safeMimeType: true },
+  });
+  if (!attachment) throw new AppError("Attachment not found", 404);
+  await requireMembership(attachment.conversationId, userId, businessId);
+  const file = await readChatFile(businessId, attachment.storageKey);
+  const safeName = attachment.originalName.replace(/["\\r\\n]/g, "_");
+  res.setHeader("Content-Type", attachment.safeMimeType);
+  res.setHeader("Content-Length", String(file.length));
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.status(200).send(file);
 }
 
 export async function toggleReaction(req: Request, res: Response) {
