@@ -317,6 +317,21 @@ describe("OrdersPage order search", () => {
       );
     });
   });
+
+  it("counts and lists picked-up orders separately from ready and completed orders", async () => {
+    vi.mocked(listAllOrders).mockResolvedValue([
+      { ...orderA, status: "PICKED_UP" },
+    ]);
+
+    renderPage();
+
+    const pickedUpFolder = await screen.findByRole("button", { name: /Picked Up \\(1\\)/ });
+    expect(screen.getByRole("button", { name: /Ready for Pickup \\/ Completed \\(0\\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /All Orders \\(1\\)/ })).toBeInTheDocument();
+
+    fireEvent.click(pickedUpFolder);
+    expect(await screen.findByText("00001")).toBeInTheDocument();
+  });
 });
 
 describe("OrdersPage colour selector", () => {
