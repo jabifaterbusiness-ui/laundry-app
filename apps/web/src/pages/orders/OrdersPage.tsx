@@ -233,6 +233,7 @@ export function OrdersPage() {
     | "received"
     | "outstanding"
     | "ready"
+    | "pickedUp"
     | "cancelled"
     | "all"
     | null
@@ -1316,6 +1317,10 @@ export function OrdersPage() {
       order.status === "COMPLETED",
   );
 
+  const pickedUpOrders = allOrders.filter(
+    (order) => order.status === "PICKED_UP",
+  );
+
   const cancelledOrders = allOrders.filter(
     (order) => order.status === "CANCELLED",
   );
@@ -1327,7 +1332,9 @@ export function OrdersPage() {
         ? outstandingOrders
         : openFolder === "ready"
           ? readyOrders
-          : openFolder === "cancelled"
+          : openFolder === "pickedUp"
+            ? pickedUpOrders
+            : openFolder === "cancelled"
             ? cancelledOrders
             : openFolder === "all"
               ? allOrders
@@ -2023,6 +2030,11 @@ export function OrdersPage() {
               id: "ready" as const,
               title: "Ready for Pickup / Completed",
               count: readyOrders.length,
+            },
+            {
+              id: "pickedUp" as const,
+              title: "Picked Up",
+              count: pickedUpOrders.length,
             },
             {
               id: "cancelled" as const,

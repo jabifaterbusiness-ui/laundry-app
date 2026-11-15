@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { Role } from "@prisma/client";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
@@ -13,6 +14,7 @@ import {
 import {
   createOrder,
   getOrderForBusiness,
+  getPickupPaymentEligibility,
   listOrders,
   transferOrder,
   updateOrderStatus,
@@ -195,11 +197,21 @@ export async function updateStatus(req: Request, res: Response) {
     prisma,
     {
       actorUserId: req.user!.id,
+      actorRole: req.user!.securityRole as Role,
       correlationId: req.correlationId ?? null,
+      ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
     },
   );
 
   res.status(200).json(order);
+}
+
+export async function pickupEligibility(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const branchId = requireBranchId(req);
+  const { id } = orderIdParamSchema.parse(req.params);
+  const eligibility = await getPickupPaymentEligibility(id, businessId, branchId);
+  res.status(200).json(eligibility);
 }
 
 export async function statusHistory(req: Request, res: Response) {

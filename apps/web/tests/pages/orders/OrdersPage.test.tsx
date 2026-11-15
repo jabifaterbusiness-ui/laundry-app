@@ -317,6 +317,21 @@ describe("OrdersPage order search", () => {
       );
     });
   });
+
+  it("counts and lists picked-up orders separately from ready and completed orders", async () => {
+    vi.mocked(listAllOrders).mockResolvedValue([
+      { ...orderA, status: "PICKED_UP" },
+    ]);
+
+    renderPage();
+
+    const pickedUpFolder = await screen.findByRole("button", { name: /Picked Up \(1\)/ });
+    expect(screen.getByRole("button", { name: /Ready for Pickup \/ Completed \(0\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /All Orders \(1\)/ })).toBeInTheDocument();
+
+    fireEvent.click(pickedUpFolder);
+    expect(await screen.findByText("00001")).toBeInTheDocument();
+  });
 });
 
 describe("OrdersPage colour selector", () => {
@@ -1308,6 +1323,7 @@ describe("Orders and Order Management section separation", () => {
     expect(screen.getByRole("heading", { name: "Orders" })).toBeInTheDocument();
     expect(await screen.findByText("No orders found.")).toBeInTheDocument();
     expect(screen.getByLabelText("Search orders")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Picked Up \(0\)/ })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Order Management" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Order Details" })).not.toBeInTheDocument();
   });

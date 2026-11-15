@@ -172,6 +172,9 @@ export interface TodaysReport {
   date: string;
   timeZone: string;
   period: { from: string; to: string };
+  orders: {
+    orderValueReceived: number;
+  };
   payments: {
     transactionCount: number;
     amountReceived: number;
@@ -180,6 +183,7 @@ export interface TodaysReport {
   };
   pickups: {
     orderCount: number;
+    orderValue: number;
   };
 }
 

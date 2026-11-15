@@ -222,6 +222,21 @@ export async function enqueueSyncOperation(
     );
   }
 
+  if (
+    operationType === "ORDER_UPDATE" &&
+    (payload as { action?: string; status?: string; pickupOverrideReason?: string }).action === "UPDATE_STATUS" &&
+    (payload as { status?: string }).status === "PICKED_UP" &&
+    (payload as { pickupOverrideReason?: string }).pickupOverrideReason
+  ) {
+    const overrideAllowed = await hasPermission(
+      input.context.actorUserId,
+      input.context.businessId,
+      input.context.actorRole,
+      "orders.pickup_override",
+    );
+    if (!overrideAllowed) throw new AppError("Insufficient permissions to authorize an unpaid pickup.", 403);
+  }
+
   await assertContextBelongsToBusiness(
     input.context.businessId,
     input.context.branchId,
@@ -269,7 +284,9 @@ export async function enqueueSyncOperation(
     return operation;
   } catch (err) {
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err !== null &&
+      typeof err === "object" &&
+      "code" in err &&
       err.code === "P2002"
     ) {
       const duplicate = await resolveDuplicate(input);
@@ -588,6 +605,7 @@ async function applySyncOperation(
               action: "UPDATE_STATUS";
               orderId: string;
               status: OrderStatus;
+              pickupOverrideReason?: string;
             };
 
         if (input.action === "TRANSFER_CUSTOMER") {
@@ -606,6 +624,11 @@ async function applySyncOperation(
             context.branchId,
             input.status,
             tx,
+            {
+              actorUserId: context.actorUserId,
+              actorRole: context.actorRole,
+              ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
+            },
           );
         }
         break;
@@ -623,7 +646,7 @@ async function applySyncOperation(
     });
 
     return { operation: applied, result };
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function replaySyncOperation(
@@ -674,6 +697,21 @@ export async function replaySyncOperation(
       "Insufficient permissions to replay this offline sync operation",
       403,
     );
+  }
+
+  if (
+    operationType.operationType === "ORDER_UPDATE" &&
+    (payload as { action?: string; status?: string; pickupOverrideReason?: string }).action === "UPDATE_STATUS" &&
+    (payload as { status?: string }).status === "PICKED_UP" &&
+    (payload as { pickupOverrideReason?: string }).pickupOverrideReason
+  ) {
+    const overrideAllowed = await hasPermission(
+      input.context.actorUserId,
+      input.context.businessId,
+      input.context.actorRole,
+      "orders.pickup_override",
+    );
+    if (!overrideAllowed) throw new AppError("Insufficient permissions to authorize an unpaid pickup.", 403);
   }
 
   const claim = await claimSyncOperation(input.id, input.context);

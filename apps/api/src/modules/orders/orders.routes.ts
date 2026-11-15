@@ -15,6 +15,7 @@ import {
   transfer,
   updateStatus,
   statusHistory,
+  pickupEligibility,
 } from "./orders.controller.js";
 
 // Order authorization:
@@ -50,6 +51,12 @@ ordersRouter.get(
   "/:id",
   requirePermission("orders.view"),
   asyncHandler(getOne),
+);
+
+ordersRouter.get(
+  "/:id/pickup-eligibility",
+  requirePermission("orders.change_status"),
+  asyncHandler(pickupEligibility),
 );
 
 ordersRouter.get(

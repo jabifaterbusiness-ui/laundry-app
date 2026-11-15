@@ -201,30 +201,34 @@ describe("DashboardPage", () => {
         from: "2026-11-13T23:00:00.000Z",
         to: "2026-11-14T23:00:00.000Z",
       },
+      orders: {
+        orderValueReceived: 200000,
+      },
       payments: {
         transactionCount: 4,
-        amountReceived: 125000,
+        amountReceived: 50000,
         refundAmount: 5000,
-        netCollected: 120000,
+        netCollected: 45000,
       },
       pickups: {
-        orderCount: 6,
+        orderCount: 5,
+        orderValue: 150000,
       },
     });
 
     renderDashboard();
-    fireEvent.click(await screen.findByRole("button", { name: "Today's Report" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Today's Report/ }));
 
-    expect(await screen.findByText("₦125,000")).toBeInTheDocument();
-    expect(screen.getByText("Total Invoice Collected")).toBeInTheDocument();
+    expect(await screen.findByText("₦200,000")).toBeInTheDocument();
+    expect(screen.getByText("Total Order Received")).toBeInTheDocument();
     expect(screen.getByText("Refunds")).toBeInTheDocument();
     expect(screen.getByText("Net Payment Received")).toBeInTheDocument();
     expect(screen.getByText("Total Pickups")).toBeInTheDocument();
-    expect(screen.getByText("Invoice payments collected today")).toBeInTheDocument();
-    expect(screen.getByText("Orders handed over to customers today")).toBeInTheDocument();
+    expect(screen.getByText("Full value of orders received today, paid or unpaid")).toBeInTheDocument();
+    expect(screen.getByText("Payments received today less refunds")).toBeInTheDocument();
+    expect(screen.getByText("Orders picked up today · Order value: ₦150,000")).toBeInTheDocument();
     expect(screen.getByText("₦5,000")).toBeInTheDocument();
-    expect(screen.getByText("₦120,000")).toBeInTheDocument();
-    expect(screen.getByText("18 garments handed over")).toBeInTheDocument();
+    expect(screen.getByText("₦45,000")).toBeInTheDocument();
     expect(mockedGetTodaysReport).toHaveBeenCalledWith(
       { accessToken: "token" },
       "branch-1",
@@ -284,7 +288,7 @@ describe("DashboardPage", () => {
       "/invoices",
     );
     expect(
-      screen.getByRole("link", { name: "View outstanding invoices" }),
+      screen.getByRole("link", { name: "View unpaid invoices" }),
     ).toHaveAttribute("href", "/invoices");
     expect(screen.getByRole("link", { name: "View payments" })).toHaveAttribute(
       "href",

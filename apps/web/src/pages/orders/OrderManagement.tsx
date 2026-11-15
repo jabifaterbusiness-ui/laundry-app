@@ -29,6 +29,7 @@ import { CustomerReceipt } from "../invoices/receipt/CustomerReceipt.js";
 import { CompanyReceipt } from "../invoices/receipt/CompanyReceipt.js";
 import {
   getOrder,
+  getPickupPaymentEligibility,
   getOrderStatusHistory,
   listAllOrders,
   updateOrderStatusWithOfflineQueue,
@@ -121,6 +122,7 @@ function OrderManagementContent({
   }, [customer.id, customer.phone, customer.email, customer.address, customer.notes]);
   const [error, setError] = useState<string | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [pickupOverrideReason, setPickupOverrideReason] = useState("");
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -146,6 +148,7 @@ function OrderManagementContent({
 
   const canUpdateCustomer = hasPermission(user, "customers.update");
   const canUpdateStatus = hasPermission(user, "orders.change_status");
+  const canOverridePickup = hasPermission(user, "orders.pickup_override");
   const canViewPayments = hasPermission(user, "payments.view");
   const canManagePayments = hasPermission(user, "payments.manage");
   const canViewAccount = hasPermission(user, "customer_accounts.view");
@@ -237,6 +240,15 @@ function OrderManagementContent({
         invoiceQuery.data?.id &&
         canViewPayments,
     ),
+  });
+
+  const pickupEligibilityQuery = useQuery({
+    queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+    queryFn: () => getPickupPaymentEligibility(order!.id, { accessToken }, activeBranchId),
+    enabled: Boolean(accessToken && activeBranchId && order?.id && canUpdateStatus),
+    staleTime: 0,
+    refetchInterval: layer === "status" ? 15000 : false,
+    refetchOnWindowFocus: true,
   });
 
   const invoiceHistoryQuery = useQuery<InvoiceHistoryEntry[]>({
@@ -415,6 +427,9 @@ function OrderManagementContent({
         }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
         queryClient.invalidateQueries({
+          queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+        }),
+        queryClient.invalidateQueries({
           queryKey: [
             "order-management",
             "invoice-history",
@@ -525,6 +540,10 @@ function OrderManagementContent({
       });
 
       queryClient.invalidateQueries({
+        queryKey: ["order-management", "pickup-eligibility", order?.id, activeBranchId],
+      });
+
+      queryClient.invalidateQueries({
         queryKey: ["order-management", "customer-account"],
       });
 
@@ -555,19 +574,21 @@ function OrderManagementContent({
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: OrderStatus) =>
+    mutationFn: (input: { status: OrderStatus; pickupOverrideReason?: string }) =>
       updateOrderStatusWithOfflineQueue(
         order!.id,
-        status,
+        input.status,
         { accessToken },
         {
           businessId: user?.businessId ?? "",
           branchId: activeBranchId ?? "",
           actorUserId: user?.id ?? "",
         },
+        input.pickupOverrideReason,
       ),
     onSuccess: (result) => {
       setStatusFeedback(null);
+      setPickupOverrideReason("");
       if (!result.queued) {
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         queryClient.invalidateQueries({
@@ -1252,7 +1273,7 @@ function OrderManagementContent({
         </p>
       )}
       {error && (
-        <p role="alert" style={{ marginTop: 12 }}>
+        <p role="alert" style={{ marginTop: 12, border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12 }}>
           {error}
         </p>
       )}
@@ -1572,6 +1593,43 @@ function OrderManagementContent({
           {layer === "status" && (
             <>
               <h3>Change Order Status</h3>
+              {error && (
+                <p role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12 }}>
+                  {error}
+                </p>
+              )}
+              {canOverridePickup && (
+                <label style={{ display: "block", marginBottom: 12 }}>
+                  <strong>Pickup override reason (management only)</strong>
+                  <textarea
+                    value={pickupOverrideReason}
+                    onChange={(event) => setPickupOverrideReason(event.target.value)}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="Required only when collecting an order with an outstanding balance"
+                    style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6 }}
+                  />
+                </label>
+              )}
+              {pickupEligibilityQuery.isLoading && (
+                <p role="status">Checking whether this order is fully paid before pickup...</p>
+              )}
+              {pickupEligibilityQuery.isError && (
+                <p role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  Pickup payment status could not be verified. Refresh this check before releasing the order.
+                </p>
+              )}
+              {pickupEligibilityQuery.data && !pickupEligibilityQuery.data.eligible && (
+                <div role="alert" style={{ border: "1px solid #dc2626", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <strong>This customer has not completed payment, so these items cannot be picked up.</strong>
+                  <div>
+                    {pickupEligibilityQuery.data.outstandingBalance !== null
+                      ? `Outstanding balance: ${formatMoney(pickupEligibilityQuery.data.outstandingBalance)}. `
+                      : "A valid invoice payment record was not found. "}
+                    Only an authorized management user can override this restriction, and a reason is mandatory.
+                  </div>
+                </div>
+              )}
               {STATUSES.map((item) => (
                 <button
                   key={item}
@@ -1582,14 +1640,47 @@ function OrderManagementContent({
                     mode !== "view" ||
                     item === order!.status
                   }
-                  onClick={() => statusMutation.mutate(item)}
+                  onClick={() => {
+                    if (item === "PICKED_UP") {
+                      if (pickupEligibilityQuery.isLoading || pickupEligibilityQuery.isError || !pickupEligibilityQuery.data) {
+                        setError("Pickup payment status could not be verified. Please refresh and try again.");
+                        return;
+                      }
+                      if (!pickupEligibilityQuery.data.eligible) {
+                        if (pickupEligibilityQuery.data.reason === "NO_VALID_INVOICE") {
+                          setError("Pickup is blocked because this order has no valid invoice payment record. Resolve the invoice before release.");
+                          return;
+                        }
+                        if (!canOverridePickup) {
+                          const balance = pickupEligibilityQuery.data.outstandingBalance;
+                          setError(
+                            balance !== null
+                              ? `This customer has not completed payment, so these items cannot be picked up. Outstanding balance: ${formatMoney(balance)}.`
+                              : "Pickup is blocked because this order has no valid invoice payment record.",
+                          );
+                          return;
+                        }
+                        if (!pickupOverrideReason.trim()) {
+                          setError("Enter a reason before authorizing pickup with an outstanding balance.");
+                          return;
+                        }
+                      }
+                    }
+                    setError(null);
+                    statusMutation.mutate({
+                      status: item,
+                      ...(item === "PICKED_UP" && pickupOverrideReason.trim()
+                        ? { pickupOverrideReason: pickupOverrideReason.trim() }
+                        : {}),
+                    });
+                  }}
                   style={{
                     display: "block",
                     width: "100%",
                     marginBottom: 8,
                   }}
                 >
-                  {statusLabel(item)}
+                  {statusMutation.isPending ? "Saving..." : statusLabel(item)}
                 </button>
               ))}
             </>

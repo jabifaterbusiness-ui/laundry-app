@@ -477,6 +477,11 @@ export async function getTodaysReport(scope: ReportsScope) {
     status: "POSTED" as const,
     createdAt: { gte: from, lt: to },
   };
+  const receivedOrderWhere = {
+    businessId: scope.businessId,
+    branchId: scope.branchId,
+    createdAt: { gte: from, lt: to },
+  };
   const pickupOrderWhere = {
     businessId: scope.businessId,
     branchId: scope.branchId,
@@ -484,8 +489,14 @@ export async function getTodaysReport(scope: ReportsScope) {
     pickedUpAt: { gte: from, lt: to },
   };
 
-  const [paymentCount, paymentsReceived, refunds, pickupOrderCount] =
-    await Promise.all([
+  const [
+    paymentCount,
+    paymentsReceived,
+    refunds,
+    pickupOrderCount,
+    receivedOrders,
+    pickupOrders,
+  ] = await Promise.all([
       prisma.payment.count({
         where: { ...invoicePaymentWhere, type: "PAYMENT" },
       }),
@@ -498,6 +509,14 @@ export async function getTodaysReport(scope: ReportsScope) {
         _sum: { amount: true },
       }),
       prisma.order.count({ where: pickupOrderWhere }),
+      prisma.order.aggregate({
+        where: receivedOrderWhere,
+        _sum: { orderTotal: true },
+      }),
+      prisma.order.aggregate({
+        where: pickupOrderWhere,
+        _sum: { orderTotal: true },
+      }),
     ]);
 
   const received = paymentsReceived._sum.amount ?? 0;
@@ -507,6 +526,9 @@ export async function getTodaysReport(scope: ReportsScope) {
     date,
     timeZone,
     period: { from, to },
+    orders: {
+      orderValueReceived: receivedOrders._sum.orderTotal ?? 0,
+    },
     payments: {
       transactionCount: paymentCount,
       amountReceived: received,
@@ -515,6 +537,7 @@ export async function getTodaysReport(scope: ReportsScope) {
     },
     pickups: {
       orderCount: pickupOrderCount,
+      orderValue: pickupOrders._sum.orderTotal ?? 0,
     },
   };
 }

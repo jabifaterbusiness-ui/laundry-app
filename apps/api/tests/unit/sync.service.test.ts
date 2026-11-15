@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Prisma } from "@prisma/client";
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
@@ -245,13 +244,7 @@ describe("enqueueSyncOperation", () => {
     };
 
     prismaMock.offlineSyncOperation.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError(
-        "Unique constraint failed",
-        {
-          code: "P2002",
-          clientVersion: "5.22.0",
-        },
-      ),
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
     );
     prismaMock.offlineSyncOperation.findFirst.mockResolvedValue(existing);
 
@@ -273,13 +266,7 @@ describe("enqueueSyncOperation", () => {
 
   it("does not treat a duplicate from another business as the caller's operation", async () => {
     prismaMock.offlineSyncOperation.create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError(
-        "Unique constraint failed",
-        {
-          code: "P2002",
-          clientVersion: "5.22.0",
-        },
-      ),
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
     );
     prismaMock.offlineSyncOperation.findFirst.mockResolvedValue(null);
 
@@ -1099,7 +1086,7 @@ describe("replaySyncOperation", () => {
     });
   });
 
-  it("replays an order status update through the order service", async () => {
+  it("replays a reasoned pickup override through the order service", async () => {
     const operation = {
       ...customerCreateOperation,
       id: "sync-order-status",
@@ -1108,7 +1095,8 @@ describe("replaySyncOperation", () => {
       payload: {
         action: "UPDATE_STATUS" as const,
         orderId: "550e8400-e29b-41d4-a716-446655440002",
-        status: "COMPLETED" as const,
+        status: "PICKED_UP" as const,
+        pickupOverrideReason: "Approved by branch manager",
       },
     };
 
@@ -1136,25 +1124,76 @@ describe("replaySyncOperation", () => {
       context: baseContext,
     });
 
-    expect(hasPermission).toHaveBeenCalledWith(
-      USER_A,
-      BUSINESS_A,
-      "BUSINESS_OWNER",
-      "orders.change_status",
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      1, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.change_status",
+    );
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      2, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.pickup_override",
     );
 
     expect(updateOrderStatus).toHaveBeenCalledWith(
       operation.payload.orderId,
       BUSINESS_A,
       BRANCH_A,
-      "COMPLETED",
+      "PICKED_UP",
       prismaMock,
+      {
+        actorUserId: USER_A,
+        actorRole: "BUSINESS_OWNER",
+        pickupOverrideReason: "Approved by branch manager",
+      },
     );
 
     expect(result).toMatchObject({
       status: "APPLIED",
       operation: applied,
     });
+  });
+
+  it("fails offline pickup replay when no override reason was supplied for an unpaid order", async () => {
+    const operation = {
+      ...customerCreateOperation,
+      id: "sync-unpaid-pickup",
+      clientOperationId: "client-unpaid-pickup",
+      operationType: "ORDER_UPDATE" as const,
+      payload: {
+        action: "UPDATE_STATUS" as const,
+        orderId: "550e8400-e29b-41d4-a716-446655440002",
+        status: "PICKED_UP" as const,
+      },
+    };
+    const failed = {
+      ...operation,
+      status: "FAILED" as const,
+      attemptCount: 1,
+      lastError: "This customer has not completed payment, so these items cannot be picked up.",
+    };
+
+    prismaMock.offlineSyncOperation.findFirst
+      .mockResolvedValueOnce({
+        operationType: operation.operationType,
+        payload: operation.payload,
+        status: "PENDING",
+      })
+      .mockResolvedValueOnce(operation);
+    prismaMock.offlineSyncOperation.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.offlineSyncOperation.findUniqueOrThrow.mockResolvedValue(operation);
+    updateOrderStatusMock.mockRejectedValue(
+      new AppError("This customer has not completed payment, so these items cannot be picked up.", 422),
+    );
+    prismaMock.offlineSyncOperation.update.mockResolvedValue(failed);
+
+    const result = await replaySyncOperation({ id: operation.id, context: baseContext });
+
+    expect(updateOrderStatusMock).toHaveBeenCalledWith(
+      operation.payload.orderId,
+      BUSINESS_A,
+      BRANCH_A,
+      "PICKED_UP",
+      prismaMock,
+      { actorUserId: USER_A, actorRole: "BUSINESS_OWNER" },
+    );
+    expect(result).toMatchObject({ status: "FAILED", operation: failed });
   });
 
   it("rejects a missing domain record without marking it as a conflict", async () => {
@@ -1591,6 +1630,32 @@ describe("offline sync permission enforcement", () => {
       expect(prismaMock.offlineSyncOperation.create).not.toHaveBeenCalled();
     },
   );
+
+  it("requires the separate pickup override permission when an offline pickup includes an override reason", async () => {
+    vi.mocked(hasPermission)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(enqueueSyncOperation({
+      context: baseContext,
+      clientOperationId: "client-pickup-override-denied",
+      operationType: "ORDER_UPDATE",
+      payload: {
+        action: "UPDATE_STATUS",
+        orderId: "550e8400-e29b-41d4-a716-446655440000",
+        status: "PICKED_UP",
+        pickupOverrideReason: "Customer requested release",
+      },
+    })).rejects.toMatchObject({
+      message: "Insufficient permissions to authorize an unpaid pickup.",
+      statusCode: 403,
+    });
+
+    expect(hasPermission).toHaveBeenNthCalledWith(
+      2, USER_A, BUSINESS_A, "BUSINESS_OWNER", "orders.pickup_override",
+    );
+    expect(prismaMock.offlineSyncOperation.create).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["TRANSFER_CUSTOMER", "orders.update"],
