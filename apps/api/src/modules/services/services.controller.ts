@@ -159,7 +159,6 @@ export async function deactivate(req: Request, res: Response) {
 
 
 const LEGACY_RESOURCE_TYPES = ["SERVICE", "DISCOUNT", "TAX", "CUSTOMER_PRICE"] as const;
-type LegacyResourceType = (typeof LEGACY_RESOURCE_TYPES)[number];
 
 function requireBusinessOwner(req: Request) {
   if (req.user?.securityRole !== "BUSINESS_OWNER") {
