@@ -658,7 +658,7 @@ async function updateOrderStatusWithDb(
   }
 
   let pickupOverride: { reason: string; outstandingBalance: number } | null = null;
-  if (status === "PICKED_UP") {
+  if (status === "PICKED_UP" && existing.status !== "PICKED_UP") {
     const invoice = await db.invoice.findFirst({
       where: { orderId: id, businessId, branchId },
       select: {
@@ -720,7 +720,7 @@ async function updateOrderStatusWithDb(
     data.readyAt = now;
   }
 
-  if (status === "PICKED_UP") {
+  if (status === "PICKED_UP" && existing.status !== "PICKED_UP") {
     data.pickedUpAt = now;
   }
 
@@ -742,7 +742,7 @@ async function updateOrderStatusWithDb(
     },
   });
 
-  if (pickupOverride && history?.actorUserId) {
+  if (pickupOverride && history?.actorUserId && existing.status !== "PICKED_UP") {
     await db.auditLog.create({
       data: {
         action: "order.pickup_payment_override",
