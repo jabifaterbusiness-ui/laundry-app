@@ -991,6 +991,20 @@ describe("createOrder", () => {
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
+  it("blocks pickup when no invoice exists in the selected business and branch", async () => {
+    orderFindFirst.mockResolvedValue({
+      id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
+    } as never);
+    vi.mocked(prisma.invoice.findFirst).mockResolvedValue(null);
+
+    await expect(updateOrderStatus(ORDER_A, "biz-A", BRANCH_A, "PICKED_UP"))
+      .rejects.toThrow("no valid issued invoice");
+    expect(prisma.invoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { orderId: ORDER_A, businessId: "biz-A", branchId: BRANCH_A },
+    }));
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
   it("rejects a blank management override reason", async () => {
     orderFindFirst.mockResolvedValue({
       id: ORDER_A, businessId: "biz-A", branchId: BRANCH_A, status: "READY_FOR_PICKUP",
