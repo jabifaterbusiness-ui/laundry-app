@@ -329,7 +329,7 @@ export function BranchesPage() {
                 </td>
               </tr>
             ))}
-            {!branches.length ? <tr><td colSpan={5}>No branches found.</td></tr> : null>
+            {!branches.length ? <tr><td colSpan={5}>No branches found.</td></tr> : null}
           </tbody>
         </table>
       </div>
