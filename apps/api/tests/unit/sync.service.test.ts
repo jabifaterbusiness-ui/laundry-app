@@ -1163,6 +1163,52 @@ describe("replaySyncOperation", () => {
     });
   });
 
+  it("fails offline pickup replay when no override reason was supplied for an unpaid order", async () => {
+    const operation = {
+      ...customerCreateOperation,
+      id: "sync-unpaid-pickup",
+      clientOperationId: "client-unpaid-pickup",
+      operationType: "ORDER_UPDATE" as const,
+      payload: {
+        action: "UPDATE_STATUS" as const,
+        orderId: "550e8400-e29b-41d4-a716-446655440002",
+        status: "PICKED_UP" as const,
+      },
+    };
+    const failed = {
+      ...operation,
+      status: "FAILED" as const,
+      attemptCount: 1,
+      lastError: "This customer has not completed payment, so these items cannot be picked up.",
+    };
+
+    prismaMock.offlineSyncOperation.findFirst
+      .mockResolvedValueOnce({
+        operationType: operation.operationType,
+        payload: operation.payload,
+        status: "PENDING",
+      })
+      .mockResolvedValueOnce(operation);
+    prismaMock.offlineSyncOperation.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.offlineSyncOperation.findUniqueOrThrow.mockResolvedValue(operation);
+    updateOrderStatusMock.mockRejectedValue(
+      new AppError("This customer has not completed payment, so these items cannot be picked up.", 422),
+    );
+    prismaMock.offlineSyncOperation.update.mockResolvedValue(failed);
+
+    const result = await replaySyncOperation({ id: operation.id, context: baseContext });
+
+    expect(updateOrderStatusMock).toHaveBeenCalledWith(
+      operation.payload.orderId,
+      BUSINESS_A,
+      BRANCH_A,
+      "PICKED_UP",
+      prismaMock,
+      { actorUserId: USER_A, actorRole: "BUSINESS_OWNER" },
+    );
+    expect(result).toMatchObject({ status: "FAILED", operation: failed });
+  });
+
   it("rejects a missing domain record without marking it as a conflict", async () => {
     const operation = {
       ...customerCreateOperation,
