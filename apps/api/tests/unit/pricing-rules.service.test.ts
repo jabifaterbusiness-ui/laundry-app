@@ -63,7 +63,6 @@ describe("customer-aware pricing rule lists", () => {
     expect(query.where).toMatchObject({
       businessId: "business-1",
       OR: [
-        { branchId: null },
         { branchId: { in: ["branch-A"] } },
         { id: { in: [] } },
       ],
@@ -180,7 +179,6 @@ describe("automatic price adjustments", () => {
         id: "customer-1",
         businessId: "business-1",
         OR: [
-          { ownerBranchId: null },
           { ownerBranchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
@@ -299,7 +297,6 @@ describe("automatic price adjustments", () => {
         id: "discount-1",
         businessId: "business-1",
         OR: [
-          { branchId: null },
           { branchId: { in: ["branch-A"] } },
           { id: { in: [] } },
         ],
