@@ -663,6 +663,7 @@ async function updateOrderStatusWithDb(
       where: { orderId: id, businessId, branchId },
       select: {
         id: true,
+        status: true,
         totalAmount: true,
         payments: {
           select: { amount: true, type: true, status: true },
@@ -670,8 +671,8 @@ async function updateOrderStatusWithDb(
       },
     });
 
-    if (!invoice) {
-      throw new AppError("Pickup is blocked because this order has no valid invoice payment record.", 422);
+    if (!invoice || invoice.status === "VOID") {
+      throw new AppError("Pickup is blocked because this order has no valid issued invoice payment record.", 422);
     }
 
     const netPayments = invoice.payments
