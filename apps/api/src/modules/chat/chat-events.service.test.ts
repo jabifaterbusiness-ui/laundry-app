@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { publishChatEvent, subscribeChatEvents, type ChatRealtimeEvent } from "./chat-events.service.js";
 
-const cleanups: Array<() => void> = [];\n\nafterEach(() => {\n  cleanups.splice(0).forEach((cleanup) => cleanup());\n});\n\nconst event: ChatRealtimeEvent = {
+const cleanups: Array<() => void> = [];\n\nconst event: ChatRealtimeEvent = {
   id: "event-1",
   type: "message.created",
   conversationId: "conversation-1",
