@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
 
 describe("chat composer keyboard behaviour", () => {
