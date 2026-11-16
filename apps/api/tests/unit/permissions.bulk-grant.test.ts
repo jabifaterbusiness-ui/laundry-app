@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     user: { findFirst: vi.fn() },
     permission: { findMany: vi.fn(), findUnique: vi.fn() },
-    userPermissionOverride: { findUnique: vi.fn() },
+    userPermissionOverride: { findUnique: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   },
   transaction: {
@@ -18,6 +18,7 @@ import { PERMISSIONS } from "../../src/modules/permissions/permissions.catalog.j
 import {
   allowAllUserPermissions,
   hasPermission,
+  getEffectivePermissionCodes,
 } from "../../src/modules/permissions/permissions.service.js";
 
 const BUSINESS_ID = "business-a";
@@ -160,6 +161,26 @@ describe("permission catalogue and bulk grants", () => {
         },
       },
       select: { allowed: true },
+    });
+  });
+
+  it("returns only explicitly allowed permissions for a delegated manager", async () => {
+    mocks.prisma.userPermissionOverride.findMany.mockResolvedValue([
+      { permission: { code: "chat.view" }, allowed: true },
+      { permission: { code: "chat.cross_branch" }, allowed: false },
+      { permission: { code: "chat.send_message" }, allowed: true },
+    ] as never);
+
+    await expect(
+      getEffectivePermissionCodes(BUSINESS_ID, USER_ID, "STAFF"),
+    ).resolves.toEqual(["chat.view", "chat.send_message"]);
+
+    expect(mocks.prisma.userPermissionOverride.findMany).toHaveBeenCalledWith({
+      where: { businessId: BUSINESS_ID, userId: USER_ID },
+      select: {
+        permission: { select: { code: true } },
+        allowed: true,
+      },
     });
   });
 
