@@ -9,6 +9,7 @@ const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((
 const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(date)):"";
 export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
+function markerIncludesMessage(markerAt:string|null|undefined,markerId:string|null|undefined,message:Pick<ChatMessage,"id"|"createdAt">){if(!markerAt)return false;const markerTime=new Date(markerAt).getTime();const messageTime=new Date(message.createdAt).getTime();if(markerTime>messageTime)return true;if(markerTime<messageTime)return false;return markerId?markerId>=message.id:true;}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
 export function ChatPage(){
@@ -71,9 +72,10 @@ export function ChatPage(){
       <div className="chat-messages" ref={messagesContainerRef} onScroll={event=>{const node=event.currentTarget;setAtLatest(node.scrollHeight-node.scrollTop-node.clientHeight<72);}}>{messagesQ.isLoading?<p className="chat-hint">Loading messages…</p>:null}{messagesQ.isError?<button className="chat-error" onClick={()=>void messagesQ.refetch()}>Messages unavailable. Retry</button>:null}
       {messages.map(m=>{
        const others=active?.participants.filter(p=>p.user.id!==user?.id)??[];
-       const seen=others.filter(p=>p.lastReadAt&&new Date(p.lastReadAt).getTime()>=new Date(m.createdAt).getTime()).length;
+       const delivered=others.filter(p=>markerIncludesMessage(p.lastDeliveredAt,p.lastDeliveredMessageId,m)).length;
+       const seen=others.filter(p=>markerIncludesMessage(p.lastReadAt,p.lastReadMessageId,m)).length;
        return <article key={m.id} className={"chat-bubble "+(m.kind==="SYSTEM"?"chat-system":m.sender.id===user?.id?"chat-mine":"")}>{m.kind==="SYSTEM"?m.body:<>
-        <div className="chat-bubble-meta"><b>{m.sender.id===user?.id?"You":m.sender.fullName}</b><time>{clock(m.createdAt)}</time>{m.editedAt&&!m.deletedAt?<small>Edited</small>:null}{m.sender.id===user?.id&&!m.deletedAt?<small className="chat-read-receipt">{seen}/{others.length} seen</small>:null}</div>
+        <div className="chat-bubble-meta"><b>{m.sender.id===user?.id?"You":m.sender.fullName}</b><time>{clock(m.createdAt)}</time>{m.editedAt&&!m.deletedAt?<small>Edited</small>:null}{m.sender.id===user?.id&&!m.deletedAt&&others.length>0?<><small className="chat-delivery-receipt">{delivered}/{others.length} delivered</small><small className="chat-read-receipt">{seen}/{others.length} seen</small></>:null}</div>
         {m.deletedAt?<p className="chat-deleted-message">This message was deleted</p>:<>
          {m.replyTo?<blockquote>{m.replyTo.sender.fullName}: {m.replyTo.body}</blockquote>:null}
          {m.body?<p>{m.body}</p>:null}
