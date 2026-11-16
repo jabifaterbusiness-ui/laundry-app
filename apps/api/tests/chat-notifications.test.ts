@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     chatMessage: { findMany: vi.fn() },
-    chatParticipant: { findFirst: vi.fn() },
+    chatParticipant: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     chatAttachment: { findFirst: vi.fn() },
   },
 }));
