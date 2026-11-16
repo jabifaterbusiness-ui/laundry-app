@@ -4,6 +4,8 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { deleteChatFile, readChatFile, storeChatFile } from "./chat-storage.service.js";
+import type { Role } from "@prisma/client";
+import { hasPermission } from "../permissions/permissions.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -32,9 +34,9 @@ function scope(req: Request) {
   return { userId: req.user.id, businessId: req.user.businessId, branchId: req.branchId };
 }
 
-async function requireMembership(conversationId: string, userId: string, businessId: string) {
+async function requireMembership(conversationId: string, userId: string, businessId: string, branchId: string) {
   const participant = await prisma.chatParticipant.findFirst({
-    where: { conversationId, userId, leftAt: null, conversation: { businessId } },
+    where: { conversationId, userId, leftAt: null, conversation: { businessId, branchId } },
     include: { conversation: true },
   });
   if (!participant) throw new AppError("Conversation not found", 404);
@@ -72,9 +74,9 @@ export async function listDirectory(req: Request, res: Response) {
 }
 
 export async function listConversations(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const participants = await prisma.chatParticipant.findMany({
-    where: { userId, leftAt: null, archivedAt: null, conversation: { businessId } },
+    where: { userId, leftAt: null, archivedAt: null, conversation: { businessId, branchId } },
     include: {
       conversation: {
         include: {
@@ -118,10 +120,10 @@ export async function createDirectConversation(req: Request, res: Response) {
   if (!eligible.includes(targetUserId)) throw new AppError("This colleague is not available in your branch", 404);
   const directKey = [userId, targetUserId].sort().join(":");
   const conversation = await prisma.chatConversation.upsert({
-    where: { businessId_directKey: { businessId, directKey } },
+    where: { businessId_branchId_directKey: { businessId, branchId, directKey } },
     update: {},
     create: {
-      businessId, kind: "DIRECT", directKey, createdByUserId: userId,
+      businessId, branchId, kind: "DIRECT", directKey, createdByUserId: userId,
       participants: { create: [
         { userId, role: "OWNER" }, { userId: targetUserId, role: "MEMBER" },
       ] },
@@ -145,7 +147,7 @@ export async function createGroupConversation(req: Request, res: Response) {
   }
   const conversation = await prisma.chatConversation.create({
     data: {
-      businessId, kind: "GROUP", title: input.title,
+      businessId, branchId, kind: "GROUP", title: input.title,
       ...(input.description !== undefined ? { description: input.description } : {}),
       createdByUserId: userId,
       participants: { create: [
@@ -158,16 +160,16 @@ export async function createGroupConversation(req: Request, res: Response) {
   });
   await recordAuditEvent({
     action: "chat.group.created", entityType: "ChatConversation", entityId: conversation.id,
-    businessId, actorUserId: userId, branchId: null, correlationId: req.correlationId ?? null,
+    businessId, actorUserId: userId, branchId, correlationId: req.correlationId ?? null,
     metadata: { participantCount: requested.length + 1 },
   });
   res.status(201).json({ data: conversation });
 }
 
 export async function listMessages(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
-  await requireMembership(conversationId, userId, businessId);
+  await requireMembership(conversationId, userId, businessId, branchId);
   const before = typeof req.query.before === "string" ? req.query.before : undefined;
   const messages = await prisma.chatMessage.findMany({
     where: { conversationId },
@@ -185,9 +187,9 @@ export async function listMessages(req: Request, res: Response) {
 }
 
 export async function sendMessage(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
-  await requireMembership(conversationId, userId, businessId);
+  await requireMembership(conversationId, userId, businessId, branchId);
   const input = messageSchema.parse(req.body);
   if (!input.body && input.attachmentIds.length === 0) throw new AppError("Write a message or attach a file", 422);
   if (input.attachmentIds.length) {
@@ -224,9 +226,9 @@ export async function sendMessage(req: Request, res: Response) {
 }
 
 export async function markConversationRead(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
-  await requireMembership(conversationId, userId, businessId);
+  await requireMembership(conversationId, userId, businessId, branchId);
   const latest = await prisma.chatMessage.findFirst({ where: { conversationId }, orderBy: { createdAt: "desc" }, select: { id: true, createdAt: true } });
   await prisma.chatParticipant.updateMany({
     where: { conversationId, userId, leftAt: null },
@@ -236,7 +238,7 @@ export async function markConversationRead(req: Request, res: Response) {
 }
 
 async function requireGroupAdmin(conversationId: string, userId: string, businessId: string, securityRole: Role) {
-  const participant = await requireMembership(conversationId, userId, businessId);
+  const participant = await requireMembership(conversationId, userId, businessId, branchId);
   const isGroupAdmin = participant.conversation.kind === "GROUP" && ["OWNER", "ADMIN"].includes(participant.role);
   const canModerateAll = await hasPermission(userId, businessId, securityRole, "chat.manage_all_groups");
   if (!isGroupAdmin && !canModerateAll) throw new AppError("Only group owners, administrators, or explicitly authorised moderators can perform this action", 403);
@@ -244,9 +246,9 @@ async function requireGroupAdmin(conversationId: string, userId: string, busines
 }
 
 export async function updateGroup(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  await requireGroupAdmin(id, userId, businessId, req.user!.securityRole);
+  await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const input = groupUpdateSchema.parse(req.body);
   const conversation = await prisma.chatConversation.update({
     where: { id }, data: input,
@@ -257,7 +259,7 @@ export async function updateGroup(req: Request, res: Response) {
 export async function addGroupMember(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  await requireGroupAdmin(id, userId, businessId);
+  await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const { userId: newUserId } = memberSchema.parse(req.body);
   const eligible = await eligibleColleagueIds(businessId, branchId, userId);
   if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this branch", 404);
@@ -274,9 +276,9 @@ export async function addGroupMember(req: Request, res: Response) {
 }
 
 export async function removeGroupMember(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  await requireGroupAdmin(id, userId, businessId);
+  await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const targetUserId = z.string().uuid().parse(req.params.userId);
   const target = await prisma.chatParticipant.findFirst({ where: { conversationId: id, userId: targetUserId, leftAt: null } });
   if (!target) throw new AppError("Group member not found", 404);
@@ -288,9 +290,9 @@ export async function removeGroupMember(req: Request, res: Response) {
 }
 
 export async function uploadAttachment(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
-  await requireMembership(conversationId, userId, businessId);
+  await requireMembership(conversationId, userId, businessId, branchId);
   if (!Buffer.isBuffer(req.body)) throw new AppError("Upload a file using application/octet-stream", 415);
   const encodedName = req.header("x-file-name") ?? "attachment";
   let originalName = encodedName;
@@ -319,14 +321,14 @@ export async function uploadAttachment(req: Request, res: Response) {
 }
 
 export async function downloadAttachment(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
   const attachment = await prisma.chatAttachment.findFirst({
     where: { id, businessId, deletedAt: null },
     select: { id: true, conversationId: true, storageKey: true, originalName: true, safeMimeType: true },
   });
   if (!attachment) throw new AppError("Attachment not found", 404);
-  await requireMembership(attachment.conversationId, userId, businessId);
+  await requireMembership(attachment.conversationId, userId, businessId, branchId);
   const file = await readChatFile(businessId, attachment.storageKey);
   const safeName = attachment.originalName.replace(/["\\r\\n]/g, "_");
   res.setHeader("Content-Type", attachment.safeMimeType);
@@ -338,9 +340,9 @@ export async function downloadAttachment(req: Request, res: Response) {
 }
 
 export async function setGroupMemberRole(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  const actor = await requireGroupAdmin(id, userId, businessId, req.user!.securityRole);
+  const actor = await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   if (actor.role !== "OWNER" && !(await hasPermission(userId, businessId, req.user!.securityRole, "chat.manage_all_groups"))) {
     throw new AppError("Only the group owner can appoint or remove group administrators", 403);
   }
@@ -355,10 +357,10 @@ export async function setGroupMemberRole(req: Request, res: Response) {
 }
 
 export async function toggleReaction(req: Request, res: Response) {
-  const { userId, businessId } = scope(req);
+  const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
   const messageId = z.string().uuid().parse(req.params.messageId);
-  await requireMembership(conversationId, userId, businessId);
+  await requireMembership(conversationId, userId, businessId, branchId);
   const { emoji } = reactionSchema.parse(req.body);
   const message = await prisma.chatMessage.findFirst({ where: { id: messageId, conversationId }, select: { id: true } });
   if (!message) throw new AppError("Message not found", 404);
