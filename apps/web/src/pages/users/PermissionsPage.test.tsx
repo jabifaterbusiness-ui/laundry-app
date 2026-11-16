@@ -316,7 +316,7 @@ describe("PermissionsPage", () => {
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "All 10 permissions were allowed successfully.",
+      "10 permissions you are authorised to grant were allowed successfully.",
     );
   });
 
