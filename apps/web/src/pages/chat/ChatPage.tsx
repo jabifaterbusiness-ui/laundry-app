@@ -19,7 +19,7 @@ export function ChatPage(){
  const [atLatest,setAtLatest]=useState(false);
  useEffect(()=>{setAtLatest(false);},[activeId]);
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""),[search,setSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
- const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:8000});
+ const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:3000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
  useEffect(()=>{if(!activeId&&chats[0])setActiveId(chats[0].id);else if(activeId&&!chats.some(c=>c.id===activeId))setActiveId(chats[0]?.id??"");},[chats,activeId]);
