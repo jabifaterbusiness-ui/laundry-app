@@ -68,7 +68,6 @@ export async function listNotifications(req: Request, res: Response) {
       conversationKind: message.conversation.kind,
       senderId: message.sender.id,
       senderName: message.sender.fullName,
-      preview: message.body.slice(0, 160),
       createdAt: message.createdAt,
     })),
   });
