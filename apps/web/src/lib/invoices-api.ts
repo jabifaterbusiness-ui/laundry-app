@@ -83,6 +83,7 @@ export type CustomerReceipt = {
   receiptType: "CUSTOMER";
   invoiceNumber: string;
   orderNumber: string;
+  readyDate: string | null;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -118,6 +119,7 @@ export type CompanyReceipt = {
   receiptType: "COMPANY";
   invoiceNumber: string;
   orderNumber: string;
+  readyDate: string | null;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
