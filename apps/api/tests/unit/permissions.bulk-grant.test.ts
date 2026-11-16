@@ -53,7 +53,7 @@ describe("permission catalogue and bulk grants", () => {
       })),
     );
 
-    const result = await allowAllUserPermissions(BUSINESS_ID, USER_ID);
+    const result = await allowAllUserPermissions(BUSINESS_ID, USER_ID, PERMISSIONS.map((permission) => permission.code));
 
     expect(result).toEqual({ allowed: true, count: PERMISSIONS.length });
     expect(mocks.prisma.permission.findMany).toHaveBeenCalledWith({
@@ -67,6 +67,49 @@ describe("permission catalogue and bulk grants", () => {
     expect(
       PERMISSIONS.filter((permission) => permission.code.startsWith("chat.")),
     ).toHaveLength(8);
+  });
+
+  it("grants only the permissions the actor is authorised to delegate", async () => {
+    const grantableCodes = ["chat.view", "chat.send_message"];
+    mocks.prisma.permission.findMany.mockResolvedValue([
+      { id: "chat-view-id", code: "chat.view" },
+      { id: "chat-send-id", code: "chat.send_message" },
+    ]);
+
+    const result = await allowAllUserPermissions(
+      BUSINESS_ID,
+      USER_ID,
+      grantableCodes,
+    );
+
+    expect(result).toEqual({ allowed: true, count: 2 });
+    expect(mocks.prisma.permission.findMany).toHaveBeenCalledWith({
+      where: { code: { in: grantableCodes } },
+      select: { id: true, code: true },
+    });
+    expect(mocks.transaction.userPermissionOverride.upsert).toHaveBeenCalledTimes(2);
+    expect(mocks.transaction.userPermissionOverride.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId_userId_permissionId: {
+            businessId: BUSINESS_ID,
+            userId: USER_ID,
+            permissionId: "chat-view-id",
+          },
+        },
+        create: expect.objectContaining({ allowed: true }),
+        update: { allowed: true },
+      }),
+    );
+  });
+
+  it("rejects permission codes outside the authorised catalogue", async () => {
+    await expect(
+      allowAllUserPermissions(BUSINESS_ID, USER_ID, ["platform.superuser"]),
+    ).rejects.toThrow("Permission catalogue contains an unsupported grant");
+
+    expect(mocks.prisma.permission.findMany).not.toHaveBeenCalled();
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("fails safely when even one catalogue permission record is missing", async () => {
@@ -91,7 +134,7 @@ describe("permission catalogue and bulk grants", () => {
     mocks.prisma.user.findFirst.mockResolvedValue(null);
 
     await expect(
-      allowAllUserPermissions(BUSINESS_ID, "user-from-business-b"),
+      allowAllUserPermissions(BUSINESS_ID, "user-from-business-b", PERMISSIONS.map((permission) => permission.code)),
     ).rejects.toThrow("User not found in this business");
 
     expect(mocks.prisma.permission.findMany).not.toHaveBeenCalled();
