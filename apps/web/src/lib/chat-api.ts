@@ -48,14 +48,14 @@ export async function connectChatEventStream(onEvent:(event:ChatRealtimeEvent)=>
    const {done,value}=await reader.read();
    if(done)return;
    buffer+=decoder.decode(value,{stream:true});
-   buffer=buffer.replace(/\\r\\n/g,"\\n");
-   let boundary=buffer.indexOf("\\n\\n");
+   buffer=buffer.replace(/\r\n/g,"\n");
+   let boundary=buffer.indexOf("\n\n");
    while(boundary>=0){
     const frame=buffer.slice(0,boundary);
     buffer=buffer.slice(boundary+2);
-    const data=frame.split("\\n").filter(line=>line.startsWith("data:")).map(line=>line.slice(5).trimStart()).join("\\n");
+    const data=frame.split("\n").filter(line=>line.startsWith("data:")).map(line=>line.slice(5).trimStart()).join("\n");
     if(data){try{onEvent(JSON.parse(data) as ChatRealtimeEvent);}catch{/* Ignore malformed or unsupported event frames. */}}
-    boundary=buffer.indexOf("\\n\\n");
+    boundary=buffer.indexOf("\n\n");
    }
   }
  }finally{
