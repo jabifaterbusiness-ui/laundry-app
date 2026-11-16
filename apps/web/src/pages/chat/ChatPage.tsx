@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
-import { addChatGroupMember, connectChatEventStream, createChatGroup, deleteChatMessage, downloadChatAttachment, editChatMessage, getChatConversations, getChatDirectory, getChatMessages, markChatRead, removeChatGroupMember, sendChatMessage, setChatGroupMemberRole, startDirectChat, toggleChatReaction, updateChatGroup, uploadChatAttachment, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatPerson } from "../../lib/chat-api.js";
+import { addChatGroupMember, createChatGroup, deleteChatMessage, downloadChatAttachment, editChatMessage, getChatConversations, getChatDirectory, getChatMessages, markChatRead, removeChatGroupMember, sendChatMessage, setChatGroupMemberRole, startDirectChat, toggleChatReaction, updateChatGroup, uploadChatAttachment, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatPerson } from "../../lib/chat-api.js";
 import "./ChatPage.css";
 
 const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase();
@@ -19,32 +19,6 @@ export function ChatPage(){
  const messagesContainerRef=useRef<HTMLDivElement|null>(null);
  const pendingSendRef=useRef<{key:string;clientMessageId:string}|null>(null);
  const [atLatest,setAtLatest]=useState(false);
- useEffect(()=>{
-  if(!token||!branchId)return;
-  let stopped=false;
-  let controller:AbortController|null=null;
-  let retryTimer:ReturnType<typeof setTimeout>|undefined;
-  let retryDelay=1000;
-  const run=async()=>{
-   while(!stopped){
-    controller=new AbortController();
-    try{
-     await connectChatEventStream((event)=>{
-      void qc.invalidateQueries({queryKey:["chat-conversations",branchId]});
-      void qc.invalidateQueries({queryKey:["chat-messages",branchId,event.conversationId]});
-     },controller.signal);
-     retryDelay=1000;
-    }catch{
-     if(stopped)return;
-     retryDelay=Math.min(retryDelay*2,30000);
-    }
-    if(stopped)return;
-    await new Promise<void>((resolve)=>{retryTimer=setTimeout(resolve,retryDelay);});
-   }
-  };
-  void run();
-  return()=>{stopped=true;controller?.abort();if(retryTimer)clearTimeout(retryTimer);};
- },[token,branchId,qc]);
  
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""),[search,setSearch]=useState(""),[messageSearch,setMessageSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[confirmLargeGroup,setConfirmLargeGroup]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
  useEffect(()=>{setAtLatest(false);setMessageSearch("");},[activeId]);
