@@ -50,7 +50,6 @@ export async function listNotifications(req: Request, res: Response) {
         : { createdAt: { gt: boundedSince } }),
       conversation: {
         businessId,
-        branchId,
         participants: { some: { userId, leftAt: null } },
       },
     },
@@ -83,18 +82,20 @@ function scope(req: Request) {
 
 async function requireMembership(conversationId: string, userId: string, businessId: string, branchId: string) {
   const participant = await prisma.chatParticipant.findFirst({
-    where: { conversationId, userId, leftAt: null, conversation: { businessId, branchId } },
+    where: { conversationId, userId, leftAt: null, conversation: { businessId } },
     include: { conversation: true },
   });
   if (!participant) throw new AppError("Conversation not found", 404);
   return participant;
 }
 
-async function eligibleColleagueIds(businessId: string, branchId: string, excludeUserId: string) {
+async function eligibleColleagueIds(businessId: string, branchId: string, excludeUserId: string, includeCrossBranch = false) {
   const users = await prisma.user.findMany({
     where: {
       businessId, id: { not: excludeUserId }, isActive: true, deletedAt: null,
-      branches: { some: { branchId, branch: { isActive: true } } },
+      branches: { some: includeCrossBranch
+        ? { branch: { businessId, isActive: true } }
+        : { branchId, branch: { isActive: true } } },
     },
     select: { id: true },
   });
@@ -104,26 +105,32 @@ async function eligibleColleagueIds(businessId: string, branchId: string, exclud
 export async function listDirectory(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 80) : "";
+  const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
   const users = await prisma.user.findMany({
     where: {
       businessId, id: { not: userId }, isActive: true, deletedAt: null,
-      branches: { some: { branchId, branch: { isActive: true } } },
+      branches: { some: crossBranchAllowed
+        ? { branch: { businessId, isActive: true } }
+        : { branchId, branch: { isActive: true } } },
       ...(search ? { OR: [
         { fullName: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
       ] } : {}),
     },
-    select: { id: true, fullName: true, email: true, role: true },
+    select: {
+      id: true, fullName: true, email: true, role: true,
+      branches: { where: { branch: { businessId, isActive: true } }, select: { branch: { select: { id: true, name: true } } } },
+    },
     orderBy: { fullName: "asc" },
     take: 50,
   });
-  res.json({ data: users });
+  res.json({ data: users.map(({ branches, ...user }) => ({ ...user, branches: branches.map(({ branch }) => branch) })) });
 }
 
 export async function listConversations(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const participants = await prisma.chatParticipant.findMany({
-    where: { userId, leftAt: null, archivedAt: null, conversation: { businessId, branchId } },
+    where: { userId, leftAt: null, archivedAt: null, conversation: { businessId } },
     include: {
       conversation: {
         include: {
@@ -163,9 +170,21 @@ export async function createDirectConversation(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const targetUserId = z.string().uuid().parse(req.params.userId);
   if (targetUserId === userId) throw new AppError("You cannot start a chat with yourself", 422);
-  const eligible = await eligibleColleagueIds(businessId, branchId, userId);
-  if (!eligible.includes(targetUserId)) throw new AppError("This colleague is not available in your branch", 404);
+  const target = await prisma.user.findFirst({
+    where: { id: targetUserId, businessId, isActive: true, deletedAt: null, branches: { some: { branch: { businessId, isActive: true } } } },
+    select: { id: true, branches: { where: { branch: { isActive: true, businessId } }, select: { branchId: true } } },
+  });
+  if (!target) throw new AppError("This colleague is not available in this business", 404);
+  const sameBranch = target.branches.some((membership) => membership.branchId === branchId);
+  if (!sameBranch && !(await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch"))) {
+    throw new AppError("Cross-branch chat permission is required to contact this colleague", 403);
+  }
   const directKey = [userId, targetUserId].sort().join(":");
+  const existing = await prisma.chatConversation.findFirst({
+    where: { businessId, directKey, participants: { some: { userId, leftAt: null } } },
+    include: { participants: { include: { user: { select: { id: true, fullName: true } } } } },
+  });
+  if (existing) { res.status(200).json({ data: existing }); return; }
   const conversation = await prisma.chatConversation.upsert({
     where: { businessId_branchId_directKey: { businessId, branchId, directKey } },
     update: {},
@@ -183,10 +202,15 @@ export async function createDirectConversation(req: Request, res: Response) {
 export async function createGroupConversation(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const input = groupSchema.parse(req.body);
-  const eligibleIds = await eligibleColleagueIds(businessId, branchId, userId);
-  const requested = input.includeAllEligible ? eligibleIds : [...new Set(input.participantIds)];
+  const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
+  const eligibleIds = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
+  const branchEligibleIds = await eligibleColleagueIds(businessId, branchId, userId, false);
+  const requested = input.includeAllEligible ? branchEligibleIds : [...new Set(input.participantIds)];
   if (requested.some((id) => !eligibleIds.includes(id))) {
-    throw new AppError("One or more selected colleagues are not eligible for this branch", 422);
+    throw new AppError("One or more selected colleagues are not eligible for this business", 422);
+  }
+  if (!crossBranchAllowed && requested.some((id) => !branchEligibleIds.includes(id))) {
+    throw new AppError("Cross-branch chat permission is required to add colleagues from another branch", 403);
   }
   if (requested.length < 2) throw new AppError("A group needs at least two other participants", 422);
   if (requested.length > 50 && !input.confirmLargeGroup) {
@@ -359,8 +383,11 @@ export async function addGroupMember(req: Request, res: Response) {
   const id = z.string().uuid().parse(req.params.id);
   await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const { userId: newUserId } = memberSchema.parse(req.body);
-  const eligible = await eligibleColleagueIds(businessId, branchId, userId);
-  if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this branch", 404);
+  const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
+  const eligible = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
+  if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this business", 404);
+  const branchEligible = await eligibleColleagueIds(businessId, branchId, userId, false);
+  if (!crossBranchAllowed && !branchEligible.includes(newUserId)) throw new AppError("Cross-branch chat permission is required to add this colleague", 403);
   const existing = await prisma.chatParticipant.findFirst({ where: { conversationId: id, userId: newUserId } });
   if (existing && !existing.leftAt) throw new AppError("This colleague is already in the group", 409);
   await prisma.chatParticipant.upsert({
