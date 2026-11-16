@@ -463,7 +463,10 @@ export async function downloadAttachment(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
   const attachment = await prisma.chatAttachment.findFirst({
-    where: { id, businessId, deletedAt: null },
+    where: {
+      id, businessId, deletedAt: null,
+      OR: [{ messageId: null }, { message: { is: { deletedAt: null } } }],
+    },
     select: { id: true, conversationId: true, storageKey: true, originalName: true, safeMimeType: true },
   });
   if (!attachment) throw new AppError("Attachment not found", 404);
