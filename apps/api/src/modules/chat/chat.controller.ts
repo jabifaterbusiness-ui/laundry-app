@@ -20,6 +20,7 @@ const messageSchema = z.object({
   clientMessageId: z.string().min(1).max(100).optional(),
   replyToMessageId: z.string().uuid().optional(),
 });
+const editMessageSchema = z.object({ body: z.string().trim().min(1).max(5000) }).strict();
 const groupUpdateSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
   description: z.string().trim().max(500).nullable().optional(),
@@ -223,6 +224,52 @@ export async function sendMessage(req: Request, res: Response) {
     return created;
   });
   res.status(201).json({ data: message });
+}
+
+export async function editMessage(req: Request, res: Response) {
+  const { userId, businessId, branchId } = scope(req);
+  const conversationId = z.string().uuid().parse(req.params.id);
+  const messageId = z.string().uuid().parse(req.params.messageId);
+  await requireMembership(conversationId, userId, businessId, branchId);
+  const { body } = editMessageSchema.parse(req.body);
+  const existing = await prisma.chatMessage.findFirst({
+    where: { id: messageId, conversationId, senderUserId: userId, kind: "TEXT", deletedAt: null },
+    select: { id: true },
+  });
+  if (!existing) throw new AppError("Message not found or cannot be edited", 404);
+  const message = await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { body, editedAt: new Date() },
+    include: { sender: { select: { id: true, fullName: true } } },
+  });
+  await recordAuditEvent({
+    action: "chat.message.edited", entityType: "ChatMessage", entityId: messageId,
+    businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
+    metadata: { conversationId },
+  });
+  res.json({ data: message });
+}
+
+export async function deleteMessage(req: Request, res: Response) {
+  const { userId, businessId, branchId } = scope(req);
+  const conversationId = z.string().uuid().parse(req.params.id);
+  const messageId = z.string().uuid().parse(req.params.messageId);
+  await requireMembership(conversationId, userId, businessId, branchId);
+  const existing = await prisma.chatMessage.findFirst({
+    where: { id: messageId, conversationId, senderUserId: userId, kind: "TEXT", deletedAt: null },
+    select: { id: true },
+  });
+  if (!existing) throw new AppError("Message not found or cannot be deleted", 404);
+  await prisma.chatMessage.update({
+    where: { id: messageId },
+    data: { body: "This message was deleted", deletedAt: new Date(), editedAt: null },
+  });
+  await recordAuditEvent({
+    action: "chat.message.deleted", entityType: "ChatMessage", entityId: messageId,
+    businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
+    metadata: { conversationId },
+  });
+  res.status(204).end();
 }
 
 export async function markConversationRead(req: Request, res: Response) {
