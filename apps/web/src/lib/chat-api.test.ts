@@ -10,13 +10,13 @@ describe("chat realtime event frame parser", () => {
       messageId: "message-a",
       createdAt: "2026-11-16T20:03:00.000Z",
     };
-    const firstChunk = `: connected\\r\\n\\r\\nid: message-a\\r\\nevent: message.created\\r\\ndata: ${JSON.stringify(event)}\\r\\n`;
+    const firstChunk = \`: connected\r\n\r\nid: message-a\r\nevent: message.created\r\ndata: \${JSON.stringify(event)}\r\n\`;
 
     const partial = consumeChatEventFrames(firstChunk);
     expect(partial.events).toEqual([]);
     expect(partial.remaining).toContain("data:");
 
-    const completed = consumeChatEventFrames(`${partial.remaining}\\r\\n: heartbeat\\r\\n\\r\\n`);
+    const completed = consumeChatEventFrames(\`\${partial.remaining}\r\n: heartbeat\r\n\r\n\`);
     expect(completed.events).toEqual([event]);
     expect(completed.remaining).toBe("");
   });
@@ -29,7 +29,7 @@ describe("chat realtime event frame parser", () => {
       messageId: "message-b",
       createdAt: "2026-11-16T20:04:00.000Z",
     };
-    const input = `data: not-json\\n\\ndata: ${JSON.stringify(event)}\\n\\n`;
+    const input = \`data: not-json\n\ndata: \${JSON.stringify(event)}\n\n\`;
 
     expect(consumeChatEventFrames(input)).toEqual({ remaining: "", events: [event] });
   });
