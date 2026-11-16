@@ -25,8 +25,8 @@ export function ChatAlertManager() {
     queryKey: ["chat-notifications", branchId],
     queryFn: async () => {
       const result = await getChatNotifications(cursor.current.since, cursor.current.afterId);
-      if (result.data.length > 0) {
-        const lastMessage = result.data[result.data.length - 1];
+      const lastMessage = result.data.at(-1);
+      if (lastMessage) {
         cursor.current = { since: lastMessage.createdAt, afterId: lastMessage.id };
       }
       return result.data;
