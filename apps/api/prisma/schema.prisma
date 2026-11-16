@@ -208,6 +208,7 @@ model Branch {
   name       String
   address    String?
   orderReadyTimeFormat String @default("24H")
+  defaultOrderReadyTime String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
