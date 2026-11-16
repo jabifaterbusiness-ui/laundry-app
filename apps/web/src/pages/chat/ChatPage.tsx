@@ -8,6 +8,7 @@ import "./ChatPage.css";
 const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase();
 const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(date)):"";
 export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
+export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
 export function ChatPage(){
@@ -51,7 +52,7 @@ export function ChatPage(){
  const canStartDirect=hasPermission(user,"chat.create_direct");
  const canCreateGroup=hasPermission(user,"chat.create_group");
  if(!hasPermission(user,"chat.view"))return <main className="chat-page"><section className="chat-welcome"><span>🔒</span><h2>Chat access is not enabled</h2><p>Ask your business administrator to grant you the Chat permission.</p></section></main>;
- function sendDraft(){if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending&&!uploading){const body=draft.trim();const attachmentIds=pendingFiles.map(file=>file.id);const replyToMessageId=replyTo?.id;const key=JSON.stringify([activeId,body,attachmentIds,replyToMessageId??null]);if(pendingSendRef.current?.key!==key)pendingSendRef.current={key,clientMessageId:crypto.randomUUID()};send.mutate({body,attachmentIds,...(replyToMessageId?{replyToMessageId}:{}),clientMessageId:pendingSendRef.current.clientMessageId});}}
+ function sendDraft(){if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending&&!uploading){const body=draft.trim();const attachmentIds=pendingFiles.map(file=>file.id);const replyToMessageId=replyTo?.id;const key=JSON.stringify([activeId,body,attachmentIds,replyToMessageId??null]);pendingSendRef.current=resolveChatClientMessageId(pendingSendRef.current,key,()=>crypto.randomUUID());send.mutate({body,attachmentIds,...(replyToMessageId?{replyToMessageId}:{}),clientMessageId:pendingSendRef.current.clientMessageId});}}
  function submit(e:FormEvent){e.preventDefault();sendDraft();}
  function handleComposerKeyDown(e:React.KeyboardEvent<HTMLTextAreaElement>){if(shouldSendChatMessageOnKey(e.key,e.shiftKey,e.nativeEvent.isComposing)){e.preventDefault();sendDraft();}}
  async function handleFile(file:File){if(!activeId)return;setUploading(true);setUploadError("");try{const result=await uploadChatAttachment(activeId,file);setPendingFiles(current=>[...current,result.data]);}catch(error){setUploadError(error instanceof Error?error.message:"File upload failed");}finally{setUploading(false);}}
