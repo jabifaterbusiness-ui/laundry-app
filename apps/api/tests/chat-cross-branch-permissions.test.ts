@@ -159,6 +159,30 @@ describe("cross-branch chat authorization", () => {
       }),
     }));
   });
+  it("checks new group members against the conversation branch, not the actor's selected branch", async () => {
+    crossBranchPermission.mockResolvedValue(false);
+    vi.mocked(prisma.chatParticipant.findFirst).mockResolvedValueOnce({
+      role: "ADMIN",
+      conversation: { kind: "GROUP", businessId: "business-a", branchId: "branch-a" },
+    } as never);
+    findManyUsers.mockResolvedValue([] as never);
+
+    await expect(addGroupMember(request({
+      branchId: "branch-b",
+      params: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      body: { userId: "22222222-2222-4222-8222-222222222222" },
+    }), response())).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Cross-branch chat permission is required to add this colleague",
+    });
+
+    expect(findManyUsers).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        branches: { some: { branchId: "branch-a", branch: { isActive: true } } },
+      }),
+    }));
+  });
+
   it("rejects cross-branch group participants without chat.cross_branch", async () => {
     crossBranchPermission.mockResolvedValue(false);
     findManyUsers.mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222" }] as never);
