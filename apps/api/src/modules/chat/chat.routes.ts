@@ -15,7 +15,7 @@ chatRouter.get("/conversations", requirePermission("chat.view"), asyncHandler(li
 chatRouter.post("/direct/:userId", requirePermission("chat.create_direct"), asyncHandler(createDirectConversation));
 chatRouter.post("/groups", requirePermission("chat.create_group"), asyncHandler(createGroupConversation));
 chatRouter.get("/conversations/:id/messages", requirePermission("chat.view"), asyncHandler(listMessages));
-chatRouter.post("/conversations/:id/messages", requirePermission("chat.view"), asyncHandler(sendMessage));
+chatRouter.post("/conversations/:id/messages", requirePermission("chat.send_message"), asyncHandler(sendMessage));
 chatRouter.post("/conversations/:id/attachments", requirePermission("chat.upload_attachments"), express.raw({ type: "application/octet-stream", limit: "10mb" }), asyncHandler(uploadAttachment));
 chatRouter.get("/attachments/:id", requirePermission("chat.view"), asyncHandler(downloadAttachment));
 chatRouter.post("/conversations/:id/read", requirePermission("chat.view"), asyncHandler(markConversationRead));
