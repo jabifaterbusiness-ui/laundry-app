@@ -96,6 +96,18 @@ export async function streamEvents(req: Request, res: Response) {
         res.end();
         return;
       }
+      if (event.type !== "conversation.removed") {
+        const participant = await prisma.chatParticipant.findFirst({
+          where: {
+            conversationId: event.conversationId,
+            userId,
+            leftAt: null,
+            conversation: { businessId },
+          },
+          select: { id: true },
+        });
+        if (!participant) return;
+      }
       res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     }).catch(() => {
       if (!res.writableEnded) res.end();
@@ -572,7 +584,7 @@ export async function removeGroupMember(req: Request, res: Response) {
     id: id + ":member-removed:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
   });
   publishChatEvent(businessId, [targetUserId], {
-    id: id + ":removed-user:" + Date.now(), type: "conversation.updated", conversationId: id, actorUserId: userId, createdAt: new Date().toISOString(),
+    id: id + ":removed-user:" + Date.now(), type: "conversation.removed", conversationId: id, actorUserId: userId, createdAt: new Date().toISOString(),
   });
   res.status(204).end();
 }
