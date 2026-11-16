@@ -13,6 +13,27 @@ import { apiFetch } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
 
+type ReadyTimeFormat = "12H" | "24H";
+
+function parseBranchReadyTime(value: string, format: ReadyTimeFormat): string | null {
+  const trimmed = value.trim().toUpperCase();
+  if (format === "24H") return /^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(trimmed) ? trimmed : null;
+  const match = /^(0?[1-9]|1[0-2]):([0-5]\\d)\\s*(AM|PM)$/.exec(trimmed);
+  if (!match) return null;
+  let hour = Number(match[1]) % 12;
+  if (match[3] === "PM") hour += 12;
+  return `${String(hour).padStart(2, "0")}:${match[2]}`;
+}
+
+function formatBranchReadyTime(value: string | null, format: ReadyTimeFormat): string {
+  if (!value) return "";
+  if (format === "24H") return value;
+  const match = /^(\\d{2}):(\\d{2})$/.exec(value);
+  if (!match) return "";
+  const hour = Number(match[1]);
+  return `${String(hour % 12 || 12).padStart(2, "0")}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`;
+}
+
 export function BranchesPage() {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -20,7 +41,8 @@ export function BranchesPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [readyTimeFormats, setReadyTimeFormats] = useState<Record<string, "12H" | "24H">>({});
+  const [readyTimeFormats, setReadyTimeFormats] = useState<Record<string, ReadyTimeFormat>>({});
+  const [defaultReadyTimes, setDefaultReadyTimes] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -41,6 +63,9 @@ export function BranchesPage() {
     setBranches(result);
     setReadyTimeFormats(Object.fromEntries(
       result.map((branch) => [branch.id, branch.orderReadyTimeFormat ?? "24H"]),
+    ));
+    setDefaultReadyTimes(Object.fromEntries(
+      result.map((branch) => [branch.id, formatBranchReadyTime(branch.defaultOrderReadyTime ?? null, branch.orderReadyTimeFormat ?? "24H")]),
     ));
   }
 
@@ -166,18 +191,25 @@ export function BranchesPage() {
   async function saveReadyTimeFormat(branchId: string) {
     if (!accessToken || !canUpdate) return;
     setMessage("");
+    const format = readyTimeFormats[branchId] ?? "24H";
+    const rawTime = defaultReadyTimes[branchId] ?? "";
+    const defaultOrderReadyTime = rawTime.trim() ? parseBranchReadyTime(rawTime, format) : null;
+    if (rawTime.trim() && !defaultOrderReadyTime) {
+      setMessage(format === "12H"
+        ? "Enter the default ready time with an explicit AM or PM, for example 02:30 PM."
+        : "Enter the default ready time in 24-hour format, for example 14:30.");
+      return;
+    }
     try {
       await apiFetch(`/branches/${branchId}`, {
         method: "PATCH",
         accessToken,
-        body: JSON.stringify({
-          orderReadyTimeFormat: readyTimeFormats[branchId] ?? "24H",
-        }),
+        body: JSON.stringify({ orderReadyTimeFormat: format, defaultOrderReadyTime }),
       });
       await load();
-      setMessage("Branch expected-ready time format updated successfully.");
+      setMessage("Branch expected-ready time settings updated successfully.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update the branch time format.");
+      setMessage(error instanceof Error ? error.message : "Unable to update the branch time settings.");
     }
   }
 
@@ -289,17 +321,31 @@ export function BranchesPage() {
                       aria-label={`Expected Ready time format for ${branch.name}`}
                       value={readyTimeFormats[branch.id] ?? branch.orderReadyTimeFormat ?? "24H"}
                       disabled={!canUpdate}
-                      onChange={(event) => setReadyTimeFormats((current) => ({
-                        ...current,
-                        [branch.id]: event.target.value as "12H" | "24H",
-                      }))}
+                      onChange={(event) => {
+                        const nextFormat = event.target.value as ReadyTimeFormat;
+                        const currentFormat = readyTimeFormats[branch.id] ?? "24H";
+                        setReadyTimeFormats((current) => ({ ...current, [branch.id]: nextFormat }));
+                        setDefaultReadyTimes((current) => {
+                          const parsed = parseBranchReadyTime(current[branch.id] ?? "", currentFormat);
+                          return { ...current, [branch.id]: parsed ? formatBranchReadyTime(parsed, nextFormat) : current[branch.id] ?? "" };
+                        });
+                      }}
                     >
                       <option value="24H">24-hour (14:30)</option>
-                      <option value="12H">12-hour (2:30 PM)</option>
+                      <option value="12H">12-hour (02:30 PM)</option>
                     </select>
+                    <input
+                      type="text"
+                      aria-label={`Default expected ready time for ${branch.name}`}
+                      value={defaultReadyTimes[branch.id] ?? ""}
+                      placeholder={(readyTimeFormats[branch.id] ?? "24H") === "12H" ? "02:30 PM" : "14:30"}
+                      disabled={!canUpdate}
+                      onChange={(event) => setDefaultReadyTimes((current) => ({ ...current, [branch.id]: event.target.value }))}
+                      style={{ width: 112 }}
+                    />
                     {canUpdate ? (
                       <button type="button" onClick={() => void saveReadyTimeFormat(branch.id)}>
-                        Save format
+                        Save settings
                       </button>
                     ) : null}
                   </div>
