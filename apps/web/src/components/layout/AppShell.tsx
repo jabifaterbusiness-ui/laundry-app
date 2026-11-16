@@ -156,7 +156,7 @@ export function AppShell({ children }: PropsWithChildren) {
     queryKey: ["chat-conversations"],
     queryFn: getChatConversations,
     enabled: Boolean(accessToken && activeBranchId && hasPermission(user, "chat.view")),
-    refetchInterval: 10_000,
+    refetchInterval: 3_000,
   });
   const chatUnreadCount = chatUnreadQuery.data?.data.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0;
   const appMode = useWorkstationModeStore((state) => state.mode);
@@ -606,6 +606,7 @@ export function AppShell({ children }: PropsWithChildren) {
                       {item.icon}
                     </span>
                     <span>{isWorkstationMode && item.href === "/orders" ? "Order Management" : item.label}</span>
+                    {item.href === "/chat" && chatUnreadCount > 0 ? <span className="chat-nav-unread-badge" aria-label={`${chatUnreadCount} unread messages`}>{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</span> : null}
                   </Link>
                 );
               })}
