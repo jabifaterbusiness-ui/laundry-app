@@ -168,7 +168,10 @@ export async function createPriceAdjustment(input: {
 export async function setPriceAdjustmentActive(id: string, isActive: boolean, auth: { accessToken: string | null }): Promise<PriceAdjustmentRule> {
   return apiFetch<PriceAdjustmentRule>(`/services/price-adjustments/${id}`, { method: "PATCH", accessToken: auth.accessToken, body: JSON.stringify({ isActive }) });
 }
-export async function removePriceAdjustmentToUnassigned(id: string, auth: { accessToken: string | null }): Promise<void> {\n  return apiFetch<void>(`/services/price-adjustments/${id}/remove`, { method: "POST", accessToken: auth.accessToken });\n}\nexport async function deletePriceAdjustment(id: string, auth: { accessToken: string | null }): Promise<void> {
+export async function removePriceAdjustmentToUnassigned(id: string, auth: { accessToken: string | null }): Promise<void> {
+  return apiFetch<void>(`/services/price-adjustments/${id}/remove`, { method: "POST", accessToken: auth.accessToken });
+}
+export async function deletePriceAdjustment(id: string, auth: { accessToken: string | null }): Promise<void> {
   return apiFetch<void>(`/services/price-adjustments/${id}`, { method: "DELETE", accessToken: auth.accessToken });
 }
 export async function createTaxRule(input: Omit<TaxRuleSetting, "id" | "isActive">, auth: { accessToken: string | null }): Promise<TaxRuleSetting> {
