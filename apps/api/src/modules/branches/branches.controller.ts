@@ -66,6 +66,7 @@ export async function getCurrentOrderPreferences(req: Request, res: Response) {
 
   res.status(200).json({
     orderReadyTimeFormat: branch.orderReadyTimeFormat ?? "24H",
+    defaultOrderReadyTime: branch.defaultOrderReadyTime ?? null,
   });
 }
 
@@ -107,6 +108,9 @@ export async function update(req: Request, res: Response) {
       ...(input.address !== undefined ? { address: input.address } : {}),
       ...(input.orderReadyTimeFormat !== undefined
         ? { orderReadyTimeFormat: input.orderReadyTimeFormat }
+        : {}),
+      ...(input.defaultOrderReadyTime !== undefined
+        ? { defaultOrderReadyTime: input.defaultOrderReadyTime }
         : {}),
     },
   );

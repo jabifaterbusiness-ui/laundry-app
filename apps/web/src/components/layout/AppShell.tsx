@@ -8,6 +8,7 @@ import { QuickOperationLauncher } from "../quick-operations/QuickOperationLaunch
 import type { QuickOperationDefinition } from "../../lib/quick-operations-catalog.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
+import { getChatConversations } from "../../lib/chat-api.js";
 import { useWorkstationModeStore } from "../../state/workstation-mode-store.js";
 import { dismissBusinessInboxMessage, getBusinessInbox, markBusinessInboxMessageRead } from "../../lib/inbox-api.js";
 import {
@@ -55,6 +56,7 @@ const OPERATIONS: NavItem[] = [
     icon: "₦",
     permission: "payments.view",
   },
+  { label: "Chat", href: "/chat", icon: "▣", permission: "chat.view" },
 ];
 
 const MANAGEMENT: NavItem[] = [
@@ -150,6 +152,13 @@ export function AppShell({ children }: PropsWithChildren) {
     refetchInterval: 60_000,
   });
   const inboxUnreadCount = inboxQuery.data?.unreadCount ?? 0;
+  const chatUnreadQuery = useQuery({
+    queryKey: ["chat-conversations"],
+    queryFn: getChatConversations,
+    enabled: Boolean(accessToken && activeBranchId && hasPermission(user, "chat.view")),
+    refetchInterval: 3_000,
+  });
+  const chatUnreadCount = chatUnreadQuery.data?.data.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0;
   const appMode = useWorkstationModeStore((state) => state.mode);
   const setAppMode = useWorkstationModeStore((state) => state.setMode);
   const isWorkstationMode = appMode === "CUSTOMER_WORKSTATION";
@@ -597,9 +606,22 @@ export function AppShell({ children }: PropsWithChildren) {
                       {item.icon}
                     </span>
                     <span>{isWorkstationMode && item.href === "/orders" ? "Order Management" : item.label}</span>
+                    {item.href === "/chat" && chatUnreadCount > 0 ? <span className="chat-nav-unread-badge" aria-label={`${chatUnreadCount} unread messages`}>{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</span> : null}
                   </Link>
                 );
               })}
+              {isWorkstationMode &&
+              (hasPermission(user, "branches.view") || hasPermission(user, "branches.update")) ? (
+                <Link
+                  to="/branches"
+                  className={`nav-item ${isActive("/branches") ? "active" : ""}`}
+                  style={{ fontWeight: isActive("/branches") ? 700 : undefined }}
+                  onClick={closeMobileNav}
+                >
+                  <span className="nav-icon" aria-hidden="true">⌘</span>
+                  <span>Branch Management</span>
+                </Link>
+              ) : null}
             </section>
             {!isWorkstationMode ? (            <Link to="/inbox" className={`nav-item ${isActive("/inbox") ? "active" : ""}`} onClick={closeMobileNav}>
               <span className="nav-icon" aria-hidden="true">✉</span>
@@ -635,6 +657,7 @@ export function AppShell({ children }: PropsWithChildren) {
                       {item.icon}
                     </span>
                     <span>{item.label}</span>
+                    {item.href === "/chat" && chatUnreadCount > 0 ? <span className="inbox-unread-badge">{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</span> : null}
                   </Link>
                 );
               })}

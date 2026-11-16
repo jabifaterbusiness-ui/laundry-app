@@ -193,6 +193,8 @@ model Business {
   backupConnections            BackupCloudConnection[]
   backupRuns                   BackupRun[]
   inboxMessages                BusinessInboxMessage[]
+  chatConversations            ChatConversation[]
+  chatAttachments               ChatAttachment[]
 
   @@map("businesses")
 }
@@ -206,6 +208,7 @@ model Branch {
   name       String
   address    String?
   orderReadyTimeFormat String @default("24H")
+  defaultOrderReadyTime String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -244,6 +247,7 @@ model Branch {
   inventoryTransfersTo   InventoryTransfer[] @relation("InventoryTransferDestination")
   inventoryStocktakes    InventoryStocktake[]
   inventoryReservations  InventoryReservation[]
+  chatConversations ChatConversation[]
   offlineSyncOperations OfflineSyncOperation[]
 
   @@index([businessId])
@@ -345,6 +349,11 @@ model User {
   inventoryPurchaseOrdersCreated InventoryPurchaseOrder[]      @relation("InventoryPurchaseOrderCreator")
   inventoryGoodsReceiptsReceived InventoryGoodsReceipt[]       @relation("InventoryGoodsReceiptReceiver")
   inboxMessages                BusinessInboxMessage[]          @relation("BusinessInboxRecipient")
+  chatConversationsCreated      ChatConversation[] @relation("ChatConversationCreator")
+  chatParticipants              ChatParticipant[] @relation("ChatParticipantUser")
+  chatMessagesSent              ChatMessage[] @relation("ChatMessageSender")
+  chatReactions                 ChatReaction[]
+  chatAttachmentsUploaded       ChatAttachment[] @relation("ChatAttachmentUploader")
 
   customersStatusChanged       Customer[]              @relation("CustomerStatusChangedBy")
   customerStatusHistoryChanges CustomerStatusHistory[] @relation("CustomerStatusHistoryChangedBy")
@@ -2075,6 +2084,133 @@ model FinancialRepayment {
   @@index([loanId])
   @@index([createdById])
   @@map("financial_repayments")
+}
+
+
+enum ChatConversationKind {
+  DIRECT
+  GROUP
+}
+
+enum ChatParticipantRole {
+  MEMBER
+  ADMIN
+  OWNER
+}
+
+enum ChatMessageKind {
+  TEXT
+  SYSTEM
+}
+
+model ChatConversation {
+  id              String                @id @default(uuid())
+  businessId      String
+  business        Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  kind            ChatConversationKind
+  // Canonical sorted user pair for direct chats; null for group chats.
+  directKey       String?
+  title           String?
+  description     String?
+  createdByUserId String
+  createdBy       User                  @relation("ChatConversationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  participants    ChatParticipant[]
+  messages        ChatMessage[]
+  attachments     ChatAttachment[]
+  lastMessageAt   DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([businessId, branchId, directKey])
+  @@unique([businessId, directKey])
+  @@index([businessId, lastMessageAt])
+  @@map("chat_conversations")
+}
+
+model ChatParticipant {
+  id                 String              @id @default(uuid())
+  conversationId     String
+  conversation       ChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User                @relation("ChatParticipantUser", fields: [userId], references: [id], onDelete: Cascade)
+  role               ChatParticipantRole @default(MEMBER)
+  joinedAt           DateTime            @default(now())
+  leftAt             DateTime?
+  lastReadMessageId  String?
+  lastReadAt         DateTime?
+  mutedAt            DateTime?
+  archivedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([conversationId, userId])
+  @@index([userId, leftAt, archivedAt])
+  @@index([conversationId, leftAt])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id               String           @id @default(uuid())
+  conversationId   String
+  conversation     ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUserId     String
+  sender           User             @relation("ChatMessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  kind             ChatMessageKind  @default(TEXT)
+  body             String           @db.Text
+  replyToMessageId String?
+  replyTo          ChatMessage?     @relation("ChatMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies          ChatMessage[]    @relation("ChatMessageReplies")
+  clientMessageId String?
+  editedAt         DateTime?
+  deletedAt        DateTime?
+  attachments      ChatAttachment[]
+  reactions        ChatReaction[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([conversationId, senderUserId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+  @@index([senderUserId, createdAt])
+  @@map("chat_messages")
+}
+
+model ChatAttachment {
+  id               String           @id @default(uuid())
+  businessId       String
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId   String
+  conversation     ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId        String?
+  message          ChatMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploadedByUserId String
+  uploadedBy       User             @relation("ChatAttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  storageKey       String           @unique
+  originalName     String
+  safeMimeType     String
+  sizeBytes        Int
+  checksum         String?
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+
+  @@index([businessId, conversationId, createdAt])
+  @@index([messageId])
+  @@map("chat_attachments")
+}
+
+model ChatReaction {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([userId, createdAt])
+  @@map("chat_reactions")
 }
 
 model Permission {

@@ -86,8 +86,18 @@ const validPayloads = {
       {
         serviceId: "550e8400-e29b-41d4-a716-446655440001",
         quantity: 1,
+        colors: ["White", "Blue"],
       },
     ],
+    adjustments: [
+      {
+        adjustmentId: "550e8400-e29b-41d4-a716-446655440005",
+        scope: "ITEMS",
+        itemIndexes: [0],
+      },
+    ],
+    taxRuleIds: ["550e8400-e29b-41d4-a716-446655440006"],
+    expectedReadyAt: "2026-09-10T12:00:00.000Z",
   },
   ORDER_UPDATE: {
     action: "TRANSFER_CUSTOMER",
@@ -164,15 +174,7 @@ describe("enqueueSyncOperation", () => {
       operationType: "ORDER_CREATE",
       status: "PENDING",
       payloadVersion: 1,
-      payload: {
-        customerId: "550e8400-e29b-41d4-a716-446655440000",
-        items: [
-          {
-            serviceId: "550e8400-e29b-41d4-a716-446655440001",
-            quantity: 1,
-          },
-        ],
-      },
+      payload: validPayloads.ORDER_CREATE,
     };
 
     prismaMock.offlineSyncOperation.create.mockResolvedValue(operation);
@@ -193,15 +195,7 @@ describe("enqueueSyncOperation", () => {
         clientOperationId: "client-001",
         operationType: "ORDER_CREATE",
         payloadVersion: 1,
-        payload: {
-          customerId: "550e8400-e29b-41d4-a716-446655440000",
-          items: [
-            {
-              serviceId: "550e8400-e29b-41d4-a716-446655440001",
-              quantity: 1,
-            },
-          ],
-        },
+        payload: validPayloads.ORDER_CREATE,
         status: "PENDING",
         correlationId: null,
       },
@@ -963,8 +957,17 @@ describe("replaySyncOperation", () => {
           {
             serviceId: "550e8400-e29b-41d4-a716-446655440001",
             quantity: 2,
+            colors: ["White", "Blue"],
           },
         ],
+        adjustments: [
+          {
+            adjustmentId: "550e8400-e29b-41d4-a716-446655440005",
+            scope: "ITEMS",
+            itemIndexes: [0],
+          },
+        ],
+        taxRuleIds: ["550e8400-e29b-41d4-a716-446655440006"],
         expectedReadyAt: "2026-09-10T12:00:00.000Z",
         garmentNote: "Handle carefully",
         internalNote: "Offline order",
@@ -1012,8 +1015,17 @@ describe("replaySyncOperation", () => {
           {
             serviceId: "550e8400-e29b-41d4-a716-446655440001",
             quantity: 2,
+            colors: ["White", "Blue"],
           },
         ],
+        adjustments: [
+          {
+            adjustmentId: "550e8400-e29b-41d4-a716-446655440005",
+            scope: "ITEMS",
+            itemIndexes: [0],
+          },
+        ],
+        taxRuleIds: ["550e8400-e29b-41d4-a716-446655440006"],
         expectedReadyAt: new Date("2026-09-10T12:00:00.000Z"),
         garmentNote: "Handle carefully",
         internalNote: "Offline order",

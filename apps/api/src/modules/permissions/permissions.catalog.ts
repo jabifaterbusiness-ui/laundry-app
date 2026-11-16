@@ -23,6 +23,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "services.view", module: "services", action: "view", description: "View services" },
   { code: "services.create", module: "services", action: "create", description: "Create services" },
   { code: "services.update", module: "services", action: "update", description: "Update services" },
+  { code: "services.delete", module: "services", action: "delete", description: "Permanently delete pricing records" },
   { code: "services.change_status", module: "services", action: "change_status", description: "Change service status" },
   { code: "colors.view", module: "colors", action: "view", description: "View colour catalogue" },
   { code: "colors.manage", module: "colors", action: "manage", description: "Add and manage colours" },
@@ -81,6 +82,16 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "migrations.view", module: "migrations", action: "view", description: "View migration jobs" },
   { code: "migrations.manage", module: "migrations", action: "manage", description: "Manage migration jobs" },
 
+  { code: "chat.view", module: "chat", action: "view", description: "View own conversations and eligible colleagues" },
+  { code: "chat.cross_branch", module: "chat", action: "cross_branch", description: "Discover and initiate chats with colleagues in other branches of the same business" },
+  { code: "chat.send_message", module: "chat", action: "send_message", description: "Send messages and replies in conversations" },
+  { code: "chat.create_direct", module: "chat", action: "create_direct", description: "Start direct conversations" },
+  { code: "chat.create_group", module: "chat", action: "create_group", description: "Create group conversations" },
+  { code: "chat.manage_group", module: "chat", action: "manage_group", description: "Manage groups you own or administer" },
+  { code: "chat.manage_all_groups", module: "chat", action: "manage_all_groups", description: "Moderate any group in the business" },
+  { code: "chat.upload_attachments", module: "chat", action: "upload_attachments", description: "Upload files to conversations" },
+
+
   { code: "users.view", module: "users", action: "view", description: "View users" },
   { code: "users.create", module: "users", action: "create", description: "Create users" },
   { code: "users.update", module: "users", action: "update", description: "Update users" },
@@ -99,6 +110,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
   BUSINESS_OWNER: PERMISSIONS.map((permission) => permission.code),
   BRANCH_MANAGER: PERMISSIONS.filter((permission) =>
     !permission.code.startsWith("business.") &&
+    permission.code !== "chat.cross_branch" &&
     permission.code !== "inventory.approve" &&
     permission.code !== "inventory.reports_all_branches" &&
     !permission.code.startsWith("users.manage_permissions") &&

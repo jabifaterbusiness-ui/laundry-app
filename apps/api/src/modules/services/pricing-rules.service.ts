@@ -251,13 +251,37 @@ export async function setPriceAdjustmentActive(id: string, businessId: string, b
   }, { isolationLevel: "Serializable" });
 }
 
+export async function removePriceAdjustmentToUnassigned(id: string, businessId: string, branchId: string, userId: string) {
+  return prisma.$transaction(async (tx) => {
+    const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
+    const existing = await tx.priceAdjustment.findFirst({
+      where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] },
+    });
+    if (!existing) throw new AppError("Price adjustment not found", 404);
+    if (existing.branchId !== branchId) {
+      throw new AppError("Only the owning branch can remove a discount from its active list. Shared discounts remain owned by their original branch.", 403);
+    }
+    const result = await tx.priceAdjustment.updateMany({
+      where: { id, businessId, branchId },
+      data: { branchId: null },
+    });
+    if (!result.count) throw new AppError("Price adjustment not found", 404);
+    const revokedShares = await tx.branchResourceShare.deleteMany({
+      where: { businessId, ownerBranchId: branchId, resourceType: "DISCOUNTS", resourceId: id },
+    });
+    return { removed: true, revokedShareCount: revokedShares.count };
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function deletePriceAdjustment(id: string, businessId: string, branchId: string, userId: string) {
   await prisma.$transaction(async (tx) => {
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
     const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
     if (!existing) throw new AppError("Price adjustment not found", 404);
+    if (existing.branchId !== branchId) throw new AppError("Only the owning branch can permanently delete a discount", 403);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
-    const result = await tx.priceAdjustment.deleteMany({ where: { id, businessId, branchId: existing.branchId } });
+    await tx.branchResourceShare.deleteMany({ where: { businessId, ownerBranchId: branchId, resourceType: "DISCOUNTS", resourceId: id } });
+    const result = await tx.priceAdjustment.deleteMany({ where: { id, businessId, branchId } });
     if (!result.count) throw new AppError("Price adjustment not found", 404);
   }, { isolationLevel: "Serializable" });
 }

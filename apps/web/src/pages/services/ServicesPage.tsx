@@ -9,6 +9,7 @@ import {
   createPriceAdjustment,
   createTaxRule,
   deletePriceAdjustment,
+  removePriceAdjustmentToUnassigned,
   setPriceAdjustmentActive,
   deleteTaxRule,
   listPricingRules,
@@ -37,6 +38,7 @@ export function ServicesPage() {
   const user = useAuthStore((s) => s.user);
   const setActiveBranch = useAuthStore((s) => s.setActiveBranch);
   const canManageBranchSharing = hasPermission(user, "branches.update");
+  const canPermanentlyDeletePricing = hasPermission(user, "services.delete");
   const queryClient = useQueryClient();
 
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
@@ -145,6 +147,15 @@ export function ServicesPage() {
       setAdjustmentPage(1);
       setTaxPage(1);
       queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
+    },
+  });
+  const removePricingRuleMutation = useMutation({
+    mutationFn: (id: string) => removePriceAdjustmentToUnassigned(id, { accessToken }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
+        queryClient.invalidateQueries({ queryKey: ["services", "legacy-unassigned"] }),
+      ]);
     },
   });
   const deletePricingRuleMutation = useMutation({
@@ -288,36 +299,43 @@ export function ServicesPage() {
       <h1>Services & Price List</h1>
 
       {isBusinessOwner && (
-        <section aria-labelledby="legacy-pricing-heading" style={{ margin: "1.25rem 0", padding: "1.25rem", border: "1px solid #f0c36d", borderRadius: 14, background: "linear-gradient(135deg, #fffaf0, #ffffff)" }}>
-          <h2 id="legacy-pricing-heading">Needs Branch Assignment</h2>
-          <p>Older records without a recorded owning branch are held here. They are hidden from branch pricing until you assign each record to the correct branch. Nothing is automatically moved.</p>
-          {legacyPricingQuery.isLoading && <p>Checking unassigned legacy records…</p>}
-          {legacyPricingQuery.isError && <p role="alert">Unable to load unassigned records. Refresh and try again.</p>}
-          {legacyPricingQuery.data && (() => {
-            const data = legacyPricingQuery.data;
-            const rows: Array<{ type: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; id: string; label: string; detail: string; locked?: boolean }> = [
-              ...data.services.map((x) => ({ type: "SERVICE" as const, id: x.id, label: x.name, detail: `Service · ${x.pieces} pcs · ₦${x.unitPrice.toLocaleString()}` })),
-              ...data.discounts.map((x) => ({ type: "DISCOUNT" as const, id: x.id, label: x.name, detail: `Discount · ${x.percentage}% · ${x.targetScope}` })),
-              ...data.taxes.map((x) => ({ type: "TAX" as const, id: x.id, label: x.name, detail: `Tax · ${x.kind === "PERCENTAGE" ? `${x.value}%` : `₦${x.value.toLocaleString()}`}` })),
-              ...data.customerPrices.map((x) => ({ type: "CUSTOMER_PRICE" as const, id: x.id, label: `${x.customer.name} — ${x.service.name}`, detail: `Customer-specific price · ₦${x.unitPrice.toLocaleString()}`, locked: !x.service.ownerBranchId || (Boolean(x.customer.ownerBranchId) && x.customer.ownerBranchId !== x.service.ownerBranchId) })),
-            ];
-            if (!rows.length) return <p>No unassigned legacy pricing records remain.</p>;
-            return <div style={{ display: "grid", gap: 10 }}>
-              {rows.map((row) => {
-                const key = `${row.type}:${row.id}`;
-                const target = legacyTargets[key] ?? (activeBranchId ?? "");
-                return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 240px) auto", gap: 10, alignItems: "center", padding: 12, border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "#fff" }}>
-                  <div><strong>{row.label}</strong><div><small>{row.detail}{row.locked ? " · Assign its service and customer first" : ""}</small></div></div>
-                  <select aria-label={`Target branch for ${row.label}`} value={target} onChange={(event) => setLegacyTargets((current) => ({ ...current, [key]: event.target.value }))}>
-                    <option value="">Choose owning branch</option>
-                    {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                  </select>
-                  <button type="button" disabled={!target || row.locked || legacyAssignmentMutation.isPending || !branchesQuery.data?.some((branch) => branch.id === target)} onClick={() => legacyAssignmentMutation.mutate({ resourceType: row.type, resourceId: row.id, targetBranchId: target })}>Assign</button>
+        <section className="legacy-pricing-assignment" style={{ margin: "1.25rem 0", border: "1px solid #f0c36d", borderRadius: 14, background: "linear-gradient(135deg, #fffaf0, #ffffff)" }}>
+          <details>
+            <summary id="legacy-pricing-heading">
+              <strong>Needs Branch Assignment</strong>
+              <span>Legacy records awaiting an owner branch</span>
+            </summary>
+            <div className="legacy-pricing-assignment-content">
+              <p>Older records without a recorded owning branch are held here. They are hidden from branch pricing until you assign each record to the correct branch. Nothing is automatically moved.</p>
+              {legacyPricingQuery.isLoading && <p>Checking unassigned legacy records…</p>}
+              {legacyPricingQuery.isError && <p role="alert">Unable to load unassigned records. Refresh and try again.</p>}
+              {legacyPricingQuery.data && (() => {
+                const data = legacyPricingQuery.data;
+                const rows: Array<{ type: "SERVICE" | "DISCOUNT" | "TAX" | "CUSTOMER_PRICE"; id: string; label: string; detail: string; locked?: boolean }> = [
+                  ...data.services.map((x) => ({ type: "SERVICE" as const, id: x.id, label: x.name, detail: `Service · ${x.pieces} pcs · ₦${x.unitPrice.toLocaleString()}` })),
+                  ...data.discounts.map((x) => ({ type: "DISCOUNT" as const, id: x.id, label: x.name, detail: `Discount · ${x.percentage}% · ${x.targetScope}` })),
+                  ...data.taxes.map((x) => ({ type: "TAX" as const, id: x.id, label: x.name, detail: `Tax · ${x.kind === "PERCENTAGE" ? `${x.value}%` : `₦${x.value.toLocaleString()}`}` })),
+                  ...data.customerPrices.map((x) => ({ type: "CUSTOMER_PRICE" as const, id: x.id, label: `${x.customer.name} — ${x.service.name}`, detail: `Customer-specific price · ₦${x.unitPrice.toLocaleString()}`, locked: !x.service.ownerBranchId || (Boolean(x.customer.ownerBranchId) && x.customer.ownerBranchId !== x.service.ownerBranchId) })),
+                ];
+                if (!rows.length) return <p>No unassigned legacy pricing records remain.</p>;
+                return <div style={{ display: "grid", gap: 10 }}>
+                  {rows.map((row) => {
+                    const key = `${row.type}:${row.id}`;
+                    const target = legacyTargets[key] ?? (activeBranchId ?? "");
+                    return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(180px, 240px) auto", gap: 10, alignItems: "center", padding: 12, border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "#fff" }}>
+                      <div><strong>{row.label}</strong><div><small>{row.detail}{row.locked ? " · Assign its service and customer first" : ""}</small></div></div>
+                      <select aria-label={`Target branch for ${row.label}`} value={target} onChange={(event) => setLegacyTargets((current) => ({ ...current, [key]: event.target.value }))}>
+                        <option value="">Choose owning branch</option>
+                        {(branchesQuery.data ?? []).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                      </select>
+                      <button type="button" disabled={!target || row.locked || legacyAssignmentMutation.isPending || !branchesQuery.data?.some((branch) => branch.id === target)} onClick={() => legacyAssignmentMutation.mutate({ resourceType: row.type, resourceId: row.id, targetBranchId: target })}>Assign</button>
+                    </div>;
+                  })}
                 </div>;
-              })}
-            </div>;
-          })()}
-          {legacyAssignmentMutation.isError && <p role="alert">Assignment failed. Confirm the target branch and related customer/service ownership, then retry.</p>}
+              })()}
+              {legacyAssignmentMutation.isError && <p role="alert">Assignment failed. Confirm the target branch and related customer/service ownership, then retry.</p>}
+            </div>
+          </details>
         </section>
       )}
 
@@ -409,8 +427,15 @@ export function ServicesPage() {
                   {rule.startsAt && <small> · Starts {new Date(rule.startsAt).toLocaleString()}</small>}
                   {rule.endsAt && <small> · Ends {new Date(rule.endsAt).toLocaleString()}</small>}
                   {rule.allowStacking && <small> · Stackable</small>}
-                  <button type="button" disabled={adjustmentStatusMutation.isPending} onClick={() => adjustmentStatusMutation.mutate({ id: rule.id, isActive: !rule.isActive })}>{rule.isActive ? "Pause" : "Resume"}</button>
-                  <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" })}>Remove</button>
+                  {rule.branchId === activeBranchId ? <>
+                    <button type="button" disabled={adjustmentStatusMutation.isPending} onClick={() => adjustmentStatusMutation.mutate({ id: rule.id, isActive: !rule.isActive })}>{rule.isActive ? "Pause" : "Resume"}</button>
+                    <button type="button" disabled={removePricingRuleMutation.isPending} onClick={() => removePricingRuleMutation.mutate(rule.id)}>Remove to Needs Branch Assignment</button>
+                    {canPermanentlyDeletePricing ? <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => {
+                      if (window.confirm(`Permanently delete “${rule.name}”? This cannot be undone. Historical invoices remain unchanged.`)) {
+                        deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" });
+                      }
+                    }}>Delete permanently</button> : null}
+                  </> : <small>Shared from another branch · managed by its owner</small>}
                 </li>;
               })}
             </ul>

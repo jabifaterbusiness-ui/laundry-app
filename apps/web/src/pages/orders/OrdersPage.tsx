@@ -373,7 +373,7 @@ export function OrdersPage() {
 
   const branchOrderPreferencesQuery = useQuery({
     queryKey: ["branches", "order-preferences", activeBranchId],
-    queryFn: () => apiFetch<{ orderReadyTimeFormat: ReadyTimeFormat }>(
+    queryFn: () => apiFetch<{ orderReadyTimeFormat: ReadyTimeFormat; defaultOrderReadyTime: string | null }>(
       "/branches/current/order-preferences",
       { accessToken, branchId: activeBranchId },
     ),
@@ -860,7 +860,7 @@ export function OrdersPage() {
 
   function syncExpectedReadyAtDraft(dateValue: string, timeValue: string) {
     if (!activeWorkspaceId) return;
-    const normalizedTime = parseReadyTimeInput(timeValue, readyTimeFormat);
+    const normalizedTime = parseReadyTimeInput(timeValue, readyTimeFormat) ?? (!timeValue.trim() ? branchOrderPreferencesQuery.data?.defaultOrderReadyTime ?? null : null);
     if (!dateValue && !timeValue.trim()) {
       updateWorkspace(activeWorkspaceId, { draft: { expectedReadyAt: "" } });
       return;
@@ -874,7 +874,7 @@ export function OrdersPage() {
 
   function getExpectedReadyAtIso(): string | undefined {
     if (!readyDateInput && !readyTimeInput.trim()) return undefined;
-    const normalizedTime = parseReadyTimeInput(readyTimeInput, readyTimeFormat);
+    const normalizedTime = parseReadyTimeInput(readyTimeInput, readyTimeFormat) ?? (!readyTimeInput.trim() ? branchOrderPreferencesQuery.data?.defaultOrderReadyTime ?? null : null);
     if (!readyDateInput || !normalizedTime) {
       throw new Error(`Enter both an expected ready date and a valid ${readyTimeFormat === "12H" ? "12-hour" : "24-hour"} time, or leave both blank.`);
     }
@@ -1816,7 +1816,7 @@ export function OrdersPage() {
                   type="text"
                   aria-label="Expected Ready time"
                   value={readyTimeInput}
-                  placeholder={readyTimeFormat === "12H" ? "02:30 PM" : "14:30"}
+                  placeholder={branchOrderPreferencesQuery.data?.defaultOrderReadyTime ? formatReadyTimeInput(`2000-01-01T${branchOrderPreferencesQuery.data.defaultOrderReadyTime}`, readyTimeFormat) : readyTimeFormat === "12H" ? "02:30 PM" : "14:30"}
                   disabled={branchOrderPreferencesQuery.isLoading || branchOrderPreferencesQuery.isError}
                   onChange={(event) => {
                     setReadyTimeInput(event.target.value);
@@ -1831,7 +1831,7 @@ export function OrdersPage() {
                 </p>
               ) : (
                 <p style={{ gridColumn: "1 / -1", margin: 0, color: "#64748b", fontSize: 13 }}>
-                  Optional. Select both a date and time, or leave both blank.
+                  Optional. Choose a date and enter a time, or leave the time blank to use this branch’s default. Leave both blank for no expected-ready time.
                 </p>
               )}
             </div>

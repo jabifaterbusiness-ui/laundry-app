@@ -56,6 +56,7 @@ export interface Branch {
   name: string;
   address: string | null;
   orderReadyTimeFormat?: "12H" | "24H";
+  defaultOrderReadyTime?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -182,10 +183,12 @@ export interface UpdateBranchInput {
 export function createBranch(
   input: CreateBranchInput,
   accessToken: string,
+  platformBusinessId?: string | null,
 ) {
   return apiFetch<Branch>("/branches", {
     method: "POST",
     accessToken,
+    ...(platformBusinessId ? { headers: { "X-Platform-Business-Id": platformBusinessId } } : {}),
     body: JSON.stringify(input),
   });
 }

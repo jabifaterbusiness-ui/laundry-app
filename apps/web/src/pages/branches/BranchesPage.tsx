@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   assignUserToBranch,
   createBranch,
   listBranchUsers,
-  listBranches,
   listUsers,
   removeUserFromBranch,
   type Branch,
@@ -12,15 +12,26 @@ import {
 import { apiFetch } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
+import { getPlatformBusinesses } from "../../lib/platform-api.js";
+import { formatBranchReadyTime, parseBranchReadyTime, type ReadyTimeFormat } from "../../lib/branch-ready-time.js";
 
 export function BranchesPage() {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const isPlatformAdmin = user?.securityRole === "PLATFORM_ADMIN";
+  const businessesQuery = useQuery({ queryKey: ["platform", "businesses"], queryFn: () => getPlatformBusinesses(accessToken), enabled: Boolean(isPlatformAdmin && accessToken) });
+  const [platformBusinessId, setPlatformBusinessId] = useState("");
+  useEffect(() => {
+    if (isPlatformAdmin && !platformBusinessId && businessesQuery.data?.length) setPlatformBusinessId(businessesQuery.data[0]!.id);
+  }, [isPlatformAdmin, platformBusinessId, businessesQuery.data]);
+  const businessContextId = isPlatformAdmin ? platformBusinessId : user?.businessId ?? "";
+  const platformHeaders = isPlatformAdmin && platformBusinessId ? { "X-Platform-Business-Id": platformBusinessId } : undefined;
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [readyTimeFormats, setReadyTimeFormats] = useState<Record<string, "12H" | "24H">>({});
+  const [readyTimeFormats, setReadyTimeFormats] = useState<Record<string, ReadyTimeFormat>>({});
+  const [defaultReadyTimes, setDefaultReadyTimes] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -33,20 +44,23 @@ export function BranchesPage() {
   const canUpdate = hasPermission(user, "branches.update");
   const canActivate = hasPermission(user, "branches.activate");
   const canDeactivate = hasPermission(user, "branches.deactivate");
-  const canManageUsers = hasPermission(user, "branches.manage_users");
+  const canManageUsers = !isPlatformAdmin && hasPermission(user, "branches.manage_users");
 
   async function load() {
-    if (!accessToken) return;
-    const result = await apiFetch<Branch[]>("/branches?status=all", { accessToken });
+    if (!accessToken || !businessContextId) return;
+    const result = await apiFetch<Branch[]>("/branches?status=all", { accessToken, ...(platformHeaders ? { headers: platformHeaders } : {}) });
     setBranches(result);
     setReadyTimeFormats(Object.fromEntries(
       result.map((branch) => [branch.id, branch.orderReadyTimeFormat ?? "24H"]),
+    ));
+    setDefaultReadyTimes(Object.fromEntries(
+      result.map((branch) => [branch.id, formatBranchReadyTime(branch.defaultOrderReadyTime ?? null, branch.orderReadyTimeFormat ?? "24H")]),
     ));
   }
 
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load branches."));
-  }, [accessToken]);
+  }, [accessToken, businessContextId]);
 
   async function submit() {
     if (!accessToken || !name.trim()) return;
@@ -56,10 +70,11 @@ export function BranchesPage() {
         await apiFetch(`/branches/${editing}`, {
           method: "PATCH",
           accessToken,
+          ...(platformHeaders ? { headers: platformHeaders } : {}),
           body: JSON.stringify({ name: name.trim(), address: address.trim() || undefined }),
         });
       } else {
-        await createBranch({ name: name.trim(), address: address.trim() || undefined }, accessToken);
+        await createBranch({ name: name.trim(), address: address.trim() || undefined }, accessToken, isPlatformAdmin ? businessContextId : null);
       }
       setName("");
       setAddress("");
@@ -155,6 +170,7 @@ export function BranchesPage() {
       await apiFetch(`/branches/${branch.id}/${branch.isActive ? "deactivate" : "activate"}`, {
         method: "PATCH",
         accessToken,
+        ...(platformHeaders ? { headers: platformHeaders } : {}),
       });
       await load();
       setMessage(`Branch ${branch.isActive ? "deactivated" : "activated"} successfully.`);
@@ -166,18 +182,26 @@ export function BranchesPage() {
   async function saveReadyTimeFormat(branchId: string) {
     if (!accessToken || !canUpdate) return;
     setMessage("");
+    const format = readyTimeFormats[branchId] ?? "24H";
+    const rawTime = defaultReadyTimes[branchId] ?? "";
+    const defaultOrderReadyTime = rawTime.trim() ? parseBranchReadyTime(rawTime, format) : null;
+    if (rawTime.trim() && !defaultOrderReadyTime) {
+      setMessage(format === "12H"
+        ? "Enter the default ready time with an explicit AM or PM, for example 02:30 PM."
+        : "Enter the default ready time in 24-hour format, for example 14:30.");
+      return;
+    }
     try {
       await apiFetch(`/branches/${branchId}`, {
         method: "PATCH",
         accessToken,
-        body: JSON.stringify({
-          orderReadyTimeFormat: readyTimeFormats[branchId] ?? "24H",
-        }),
+        ...(platformHeaders ? { headers: platformHeaders } : {}),
+        body: JSON.stringify({ orderReadyTimeFormat: format, defaultOrderReadyTime }),
       });
       await load();
-      setMessage("Branch expected-ready time format updated successfully.");
+      setMessage("Branch expected-ready time settings updated successfully.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update the branch time format.");
+      setMessage(error instanceof Error ? error.message : "Unable to update the branch time settings.");
     }
   }
 
@@ -185,6 +209,9 @@ export function BranchesPage() {
     <section className="page-card">
       <h1>Branch Management</h1>
       <p>Create and manage the branches belonging to this business.</p>
+      {isPlatformAdmin ? <label style={{ display: "grid", gap: 6, maxWidth: 520, margin: "16px 0" }}>Business<select value={platformBusinessId} onChange={(event) => { setPlatformBusinessId(event.target.value); setSelectedBranch(null); }}><option value="">Select a business</option>{(businessesQuery.data ?? []).map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select></label> : null}
+      {isPlatformAdmin && businessesQuery.isLoading ? <p>Loading businesses…</p> : null}
+      {isPlatformAdmin && businessesQuery.isError ? <p role="alert">Unable to load businesses. Refresh and try again.</p> : null}
 
       {message ? <div role="status" style={{ margin: "16px 0", padding: 12, borderRadius: 8, background: "#f3f4f6" }}>{message}</div> : null}
 
@@ -289,17 +316,31 @@ export function BranchesPage() {
                       aria-label={`Expected Ready time format for ${branch.name}`}
                       value={readyTimeFormats[branch.id] ?? branch.orderReadyTimeFormat ?? "24H"}
                       disabled={!canUpdate}
-                      onChange={(event) => setReadyTimeFormats((current) => ({
-                        ...current,
-                        [branch.id]: event.target.value as "12H" | "24H",
-                      }))}
+                      onChange={(event) => {
+                        const nextFormat = event.target.value as ReadyTimeFormat;
+                        const currentFormat = readyTimeFormats[branch.id] ?? "24H";
+                        setReadyTimeFormats((current) => ({ ...current, [branch.id]: nextFormat }));
+                        setDefaultReadyTimes((current) => {
+                          const parsed = parseBranchReadyTime(current[branch.id] ?? "", currentFormat);
+                          return { ...current, [branch.id]: parsed ? formatBranchReadyTime(parsed, nextFormat) : current[branch.id] ?? "" };
+                        });
+                      }}
                     >
                       <option value="24H">24-hour (14:30)</option>
-                      <option value="12H">12-hour (2:30 PM)</option>
+                      <option value="12H">12-hour (02:30 PM)</option>
                     </select>
+                    <input
+                      type="text"
+                      aria-label={`Default expected ready time for ${branch.name}`}
+                      value={defaultReadyTimes[branch.id] ?? ""}
+                      placeholder={(readyTimeFormats[branch.id] ?? "24H") === "12H" ? "02:30 PM" : "14:30"}
+                      disabled={!canUpdate}
+                      onChange={(event) => setDefaultReadyTimes((current) => ({ ...current, [branch.id]: event.target.value }))}
+                      style={{ width: 112 }}
+                    />
                     {canUpdate ? (
                       <button type="button" onClick={() => void saveReadyTimeFormat(branch.id)}>
-                        Save format
+                        Save settings
                       </button>
                     ) : null}
                   </div>
