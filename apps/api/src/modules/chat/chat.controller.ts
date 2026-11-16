@@ -74,7 +74,7 @@ export async function listNotifications(req: Request, res: Response) {
   });
 }
 
-export function streamEvents(req: Request, res: Response) {
+export async function streamEvents(req: Request, res: Response) {
   const { userId } = scope(req);
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
