@@ -15,6 +15,7 @@ const RECEIPT = {
   businessId: "business-1",
   invoiceNumber: "INV-00001",
   orderNumber: "00001",
+  readyDate: null,
   companyName: "Test Laundry",
   companyPhone: "08000000000",
   companyEmail: "hello@testlaundry.com",
