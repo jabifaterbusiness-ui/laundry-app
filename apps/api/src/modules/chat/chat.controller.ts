@@ -218,11 +218,11 @@ export async function createGroupConversation(req: Request, res: Response) {
   const eligibleIds = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
   const branchEligibleIds = await eligibleColleagueIds(businessId, branchId, userId, false);
   const requested = input.includeAllEligible ? branchEligibleIds : [...new Set(input.participantIds)];
-  if (requested.some((id) => !eligibleIds.includes(id))) {
-    throw new AppError("One or more selected colleagues are not eligible for this business", 422);
-  }
   if (!crossBranchAllowed && requested.some((id) => !branchEligibleIds.includes(id))) {
     throw new AppError("Cross-branch chat permission is required to add colleagues from another branch", 403);
+  }
+  if (requested.some((id) => !eligibleIds.includes(id))) {
+    throw new AppError("One or more selected colleagues are not eligible for this business", 422);
   }
   if (requested.length < 2) throw new AppError("A group needs at least two other participants", 422);
   if (requested.length > 50 && !input.confirmLargeGroup) {
@@ -396,10 +396,10 @@ export async function addGroupMember(req: Request, res: Response) {
   await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const { userId: newUserId } = memberSchema.parse(req.body);
   const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
-  const eligible = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
-  if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this business", 404);
   const branchEligible = await eligibleColleagueIds(businessId, branchId, userId, false);
   if (!crossBranchAllowed && !branchEligible.includes(newUserId)) throw new AppError("Cross-branch chat permission is required to add this colleague", 403);
+  const eligible = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
+  if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this business", 404);
   const existing = await prisma.chatParticipant.findFirst({ where: { conversationId: id, userId: newUserId } });
   if (existing && !existing.leftAt) throw new AppError("This colleague is already in the group", 409);
   await prisma.chatParticipant.upsert({
