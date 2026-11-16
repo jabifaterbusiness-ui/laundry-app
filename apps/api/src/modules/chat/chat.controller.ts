@@ -124,10 +124,11 @@ async function publishConversationEvent(
 ) {
   let recipients: Array<{ userId: string }> = [];
   try {
-    recipients = await prisma.chatParticipant.findMany({
+    const found = await prisma.chatParticipant.findMany({
       where: { conversationId, leftAt: null, conversation: { businessId } },
       select: { userId: true },
     });
+    if (Array.isArray(found)) recipients = found;
   } catch {
     // Realtime fan-out is best-effort; it must never fail a persisted chat action.
   }
