@@ -24,7 +24,7 @@ function request(query: Record<string, unknown> = {}) {
     user: { id: "user-a", businessId: "business-a" },
     branchId: "branch-a",
     query,
-    params: { id: "conversation-a" },
+    params: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
   } as unknown as Request;
 }
 
@@ -98,7 +98,7 @@ describe("chat notification feed", () => {
       body: "x".repeat(200),
       createdAt,
       sender: { id: "sender-a", fullName: "Alex" },
-      conversation: { id: "conversation-a", title: "Operations", kind: "GROUP" },
+      conversation: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", title: "Operations", kind: "GROUP" },
     }] as never);
     const res = response();
 
@@ -107,7 +107,7 @@ describe("chat notification feed", () => {
     expect(res.json).toHaveBeenCalledWith({
       data: [{
         id: "message-1",
-        conversationId: "conversation-a",
+        conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         conversationTitle: "Operations",
         conversationKind: "GROUP",
         senderId: "sender-a",
@@ -143,7 +143,7 @@ describe("chat notification feed", () => {
 describe("chat message history search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    findParticipant.mockResolvedValue({ id: "participant-a", conversation: { id: "conversation-a", businessId: "business-a" } } as never);
+    findParticipant.mockResolvedValue({ id: "participant-a", conversation: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", businessId: "business-a" } } as never);
   });
 
   it("searches message text only inside the active member's conversation and excludes deleted matches", async () => {
@@ -154,7 +154,7 @@ describe("chat message history search", () => {
 
     expect(findParticipant).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        conversationId: "conversation-a",
+        conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         userId: "user-a",
         leftAt: null,
         conversation: { businessId: "business-a" },
@@ -162,7 +162,7 @@ describe("chat message history search", () => {
     }));
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        conversationId: "conversation-a",
+        conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         body: { contains: "invoice overdue", mode: "insensitive" },
         deletedAt: null,
       },
@@ -181,7 +181,7 @@ describe("chat message history search", () => {
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        conversationId: "conversation-a",
+        conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         body: { contains: "x".repeat(100), mode: "insensitive" },
         deletedAt: null,
       },
