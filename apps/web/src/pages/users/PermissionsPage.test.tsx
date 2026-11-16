@@ -307,7 +307,7 @@ describe("PermissionsPage", () => {
     expect(mockedUpdateUserPermission).not.toHaveBeenCalled();
   });
   it("supports Allow All for an individual user", async () => {
-    mockUser = { ...mockUser, permissions: permissions.map((permission) => permission.code) };
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", ...permissions.map((permission) => permission.code)] };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
