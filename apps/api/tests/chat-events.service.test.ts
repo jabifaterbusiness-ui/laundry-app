@@ -25,4 +25,22 @@ describe("chat realtime event delivery", () => {
     publishChatEvent(["user-a"], event);
     expect(firstListener).toHaveBeenCalledOnce();
   });
+  it("isolates a disconnected subscriber that throws during delivery", () => {
+    const disconnectedListener = vi.fn(() => { throw new Error("socket closed"); });
+    const healthyListener = vi.fn();
+    subscribeChatEvents("user-c", disconnectedListener);
+    subscribeChatEvents("user-c", healthyListener);
+
+    publishChatEvent(["user-c"], {
+      id: "message-b",
+      type: "message.created",
+      conversationId: "conversation-b",
+      messageId: "message-b",
+      createdAt: "2026-11-16T20:01:00.000Z",
+    });
+
+    expect(disconnectedListener).toHaveBeenCalledOnce();
+    expect(healthyListener).toHaveBeenCalledOnce();
+  });
+
 });
