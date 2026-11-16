@@ -6,6 +6,7 @@ import { recordAuditEvent } from "../../lib/audit.js";
 import { deleteChatFile, readChatFile, storeChatFile } from "./chat-storage.service.js";
 import type { Role } from "@prisma/client";
 import { hasPermission } from "../permissions/permissions.service.js";
+import { publishChatEvent, subscribeChatEvents } from "./chat-events.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -71,6 +72,34 @@ export async function listNotifications(req: Request, res: Response) {
       createdAt: message.createdAt,
     })),
   });
+}
+
+export function streamEvents(req: Request, res: Response) {
+  const { userId } = scope(req);
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  res.write(": connected\\n\\n");
+
+  const unsubscribe = subscribeChatEvents(userId, (event) => {
+    if (res.writableEnded) return;
+    res.write(`id: ${event.id}\\nevent: ${event.type}\\ndata: ${JSON.stringify(event)}\\n\\n`);
+  });
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": heartbeat\\n\\n");
+  }, 25_000);
+  let closed = false;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+  };
+  res.on("close", cleanup);
+  req.on("aborted", cleanup);
 }
 
 function scope(req: Request) {
@@ -340,6 +369,19 @@ export async function sendMessage(req: Request, res: Response) {
     if (!existing) throw error;
     duplicateRequest = true;
     message = existing;
+  }
+  if (!duplicateRequest && message) {
+    const recipients = await prisma.chatParticipant.findMany({
+      where: { conversationId, leftAt: null, conversation: { businessId } },
+      select: { userId: true },
+    }).catch(() => []);
+    publishChatEvent(recipients.map((participant) => participant.userId), {
+      id: message.id,
+      type: "message.created",
+      conversationId,
+      messageId: message.id,
+      createdAt: message.createdAt.toISOString(),
+    });
   }
   res.status(duplicateRequest ? 200 : 201).json({ data: message });
 }
