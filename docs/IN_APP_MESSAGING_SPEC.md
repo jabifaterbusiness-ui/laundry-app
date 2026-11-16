@@ -1,6 +1,6 @@
 # LaundryAngel in-app messaging — implementation specification
 
-Status: approved product scope; implementation and verification pending. This document is the engineering contract for the messaging module.
+Status: implementation in progress; automated CI passes on PR #46 head `04280de`. Isolated multi-user staging acceptance remains in progress. This document is the engineering contract for the messaging module.
 
 ## Product outcome
 
@@ -44,7 +44,7 @@ Deliver a polished, responsive, WhatsApp-familiar internal communication workspa
 ## Security, tenancy and permissions
 
 - Business isolation is mandatory. A conversation has one businessId; every participant must be an active user of that same business. No cross-business chat in this release.
-- Branch visibility is an additional eligibility filter: users may communicate with colleagues in the same business, but directory discovery should respect branch membership and explicit cross-branch communication policy. A business owner or platform admin must not accidentally inherit access to private conversations merely from their role.
+- Branch visibility is an additional eligibility filter. Same-branch communication is available to eligible users; discovering or initiating cross-branch conversations requires the explicit `chat.cross_branch` permission. Enforce this on directory discovery, direct creation, group creation and adding group members. Cross-branch conversations remain within the same business and require active participant membership to read/send. Business Owner and Platform Admin effective-permission defaults follow the existing permission service; ordinary users and Branch Managers require explicit grants.
 - Derive business and user identity from the authenticated server session. Never trust client-supplied businessId, senderId, read state, role, or membership.
 - Suggested permission keys, to be registered in the permission catalogue and seeded consistently:
   - chat.view — access own conversations and colleague directory.
@@ -52,7 +52,7 @@ Deliver a polished, responsive, WhatsApp-familiar internal communication workspa
   - chat.create_group — create group conversations.
   - chat.manage_group — manage group metadata and members where the actor is a group owner/admin.
   - chat.manage_all_groups — exceptional business-level moderation, separately granted.
-  - chat.upload_attachments — upload files to conversations.
+  - chat.upload_attachments — upload files to conversations.\n  - chat.cross_branch — discover and initiate conversations with colleagues in other branches of the same business.
 - Group permissions are not inferred from job title. Business Owner/platform-level defaults must be implemented through the existing effective-permission system, while ordinary users require explicit grants.
 - Enforce authorization in every REST endpoint and realtime event handler, not just navigation/UI.
 - Rate-limit message creation, group creation, directory search and uploads. Validate/normalize message payloads. Escape/render message text safely; never render user HTML.
@@ -92,7 +92,7 @@ Add indexes for (businessId, lastMessageAt), (conversationId, createdAt), (userI
 
 ## Notifications and UX quality
 
-- Update in-app unread badges promptly and persist unread state across devices.
+- Update in-app unread badges promptly and persist unread state across devices. The Chat navigation item alone displays the red unread badge; do not add badges to Inbox, Order Management, Invoices & Receipts or Payments.\n- Refresh unread/conversation summaries on a short polling interval (currently 3 seconds) and persist read cursors server-side. Clear a conversation's unread state only when that conversation is active, visible and scrolled to the latest message; messages in other conversations remain unread.
 - Integrate with the existing notification/inbox pattern without exposing message contents in logs or unauthorised notification previews.
 - Respect mute settings and avoid generating notifications for the sender's own messages.
 - Accessibility: keyboard navigation, visible focus, labelled controls, screen-reader announcements for new messages, adequate contrast and reduced-motion support.
@@ -116,10 +116,11 @@ Add indexes for (businessId, lastMessageAt), (conversationId, createdAt), (userI
 - Two eligible users can create and exchange direct messages; a third user cannot read the conversation or join its realtime room.
 - An ordinary user without chat permissions cannot open the module or call protected APIs directly.
 - A user without chat.create_group cannot create groups, including by crafting requests.
-- An authorised group creator can select users or all eligible users from their business; cross-business IDs are rejected server-side.
+- An authorised group creator can select users or all eligible users from their business; cross-business IDs are rejected server-side. Cross-branch selections additionally require `chat.cross_branch`.
 - Removed/left members cannot fetch later messages, attachments or realtime events.
 - Messages survive refresh, reconnect, multiple devices and transient socket failures without duplicate sends.
 - Unread counts and read cursors are consistent across devices.
 - Upload validation rejects oversized, spoofed and disallowed files; attachment URLs do not bypass membership checks.
 - Emoji, replies, reactions, image/document attachments and group membership events render correctly on desktop and mobile.
 - Automated tests and production-like staging checks pass before merge/deploy.
+\n\n## PR #46 implementation notes (2026-11-16)\n\n- Cross-branch access is controlled by `chat.cross_branch`; branch names are shown in the colleague directory. Same-branch group creation remains available through the normal eligible-user flow, while cross-branch members must be explicitly selected and authorised.\n- Direct conversations are unique per unordered participant pair across a business, not per branch. Existing conversation membership—not the conversation's originating branch—governs participant access, while business isolation remains mandatory.\n- The Chat navigation badge is the only global unread badge added by this change. It refreshes every 3 seconds. Chat conversation summaries also refresh every 3 seconds.\n- Read cursors advance only while the relevant conversation is active, the browser page is visible/focused, and the message timeline is at its latest position (with the mobile thread open where applicable).\n- Automated CI run #1900 passed API/web tests, lint, TypeScript checks, migrations and production builds for commit `04280deefd6b3858bf7ab7b95f48399677a97096`. Manual isolated-stack acceptance is still required before release.\n
