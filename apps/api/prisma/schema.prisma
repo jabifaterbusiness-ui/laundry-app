@@ -246,6 +246,7 @@ model Branch {
   inventoryTransfersTo   InventoryTransfer[] @relation("InventoryTransferDestination")
   inventoryStocktakes    InventoryStocktake[]
   inventoryReservations  InventoryReservation[]
+  chatConversations ChatConversation[]
   offlineSyncOperations OfflineSyncOperation[]
 
   @@index([businessId])
@@ -2105,6 +2106,8 @@ model ChatConversation {
   id              String                @id @default(uuid())
   businessId      String
   business        Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
   kind            ChatConversationKind
   // Canonical sorted user pair for direct chats; null for group chats.
   directKey       String?
@@ -2119,7 +2122,7 @@ model ChatConversation {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  @@unique([businessId, directKey])
+  @@unique([businessId, branchId, directKey])
   @@index([businessId, lastMessageAt])
   @@map("chat_conversations")
 }
