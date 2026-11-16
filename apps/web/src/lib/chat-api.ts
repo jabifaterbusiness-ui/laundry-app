@@ -33,6 +33,19 @@ export const getChatNotifications=(since:string,afterId?:string)=>apiFetch<{data
 export interface ChatRealtimeEvent {
  type:"message.created"; id:string; conversationId:string; messageId:string; createdAt:string;
 }
+export function consumeChatEventFrames(input:string):{remaining:string;events:ChatRealtimeEvent[]}{
+ let buffer=input.replace(/\r\n/g,"\n");
+ const events:ChatRealtimeEvent[]=[];
+ let boundary=buffer.indexOf("\n\n");
+ while(boundary>=0){
+  const frame=buffer.slice(0,boundary);
+  buffer=buffer.slice(boundary+2);
+  const data=frame.split("\n").filter(line=>line.startsWith("data:")).map(line=>line.slice(5).trimStart()).join("\n");
+  if(data){try{events.push(JSON.parse(data) as ChatRealtimeEvent);}catch{/* Ignore malformed or unsupported event frames. */}}
+  boundary=buffer.indexOf("\n\n");
+ }
+ return {remaining:buffer,events};
+}
 export async function connectChatEventStream(onEvent:(event:ChatRealtimeEvent)=>void,signal:AbortSignal):Promise<void>{
  const {accessToken}=useAuthStore.getState();
  const branchId=useAuthStore.getState().activeBranchId;
@@ -48,15 +61,9 @@ export async function connectChatEventStream(onEvent:(event:ChatRealtimeEvent)=>
    const {done,value}=await reader.read();
    if(done)return;
    buffer+=decoder.decode(value,{stream:true});
-   buffer=buffer.replace(/\r\n/g,"\n");
-   let boundary=buffer.indexOf("\n\n");
-   while(boundary>=0){
-    const frame=buffer.slice(0,boundary);
-    buffer=buffer.slice(boundary+2);
-    const data=frame.split("\n").filter(line=>line.startsWith("data:")).map(line=>line.slice(5).trimStart()).join("\n");
-    if(data){try{onEvent(JSON.parse(data) as ChatRealtimeEvent);}catch{/* Ignore malformed or unsupported event frames. */}}
-    boundary=buffer.indexOf("\n\n");
-   }
+   const parsed=consumeChatEventFrames(buffer);
+   buffer=parsed.remaining;
+   for(const event of parsed.events)onEvent(event);
   }
  }finally{
   reader.releaseLock();
