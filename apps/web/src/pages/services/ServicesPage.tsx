@@ -9,6 +9,7 @@ import {
   createPriceAdjustment,
   createTaxRule,
   deletePriceAdjustment,
+  removePriceAdjustmentToUnassigned,
   setPriceAdjustmentActive,
   deleteTaxRule,
   listPricingRules,
@@ -37,6 +38,7 @@ export function ServicesPage() {
   const user = useAuthStore((s) => s.user);
   const setActiveBranch = useAuthStore((s) => s.setActiveBranch);
   const canManageBranchSharing = hasPermission(user, "branches.update");
+  const canPermanentlyDeletePricing = hasPermission(user, "services.delete");
   const queryClient = useQueryClient();
 
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
@@ -145,6 +147,15 @@ export function ServicesPage() {
       setAdjustmentPage(1);
       setTaxPage(1);
       queryClient.invalidateQueries({ queryKey: ["pricing-rules"] });
+    },
+  });
+  const removePricingRuleMutation = useMutation({
+    mutationFn: (id: string) => removePriceAdjustmentToUnassigned(id, { accessToken }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["pricing-rules"] }),
+        queryClient.invalidateQueries({ queryKey: ["services", "legacy-unassigned"] }),
+      ]);
     },
   });
   const deletePricingRuleMutation = useMutation({
@@ -416,8 +427,15 @@ export function ServicesPage() {
                   {rule.startsAt && <small> · Starts {new Date(rule.startsAt).toLocaleString()}</small>}
                   {rule.endsAt && <small> · Ends {new Date(rule.endsAt).toLocaleString()}</small>}
                   {rule.allowStacking && <small> · Stackable</small>}
-                  <button type="button" disabled={adjustmentStatusMutation.isPending} onClick={() => adjustmentStatusMutation.mutate({ id: rule.id, isActive: !rule.isActive })}>{rule.isActive ? "Pause" : "Resume"}</button>
-                  <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" })}>Remove</button>
+                  {rule.branchId === activeBranchId ? <>
+                    <button type="button" disabled={adjustmentStatusMutation.isPending} onClick={() => adjustmentStatusMutation.mutate({ id: rule.id, isActive: !rule.isActive })}>{rule.isActive ? "Pause" : "Resume"}</button>
+                    <button type="button" disabled={removePricingRuleMutation.isPending} onClick={() => removePricingRuleMutation.mutate(rule.id)}>Remove to Needs Branch Assignment</button>
+                    {canPermanentlyDeletePricing ? <button type="button" disabled={deletePricingRuleMutation.isPending} onClick={() => {
+                      if (window.confirm(`Permanently delete “${rule.name}”? This cannot be undone. Historical invoices remain unchanged.`)) {
+                        deletePricingRuleMutation.mutate({ id: rule.id, kind: "adjustment" });
+                      }
+                    }}>Delete permanently</button> : null}
+                  </> : <small>Shared from another branch · managed by its owner</small>}
                 </li>;
               })}
             </ul>
