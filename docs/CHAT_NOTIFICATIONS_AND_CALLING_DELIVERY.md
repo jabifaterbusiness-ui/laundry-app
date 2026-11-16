@@ -4,8 +4,8 @@
 
 - The authenticated application now mounts a global Chat alert manager, so alerts are not limited to the Chat page.
 - A business-scoped API feed returns recent message metadata only from conversations the signed-in user still belongs to. It excludes the user's own messages and deleted messages, and does not return message bodies. Conversation membership is the access boundary; selecting a branch resets the client alert cursor but does not hide conversations in which the user remains an active participant.
-- An authenticated server-sent event stream emits `message.created` metadata only to active participants after the message transaction commits. User-specific channels prevent events from being broadcast to other business users.
-- The browser reconnects the event stream and immediately invalidates message, conversation and notification queries. REST polling remains enabled as a fallback for missed events and unavailable streaming connections.
+- An authenticated server-sent event stream emits `message.created` metadata only to active participants after the message transaction commits. Channels are keyed by both business and user IDs; chat permission is rechecked before each event, disconnected listeners are isolated, and streams rotate every five minutes.
+- The browser parses chunked event frames, reconnects the stream and immediately invalidates message, conversation and notification queries. REST polling remains enabled as a fallback for missed events and unavailable streaming connections.
 - Users can explicitly grant desktop notification permission from the Team Chat page.
 - The notification feed is scoped by the authenticated user's business and active conversation membership; the browser cannot request another tenant's notifications by supplying a business ID. The selected branch is validated by middleware, while existing conversation membership can span branches within the same business.
 - The API returns a short conversation label rather than message contents in operating-system notifications to reduce accidental disclosure.
