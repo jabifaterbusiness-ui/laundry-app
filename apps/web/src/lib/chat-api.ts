@@ -1,7 +1,7 @@
 import { apiFetch, apiFetchBlob } from "./api-client.js";
 import { useAuthStore } from "../state/auth-store.js";
 const auth = () => ({ accessToken: useAuthStore.getState().accessToken });
-export interface ChatPerson { id:string; fullName:string; email?:string; role?:string; }
+export interface ChatPerson { id:string; fullName:string; email?:string; role?:string; branches?:Array<{id:string;name:string}>; }
 export interface ChatAttachment { id:string; originalName:string; safeMimeType:string; sizeBytes:number; }
 export interface ChatMessage { id:string; body:string; kind:"TEXT"|"SYSTEM"; createdAt:string; editedAt?:string|null; deletedAt?:string|null; sender:{id:string;fullName:string}; attachments?:ChatAttachment[]; reactions?:Array<{id:string;emoji:string;user:{id:string;fullName:string}}>; replyTo?:{id:string;body:string;sender:{fullName:string}}|null; }
 export interface ChatConversation { id:string; kind:"DIRECT"|"GROUP"; title:string|null; description?:string|null; myRole?:string; unreadCount:number; lastMessage?:ChatMessage|null; lastMessageAt?:string|null; participants:Array<{id:string;user:ChatPerson;role:string;lastReadAt?:string|null}>; }
