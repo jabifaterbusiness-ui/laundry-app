@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { publishChatEvent, subscribeChatEvents, type ChatRealtimeEvent } from "./chat-events.service.js";
 
-const cleanups: Array<() => void> = [];\n\nconst event: ChatRealtimeEvent = {
+const cleanups: Array<() => void> = [];
+
+const event: ChatRealtimeEvent = {
   id: "event-1",
   type: "message.created",
   conversationId: "conversation-1",
@@ -10,6 +12,7 @@ const cleanups: Array<() => void> = [];\n\nconst event: ChatRealtimeEvent = {
 };
 
 afterEach(() => {
+  cleanups.splice(0).forEach((cleanup) => cleanup());
   vi.restoreAllMocks();
 });
 
@@ -21,9 +24,7 @@ describe("chat realtime event channels", () => {
     cleanups.push(subscribeChatEvents("business-a", "user-a", (item) => businessA.push(item)));
     cleanups.push(subscribeChatEvents("business-b", "user-a", (item) => businessB.push(item)));
     cleanups.push(subscribeChatEvents("business-a", "user-b", (item) => userB.push(item)));
-
     publishChatEvent("business-a", ["user-a", "user-b"], event);
-
     expect(businessA).toEqual([event]);
     expect(businessB).toEqual([]);
     expect(userB).toEqual([event]);
