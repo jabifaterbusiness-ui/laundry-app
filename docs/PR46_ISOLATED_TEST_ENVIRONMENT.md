@@ -32,13 +32,7 @@ sudo install -d -m 700 /opt/laundryangel/pr46-test/source
 sudo tar --no-same-owner --no-same-permissions -xzf /tmp/laundryangel-pr46-isolated-test.tar.gz -C /opt/laundryangel/pr46-test/source
 ```
 
-The package branch is based on the CI-passing application commit and adds only isolated-test infrastructure and documentation. The application source commit to record/deploy is:
-
-`/opt/laundryangel/pr46-test/source`
-
-The archive must be created from commit:
-
-`34ea676b263ad62127d892af8643659313149bbd`
+The package branch is based on the CI-passing application commit and adds only isolated-test infrastructure and documentation. The application code being tested is unchanged from commit `34ea676b263ad62127d892af8643659313149bbd`. The archive contains that application source plus the isolated-test deployment files.
 
 Then run:
 
