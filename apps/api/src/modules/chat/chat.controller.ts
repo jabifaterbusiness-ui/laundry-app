@@ -432,6 +432,13 @@ export async function editMessage(req: Request, res: Response) {
     businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
     metadata: { conversationId },
   });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":updated:" + message.updatedAt.getTime(),
+    type: "message.updated",
+    messageId,
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
+  });
   res.json({ data: message });
 }
 
@@ -454,6 +461,13 @@ export async function deleteMessage(req: Request, res: Response) {
     businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
     metadata: { conversationId },
   });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":deleted:" + Date.now(),
+    type: "message.deleted",
+    messageId,
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -465,6 +479,12 @@ export async function markConversationRead(req: Request, res: Response) {
   await prisma.chatParticipant.updateMany({
     where: { conversationId, userId, leftAt: null },
     data: { lastReadMessageId: latest?.id ?? null, lastReadAt: latest?.createdAt ?? new Date() },
+  });
+  await publishConversationEvent(businessId, conversationId, {
+    id: conversationId + ":read:" + Date.now(),
+    type: "conversation.read",
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
   });
   res.status(204).end();
 }
@@ -490,6 +510,9 @@ export async function updateGroup(req: Request, res: Response) {
     },
   });
   await recordAuditEvent({ action: "chat.group.updated", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { fields: Object.keys(input) } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":updated:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.json({ data: conversation });
 }
 
@@ -516,6 +539,9 @@ export async function addGroupMember(req: Request, res: Response) {
   });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member was added to the group" } });
   await recordAuditEvent({ action: "chat.group.member_added", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: newUserId } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-added:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -530,6 +556,12 @@ export async function removeGroupMember(req: Request, res: Response) {
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { leftAt: new Date() } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member left or was removed from the group" } });
   await recordAuditEvent({ action: "chat.group.member_removed", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-removed:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
+  publishChatEvent(businessId, [targetUserId], {
+    id: id + ":removed-user:" + Date.now(), type: "conversation.updated", conversationId: id, actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -598,6 +630,9 @@ export async function setGroupMemberRole(req: Request, res: Response) {
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { role } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: role === "ADMIN" ? "A group administrator was appointed" : "A group administrator role was removed" } });
   await recordAuditEvent({ action: "chat.group.member_role_updated", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId, role } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-role:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -612,5 +647,8 @@ export async function toggleReaction(req: Request, res: Response) {
   const existing = await prisma.chatReaction.findFirst({ where: { messageId, userId, emoji } });
   if (existing) await prisma.chatReaction.delete({ where: { id: existing.id } });
   else await prisma.chatReaction.create({ data: { messageId, userId, emoji } });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":reaction:" + Date.now(), type: "message.reaction", messageId, actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
