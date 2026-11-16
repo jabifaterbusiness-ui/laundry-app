@@ -5,14 +5,21 @@ vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     chatMessage: { findMany: vi.fn() },
     chatParticipant: { findFirst: vi.fn() },
+    chatAttachment: { findFirst: vi.fn() },
   },
+}));
+vi.mock("../src/modules/chat/chat-storage.service.js", () => ({
+  readChatFile: vi.fn(),
+  storeChatFile: vi.fn(),
+  deleteChatFile: vi.fn(),
 }));
 
 import { prisma } from "../src/lib/prisma.js";
-import { listMessages, listNotifications } from "../src/modules/chat/chat.controller.js";
+import { downloadAttachment, listMessages, listNotifications } from "../src/modules/chat/chat.controller.js";
 
 const findMany = vi.mocked(prisma.chatMessage.findMany);
 const findParticipant = vi.mocked(prisma.chatParticipant.findFirst);
+const findAttachment = vi.mocked(prisma.chatAttachment.findFirst);
 
 function response() {
   const res = { json: vi.fn() } as unknown as Response;
@@ -221,6 +228,27 @@ describe("chat message history search", () => {
         conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         body: { contains: "x".repeat(100), mode: "insensitive" },
         deletedAt: null,
+      },
+    }));
+  });
+});
+
+describe("chat attachment access", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("does not allow downloading an attachment whose parent message was deleted", async () => {
+    findAttachment.mockResolvedValue(null as never);
+    const res = response();
+
+    await expect(downloadAttachment(request({ params: { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } }), res))
+      .rejects.toMatchObject({ statusCode: 404, message: "Attachment not found" });
+
+    expect(findAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        businessId: "business-a",
+        deletedAt: null,
+        OR: [{ messageId: null }, { message: { is: { deletedAt: null } } }],
       },
     }));
   });
