@@ -1,0 +1,97 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PR46_TEST_DB_USER:?Set PR46_TEST_DB_USER in the protected test env file}
+      POSTGRES_PASSWORD: ${PR46_TEST_DB_PASSWORD:?Set PR46_TEST_DB_PASSWORD in the protected test env file}
+      POSTGRES_DB: ${PR46_TEST_DB_NAME:?Set PR46_TEST_DB_NAME in the protected test env file}
+    volumes:
+      - pr46_test_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$\${POSTGRES_USER}\" -d \"$\${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 128
+    networks:
+      - data
+
+  api:
+    image: laundryangel-api:pr46-isolated-test
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${PR46_TEST_ENV_FILE:?Set PR46_TEST_ENV_FILE to the protected test env file}
+    environment:
+      NODE_ENV: production
+      ENABLE_BACKGROUND_SCHEDULERS: "false"
+      PORT: "4000"
+      APP_URL: http://localhost:18081
+      WEB_APP_URL: http://localhost:18081
+      CORS_ORIGIN: http://localhost:18081
+      DATABASE_URL: postgresql://${PR46_TEST_DB_USER}:${PR46_TEST_DB_PASSWORD}@db:5432/${PR46_TEST_DB_NAME}?schema=public
+      MIGRATION_STORAGE_DIR: /app/apps/api/data/migrations
+      BUSINESS_BRANDING_STORAGE_DIR: /app/apps/api/data/business-branding
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pr46_test_migration_data:/app/apps/api/data/migrations
+      - pr46_test_branding_data:/app/apps/api/data/business-branding
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    mem_limit: 640m
+    cpus: 0.75
+    pids_limit: 192
+    networks:
+      - data
+
+  web:
+    image: laundryangel-web:pr46-isolated-test
+    build:
+      context: ../..
+      dockerfile: deploy/web.production.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18081:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 96m
+    cpus: 0.25
+    pids_limit: 64
+    networks:
+      - data
+      - ingress
+
+networks:
+  data:
+    name: laundryangel_pr46_test_net
+    internal: true
+  ingress:
+    name: laundryangel_pr46_test_ingress
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+
+volumes:
+  pr46_test_pg_data:
+    name: laundryangel_pr46_test_pg_data
+  pr46_test_migration_data:
+    name: laundryangel_pr46_test_migration_data
+  pr46_test_branding_data:
+    name: laundryangel_pr46_test_branding_data
