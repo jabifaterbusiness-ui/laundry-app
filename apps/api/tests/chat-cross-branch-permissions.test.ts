@@ -99,6 +99,35 @@ describe("cross-branch chat authorization", () => {
     });
   });
 
+  it("includes colleagues from every active business branch in all-eligible groups when chat.cross_branch is granted", async () => {
+    crossBranchPermission.mockResolvedValue(true);
+    findManyUsers
+      .mockResolvedValueOnce([
+        { id: "22222222-2222-4222-8222-222222222222" },
+        { id: "33333333-3333-4333-8333-333333333333" },
+      ] as never)
+      .mockResolvedValueOnce([
+        { id: "33333333-3333-4333-8333-333333333333" },
+      ] as never);
+    vi.mocked(prisma.chatConversation.create).mockResolvedValue({ id: "conversation-a" } as never);
+    const res = response();
+
+    await createGroupConversation(request({
+      body: { title: "All business colleagues", includeAllEligible: true },
+    }), res);
+
+    expect(prisma.chatConversation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        participants: { create: [
+          { userId: "user-a", role: "OWNER" },
+          { userId: "22222222-2222-4222-8222-222222222222", role: "MEMBER" },
+          { userId: "33333333-3333-4333-8333-333333333333", role: "MEMBER" },
+        ] },
+      }),
+    }));
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
   it("rejects cross-branch group participants without chat.cross_branch", async () => {
     crossBranchPermission.mockResolvedValue(false);
     findManyUsers.mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222" }] as never);
