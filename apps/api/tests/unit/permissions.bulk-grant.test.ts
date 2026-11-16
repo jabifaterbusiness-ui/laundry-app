@@ -122,7 +122,7 @@ describe("permission catalogue and bulk grants", () => {
     );
 
     await expect(
-      allowAllUserPermissions(BUSINESS_ID, USER_ID),
+      allowAllUserPermissions(BUSINESS_ID, USER_ID, PERMISSIONS.map((permission) => permission.code)),
     ).rejects.toThrow(
       "Permission catalogue is incomplete; cannot allow all permissions",
     );
