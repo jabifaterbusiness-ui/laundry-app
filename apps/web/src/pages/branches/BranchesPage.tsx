@@ -4,7 +4,6 @@ import {
   assignUserToBranch,
   createBranch,
   listBranchUsers,
-  listBranches,
   listUsers,
   removeUserFromBranch,
   type Branch,
