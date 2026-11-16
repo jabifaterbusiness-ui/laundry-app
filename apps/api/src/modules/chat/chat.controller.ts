@@ -217,7 +217,7 @@ export async function createGroupConversation(req: Request, res: Response) {
   const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
   const eligibleIds = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
   const branchEligibleIds = await eligibleColleagueIds(businessId, branchId, userId, false);
-  const requested = input.includeAllEligible ? branchEligibleIds : [...new Set(input.participantIds)];
+  const requested = input.includeAllEligible ? eligibleIds : [...new Set(input.participantIds)];
   if (!crossBranchAllowed && requested.some((id) => !branchEligibleIds.includes(id))) {
     throw new AppError("Cross-branch chat permission is required to add colleagues from another branch", 403);
   }
