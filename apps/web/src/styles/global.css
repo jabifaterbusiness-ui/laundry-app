@@ -4655,6 +4655,10 @@ a {
   line-height: 1.5;
 }
 
+.subscription-offline-payment-panel > div > span {
+  opacity: 1;
+}
+
 .dashboard-page .dashboard-kpi-card p {
   color: #465367;
   font-size: 13px;
