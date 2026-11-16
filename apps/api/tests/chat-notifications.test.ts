@@ -146,6 +146,21 @@ describe("chat message history search", () => {
     findParticipant.mockResolvedValue({ id: "participant-a", conversation: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", businessId: "business-a" } } as never);
   });
 
+  it("excludes deleted messages from ordinary conversation history", async () => {
+    findMany.mockResolvedValue([] as never);
+    const res = response();
+
+    await listMessages(request(), res);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        deletedAt: null,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 50,
+    }));
+  });
   it("searches message text only inside the active member's conversation and excludes deleted matches", async () => {
     findMany.mockResolvedValue([] as never);
     const res = response();
