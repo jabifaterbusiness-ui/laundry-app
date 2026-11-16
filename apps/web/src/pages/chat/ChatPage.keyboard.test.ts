@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { markerIncludesMessage, resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
+import { appendChatEmoji, markerIncludesMessage, resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
+
+describe("chat composer emoji insertion", () => {
+  it("appends the selected emoji without replacing the existing draft", () => {
+    expect(appendChatEmoji("Order is ready ", "🎉")).toBe("Order is ready 🎉");
+  });
+});
 
 describe("chat composer keyboard behaviour", () => {
   it("sends on Enter without Shift", () => {
