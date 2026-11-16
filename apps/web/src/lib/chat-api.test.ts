@@ -19,6 +19,17 @@ describe("chat realtime event frame parser", () => {
     expect(completed.remaining).toBe("");
   });
 
+  it("parses conversation delivery receipt events", () => {
+    const event: ChatRealtimeEvent = {
+      id: "conversation-a:delivered:user-b:message-a",
+      type: "conversation.delivered",
+      conversationId: "conversation-a",
+      actorUserId: "user-b",
+      createdAt: "2026-11-16T20:05:00.000Z",
+    };
+    expect(consumeChatEventFrames("data: " + JSON.stringify(event) + "\n\n").events).toEqual([event]);
+  });
+
   it("ignores malformed frames and continues with later valid events", () => {
     const event: ChatRealtimeEvent = {
       id: "message-b",
