@@ -22,9 +22,10 @@ export const updateBranchSchema = z
     name: branchNameSchema.optional(),
     address: branchAddressSchema,
     orderReadyTimeFormat: z.enum(["12H", "24H"]).optional(),
+    defaultOrderReadyTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
   })
   .refine(
-    (data) => data.name !== undefined || data.address !== undefined || data.orderReadyTimeFormat !== undefined,
+    (data) => data.name !== undefined || data.address !== undefined || data.orderReadyTimeFormat !== undefined || data.defaultOrderReadyTime !== undefined,
     { message: "At least one field must be provided" },
   );
 
