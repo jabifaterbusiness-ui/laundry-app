@@ -305,7 +305,7 @@ export async function sendMessage(req: Request, res: Response) {
     const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId, deletedAt: null } });
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
   }
-  let message;
+  let message: Awaited<ReturnType<typeof prisma.chatMessage.findFirst>>;
   try {
     message = await prisma.$transaction(async (tx) => {
       if (input.clientMessageId) {
@@ -315,14 +315,14 @@ export async function sendMessage(req: Request, res: Response) {
         });
         if (existing) return existing;
       }
-    const created = await tx.chatMessage.create({
-      data: {
-        conversationId, senderUserId: userId, body: input.body,
-        ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
-        ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
-        ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
-      },
-      include: messageInclude,
+      const created = await tx.chatMessage.create({
+        data: {
+          conversationId, senderUserId: userId, body: input.body,
+          ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+          ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+          ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
+        },
+        include: messageInclude,
       });
       await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
       return created;
