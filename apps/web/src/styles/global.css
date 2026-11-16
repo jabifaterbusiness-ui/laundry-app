@@ -4645,7 +4645,10 @@ a {
 .subscription-payment-selection label,
 .subscription-action-message,
 .subscription-success,
-.subscription-error-text {
+.subscription-error-text,
+.subscription-feedback p,
+.subscription-expiry-banner,
+.subscription-offline-payment-panel > div > span {
   color: var(--la-supporting-text);
   font-size: var(--la-supporting-text-size);
   font-weight: var(--la-supporting-text-weight);
