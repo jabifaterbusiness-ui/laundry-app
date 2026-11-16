@@ -99,22 +99,32 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
  * queries. See src/lib/tenant-scope.ts.
  */
 export async function requirePlatformBusinessContext(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user) throw new AppError("Authentication required", 401);
+  if (!req.user) {
+    return next(new AppError("Authentication required", 401));
+  }
   if (req.user.securityRole !== "PLATFORM_ADMIN") {
     return requireBusinessContext(req, _res, next);
   }
+
   const businessId = req.header("x-platform-business-id");
   if (!businessId || !businessId.trim()) {
-    throw new AppError("Select a business to manage its branches", 403);
+    return next(new AppError("Select a business to manage its branches", 403));
   }
-  const business = await prisma.business.findUnique({
-    where: { id: businessId.trim() },
-    select: { id: true },
-  });
-  if (!business) throw new AppError("Business not found", 404);
-  // This is request-local scope only. Platform Admin's database account remains tenant-neutral.
-  req.user.businessId = business.id;
-  next();
+
+  try {
+    const business = await prisma.business.findUnique({
+      where: { id: businessId.trim() },
+      select: { id: true },
+    });
+    if (!business) {
+      return next(new AppError("Business not found", 404));
+    }
+    // This is request-local scope only. Platform Admin's database account remains tenant-neutral.
+    req.user.businessId = business.id;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 }
 
 export function requireBusinessContext(req: Request, _res: Response, next: NextFunction) {
