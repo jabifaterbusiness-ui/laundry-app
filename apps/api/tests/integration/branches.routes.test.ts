@@ -38,6 +38,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userPermissionOverride: {
       findUnique: vi.fn(),
     },
+    business: { findUnique: vi.fn().mockResolvedValue({ id: "biz-A" }) },
     branch: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -130,6 +131,17 @@ describe("Branches routes - authentication", () => {
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
     expect(res.status).toBe(403);
   });
+  it("allows a PLATFORM_ADMIN to scope branch management to a selected business", async () => {
+    findMany.mockResolvedValue([{ id: "branch-a", businessId: "biz-A", name: "Main Branch" }] as never);
+    const res = await request(app)
+      .get("/api/v1/branches?status=all")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .set("X-Platform-Business-Id", "biz-A");
+    expect(res.status).toBe(200);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ businessId: "biz-A" }),
+    }));
+  });
 });
 
 describe("Branches routes - tenant isolation", () => {
@@ -172,7 +184,7 @@ describe("Branches routes - tenant isolation", () => {
       .set("X-Branch-Id", "22222222-2222-2222-2222-222222222222");
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ orderReadyTimeFormat: "12H" });
+    expect(res.body).toEqual({ orderReadyTimeFormat: "12H", defaultOrderReadyTime: null });
   });
   it("business A can list its own branches", async () => {
     findMany.mockResolvedValue([{ id: "branch-a", businessId: "biz-A", name: "Main Branch" }] as never);
