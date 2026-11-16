@@ -205,9 +205,9 @@ describe("PermissionsPage", () => {
       screen.getByText(/John Staff.*Laundry Supervisor/),
     ).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Allow" }),
-    );
+    const orderViewRow = screen.getByText("View orders").closest("tr");
+    expect(orderViewRow).not.toBeNull();
+    fireEvent.click(orderViewRow!.querySelector("button")!);
 
     await waitFor(() => {
       expect(mockedUpdateUserPermission).toHaveBeenCalledWith(
