@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldSendChatMessageOnKey } from "./ChatPage.js";
+import { resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
 
 describe("chat composer keyboard behaviour", () => {
   it("sends on Enter without Shift", () => {
@@ -16,5 +16,26 @@ describe("chat composer keyboard behaviour", () => {
 
   it("does not intercept other keys", () => {
     expect(shouldSendChatMessageOnKey("a", false, false)).toBe(false);
+  });
+});
+
+describe("chat send retry idempotency", () => {
+  it("reuses the same client id when the exact message is retried", () => {
+    const original = { key: "conversation-a|same message", clientMessageId: "client-id-1" };
+    const createId = vi.fn(() => "client-id-2");
+
+    expect(resolveChatClientMessageId(original, original.key, createId)).toBe(original);
+    expect(createId).not.toHaveBeenCalled();
+  });
+
+  it("creates a new client id when the message payload changes", () => {
+    const original = { key: "conversation-a|first message", clientMessageId: "client-id-1" };
+    const createId = vi.fn(() => "client-id-2");
+
+    expect(resolveChatClientMessageId(original, "conversation-a|edited message", createId)).toEqual({
+      key: "conversation-a|edited message",
+      clientMessageId: "client-id-2",
+    });
+    expect(createId).toHaveBeenCalledOnce();
   });
 });
