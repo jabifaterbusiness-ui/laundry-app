@@ -2138,9 +2138,11 @@ model ChatParticipant {
   role               ChatParticipantRole @default(MEMBER)
   joinedAt           DateTime            @default(now())
   leftAt             DateTime?
-  lastReadMessageId  String?
-  lastReadAt         DateTime?
-  mutedAt            DateTime?
+  lastReadMessageId      String?
+  lastReadAt             DateTime?
+  lastDeliveredMessageId String?
+  lastDeliveredAt        DateTime?
+  mutedAt                DateTime?
   archivedAt         DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt

@@ -80,6 +80,10 @@ export function CompanyReceipt({
           <span className="receipt__label">BRANCH</span>
           <strong>{receipt.branchName}</strong>
         </div>
+        <div>
+          <span className="receipt__label">READY DATE</span>
+          <strong>{receipt.readyDate ? formatReceiptDate(receipt.readyDate) : "Not set"}</strong>
+        </div>
       </section>
 
       <table className="receipt__items">

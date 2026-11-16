@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     chatMessage: { findMany: vi.fn() },
-    chatParticipant: { findFirst: vi.fn() },
+    chatParticipant: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     chatAttachment: { findFirst: vi.fn() },
   },
 }));
@@ -98,7 +98,7 @@ describe("chat notification feed", () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
-  it("returns only safe notification metadata and truncates message previews", async () => {
+  it("returns safe notification metadata without exposing message bodies or previews", async () => {
     const createdAt = new Date("2026-11-16T00:00:01.000Z");
     findMany.mockResolvedValue([{
       id: "message-1",
@@ -119,7 +119,6 @@ describe("chat notification feed", () => {
         conversationKind: "GROUP",
         senderId: "sender-a",
         senderName: "Alex",
-        preview: "x".repeat(160),
         createdAt,
       }],
     });

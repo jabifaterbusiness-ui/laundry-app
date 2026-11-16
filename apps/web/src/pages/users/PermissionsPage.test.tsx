@@ -71,6 +71,14 @@ const permissions: import("../../lib/permissions-api.js").RolePermission[] = [
     source: "user_override",
     allowed: true,
   },
+  { code: "chat.view", module: "chat", action: "view", description: "View own conversations and eligible colleagues", source: "default", allowed: false },
+  { code: "chat.cross_branch", module: "chat", action: "cross_branch", description: "Discover and initiate chats with colleagues in other branches of the same business", source: "default", allowed: false },
+  { code: "chat.send_message", module: "chat", action: "send_message", description: "Send messages and replies in conversations", source: "default", allowed: false },
+  { code: "chat.create_direct", module: "chat", action: "create_direct", description: "Start direct conversations", source: "default", allowed: false },
+  { code: "chat.create_group", module: "chat", action: "create_group", description: "Create group conversations", source: "default", allowed: false },
+  { code: "chat.manage_group", module: "chat", action: "manage_group", description: "Manage groups you own or administer", source: "default", allowed: false },
+  { code: "chat.manage_all_groups", module: "chat", action: "manage_all_groups", description: "Moderate any group in the business", source: "default", allowed: false },
+  { code: "chat.upload_attachments", module: "chat", action: "upload_attachments", description: "Upload files to conversations", source: "default", allowed: false },
 ];
 
 function renderPermissions() {
@@ -178,6 +186,7 @@ describe("PermissionsPage", () => {
   });
 
   it("manages permissions for an individual user", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", "orders.view"] };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
@@ -197,9 +206,9 @@ describe("PermissionsPage", () => {
       screen.getByText(/John Staff.*Laundry Supervisor/),
     ).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Allow" }),
-    );
+    const orderViewRow = screen.getByText("View orders").closest("tr");
+    expect(orderViewRow).not.toBeNull();
+    fireEvent.click(orderViewRow!.querySelector("button")!);
 
     await waitFor(() => {
       expect(mockedUpdateUserPermission).toHaveBeenCalledWith(
@@ -240,7 +249,65 @@ describe("PermissionsPage", () => {
     });
   });
 
+  it("shows all eight chat permissions and keeps each grant individually controllable", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", ...permissions.filter((permission) => permission.code.startsWith("chat.")).map((permission) => permission.code)] };
+    renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", {
+      name: /John Staff — Laundry Supervisor/,
+    });
+    fireEvent.change(userSelect, { target: { value: "staff-1" } });
+
+    const moduleSelect = await screen.findByLabelText("Module");
+    fireEvent.change(moduleSelect, { target: { value: "chat" } });
+
+    const chatPermissionDescriptions = [
+      "View own conversations and eligible colleagues",
+      "Discover and initiate chats with colleagues in other branches of the same business",
+      "Send messages and replies in conversations",
+      "Start direct conversations",
+      "Create group conversations",
+      "Manage groups you own or administer",
+      "Moderate any group in the business",
+      "Upload files to conversations",
+    ];
+    for (const description of chatPermissionDescriptions) {
+      expect(await screen.findByText(description)).toBeInTheDocument();
+    }
+
+    const uploadRow = screen.getByText("Upload files to conversations").closest("tr");
+    expect(uploadRow).not.toBeNull();
+    fireEvent.click(uploadRow!.querySelector("button")!);
+
+    await waitFor(() => {
+      expect(mockedUpdateUserPermission).toHaveBeenCalledWith(
+        "staff-1",
+        "chat.upload_attachments",
+        true,
+        "Test permission change reason",
+        "token",
+      );
+    });
+  });
+
+
+  it("keeps chat permission rows visible but disables grants the acting manager cannot delegate", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions"] };
+    renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", { name: /John Staff — Laundry Supervisor/ });
+    fireEvent.change(userSelect, { target: { value: "staff-1" } });
+    fireEvent.change(await screen.findByLabelText("Module"), { target: { value: "chat" } });
+
+    const viewRow = screen.getByText("View own conversations and eligible colleagues").closest("tr");
+    expect(viewRow).not.toBeNull();
+    expect(viewRow!.querySelector("button")).toBeDisabled();
+    expect(mockedUpdateUserPermission).not.toHaveBeenCalled();
+  });
   it("supports Allow All for an individual user", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", ...permissions.map((permission) => permission.code)] };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
@@ -267,7 +334,7 @@ describe("PermissionsPage", () => {
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "All 2 permissions were allowed successfully.",
+      "10 permissions you are authorised to grant were allowed successfully.",
     );
   });
 

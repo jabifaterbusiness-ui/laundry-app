@@ -115,6 +115,7 @@ const invoiceFixture = {
   orderId: "77777777-7777-7777-7777-777777777777",
   order: {
     orderNumber: "00017",
+    expectedReadyAt: new Date("2026-09-02T12:00:00.000Z"),
   },
   status: "ISSUED",
   customerName: "Jane Doe",
@@ -223,6 +224,7 @@ describe("Customer receipt endpoint", () => {
       receiptType: "CUSTOMER",
       invoiceNumber: "00042",
       orderNumber: "00017",
+      readyDate: "2026-09-02T12:00:00.000Z",
       companyName: "Clean Laundry",
       companyPhone: "08000000000",
       companyEmail: "hello@example.com",

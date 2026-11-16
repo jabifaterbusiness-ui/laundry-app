@@ -5,6 +5,7 @@ export type CustomerReceipt = {
   businessId: string;
   invoiceNumber: string;
   orderNumber: string;
+  readyDate: string | null;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -54,6 +55,7 @@ export type CompanyReceipt = {
   receiptType: "COMPANY";
   invoiceNumber: string;
   orderNumber: string;
+  readyDate: string | null;
   companyName: string;
   companyPhone: string | null;
   companyEmail: string | null;
@@ -118,6 +120,7 @@ async function getInvoiceSnapshot(
       order: {
         select: {
           orderNumber: true,
+          expectedReadyAt: true,
         },
       },
       branch: {
@@ -207,6 +210,7 @@ export async function getCustomerReceipt(
     receiptType: "CUSTOMER",
     invoiceNumber: invoice.invoiceNumber,
     orderNumber: invoice.order.orderNumber,
+    readyDate: invoice.order.expectedReadyAt?.toISOString() ?? null,
     companyName: invoice.companyName,
     companyPhone: invoice.companyPhone,
     companyEmail: invoice.companyEmail,
@@ -262,6 +266,7 @@ export async function getCompanyReceipt(
     receiptType: "COMPANY",
     invoiceNumber: invoice.invoiceNumber,
     orderNumber: invoice.order.orderNumber,
+    readyDate: invoice.order.expectedReadyAt?.toISOString() ?? null,
     companyName: invoice.companyName,
     companyPhone: invoice.companyPhone,
     companyEmail: invoice.companyEmail,

@@ -13,6 +13,7 @@ import {
   allowAllUserPermissions,
   disallowAllUserPermissions,
   requirePermissionForGrant,
+  getEffectivePermissionCodes,
 } from "./permissions.service.js";
 import {
   rolePermissionParamsSchema,
@@ -192,14 +193,24 @@ export async function allowAllUserPermissionsController(
   const businessId = requireBusinessId(req);
   const { userId } = userIdParamSchema.parse(req.params);
 
-  // Verify the actor possesses every permission before granting the full
-  // catalogue, preventing a partial/unauthorized escalation.
-  for (const permission of await listPermissions()) {
-    await requirePermissionForGrant(
-      req.user!.id,
+  // Bulk grant only the permissions the acting user currently possesses.
+  // This makes Allow All useful for delegated managers without permitting
+  // privilege escalation beyond their own authorised catalogue.
+  const actorPermissionCodes = new Set(
+    await getEffectivePermissionCodes(
       businessId,
+      req.user!.id,
       req.user!.securityRole,
-      permission.code,
+    ),
+  );
+  const grantablePermissionCodes = (await listPermissions())
+    .map((permission) => permission.code)
+    .filter((code) => actorPermissionCodes.has(code));
+
+  if (grantablePermissionCodes.length === 0) {
+    throw new AppError(
+      "You do not have any permissions you are authorised to grant",
+      403,
     );
   }
 
@@ -207,12 +218,19 @@ export async function allowAllUserPermissionsController(
     businessId,
     userId,
   );
-  const previousAllowed = previousPermissions.permissions
+  const previousPermissionStates = previousPermissions.permissions
+    .map((permission) => ({ code: permission.code, allowed: permission.allowed }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+  const previousAllowed = previousPermissionStates
     .filter((permission) => permission.allowed)
-    .map((permission) => permission.code)
-    .sort();
+    .map((permission) => permission.code);
+  const grantablePermissionSet = new Set(grantablePermissionCodes);
+  const afterPermissionStates = previousPermissionStates.map((permission) => ({
+    code: permission.code,
+    allowed: permission.allowed || grantablePermissionSet.has(permission.code),
+  }));
 
-  const result = await allowAllUserPermissions(businessId, userId);
+  const result = await allowAllUserPermissions(businessId, userId, grantablePermissionCodes);
 
   await recordAuditEvent({
     action: "permission.user.allow_all",
@@ -225,12 +243,15 @@ export async function allowAllUserPermissionsController(
       userId,
       count: result.count,
       before: {
+        permissionStates: previousPermissionStates,
         allowedPermissionCodes: previousAllowed,
       },
+      grantablePermissionCodes: [...grantablePermissionCodes].sort(),
       after: {
-        allowedPermissionCodes: (await listPermissions())
-          .map((permission) => permission.code)
-          .sort(),
+        permissionStates: afterPermissionStates,
+        allowedPermissionCodes: afterPermissionStates
+          .filter((permission) => permission.allowed)
+          .map((permission) => permission.code),
       },
       reason: normalizedReason,
     },

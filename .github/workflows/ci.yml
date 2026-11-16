@@ -50,6 +50,14 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Validate Nginx proxy configurations
+        run: |
+          docker run --rm \
+            --add-host=api:127.0.0.1 \
+            --add-host=api-production-4521.up.railway.app:127.0.0.1 \
+            -v "$GITHUB_WORKSPACE/deploy/nginx/production.conf:/etc/nginx/conf.d/production.conf:ro" \
+            -v "$GITHUB_WORKSPACE/deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
       - name: Build shared package
         run: npm run build:shared
       - name: Generate Prisma Client
@@ -61,10 +69,10 @@ jobs:
         run: npm run test:api
       - name: Run web library, state and offline tests
         timeout-minutes: 12
-        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/lib tests/state tests/offline-subscription-payment-queue.test.ts tests/offline-sync-queue.test.ts
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/lib tests/state src/lib/chat-api.test.ts tests/offline-subscription-payment-queue.test.ts tests/offline-sync-queue.test.ts
       - name: Run web component and app tests
         timeout-minutes: 12
-        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/components tests/App.test.tsx src/components/auth/SensitiveAuthorizationManager.test.tsx src/components/auth/SensitiveAuthorizationProvider.test.tsx
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/components tests/App.test.tsx src/components/auth/SensitiveAuthorizationManager.test.tsx src/components/auth/SensitiveAuthorizationProvider.test.tsx src/pages/chat/ChatPage.keyboard.test.ts
       - name: Run Orders page tests
         timeout-minutes: 6
         run: npm run test --workspace=apps/web -- --reporter=verbose --pool=forks --poolOptions.forks.singleFork --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/orders/OrdersPage.test.tsx
@@ -76,7 +84,7 @@ jobs:
         run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/customers tests/pages/data-management tests/pages/finance tests/pages/help tests/pages/inventory tests/pages/invoices
       - name: Run remaining web page tests (payments through users)
         timeout-minutes: 12
-        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/payments tests/pages/reports tests/pages/services tests/pages/users src/pages/security/SuspiciousActivityPage.test.tsx
+        run: npm run test:web -- --reporter=verbose --pool=threads --maxWorkers=2 --minWorkers=1 --testTimeout=15000 --hookTimeout=15000 --teardownTimeout=10000 tests/pages/payments tests/pages/reports tests/pages/services tests/pages/users src/pages/users/PermissionsPage.test.tsx src/pages/security/SuspiciousActivityPage.test.tsx
       - name: Lint API and web
         timeout-minutes: 10
         run: npm run lint

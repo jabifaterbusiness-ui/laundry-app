@@ -3,15 +3,17 @@
 ## Implemented in this branch
 
 - The authenticated application now mounts a global Chat alert manager, so alerts are not limited to the Chat page.
-- A branch-scoped API feed returns recent messages only from conversations the signed-in user still belongs to. It excludes the user's own messages and deleted messages.
-- The web client polls the feed while the app is open, shows a dismissible in-app alert, and opens a browser notification when the page is in the background and the user has granted browser notification permission.
+- A business-scoped API feed returns recent message metadata only from conversations the signed-in user still belongs to. It excludes the user's own messages and deleted messages, and does not return message bodies. Conversation membership is the access boundary; selecting a branch resets the client alert cursor but does not hide conversations in which the user remains an active participant.
+- An authenticated server-sent event stream emits metadata for new messages, edits, deletions, reactions, delivery/read-state changes and conversation/group updates. Events are published after their database changes and delivered only to active participants. Channels are keyed by both business and user IDs; chat permission is rechecked before each event, disconnected listeners are isolated, and streams rotate every five minutes.
+- The global browser alert manager parses chunked event frames, reconnects after the five-minute stream rotation, uses capped exponential backoff during network failures, stops retrying after authentication/permission denial, and immediately invalidates message, conversation and notification queries. REST polling remains enabled as a fallback for missed events and unavailable streaming connections.
 - Users can explicitly grant desktop notification permission from the Team Chat page.
-- The notification feed is scoped by the authenticated user's business and selected branch; the browser cannot request another tenant's notifications by supplying a business ID.
+- The notification feed is scoped by the authenticated user's business and active conversation membership; the browser cannot request another tenant's notifications by supplying a business ID. The selected branch is validated by middleware, while existing conversation membership can span branches within the same business.
+- Delivery receipts advance only when a participant fetches the newest unfiltered conversation page. The participant stores the latest delivered message ID/time; senders see delivered counts separately from read/seen counts. Searching or loading older history does not falsely advance delivery.
 - The API returns a short conversation label rather than message contents in operating-system notifications to reduce accidental disclosure.
 
 ## Important delivery limits
 
-The current implementation provides live in-app alerts and browser notifications while the authenticated LaundryAngel application is running. It does **not** yet guarantee delivery after the browser has been fully closed. That requires a Web Push subscription lifecycle, a VAPID key pair, a push sender on the API, and a service-worker push event handler. The browser permission prompt is not itself a push subscription.
+The current implementation provides live in-app alerts and browser notifications while the authenticated LaundryAngel application is running. The event bus is in-process and therefore assumes one API instance; multi-instance deployments need a shared event broker. The event bus is in-process and has no durable replay; REST polling remains the recovery path for missed events. Typing/presence indicators and cross-instance fan-out are not yet implemented. It does **not** yet guarantee delivery after the browser has been fully closed. That requires a Web Push subscription lifecycle, a VAPID key pair, a push sender on the API, and a service-worker push event handler. The browser permission prompt is not itself a push subscription.
 
 Incoming-call alerts are part of the calling milestone, but a production-ready call invitation and accept/decline lifecycle must be implemented together with the media session. We should not show an "Accept call" action that falsely implies a media connection exists before the media service is available.
 

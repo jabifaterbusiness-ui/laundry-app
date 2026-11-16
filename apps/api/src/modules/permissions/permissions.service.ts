@@ -446,6 +446,7 @@ export async function upsertUserPermissionOverride(
 export async function allowAllUserPermissions(
   businessId: string,
   userId: string,
+  grantablePermissionCodes: readonly string[],
 ) {
   const user = await requireBusinessUser(userId, businessId);
 
@@ -456,16 +457,26 @@ export async function allowAllUserPermissions(
     );
   }
 
+  const requestedCodes = [...new Set(grantablePermissionCodes)];
+  if (requestedCodes.length === 0) {
+    throw new AppError("You do not have any permissions you are authorised to grant", 403);
+  }
+
+  const knownCodes = new Set(PERMISSIONS.map((permission) => permission.code));
+  if (requestedCodes.some((code) => !knownCodes.has(code))) {
+    throw new AppError("Permission catalogue contains an unsupported grant", 400);
+  }
+
   const permissionRecords = await prisma.permission.findMany({
     where: {
-      code: { in: PERMISSIONS.map((permission) => permission.code) },
+      code: { in: requestedCodes },
     },
     select: { id: true, code: true },
   });
 
-  if (permissionRecords.length !== PERMISSIONS.length) {
+  if (permissionRecords.length !== requestedCodes.length) {
     throw new AppError(
-      "Permission catalogue is incomplete; cannot allow all permissions",
+      "Permission catalogue is incomplete; cannot allow all authorised permissions",
       500,
     );
   }

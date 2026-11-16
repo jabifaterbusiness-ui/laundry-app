@@ -6,6 +6,7 @@ import { recordAuditEvent } from "../../lib/audit.js";
 import { deleteChatFile, readChatFile, storeChatFile } from "./chat-storage.service.js";
 import type { Role } from "@prisma/client";
 import { hasPermission } from "../permissions/permissions.service.js";
+import { publishChatEvent, subscribeChatEvents, type ChatRealtimeEvent } from "./chat-events.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -68,9 +69,84 @@ export async function listNotifications(req: Request, res: Response) {
       conversationKind: message.conversation.kind,
       senderId: message.sender.id,
       senderName: message.sender.fullName,
-      preview: message.body.slice(0, 160),
       createdAt: message.createdAt,
     })),
+  });
+}
+
+export async function streamEvents(req: Request, res: Response) {
+  const { userId, businessId } = scope(req);
+  const securityRole = req.user!.securityRole;
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  res.write(": connected\n\n");
+
+  // Recheck the current chat permission before each event so a revoked grant
+  // cannot keep receiving metadata on an already-open stream.
+  let deliveryQueue = Promise.resolve();
+  const unsubscribe = subscribeChatEvents(businessId, userId, (event) => {
+    deliveryQueue = deliveryQueue.then(async () => {
+      if (res.writableEnded) return;
+      const allowed = await hasPermission(userId, businessId, securityRole, "chat.view");
+      if (!allowed) {
+        res.end();
+        return;
+      }
+      if (event.type !== "conversation.removed") {
+        const participant = await prisma.chatParticipant.findFirst({
+          where: {
+            conversationId: event.conversationId,
+            userId,
+            leftAt: null,
+            conversation: { businessId },
+          },
+          select: { id: true },
+        });
+        if (!participant) return;
+      }
+      res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    }).catch(() => {
+      if (!res.writableEnded) res.end();
+    });
+  });
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": heartbeat\n\n");
+  }, 25_000);
+  const maxLifetime = setTimeout(() => res.end(), 5 * 60 * 1000);
+  let closed = false;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    clearTimeout(maxLifetime);
+    unsubscribe();
+  };
+  res.on("close", cleanup);
+  req.on("aborted", cleanup);
+}
+
+async function publishConversationEvent(
+  businessId: string,
+  conversationId: string,
+  event: Omit<ChatRealtimeEvent, "conversationId">,
+) {
+  let recipients: Array<{ userId: string }> = [];
+  try {
+    const found = await prisma.chatParticipant.findMany({
+      where: { conversationId, leftAt: null, conversation: { businessId } },
+      select: { userId: true },
+    });
+    if (Array.isArray(found)) recipients = found;
+  } catch {
+    // Realtime fan-out is best-effort; it must never fail a persisted chat action.
+  }
+  publishChatEvent(businessId, recipients.map((participant) => participant.userId), {
+    ...event,
+    conversationId,
   });
 }
 
@@ -208,6 +284,9 @@ export async function createDirectConversation(req: Request, res: Response) {
     },
     include: { participants: { include: { user: { select: { id: true, fullName: true } } } } },
   });
+  await publishConversationEvent(businessId, conversation.id, {
+    id: conversation.id + ":direct-ready:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(200).json({ data: conversation });
 }
 
@@ -246,6 +325,9 @@ export async function createGroupConversation(req: Request, res: Response) {
     businessId, actorUserId: userId, branchId, correlationId: req.correlationId ?? null,
     metadata: { participantCount: requested.length + 1 },
   });
+  await publishConversationEvent(businessId, conversation.id, {
+    id: conversation.id + ":group-created:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(201).json({ data: conversation });
 }
 
@@ -267,6 +349,43 @@ export async function listMessages(req: Request, res: Response) {
       replyTo: { select: { id: true, body: true, deletedAt: true, sender: { select: { fullName: true } } } },
     },
   });
+
+  // A message is delivered when the recipient has actually fetched the
+  // conversation, not merely when the sender's POST request succeeded.
+  // Only the newest, unfiltered page advances the monotonic delivery marker.
+  const latest = messages[0];
+  if (!before && !search && latest) {
+    const deliveryUpdate = await prisma.chatParticipant.updateMany({
+      where: {
+        conversationId,
+        userId,
+        leftAt: null,
+        OR: [
+          { lastDeliveredAt: null },
+          { lastDeliveredAt: { lt: latest.createdAt } },
+          {
+            AND: [
+              { lastDeliveredAt: latest.createdAt },
+              { lastDeliveredMessageId: { lt: latest.id } },
+            ],
+          },
+        ],
+      },
+      data: {
+        lastDeliveredMessageId: latest.id,
+        lastDeliveredAt: latest.createdAt,
+      },
+    });
+    if (deliveryUpdate.count > 0) {
+      await publishConversationEvent(businessId, conversationId, {
+        id: conversationId + ":delivered:" + userId + ":" + latest.id,
+        type: "conversation.delivered",
+        actorUserId: userId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
   res.json({ data: messages.reverse().map((message) => ({
     ...message,
     replyTo: message.replyTo?.deletedAt ? null : message.replyTo,
@@ -279,6 +398,22 @@ export async function sendMessage(req: Request, res: Response) {
   await requireMembership(conversationId, userId, businessId, branchId);
   const input = messageSchema.parse(req.body);
   if (!input.body && input.attachmentIds.length === 0) throw new AppError("Write a message or attach a file", 422);
+
+  // Idempotency is checked before validating unattached uploads. A retry after
+  // a successful send must return the original message even though its files
+  // are now linked to that message rather than remaining unattached.
+  const messageInclude = {
+    sender: { select: { id: true, fullName: true } },
+    attachments: { where: { deletedAt: null }, select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } },
+  } as const;
+  if (input.clientMessageId) {
+    const existing = await prisma.chatMessage.findFirst({
+      where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+      include: messageInclude,
+    });
+    if (existing) { res.status(200).json({ data: existing }); return; }
+  }
+
   if (input.attachmentIds.length) {
     const owned = await prisma.chatAttachment.findMany({
       where: { id: { in: input.attachmentIds }, businessId, conversationId, uploadedByUserId: userId, messageId: null, deletedAt: null },
@@ -290,26 +425,51 @@ export async function sendMessage(req: Request, res: Response) {
     const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId, deletedAt: null } });
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
   }
-  const message = await prisma.$transaction(async (tx) => {
-    if (input.clientMessageId) {
-      const existing = await tx.chatMessage.findFirst({
-        where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+  let message: Awaited<ReturnType<typeof prisma.chatMessage.findFirst>>;
+  let duplicateRequest = false;
+  try {
+    message = await prisma.$transaction(async (tx) => {
+      if (input.clientMessageId) {
+        const existing = await tx.chatMessage.findFirst({
+          where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+          include: messageInclude,
+        });
+        if (existing) { duplicateRequest = true; return existing; }
+      }
+      const created = await tx.chatMessage.create({
+        data: {
+          conversationId, senderUserId: userId, body: input.body,
+          ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+          ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+          ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
+        },
+        include: messageInclude,
       });
-      if (existing) return existing;
-    }
-    const created = await tx.chatMessage.create({
-      data: {
-        conversationId, senderUserId: userId, body: input.body,
-        ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
-        ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
-        ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
-      },
-      include: { sender: { select: { id: true, fullName: true } }, attachments: { select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } } },
+      await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
+      return created;
     });
-    await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
-    return created;
-  });
-  res.status(201).json({ data: message });
+  } catch (error) {
+    // Concurrent retries can both pass the preflight lookup. The database
+    // unique key is the final arbiter; return the winning request's message.
+    const isUniqueConflict = typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+    if (!isUniqueConflict || !input.clientMessageId) throw error;
+    const existing = await prisma.chatMessage.findFirst({
+      where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+      include: messageInclude,
+    });
+    if (!existing) throw error;
+    duplicateRequest = true;
+    message = existing;
+  }
+  if (!duplicateRequest && message) {
+    await publishConversationEvent(businessId, conversationId, {
+      id: message.id,
+      type: "message.created",
+      messageId: message.id,
+      createdAt: message.createdAt.toISOString(),
+    });
+  }
+  res.status(duplicateRequest ? 200 : 201).json({ data: message });
 }
 
 export async function editMessage(req: Request, res: Response) {
@@ -333,6 +493,13 @@ export async function editMessage(req: Request, res: Response) {
     businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
     metadata: { conversationId },
   });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":updated:" + message.updatedAt.getTime(),
+    type: "message.updated",
+    messageId,
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
+  });
   res.json({ data: message });
 }
 
@@ -355,6 +522,13 @@ export async function deleteMessage(req: Request, res: Response) {
     businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null,
     metadata: { conversationId },
   });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":deleted:" + Date.now(),
+    type: "message.deleted",
+    messageId,
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -366,6 +540,12 @@ export async function markConversationRead(req: Request, res: Response) {
   await prisma.chatParticipant.updateMany({
     where: { conversationId, userId, leftAt: null },
     data: { lastReadMessageId: latest?.id ?? null, lastReadAt: latest?.createdAt ?? new Date() },
+  });
+  await publishConversationEvent(businessId, conversationId, {
+    id: conversationId + ":read:" + Date.now(),
+    type: "conversation.read",
+    actorUserId: userId,
+    createdAt: new Date().toISOString(),
   });
   res.status(204).end();
 }
@@ -391,6 +571,9 @@ export async function updateGroup(req: Request, res: Response) {
     },
   });
   await recordAuditEvent({ action: "chat.group.updated", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { fields: Object.keys(input) } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":updated:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.json({ data: conversation });
 }
 
@@ -412,11 +595,14 @@ export async function addGroupMember(req: Request, res: Response) {
   if (existing && !existing.leftAt) throw new AppError("This colleague is already in the group", 409);
   await prisma.chatParticipant.upsert({
     where: { conversationId_userId: { conversationId: id, userId: newUserId } },
-    update: { leftAt: null, joinedAt: new Date(), role: "MEMBER", archivedAt: null, lastReadMessageId: null, lastReadAt: null },
+    update: { leftAt: null, joinedAt: new Date(), role: "MEMBER", archivedAt: null, lastReadMessageId: null, lastReadAt: null, lastDeliveredMessageId: null, lastDeliveredAt: null },
     create: { conversationId: id, userId: newUserId, role: "MEMBER" },
   });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member was added to the group" } });
   await recordAuditEvent({ action: "chat.group.member_added", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: newUserId } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-added:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -431,6 +617,12 @@ export async function removeGroupMember(req: Request, res: Response) {
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { leftAt: new Date() } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member left or was removed from the group" } });
   await recordAuditEvent({ action: "chat.group.member_removed", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-removed:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
+  publishChatEvent(businessId, [targetUserId], {
+    id: id + ":removed-user:" + Date.now(), type: "conversation.removed", conversationId: id, actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -499,6 +691,9 @@ export async function setGroupMemberRole(req: Request, res: Response) {
   await prisma.chatParticipant.update({ where: { id: target.id }, data: { role } });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: role === "ADMIN" ? "A group administrator was appointed" : "A group administrator role was removed" } });
   await recordAuditEvent({ action: "chat.group.member_role_updated", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { memberUserId: targetUserId, role } });
+  await publishConversationEvent(businessId, id, {
+    id: id + ":member-role:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }
 
@@ -513,5 +708,8 @@ export async function toggleReaction(req: Request, res: Response) {
   const existing = await prisma.chatReaction.findFirst({ where: { messageId, userId, emoji } });
   if (existing) await prisma.chatReaction.delete({ where: { id: existing.id } });
   else await prisma.chatReaction.create({ data: { messageId, userId, emoji } });
+  await publishConversationEvent(businessId, conversationId, {
+    id: messageId + ":reaction:" + Date.now(), type: "message.reaction", messageId, actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(204).end();
 }

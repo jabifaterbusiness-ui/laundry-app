@@ -10,6 +10,7 @@ function makeReceipt(
     businessId: "business-1",
     invoiceNumber: "INV-00001",
     orderNumber: "00001",
+    readyDate: null,
     companyName: "Fresh & Clean Laundry",
     companyPhone: "+2348000000000",
     companyEmail: "hello@example.com",
@@ -148,9 +149,7 @@ describe("renderCustomerReceiptEmail", () => {
     expect(html).toContain(
       "&lt;script&gt;alert(&#039;company&#039;)&lt;/script&gt;",
     );
-    expect(html).toContain(
-      "&lt;img src=x onerror=alert(1)&gt;",
-    );
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).toContain("Branch &quot;A&quot;");
     expect(html).toContain("&lt;b&gt;Dangerous&lt;/b&gt;");
     expect(html).toContain("Terms &amp; &lt;conditions&gt;");
