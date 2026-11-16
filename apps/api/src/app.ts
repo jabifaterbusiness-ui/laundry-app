@@ -38,7 +38,7 @@ import { whatsappConnectionsRouter } from "./modules/whatsapp/whatsapp-connectio
 import { whatsappInboxRouter } from "./modules/whatsapp/whatsapp-inbox.routes.js";
 import { setupRouter } from "./modules/setup/setup.routes.js";
 import { businessRegistrationRouter } from "./modules/business-registration/business-registration.routes.js";
-import { requireAuth, requireBusinessContext } from "./modules/auth/auth.middleware.js";
+import { requireAuth, requireBusinessContext, requirePlatformBusinessContext } from "./modules/auth/auth.middleware.js";
 import { requireActiveBusinessSubscription } from "./modules/subscriptions/subscriptions.middleware.js";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
@@ -100,19 +100,20 @@ export function createApp() {
   const mountProtectedTenantRoute = (
     path: string,
     router: express.Router,
+    contextMiddleware = requireBusinessContext,
   ) => {
     v1.use(
       path,
       requireAuth,
       requirePlatformOperational,
-      requireBusinessContext,
+      contextMiddleware,
       requireActiveBusinessSubscription,
       router,
     );
   };
 
   mountProtectedTenantRoute("/businesses", businessesRouter);
-  mountProtectedTenantRoute("/branches", branchesRouter);
+  mountProtectedTenantRoute("/branches", branchesRouter, requirePlatformBusinessContext);
   mountProtectedTenantRoute("/customers", customersRouter);
   mountProtectedTenantRoute("/audit", auditRouter);
   mountProtectedTenantRoute("/services", servicesRouter);
