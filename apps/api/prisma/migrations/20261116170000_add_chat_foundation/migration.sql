@@ -6,6 +6,7 @@ CREATE TYPE "ChatMessageKind" AS ENUM ('TEXT', 'SYSTEM');
 CREATE TABLE "chat_conversations" (
   "id" TEXT NOT NULL,
   "businessId" TEXT NOT NULL,
+  "branchId" TEXT NOT NULL,
   "kind" "ChatConversationKind" NOT NULL,
   "directKey" TEXT,
   "title" TEXT,
@@ -16,8 +17,9 @@ CREATE TABLE "chat_conversations" (
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "chat_conversations_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "chat_conversations_businessId_directKey_key" ON "chat_conversations"("businessId", "directKey");
+CREATE UNIQUE INDEX "chat_conversations_businessId_branchId_directKey_key" ON "chat_conversations"("businessId", "branchId", "directKey");
 CREATE INDEX "chat_conversations_businessId_lastMessageAt_idx" ON "chat_conversations"("businessId", "lastMessageAt");
+ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
