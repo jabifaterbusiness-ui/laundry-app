@@ -28,7 +28,7 @@ const findFirstUser = vi.mocked(prisma.user.findFirst);
 const crossBranchPermission = vi.mocked(hasPermission);
 
 function response() {
-  return { json: vi.fn(), status: vi.fn().mockReturnThis() } as unknown as Response;
+  return { json: vi.fn(), end: vi.fn(), status: vi.fn().mockReturnThis() } as unknown as Response;
 }
 function request(overrides: Record<string, unknown> = {}) {
   return {
