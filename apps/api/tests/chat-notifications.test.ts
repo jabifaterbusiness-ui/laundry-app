@@ -28,7 +28,7 @@ function request(query: Record<string, unknown> = {}) {
 describe("chat notification feed", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("scopes notifications to the signed-in user's business, branch and active memberships", async () => {
+  it("scopes notifications to the signed-in user's business and active conversation memberships across branches", async () => {
     findMany.mockResolvedValue([] as never);
     const res = response();
 
@@ -40,7 +40,6 @@ describe("chat notification feed", () => {
         deletedAt: null,
         conversation: {
           businessId: "business-a",
-          branchId: "branch-a",
           participants: { some: { userId: "user-a", leftAt: null } },
         },
       }),
