@@ -21,7 +21,7 @@ vi.mock("../src/modules/chat/chat-storage.service.js", () => ({
 
 import { prisma } from "../src/lib/prisma.js";
 import { hasPermission } from "../src/modules/permissions/permissions.service.js";
-import { createDirectConversation, listDirectory } from "../src/modules/chat/chat.controller.js";
+import { createDirectConversation, createGroupConversation, listDirectory } from "../src/modules/chat/chat.controller.js";
 
 const findManyUsers = vi.mocked(prisma.user.findMany);
 const findFirstUser = vi.mocked(prisma.user.findFirst);
@@ -96,6 +96,21 @@ describe("cross-branch chat authorization", () => {
     }), response())).rejects.toMatchObject({
       statusCode: 403,
       message: "Cross-branch chat permission is required to contact this colleague",
+    });
+  });
+
+  it("rejects cross-branch group participants without chat.cross_branch", async () => {
+    crossBranchPermission.mockResolvedValue(false);
+    findManyUsers.mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222" }] as never);
+
+    await expect(createGroupConversation(request({
+      body: {
+        title: "Cross-branch group",
+        participantIds: ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"],
+      },
+    }), response())).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Cross-branch chat permission is required to add colleagues from another branch",
     });
   });
 });
