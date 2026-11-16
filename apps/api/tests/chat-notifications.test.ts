@@ -240,7 +240,10 @@ describe("chat attachment access", () => {
     findAttachment.mockResolvedValue(null as never);
     const res = response();
 
-    await expect(downloadAttachment(request({ params: { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } }), res))
+    const req = request();
+    req.params = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } as never;
+
+    await expect(downloadAttachment(req, res))
       .rejects.toMatchObject({ statusCode: 404, message: "Attachment not found" });
 
     expect(findAttachment).toHaveBeenCalledWith(expect.objectContaining({
