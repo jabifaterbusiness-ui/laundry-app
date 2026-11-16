@@ -69,8 +69,11 @@ describe("Allow All permission controller", () => {
     ]);
     mocks.getUserPermissions.mockResolvedValue({
       permissions: [
-        { code: "orders.view", allowed: true },
+        { code: "chat.cross_branch", allowed: false },
+        { code: "chat.send_message", allowed: false },
         { code: "chat.view", allowed: false },
+        { code: "orders.view", allowed: true },
+        { code: "users.manage_permissions", allowed: false },
       ],
     });
     mocks.allowAllUserPermissions.mockResolvedValue({
@@ -103,8 +106,11 @@ describe("Allow All permission controller", () => {
         metadata: expect.objectContaining({
           before: {
             permissionStates: [
+              { code: "chat.cross_branch", allowed: false },
+              { code: "chat.send_message", allowed: false },
               { code: "chat.view", allowed: false },
               { code: "orders.view", allowed: true },
+              { code: "users.manage_permissions", allowed: false },
             ],
             allowedPermissionCodes: ["orders.view"],
           },
@@ -115,11 +121,19 @@ describe("Allow All permission controller", () => {
           ],
           after: {
             permissionStates: [
+              { code: "chat.cross_branch", allowed: false },
+              { code: "chat.send_message", allowed: true },
               { code: "chat.view", allowed: true },
               { code: "orders.view", allowed: true },
+              { code: "users.manage_permissions", allowed: true },
             ],
-            allowedPermissionCodes: ["chat.view", "orders.view"],
-          },
+            allowedPermissionCodes: [
+              "chat.send_message",
+              "chat.view",
+              "orders.view",
+              "users.manage_permissions",
+            ],
+          }
         }),
       }),
     );
