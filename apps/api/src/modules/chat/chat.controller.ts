@@ -266,6 +266,9 @@ export async function createDirectConversation(req: Request, res: Response) {
     },
     include: { participants: { include: { user: { select: { id: true, fullName: true } } } } },
   });
+  await publishConversationEvent(businessId, conversation.id, {
+    id: conversation.id + ":direct-ready:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
+  });
   res.status(200).json({ data: conversation });
 }
 
@@ -303,6 +306,9 @@ export async function createGroupConversation(req: Request, res: Response) {
     action: "chat.group.created", entityType: "ChatConversation", entityId: conversation.id,
     businessId, actorUserId: userId, branchId, correlationId: req.correlationId ?? null,
     metadata: { participantCount: requested.length + 1 },
+  });
+  await publishConversationEvent(businessId, conversation.id, {
+    id: conversation.id + ":group-created:" + Date.now(), type: "conversation.updated", actorUserId: userId, createdAt: new Date().toISOString(),
   });
   res.status(201).json({ data: conversation });
 }
