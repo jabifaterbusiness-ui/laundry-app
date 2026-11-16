@@ -101,18 +101,24 @@ describe("Allow All permission controller", () => {
         actorUserId: ACTOR_ID,
         businessId: BUSINESS_ID,
         metadata: expect.objectContaining({
+          before: {
+            permissionStates: [
+              { code: "chat.view", allowed: false },
+              { code: "orders.view", allowed: true },
+            ],
+            allowedPermissionCodes: ["orders.view"],
+          },
           grantablePermissionCodes: [
             "chat.send_message",
             "chat.view",
             "users.manage_permissions",
           ],
           after: {
-            allowedPermissionCodes: [
-              "chat.send_message",
-              "chat.view",
-              "orders.view",
-              "users.manage_permissions",
+            permissionStates: [
+              { code: "chat.view", allowed: true },
+              { code: "orders.view", allowed: true },
             ],
+            allowedPermissionCodes: ["chat.view", "orders.view"],
           },
         }),
       }),
