@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BranchesPage } from "./BranchesPage.js";
 import {
@@ -70,6 +71,21 @@ const branches = [
   },
 ];
 
+
+function renderBranchesPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <BranchesPage />
+    </QueryClientProvider>,
+  );
+}
+
 describe("BranchesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,7 +119,7 @@ describe("BranchesPage", () => {
   });
 
   it("lists branches and provides management actions", async () => {
-    render(<BranchesPage />);
+    renderBranchesPage();
 
     expect(await screen.findByText("Main Branch")).toBeInTheDocument();
     expect(screen.getByText("Gwarinpa")).toBeInTheDocument();
@@ -116,27 +132,31 @@ describe("BranchesPage", () => {
   });
 
   it("saves a branch expected-ready time format", async () => {
-    render(<BranchesPage />);
+    renderBranchesPage();
 
     const selector = await screen.findByRole("combobox", {
       name: "Expected Ready time format for Main Branch",
     });
     fireEvent.change(selector, { target: { value: "12H" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save format" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => {
       expect(mockedApiFetch).toHaveBeenCalledWith(
         "/branches/branch-1",
         expect.objectContaining({
           method: "PATCH",
-          body: JSON.stringify({ orderReadyTimeFormat: "12H" }),
+          accessToken: "token",
+          body: JSON.stringify({
+            orderReadyTimeFormat: "12H",
+            defaultOrderReadyTime: null,
+          }),
         }),
       );
     });
   });
 
   it("creates a branch", async () => {
-    render(<BranchesPage />);
+    renderBranchesPage();
 
     fireEvent.change(screen.getByPlaceholderText("Branch name"), {
       target: { value: "Downtown Branch" },
@@ -154,6 +174,7 @@ describe("BranchesPage", () => {
           address: "Central Area",
         },
         "token",
+        null,
       );
     });
   });
@@ -192,7 +213,7 @@ describe("BranchesPage", () => {
       },
     ]);
 
-    render(<BranchesPage />);
+    renderBranchesPage();
 
     await screen.findByText("Main Branch");
 
@@ -251,7 +272,7 @@ describe("BranchesPage", () => {
       permissions: ["branches.view"],
     };
 
-    render(<BranchesPage />);
+    renderBranchesPage();
 
     await screen.findByText("Main Branch");
 

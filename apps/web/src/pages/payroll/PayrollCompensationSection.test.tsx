@@ -200,7 +200,7 @@ describe("PayrollCompensationSection", () => {
     expect(
       await screen.findByRole("heading", { name: "Unassigned legacy salaries" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("1st Avenue, mainbranch")).toBeInTheDocument();
+    expect(await screen.findByText("1st Avenue, mainbranch")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Assign to this branch" }));
 
     expect(screen.getByRole("button", { name: "Confirm assignment" })).toBeInTheDocument();
