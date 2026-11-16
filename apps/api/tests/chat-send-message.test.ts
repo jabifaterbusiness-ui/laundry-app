@@ -80,4 +80,28 @@ describe("chat message send idempotency", () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ data: original });
   });
+  it("returns the original message when a concurrent retry loses the unique-key race", async () => {
+    findParticipant.mockResolvedValue({
+      id: "participant-a",
+      conversation: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", businessId: "business-a" },
+    } as never);
+    const original = {
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      body: "Please find the attached invoice",
+      sender: { id: "user-a", fullName: "Alex" },
+      attachments: [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", originalName: "invoice.pdf", safeMimeType: "application/pdf", sizeBytes: 1024 }],
+    };
+    findMessage.mockResolvedValueOnce(null).mockResolvedValueOnce(original as never);
+    findAttachments.mockResolvedValue([{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }] as never);
+    transaction.mockRejectedValueOnce({ code: "P2002" } as never);
+    const res = response();
+
+    await sendMessage(request(), res);
+
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(findMessage).toHaveBeenCalledTimes(2);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ data: original });
+  });
+
 });
