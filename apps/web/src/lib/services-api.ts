@@ -96,6 +96,7 @@ export async function setServiceActive(
 
 export interface PriceAdjustmentRule {
   id: string;
+  branchId?: string | null;
   name: string;
   percentage: number;
   isActive: boolean;
