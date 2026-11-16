@@ -51,7 +51,7 @@ export async function connectChatEventStream(onEvent:(event:ChatRealtimeEvent)=>
  const branchId=useAuthStore.getState().activeBranchId;
  if(!accessToken||!branchId)throw new Error("Chat authentication and an active branch are required");
  const response=await fetch(`${API_BASE_URL}/chat/events`,{headers:{Authorization:`Bearer ${accessToken}`,"X-Branch-Id":branchId,Accept:"text/event-stream"},signal});
- if(!response.ok)throw new Error(`Chat event stream failed with status ${response.status}`);
+ if(!response.ok){const error=new Error(`Chat event stream failed with status ${response.status}`) as Error&{status:number};error.status=response.status;throw error;}
  if(!response.body)throw new Error("Chat event stream is unavailable in this browser");
  const reader=response.body.getReader();
  const decoder=new TextDecoder();
