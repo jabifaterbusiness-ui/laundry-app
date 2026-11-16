@@ -59,6 +59,7 @@ services:
     pids_limit: 192
     networks:
       - data
+      - app
 
   web:
     image: laundryangel-web:pr46-isolated-test
@@ -75,12 +76,15 @@ services:
     cpus: 0.25
     pids_limit: 64
     networks:
-      - data
+      - app
       - ingress
 
 networks:
   data:
     name: laundryangel_pr46_test_net
+    internal: true
+  app:
+    name: laundryangel_pr46_test_app_net
     internal: true
   ingress:
     name: laundryangel_pr46_test_ingress
