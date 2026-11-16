@@ -186,6 +186,7 @@ describe("PermissionsPage", () => {
   });
 
   it("manages permissions for an individual user", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", "orders.view"] };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
