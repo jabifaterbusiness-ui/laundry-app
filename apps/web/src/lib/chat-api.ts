@@ -7,7 +7,7 @@ export interface ChatMessage { id:string; body:string; kind:"TEXT"|"SYSTEM"; cre
 export interface ChatConversation { id:string; kind:"DIRECT"|"GROUP"; title:string|null; description?:string|null; myRole?:string; unreadCount:number; lastMessage?:ChatMessage|null; lastMessageAt?:string|null; participants:Array<{id:string;user:ChatPerson;role:string;lastReadAt?:string|null}>; }
 export const getChatConversations=()=>apiFetch<{data:ChatConversation[]}>("/chat/conversations",auth());
 export const getChatDirectory=(search="")=>apiFetch<{data:ChatPerson[]}>(`/chat/directory?search=${encodeURIComponent(search)}`,auth());
-export const getChatMessages=(id:string)=>apiFetch<{data:ChatMessage[]}>(`/chat/conversations/${encodeURIComponent(id)}/messages`,auth());
+export const getChatMessages=(id:string,search="")=>apiFetch<{data:ChatMessage[]}>(`/chat/conversations/${encodeURIComponent(id)}/messages${search.trim()?`?search=${encodeURIComponent(search.trim().slice(0,100))}`:""}`,auth());
 export const startDirectChat=(id:string)=>apiFetch<{data:ChatConversation}>(`/chat/direct/${encodeURIComponent(id)}`,{...auth(),method:"POST",body:"{}"});
 export const createChatGroup=(input:{title:string;description?:string;participantIds:string[];includeAllEligible:boolean;confirmLargeGroup:boolean})=>apiFetch<{data:ChatConversation}>("/chat/groups",{...auth(),method:"POST",body:JSON.stringify(input)});
 export const sendChatMessage=(id:string,body:string,attachmentIds:string[]=[],replyToMessageId?:string)=>apiFetch<{data:ChatMessage}>(`/chat/conversations/${encodeURIComponent(id)}/messages`,{...auth(),method:"POST",body:JSON.stringify({body,attachmentIds,clientMessageId:crypto.randomUUID(),...(replyToMessageId?{replyToMessageId}:{})})});
