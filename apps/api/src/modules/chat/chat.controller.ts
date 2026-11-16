@@ -29,6 +29,45 @@ const memberSchema = z.object({ userId: z.string().uuid() });
 const memberRoleSchema = z.object({ role: z.enum(["ADMIN", "MEMBER"]) });
 const reactionSchema = z.object({ emoji: z.string().trim().min(1).max(16) });
 
+export async function listNotifications(req: Request, res: Response) {
+  const { userId, businessId, branchId } = scope(req);
+  const rawSince = typeof req.query.since === "string" ? req.query.since : undefined;
+  const since = rawSince ? new Date(rawSince) : new Date(Date.now() - 30_000);
+  if (Number.isNaN(since.getTime())) throw new AppError("Invalid notification cursor", 422);
+  // Bound the cursor to avoid unbounded history scans from a stale or forged client value.
+  const boundedSince = new Date(Math.max(since.getTime(), Date.now() - 24 * 60 * 60 * 1000));
+  const messages = await prisma.chatMessage.findMany({
+    where: {
+      senderUserId: { not: userId },
+      deletedAt: null,
+      createdAt: { gt: boundedSince },
+      conversation: {
+        businessId,
+        branchId,
+        participants: { some: { userId, leftAt: null } },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: 30,
+    include: {
+      sender: { select: { id: true, fullName: true } },
+      conversation: { select: { id: true, title: true, kind: true } },
+    },
+  });
+  res.json({
+    data: messages.map((message) => ({
+      id: message.id,
+      conversationId: message.conversation.id,
+      conversationTitle: message.conversation.title,
+      conversationKind: message.conversation.kind,
+      senderId: message.sender.id,
+      senderName: message.sender.fullName,
+      preview: message.body.slice(0, 160),
+      createdAt: message.createdAt,
+    })),
+  });
+}
+
 function scope(req: Request) {
   if (!req.user?.id || !req.user.businessId) throw new AppError("Business account required", 403);
   if (!req.branchId) throw new AppError("Choose an active branch to use chat", 400);
