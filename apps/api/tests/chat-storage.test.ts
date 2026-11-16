@@ -7,9 +7,9 @@ describe("chat attachment storage safeguards", () => {
   });
 
   it("removes path separators from uploaded file names", () => {
-    const safe = sanitizeChatFilename("../../private\\\\invoice.pdf");
+    const safe = sanitizeChatFilename(`../../private${String.fromCharCode(92)}invoice.pdf`);
     expect(safe).not.toContain("/");
-    expect(safe).not.toContain("\\\\");
+    expect(safe).not.toContain(String.fromCharCode(92));
     expect(safe).toContain("invoice.pdf");
   });
 
