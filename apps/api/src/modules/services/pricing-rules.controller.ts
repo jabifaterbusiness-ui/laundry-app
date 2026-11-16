@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { createAdjustmentSchema, createTaxRuleSchema, listPricingRulesQuerySchema, pricingRuleIdSchema, updateAdjustmentStatusSchema } from "./pricing-rules.validation.js";
-import { createPriceAdjustment, createTaxRule, deletePriceAdjustment, deleteTaxRule, listPricingRules, setPriceAdjustmentActive } from "./pricing-rules.service.js";
+import { createPriceAdjustment, createTaxRule, deletePriceAdjustment, deleteTaxRule, listPricingRules, removePriceAdjustmentToUnassigned, setPriceAdjustmentActive } from "./pricing-rules.service.js";
 
 function branchId(req: Request): string { if (!req.branchId) throw new AppError("A valid branch context is required", 400); return req.branchId; }
 function businessId(req: Request): string {
@@ -64,6 +64,24 @@ export async function updateAdjustmentStatus(req: Request, res: Response) {
     correlationId: req.correlationId ?? null,
   });
   res.status(200).json(result);
+}
+
+export async function removeAdjustmentToUnassigned(req: Request, res: Response) {
+  const id = businessId(req);
+  const branch = branchId(req);
+  const { id: ruleId } = pricingRuleIdSchema.parse(req.params);
+  await removePriceAdjustmentToUnassigned(ruleId, id, branch, req.user!.id);
+  await recordAuditEvent({
+    action: "pricing.adjustment_removed_to_unassigned",
+    entityType: "PriceAdjustment",
+    entityId: ruleId,
+    businessId: id,
+    branchId: branch,
+    actorUserId: req.user!.id,
+    correlationId: req.correlationId ?? null,
+    metadata: { previousBranchId: branch, newBranchId: null },
+  });
+  res.status(204).send();
 }
 
 export async function removeAdjustment(req: Request, res: Response) {
