@@ -147,12 +147,20 @@ export async function listConversations(req: Request, res: Response) {
     take: 100,
   });
   const data = await Promise.all(participants.map(async (participant) => {
+    const readMarker = participant.lastReadMessageId
+      ? await prisma.chatMessage.findUnique({ where: { id: participant.lastReadMessageId }, select: { id: true, createdAt: true } })
+      : null;
     const unreadCount = await prisma.chatMessage.count({
       where: {
         conversationId: participant.conversationId,
         senderUserId: { not: userId },
         deletedAt: null,
-        ...(participant.lastReadAt ? { createdAt: { gt: participant.lastReadAt } } : {}),
+        ...(readMarker
+          ? { OR: [
+              { createdAt: { gt: readMarker.createdAt } },
+              { createdAt: readMarker.createdAt, id: { gt: readMarker.id } },
+            ] }
+          : participant.lastReadAt ? { createdAt: { gt: participant.lastReadAt } } : {}),
       },
     });
     return {
@@ -346,7 +354,7 @@ export async function markConversationRead(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const conversationId = z.string().uuid().parse(req.params.id);
   await requireMembership(conversationId, userId, businessId, branchId);
-  const latest = await prisma.chatMessage.findFirst({ where: { conversationId }, orderBy: { createdAt: "desc" }, select: { id: true, createdAt: true } });
+  const latest = await prisma.chatMessage.findFirst({ where: { conversationId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, createdAt: true } });
   await prisma.chatParticipant.updateMany({
     where: { conversationId, userId, leftAt: null },
     data: { lastReadMessageId: latest?.id ?? null, lastReadAt: latest?.createdAt ?? new Date() },
