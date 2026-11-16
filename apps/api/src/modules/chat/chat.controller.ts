@@ -237,7 +237,7 @@ export async function markConversationRead(req: Request, res: Response) {
   res.status(204).end();
 }
 
-async function requireGroupAdmin(conversationId: string, userId: string, businessId: string, securityRole: Role) {
+async function requireGroupAdmin(conversationId: string, userId: string, businessId: string, branchId: string, securityRole: Role) {
   const participant = await requireMembership(conversationId, userId, businessId, branchId);
   const isGroupAdmin = participant.conversation.kind === "GROUP" && ["OWNER", "ADMIN"].includes(participant.role);
   const canModerateAll = await hasPermission(userId, businessId, securityRole, "chat.manage_all_groups");
