@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { publishChatEvent, subscribeChatEvents, type ChatRealtimeEvent } from "./chat-events.service.js";
 
-const event: ChatRealtimeEvent = {
+const cleanups: Array<() => void> = [];\n\nafterEach(() => {\n  cleanups.splice(0).forEach((cleanup) => cleanup());\n});\n\nconst event: ChatRealtimeEvent = {
   id: "event-1",
   type: "message.created",
   conversationId: "conversation-1",
@@ -18,9 +18,9 @@ describe("chat realtime event channels", () => {
     const businessA: ChatRealtimeEvent[] = [];
     const businessB: ChatRealtimeEvent[] = [];
     const userB: ChatRealtimeEvent[] = [];
-    subscribeChatEvents("business-a", "user-a", (item) => businessA.push(item));
-    subscribeChatEvents("business-b", "user-a", (item) => businessB.push(item));
-    subscribeChatEvents("business-a", "user-b", (item) => userB.push(item));
+    cleanups.push(subscribeChatEvents("business-a", "user-a", (item) => businessA.push(item)));
+    cleanups.push(subscribeChatEvents("business-b", "user-a", (item) => businessB.push(item)));
+    cleanups.push(subscribeChatEvents("business-a", "user-b", (item) => userB.push(item)));
 
     publishChatEvent("business-a", ["user-a", "user-b"], event);
 
@@ -39,8 +39,8 @@ describe("chat realtime event channels", () => {
 
   it("isolates throwing listeners so other subscribers still receive the event", () => {
     const received: ChatRealtimeEvent[] = [];
-    subscribeChatEvents("business-a", "user-a", () => { throw new Error("closed response"); });
-    subscribeChatEvents("business-a", "user-a", (item) => received.push(item));
+    cleanups.push(subscribeChatEvents("business-a", "user-a", () => { throw new Error("closed response"); }));
+    cleanups.push(subscribeChatEvents("business-a", "user-a", (item) => received.push(item)));
     expect(() => publishChatEvent("business-a", ["user-a"], event)).not.toThrow();
     expect(received).toEqual([event]);
   });
