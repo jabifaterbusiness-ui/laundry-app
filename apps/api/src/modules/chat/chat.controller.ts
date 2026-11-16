@@ -337,7 +337,11 @@ export async function updateGroup(req: Request, res: Response) {
   await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const input = groupUpdateSchema.parse(req.body);
   const conversation = await prisma.chatConversation.update({
-    where: { id }, data: input,
+    where: { id },
+    data: {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+    },
   });
   await recordAuditEvent({ action: "chat.group.updated", entityType: "ChatConversation", entityId: id, businessId, branchId, actorUserId: userId, correlationId: req.correlationId ?? null, metadata: { fields: Object.keys(input) } });
   res.json({ data: conversation });
