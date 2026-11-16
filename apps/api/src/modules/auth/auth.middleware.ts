@@ -105,7 +105,7 @@ export async function requirePlatformBusinessContext(req: Request, _res: Respons
   }
   const businessId = req.header("x-platform-business-id");
   if (!businessId || !businessId.trim()) {
-    throw new AppError("Select a business to manage its branches", 400);
+    throw new AppError("Select a business to manage its branches", 403);
   }
   const business = await prisma.business.findUnique({
     where: { id: businessId.trim() },
