@@ -57,6 +57,15 @@ const orderItemSchema = z
   .object({
     serviceId: uuid,
     quantity: z.number().int().positive(),
+    colors: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+  })
+  .strict();
+
+const orderAdjustmentSchema = z
+  .object({
+    adjustmentId: uuid,
+    scope: z.enum(["INVOICE", "ITEMS"]),
+    itemIndexes: z.array(z.number().int().nonnegative()).max(100).optional(),
   })
   .strict();
 
@@ -67,6 +76,8 @@ const orderCreatePayloadSchema = z
     expectedReadyAt: z.string().datetime().optional(),
     garmentNote: z.string().trim().max(2000).optional(),
     internalNote: z.string().trim().max(2000).optional(),
+    adjustments: z.array(orderAdjustmentSchema).max(100).optional(),
+    taxRuleIds: z.array(uuid).max(100).optional(),
   })
   .strict();
 
