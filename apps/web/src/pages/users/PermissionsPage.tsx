@@ -390,7 +390,11 @@ export function PermissionsPage() {
                   <td>
                     <button
                       type="button"
-                      disabled={locked}
+                      disabled={
+                        locked ||
+                        (!permission.allowed &&
+                          !hasPermission(currentUser, permission.code))
+                      }
                       onClick={() =>
                         updateMutation.mutate({
                           permission,
