@@ -81,6 +81,7 @@ function scope(req: Request) {
 }
 
 async function requireMembership(conversationId: string, userId: string, businessId: string, branchId: string) {
+  void branchId; // The request branch is validated by middleware; membership may span branches within this business.
   const participant = await prisma.chatParticipant.findFirst({
     where: { conversationId, userId, leftAt: null, conversation: { businessId } },
     include: { conversation: true },
@@ -189,7 +190,10 @@ export async function createDirectConversation(req: Request, res: Response) {
   }
   const directKey = [userId, targetUserId].sort().join(":");
   const existing = await prisma.chatConversation.findFirst({
-    where: { businessId, directKey, participants: { some: { userId, leftAt: null } } },
+    where: { businessId, directKey, AND: [
+      { participants: { some: { userId, leftAt: null } } },
+      { participants: { some: { userId: targetUserId, leftAt: null } } },
+    ] },
     include: { participants: { include: { user: { select: { id: true, fullName: true } } } } },
   });
   if (existing) { res.status(200).json({ data: existing }); return; }
