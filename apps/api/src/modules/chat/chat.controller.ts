@@ -82,14 +82,14 @@ export async function streamEvents(req: Request, res: Response) {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
-  res.write(": connected\\n\\n");
+  res.write(": connected\n\n");
 
   const unsubscribe = subscribeChatEvents(userId, (event) => {
     if (res.writableEnded) return;
-    res.write(`id: ${event.id}\\nevent: ${event.type}\\ndata: ${JSON.stringify(event)}\\n\\n`);
+    res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
   });
   const heartbeat = setInterval(() => {
-    if (!res.writableEnded) res.write(": heartbeat\\n\\n");
+    if (!res.writableEnded) res.write(": heartbeat\n\n");
   }, 25_000);
   let closed = false;
   const cleanup = () => {
