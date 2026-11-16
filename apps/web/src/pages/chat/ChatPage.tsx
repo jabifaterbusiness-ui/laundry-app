@@ -20,7 +20,9 @@ export function ChatPage(){
   const controller=new AbortController();
   let stopped=false;
   let retryTimer:number|undefined;
+  let retryDelay=1000;
   const connect=async()=>{
+   let disconnectedByError=false;
    try{
     await connectChatEventStream((event)=>{
      void qc.invalidateQueries({queryKey:["chat-conversations",branchId]});
@@ -29,8 +31,16 @@ export function ChatPage(){
    }catch(error){
     const status=typeof error==="object"&&error!==null&&"status" in error?(error as {status?:number}).status:undefined;
     if(status===401||status===403)return;
+    disconnectedByError=true;
    }
-   if(!stopped&&!controller.signal.aborted)retryTimer=window.setTimeout(()=>void connect(),1000);
+   if(stopped||controller.signal.aborted)return;
+   if(disconnectedByError){
+    retryTimer=window.setTimeout(()=>void connect(),retryDelay);
+    retryDelay=Math.min(retryDelay*2,30000);
+   }else{
+    retryDelay=1000;
+    retryTimer=window.setTimeout(()=>void connect(),1000);
+   }
   };
   void connect();
   return()=>{stopped=true;controller.abort();if(retryTimer!==undefined)window.clearTimeout(retryTimer);};
