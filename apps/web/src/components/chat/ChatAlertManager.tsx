@@ -28,20 +28,32 @@ export function ChatAlertManager() {
     let disposed = false;
     let retryTimer: number | undefined;
     let controller: AbortController | undefined;
+    let retryDelay = 1_000;
 
     const connect = async () => {
-      controller = new AbortController();
+      const activeController = new AbortController();
+      controller = activeController;
+      let disconnectedByError = false;
       try {
         await connectChatEventStream(() => {
           void queryClient.invalidateQueries({ queryKey: ["chat-notifications", branchId] });
           void queryClient.invalidateQueries({ queryKey: ["chat-conversations", branchId] });
           void queryClient.invalidateQueries({ queryKey: ["chat-messages", branchId] });
-        }, controller.signal);
-      } catch {
-        // The existing REST notification poll remains the fallback if streaming is unavailable.
+        }, activeController.signal);
+      } catch (error) {
+        const status = typeof error === "object" && error !== null && "status" in error
+          ? (error as { status?: number }).status
+          : undefined;
+        if (status === 401 || status === 403) return;
+        disconnectedByError = true;
       }
-      if (!disposed && !controller.signal.aborted) {
-        retryTimer = window.setTimeout(() => void connect(), 5_000);
+      if (disposed || activeController.signal.aborted) return;
+      if (disconnectedByError) {
+        retryTimer = window.setTimeout(() => void connect(), retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+      } else {
+        retryDelay = 1_000;
+        retryTimer = window.setTimeout(() => void connect(), 1_000);
       }
     };
 
