@@ -10,16 +10,16 @@ const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"n
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
 export function ChatPage(){
- const user=useAuthStore(s=>s.user), token=useAuthStore(s=>s.accessToken), qc=useQueryClient();
+ const user=useAuthStore(s=>s.user), token=useAuthStore(s=>s.accessToken), branchId=useAuthStore(s=>s.activeBranchId), qc=useQueryClient();
  const [activeId,setActiveId]=useState(""),[draft,setDraft]=useState(""),[search,setSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState("");
- const chatsQ=useQuery({queryKey:["chat-conversations"],queryFn:getChatConversations,enabled:!!token,refetchInterval:8000});
+ const chatsQ=useQuery({queryKey:["chat-conversations"],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:8000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
  useEffect(()=>{if(!activeId&&chats[0])setActiveId(chats[0].id);else if(activeId&&!chats.some(c=>c.id===activeId))setActiveId(chats[0]?.id??"");},[chats,activeId]);
- const messagesQ=useQuery({queryKey:["chat-messages",activeId],queryFn:()=>getChatMessages(activeId),enabled:!!token&&!!activeId,refetchInterval:2500});
+ const messagesQ=useQuery({queryKey:["chat-messages",activeId],queryFn:()=>getChatMessages(activeId),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:2500});
  const messages=messagesQ.data?.data??[];
  useEffect(()=>{if(activeId&&messages.length)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations"]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc]);
- const directoryQ=useQuery({queryKey:["chat-directory",search],queryFn:()=>getChatDirectory(search),enabled:!!token&&showNew});
+ const directoryQ=useQuery({queryKey:["chat-directory",search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
  const directory=directoryQ.data?.data??[];
  const send=useMutation({mutationFn:(input:{body:string;attachmentIds:string[];replyToMessageId?:string})=>sendChatMessage(activeId,input.body,input.attachmentIds,input.replyToMessageId),onSuccess:async()=>{setDraft("");setPendingFiles([]);setReplyTo(null);await Promise.all([qc.invalidateQueries({queryKey:["chat-messages",activeId]}),qc.invalidateQueries({queryKey:["chat-conversations"]})]);}});
  const reaction=useMutation({mutationFn:(input:{messageId:string;emoji:string})=>toggleChatReaction(activeId,input.messageId,input.emoji),onSuccess:()=>qc.invalidateQueries({queryKey:["chat-messages",activeId]})});
@@ -29,7 +29,7 @@ export function ChatPage(){
  const memberRole=useMutation({mutationFn:(input:{userId:string;role:"ADMIN"|"MEMBER"})=>setChatGroupMemberRole(activeId,input.userId,input.role),onSuccess:()=>qc.invalidateQueries({queryKey:["chat-conversations"]})});
  const updateGroup=useMutation({mutationFn:()=>updateChatGroup(activeId,{title:groupTitleDraft}),onSuccess:()=>qc.invalidateQueries({queryKey:["chat-conversations"]})});
  const canManageGroup=hasPermission(user,"chat.manage_group")||hasPermission(user,"chat.manage_all_groups");
- const canModerateGroup=active?.myRole==="OWNER"||active?.myRole==="ADMIN"||hasPermission(user,"chat.manage_all_groups");
+ const canModerateGroup=canManageGroup&&(active?.myRole==="OWNER"||active?.myRole==="ADMIN"||hasPermission(user,"chat.manage_all_groups"));
  useEffect(()=>{setGroupTitleDraft(active?.title??"");},[activeId,active?.title]);
  const group=useMutation({mutationFn:()=>createChatGroup({title:groupName,participantIds:selected,includeAllEligible:allUsers,confirmLargeGroup:allUsers||selected.length>50}),onSuccess:async(r)=>{setActiveId(r.data.id);setShowNew(false);setGroupMode(false);setGroupName("");setSelected([]);setAllUsers(false);await qc.invalidateQueries({queryKey:["chat-conversations"]});}});
  const unread=useMemo(()=>chats.reduce((n,c)=>n+c.unreadCount,0),[chats]);
@@ -37,7 +37,7 @@ export function ChatPage(){
  function submit(e:FormEvent){e.preventDefault();if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending)send.mutate({body:draft.trim(),attachmentIds:pendingFiles.map(file=>file.id),...(replyTo?{replyToMessageId:replyTo.id}:{})});}
  async function handleFile(file:File){if(!activeId)return;setUploading(true);setUploadError("");try{const result=await uploadChatAttachment(activeId,file);setPendingFiles(current=>[...current,result.data]);}catch(error){setUploadError(error instanceof Error?error.message:"File upload failed");}finally{setUploading(false);}}
  return <main className="chat-page">
-  <header className="chat-heading"><div><span className="chat-kicker">LAUNDRYANGEL WORKSPACE</span><h1>Team Chat</h1><p>Keep your team connected across daily operations.</p></div><button className="chat-primary" onClick={()=>setShowNew(true)}>＋ New conversation</button></header>
+  <header className="chat-heading"><div><span className="chat-kicker">LAUNDRYANGEL WORKSPACE</span><h1>Team Chat</h1><p>Keep your team connected across daily operations.</p></div><button className="chat-primary" onClick={()=>setShowNew(true)}>＋ New conversation</button></header>{!branchId?<p className="chat-branch-notice">Choose an active branch from the top navigation to open your eligible colleague directory and conversations.</p>:null}
   <section className="chat-layout">
    <aside className="chat-list-panel"><div className="chat-list-title"><div><strong>Messages</strong><small>{unread?unread+" unread":"Your conversations"}</small></div><button onClick={()=>setShowNew(true)} aria-label="New chat">＋</button></div>
     <label className="chat-search"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search conversations"/></label>
@@ -67,7 +67,7 @@ export function ChatPage(){
   </section>
   {showNew?<div className="chat-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowNew(false);}}><section className="chat-dialog" role="dialog" aria-modal="true" aria-labelledby="new-chat-title"><header><div><span className="chat-kicker">NEW MESSAGE</span><h2 id="new-chat-title">{addToGroup?"Add group members":groupMode?"Create a group":"Start a conversation"}</h2></div><button aria-label="Close" onClick={()=>setShowNew(false)}>×</button></header>{!addToGroup?<nav><button className={!groupMode?"chosen":""} onClick={()=>setGroupMode(false)}>Direct message</button><button className={groupMode?"chosen":""} onClick={()=>setGroupMode(true)}>Group chat</button></nav>:null}
    {groupMode?<><label className="chat-group-name">Group name<input value={groupName} onChange={e=>setGroupName(e.target.value)} placeholder="e.g. Wuse Branch Team" maxLength={80}/></label><label className="chat-all"><input type="checkbox" checked={allUsers} onChange={e=>setAllUsers(e.target.checked)}/> Include all eligible colleagues in my branch</label></>:<label className="chat-search"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find a colleague by name or email"/></label>}
-   <div className="chat-directory">{directoryQ.isLoading?<p className="chat-hint">Finding colleagues…</p>:null}{directory.filter(person=>!addToGroup||!active?.participants.some(member=>member.user.id===person.id)).map(person=><button key={person.id} onClick={()=>addToGroup?addMember.mutate(person):groupMode?setSelected(old=>old.includes(person.id)?old.filter(id=>id!==person.id):[...old,person.id]):direct.mutate(person)}><span className="chat-avatar">{initials(person.fullName)}</span><span><b>{person.fullName}</b><small>{person.role??person.email}</small></span>{groupMode?<input type="checkbox" checked={selected.includes(person.id)} readOnly/>:<em>Message →</em>}</button>)}</div>
+   <div className="chat-directory">{directoryQ.isLoading?<p className="chat-hint">Finding colleagues…</p>:null}{directory.filter(person=>!addToGroup||!active?.participants.some(member=>member.user.id===person.id)).map(person=><button key={person.id} onClick={()=>addToGroup?addMember.mutate(person):groupMode?setSelected(old=>old.includes(person.id)?old.filter(id=>id!==person.id):[...old,person.id]):direct.mutate(person)}><span className="chat-avatar">{initials(person.fullName)}</span><span><b>{person.fullName}</b><small>{person.role??person.email}</small></span>{groupMode?<input type="checkbox" checked={selected.includes(person.id)} readOnly/>:<em>{addToGroup?"Add →":"Message →"}</em>}</button>)}</div>
    {groupMode?<button className="chat-primary chat-create" disabled={!groupName.trim()||(!allUsers&&selected.length<2)||group.isPending} onClick={()=>group.mutate()}>{group.isPending?"Creating…":`Create group · ${allUsers?"all eligible":selected.length+" selected"}`}</button>:null}
    {direct.isError||group.isError||addMember.isError?<p className="chat-error">Could not complete this action. Check permissions and try again.</p>:null}
   </section></div>:null}
