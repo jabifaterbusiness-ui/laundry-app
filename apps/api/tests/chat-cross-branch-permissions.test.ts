@@ -6,7 +6,7 @@ vi.mock("../src/lib/prisma.js", () => ({
     user: { findMany: vi.fn(), findFirst: vi.fn() },
     chatConversation: { findFirst: vi.fn(), upsert: vi.fn(), create: vi.fn() },
     chatMessage: { count: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
-    chatParticipant: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+    chatParticipant: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn(), upsert: vi.fn() },
   },
 }));
 vi.mock("../src/modules/permissions/permissions.service.js", () => ({
@@ -21,7 +21,7 @@ vi.mock("../src/modules/chat/chat-storage.service.js", () => ({
 
 import { prisma } from "../src/lib/prisma.js";
 import { hasPermission } from "../src/modules/permissions/permissions.service.js";
-import { createDirectConversation, createGroupConversation, listDirectory } from "../src/modules/chat/chat.controller.js";
+import { addGroupMember, createDirectConversation, createGroupConversation, listDirectory } from "../src/modules/chat/chat.controller.js";
 
 const findManyUsers = vi.mocked(prisma.user.findMany);
 const findFirstUser = vi.mocked(prisma.user.findFirst);
@@ -128,6 +128,37 @@ describe("cross-branch chat authorization", () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
+  it("restores a re-added group member from archived state with a fresh read cursor", async () => {
+    crossBranchPermission.mockResolvedValue(false);
+    vi.mocked(prisma.chatParticipant.findFirst)
+      .mockResolvedValueOnce({
+        role: "ADMIN",
+        conversation: { kind: "GROUP", businessId: "business-a" },
+      } as never)
+      .mockResolvedValueOnce({
+        id: "participant-b",
+        leftAt: new Date("2026-11-15T00:00:00.000Z"),
+        archivedAt: new Date("2026-11-15T01:00:00.000Z"),
+      } as never);
+    findManyUsers.mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222" }] as never);
+    vi.mocked(prisma.chatParticipant.upsert).mockResolvedValue({} as never);
+
+    await addGroupMember(request({
+      params: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      body: { userId: "22222222-2222-4222-8222-222222222222" },
+    }), response());
+
+    expect(prisma.chatParticipant.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { conversationId_userId: { conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", userId: "22222222-2222-4222-8222-222222222222" } },
+      update: expect.objectContaining({
+        leftAt: null,
+        role: "MEMBER",
+        archivedAt: null,
+        lastReadMessageId: null,
+        lastReadAt: null,
+      }),
+    }));
+  });
   it("rejects cross-branch group participants without chat.cross_branch", async () => {
     crossBranchPermission.mockResolvedValue(false);
     findManyUsers.mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222" }] as never);
