@@ -155,7 +155,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const chatUnreadQuery = useQuery({
     queryKey: ["chat-conversations"],
     queryFn: getChatConversations,
-    enabled: Boolean(accessToken && hasPermission(user, "chat.view")),
+    enabled: Boolean(accessToken && activeBranchId && hasPermission(user, "chat.view")),
     refetchInterval: 10_000,
   });
   const chatUnreadCount = chatUnreadQuery.data?.data.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0;
