@@ -6,7 +6,7 @@ import { recordAuditEvent } from "../../lib/audit.js";
 import { deleteChatFile, readChatFile, storeChatFile } from "./chat-storage.service.js";
 import type { Role } from "@prisma/client";
 import { hasPermission } from "../permissions/permissions.service.js";
-import { publishChatEvent, subscribeChatEvents } from "./chat-events.service.js";
+import { publishChatEvent, subscribeChatEvents, type ChatRealtimeEvent } from "./chat-events.service.js";
 
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
@@ -115,6 +115,21 @@ export async function streamEvents(req: Request, res: Response) {
   };
   res.on("close", cleanup);
   req.on("aborted", cleanup);
+}
+
+async function publishConversationEvent(
+  businessId: string,
+  conversationId: string,
+  event: Omit<ChatRealtimeEvent, "conversationId">,
+) {
+  const recipients = await prisma.chatParticipant.findMany({
+    where: { conversationId, leftAt: null, conversation: { businessId } },
+    select: { userId: true },
+  }).catch(() => []);
+  publishChatEvent(businessId, recipients.map((participant) => participant.userId), {
+    ...event,
+    conversationId,
+  });
 }
 
 function scope(req: Request) {
@@ -386,14 +401,9 @@ export async function sendMessage(req: Request, res: Response) {
     message = existing;
   }
   if (!duplicateRequest && message) {
-    const recipients = await prisma.chatParticipant.findMany({
-      where: { conversationId, leftAt: null, conversation: { businessId } },
-      select: { userId: true },
-    }).catch(() => []);
-    publishChatEvent(businessId, recipients.map((participant) => participant.userId), {
+    await publishConversationEvent(businessId, conversationId, {
       id: message.id,
       type: "message.created",
-      conversationId,
       messageId: message.id,
       createdAt: message.createdAt.toISOString(),
     });
