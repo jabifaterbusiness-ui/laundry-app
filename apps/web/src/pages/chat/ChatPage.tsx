@@ -7,7 +7,7 @@ import "./ChatPage.css";
 
 const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase();
 const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(date)):"";
-export export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
+export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
