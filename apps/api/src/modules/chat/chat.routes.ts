@@ -5,11 +5,12 @@ import { requireAnyPermission, requirePermission } from "../../middleware/permis
 import {
   addGroupMember, createDirectConversation, createGroupConversation, listConversations,
   listDirectory, listMessages, markConversationRead, removeGroupMember, sendMessage,
-  toggleReaction, updateGroup, uploadAttachment, downloadAttachment, setGroupMemberRole, editMessage, deleteMessage,
+  toggleReaction, updateGroup, uploadAttachment, downloadAttachment, setGroupMemberRole, editMessage, deleteMessage, listNotifications,
 } from "./chat.controller.js";
 
 export const chatRouter = Router();
 chatRouter.use(asyncHandler(requireBranchContext), requirePermission("chat.view"));
+chatRouter.get("/notifications", requirePermission("chat.view"), asyncHandler(listNotifications));
 chatRouter.get("/directory", requirePermission("chat.view"), asyncHandler(listDirectory));
 chatRouter.get("/conversations", requirePermission("chat.view"), asyncHandler(listConversations));
 chatRouter.post("/direct/:userId", requirePermission("chat.create_direct"), asyncHandler(createDirectConversation));
