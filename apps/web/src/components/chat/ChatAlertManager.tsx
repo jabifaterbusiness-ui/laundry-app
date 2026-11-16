@@ -24,8 +24,9 @@ export function ChatAlertManager() {
   const notifications = useQuery({
     queryKey: ["chat-notifications", branchId],
     queryFn: async () => {
+      const nextCursor = new Date().toISOString();
       const result = await getChatNotifications(cursor.current);
-      cursor.current = new Date().toISOString();
+      cursor.current = nextCursor;
       return result.data;
     },
     enabled: Boolean(token && branchId && hasPermission(user, "chat.view")),
