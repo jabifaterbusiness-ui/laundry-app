@@ -377,6 +377,39 @@ describe("Branches routes - update and status", () => {
     }));
   });
 
+  it("saves a valid per-branch default expected-ready time", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    updateMany.mockResolvedValue({ count: 1 } as never);
+    findFirst.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      businessId: "biz-A",
+      orderReadyTimeFormat: "12H",
+      defaultOrderReadyTime: "09:30",
+    } as never);
+
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ defaultOrderReadyTime: "09:30" });
+
+    expect(res.status).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: "22222222-2222-2222-2222-222222222222", businessId: "biz-A" }),
+      data: expect.objectContaining({ defaultOrderReadyTime: "09:30" }),
+    }));
+  });
+
+  it("rejects an invalid per-branch default expected-ready time", async () => {
+    findUserOverride.mockResolvedValue({ allowed: true } as never);
+    const res = await request(app)
+      .patch("/api/v1/branches/22222222-2222-2222-2222-222222222222")
+      .set("Authorization", `Bearer ${STAFF_A}`)
+      .send({ defaultOrderReadyTime: "25:70" });
+
+    expect(res.status).toBe(422);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it("allows BUSINESS_OWNER to update a branch", async () => {
     updateMany.mockResolvedValue({ count: 1 } as never);
     findFirst.mockResolvedValue({
