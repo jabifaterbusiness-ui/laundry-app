@@ -161,6 +161,28 @@ describe("chat message history search", () => {
       take: 50,
     }));
   });
+  it("does not expose a deleted message through a reply preview", async () => {
+    findMany.mockResolvedValue([{
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      body: "A later message",
+      replyTo: {
+        id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        body: "This message was deleted",
+        deletedAt: new Date("2026-11-16T00:00:00.000Z"),
+        sender: { fullName: "Alex" },
+      },
+    }] as never);
+    const res = response();
+
+    await listMessages(request(), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        replyTo: null,
+      })],
+    });
+  });
   it("searches message text only inside the active member's conversation and excludes deleted matches", async () => {
     findMany.mockResolvedValue([] as never);
     const res = response();
