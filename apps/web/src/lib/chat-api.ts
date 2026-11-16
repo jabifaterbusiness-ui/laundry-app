@@ -31,7 +31,7 @@ export interface ChatNotification {
 export const getChatNotifications=(since:string,afterId?:string)=>apiFetch<{data:ChatNotification[]}>(`/chat/notifications?since=${encodeURIComponent(since)}${afterId?`&afterId=${encodeURIComponent(afterId)}`:""}`,auth());
 
 export interface ChatRealtimeEvent {
- type:"message.created"; id:string; conversationId:string; messageId:string; createdAt:string;
+ type:"message.created"|"message.updated"|"message.deleted"|"message.reaction"|"conversation.read"|"conversation.updated"; id:string; conversationId:string; messageId?:string; actorUserId?:string; createdAt:string;
 }
 export function consumeChatEventFrames(input:string):{remaining:string;events:ChatRealtimeEvent[]}{
  let buffer=input.replace(/\r\n/g,"\n");
