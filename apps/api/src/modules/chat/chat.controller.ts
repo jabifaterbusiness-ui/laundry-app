@@ -198,7 +198,7 @@ export async function createDirectConversation(req: Request, res: Response) {
   });
   if (existing) { res.status(200).json({ data: existing }); return; }
   const conversation = await prisma.chatConversation.upsert({
-    where: { businessId_branchId_directKey: { businessId, branchId, directKey } },
+    where: { businessId_directKey: { businessId, directKey } },
     update: {},
     create: {
       businessId, branchId, kind: "DIRECT", directKey, createdByUserId: userId,
