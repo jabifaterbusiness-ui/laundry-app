@@ -27,4 +27,4 @@ export interface ChatNotification {
  id:string; conversationId:string; conversationTitle:string|null; conversationKind:"DIRECT"|"GROUP";
  senderId:string; senderName:string; preview:string; createdAt:string;
 }
-export const getChatNotifications=(since:string)=>apiFetch<{data:ChatNotification[]}>(`/chat/notifications?since=${encodeURIComponent(since)}`,auth());
+export const getChatNotifications=(since:string,afterId?:string)=>apiFetch<{data:ChatNotification[]}>(`/chat/notifications?since=${encodeURIComponent(since)}${afterId?`&afterId=${encodeURIComponent(afterId)}`:""}`,auth());
