@@ -23,6 +23,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "services.view", module: "services", action: "view", description: "View services" },
   { code: "services.create", module: "services", action: "create", description: "Create services" },
   { code: "services.update", module: "services", action: "update", description: "Update services" },
+  { code: "services.delete", module: "services", action: "delete", description: "Permanently delete pricing records" },
   { code: "services.change_status", module: "services", action: "change_status", description: "Change service status" },
   { code: "colors.view", module: "colors", action: "view", description: "View colour catalogue" },
   { code: "colors.manage", module: "colors", action: "manage", description: "Add and manage colours" },
