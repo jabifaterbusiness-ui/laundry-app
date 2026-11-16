@@ -22,3 +22,9 @@ export const addChatGroupMember=(id:string,userId:string)=>apiFetch<void>(`/chat
 export const removeChatGroupMember=(id:string,userId:string)=>apiFetch<void>(`/chat/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,{...auth(),method:"DELETE"});
 export const setChatGroupMemberRole=(id:string,userId:string,role:"ADMIN"|"MEMBER")=>apiFetch<void>(`/chat/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`,{...auth(),method:"PATCH",body:JSON.stringify({role})});
 export const markChatRead=(id:string)=>apiFetch<void>(`/chat/conversations/${encodeURIComponent(id)}/read`,{...auth(),method:"POST",body:"{}"});
+
+export interface ChatNotification {
+ id:string; conversationId:string; conversationTitle:string|null; conversationKind:"DIRECT"|"GROUP";
+ senderId:string; senderName:string; preview:string; createdAt:string;
+}
+export const getChatNotifications=(since:string)=>apiFetch<{data:ChatNotification[]}>(`/chat/notifications?since=${encodeURIComponent(since)}`,auth());
