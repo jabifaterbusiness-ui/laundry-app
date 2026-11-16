@@ -1,6 +1,7 @@
 import { apiFetch, apiFetchBlob } from "./api-client.js";
 import { useAuthStore } from "../state/auth-store.js";
 const auth = () => ({ accessToken: useAuthStore.getState().accessToken });
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 export interface ChatPerson { id:string; fullName:string; email?:string; role?:string; branches?:Array<{id:string;name:string}>; }
 export interface ChatAttachment { id:string; originalName:string; safeMimeType:string; sizeBytes:number; }
 export interface ChatMessage { id:string; body:string; kind:"TEXT"|"SYSTEM"; createdAt:string; editedAt?:string|null; deletedAt?:string|null; sender:{id:string;fullName:string}; attachments?:ChatAttachment[]; reactions?:Array<{id:string;emoji:string;user:{id:string;fullName:string}}>; replyTo?:{id:string;body:string;sender:{fullName:string}}|null; }
@@ -28,3 +29,36 @@ export interface ChatNotification {
  senderId:string; senderName:string; createdAt:string;
 }
 export const getChatNotifications=(since:string,afterId?:string)=>apiFetch<{data:ChatNotification[]}>(`/chat/notifications?since=${encodeURIComponent(since)}${afterId?`&afterId=${encodeURIComponent(afterId)}`:""}`,auth());
+
+export interface ChatRealtimeEvent {
+ type:"message.created"; id:string; conversationId:string; messageId:string; createdAt:string;
+}
+export async function connectChatEventStream(onEvent:(event:ChatRealtimeEvent)=>void,signal:AbortSignal):Promise<void>{
+ const {accessToken}=useAuthStore.getState();
+ const branchId=useAuthStore.getState().activeBranchId;
+ if(!accessToken||!branchId)throw new Error("Chat authentication and an active branch are required");
+ const response=await fetch(`${API_BASE_URL}/chat/events`,{headers:{Authorization:`Bearer ${accessToken}`,"X-Branch-Id":branchId,Accept:"text/event-stream"},signal});
+ if(!response.ok)throw new Error(`Chat event stream failed with status ${response.status}`);
+ if(!response.body)throw new Error("Chat event stream is unavailable in this browser");
+ const reader=response.body.getReader();
+ const decoder=new TextDecoder();
+ let buffer="";
+ try{
+  while(!signal.aborted){
+   const {done,value}=await reader.read();
+   if(done)return;
+   buffer+=decoder.decode(value,{stream:true});
+   buffer=buffer.replace(/\\r\\n/g,"\\n");
+   let boundary=buffer.indexOf("\\n\\n");
+   while(boundary>=0){
+    const frame=buffer.slice(0,boundary);
+    buffer=buffer.slice(boundary+2);
+    const data=frame.split("\\n").filter(line=>line.startsWith("data:")).map(line=>line.slice(5).trimStart()).join("\\n");
+    if(data){try{onEvent(JSON.parse(data) as ChatRealtimeEvent);}catch{/* Ignore malformed or unsupported event frames. */}}
+    boundary=buffer.indexOf("\\n\\n");
+   }
+  }
+ }finally{
+  reader.releaseLock();
+ }
+}
