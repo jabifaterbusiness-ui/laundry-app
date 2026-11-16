@@ -70,7 +70,7 @@ export async function removeAdjustmentToUnassigned(req: Request, res: Response) 
   const id = businessId(req);
   const branch = branchId(req);
   const { id: ruleId } = pricingRuleIdSchema.parse(req.params);
-  await removePriceAdjustmentToUnassigned(ruleId, id, branch, req.user!.id);
+  const removal = await removePriceAdjustmentToUnassigned(ruleId, id, branch, req.user!.id);
   await recordAuditEvent({
     action: "pricing.adjustment_removed_to_unassigned",
     entityType: "PriceAdjustment",
@@ -79,7 +79,7 @@ export async function removeAdjustmentToUnassigned(req: Request, res: Response) 
     branchId: branch,
     actorUserId: req.user!.id,
     correlationId: req.correlationId ?? null,
-    metadata: { previousBranchId: branch, newBranchId: null },
+    metadata: { previousBranchId: branch, newBranchId: null, revokedShareCount: removal.revokedShareCount },
   });
   res.status(204).send();
 }
