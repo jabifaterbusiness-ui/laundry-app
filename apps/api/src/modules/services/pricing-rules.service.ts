@@ -238,6 +238,7 @@ export async function setPriceAdjustmentActive(id: string, businessId: string, b
     const scope = await getBranchResourceScope({ businessId, branchId, userId, resourceType: "DISCOUNTS" }, tx);
     const existing = await tx.priceAdjustment.findFirst({ where: { id, businessId, OR: [{ branchId: { in: scope.ownerBranchIds } }, { id: { in: scope.resourceIds } }] } });
     if (!existing) throw new AppError("Price adjustment not found", 404);
+    if (existing.branchId !== branchId) throw new AppError("Only the owning branch can pause or resume a discount. Shared discounts remain controlled by their original branch.", 403);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
     const result = await tx.priceAdjustment.updateMany({
       where: { id, businessId, branchId: existing.branchId },
