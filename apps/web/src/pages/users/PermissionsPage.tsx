@@ -179,7 +179,7 @@ export function PermissionsPage() {
     },
     onSuccess: (result) => {
       setError(null);
-      setSuccess("All " + result.count + " permissions were allowed successfully.");
+      setSuccess(result.count + " permission" + (result.count === 1 ? "" : "s") + " you are authorised to grant were allowed successfully.");
       queryClient.invalidateQueries({
         queryKey: ["permissions", "user", selectedUserId],
       });
