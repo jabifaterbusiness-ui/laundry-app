@@ -9,7 +9,7 @@ const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((
 const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(date)):"";
 export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
-function markerIncludesMessage(markerAt:string|null|undefined,markerId:string|null|undefined,message:Pick<ChatMessage,"id"|"createdAt">){if(!markerAt)return false;const markerTime=new Date(markerAt).getTime();const messageTime=new Date(message.createdAt).getTime();if(markerTime>messageTime)return true;if(markerTime<messageTime)return false;return markerId?markerId>=message.id:true;}
+export function markerIncludesMessage(markerAt:string|null|undefined,markerId:string|null|undefined,message:Pick<ChatMessage,"id"|"createdAt">){if(!markerAt)return false;const markerTime=new Date(markerAt).getTime();const messageTime=new Date(message.createdAt).getTime();if(markerTime>messageTime)return true;if(markerTime<messageTime)return false;return markerId?markerId>=message.id:true;}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
 export function ChatPage(){
