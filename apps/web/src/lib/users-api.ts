@@ -183,10 +183,12 @@ export interface UpdateBranchInput {
 export function createBranch(
   input: CreateBranchInput,
   accessToken: string,
+  platformBusinessId?: string | null,
 ) {
   return apiFetch<Branch>("/branches", {
     method: "POST",
     accessToken,
+    ...(platformBusinessId ? { headers: { "X-Platform-Business-Id": platformBusinessId } } : {}),
     body: JSON.stringify(input),
   });
 }
