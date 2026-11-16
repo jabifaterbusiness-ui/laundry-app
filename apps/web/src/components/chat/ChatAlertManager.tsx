@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { getChatNotifications, type ChatNotification } from "../../lib/chat-api.js";
+import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import "./ChatAlertManager.css";
 
 export function ChatAlertManager() {
   const token = useAuthStore((state) => state.accessToken);
+  const user = useAuthStore((state) => state.user);
   const branchId = useAuthStore((state) => state.activeBranchId);
   const navigate = useNavigate();
   const cursor = useRef(new Date(Date.now() - 15_000).toISOString());
@@ -26,7 +28,7 @@ export function ChatAlertManager() {
       cursor.current = new Date().toISOString();
       return result.data;
     },
-    enabled: Boolean(token && branchId),
+    enabled: Boolean(token && branchId && hasPermission(user, "chat.view")),
     refetchInterval: 4_000,
     refetchIntervalInBackground: true,
     retry: 1,
