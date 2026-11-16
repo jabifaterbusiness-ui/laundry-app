@@ -347,25 +347,23 @@ export async function uploadAttachment(req: Request, res: Response) {
   try { originalName = decodeURIComponent(encodedName); } catch { throw new AppError("Invalid file name", 422); }
   const mime = req.header("x-file-mime-type") ?? "application/octet-stream";
   const stored = await storeChatFile(businessId, req.body, mime, originalName);
-  try {
-    const attachment = await prisma.chatAttachment.create({
-      data: {
-        businessId, conversationId, uploadedByUserId: userId,
-        storageKey: stored.storageKey, originalName: stored.originalName,
-        safeMimeType: stored.safeMimeType, sizeBytes: stored.sizeBytes, checksum: stored.checksum,
-      },
-      select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true },
-    });
-    await recordAuditEvent({
-      action: "chat.attachment.uploaded", entityType: "ChatAttachment", entityId: attachment.id,
-      businessId, actorUserId: userId, branchId, correlationId: req.correlationId ?? null,
-      metadata: { mimeType: attachment.safeMimeType, sizeBytes: attachment.sizeBytes },
-    });
-    res.status(201).json({ data: attachment });
-  } catch (error) {
+  const attachment = await prisma.chatAttachment.create({
+    data: {
+      businessId, conversationId, uploadedByUserId: userId,
+      storageKey: stored.storageKey, originalName: stored.originalName,
+      safeMimeType: stored.safeMimeType, sizeBytes: stored.sizeBytes, checksum: stored.checksum,
+    },
+    select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true },
+  }).catch(async (error) => {
     await deleteChatFile(businessId, stored.storageKey);
     throw error;
-  }
+  });
+  await recordAuditEvent({
+    action: "chat.attachment.uploaded", entityType: "ChatAttachment", entityId: attachment.id,
+    businessId, actorUserId: userId, branchId, correlationId: req.correlationId ?? null,
+    metadata: { mimeType: attachment.safeMimeType, sizeBytes: attachment.sizeBytes },
+  });
+  res.status(201).json({ data: attachment });
 }
 
 export async function downloadAttachment(req: Request, res: Response) {
