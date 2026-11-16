@@ -306,6 +306,7 @@ export async function sendMessage(req: Request, res: Response) {
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
   }
   let message: Awaited<ReturnType<typeof prisma.chatMessage.findFirst>>;
+  let duplicateRequest = false;
   try {
     message = await prisma.$transaction(async (tx) => {
       if (input.clientMessageId) {
@@ -313,7 +314,7 @@ export async function sendMessage(req: Request, res: Response) {
           where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
           include: messageInclude,
         });
-        if (existing) return existing;
+        if (existing) { duplicateRequest = true; return existing; }
       }
       const created = await tx.chatMessage.create({
         data: {
@@ -337,9 +338,10 @@ export async function sendMessage(req: Request, res: Response) {
       include: messageInclude,
     });
     if (!existing) throw error;
+    duplicateRequest = true;
     message = existing;
   }
-  res.status(201).json({ data: message });
+  res.status(duplicateRequest ? 200 : 201).json({ data: message });
 }
 
 export async function editMessage(req: Request, res: Response) {
