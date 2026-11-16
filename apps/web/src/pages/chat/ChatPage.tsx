@@ -7,6 +7,7 @@ import "./ChatPage.css";
 
 const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase();
 const clock=(date?:string|null)=>date?new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"}).format(new Date(date)):"";
+export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
 export function ChatPage(){
@@ -51,7 +52,7 @@ export function ChatPage(){
  if(!hasPermission(user,"chat.view"))return <main className="chat-page"><section className="chat-welcome"><span>🔒</span><h2>Chat access is not enabled</h2><p>Ask your business administrator to grant you the Chat permission.</p></section></main>;
  function sendDraft(){if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending&&!uploading)send.mutate({body:draft.trim(),attachmentIds:pendingFiles.map(file=>file.id),...(replyTo?{replyToMessageId:replyTo.id}:{})});}
  function submit(e:FormEvent){e.preventDefault();sendDraft();}
- function handleComposerKeyDown(e:React.KeyboardEvent<HTMLTextAreaElement>){if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();sendDraft();}}
+ function handleComposerKeyDown(e:React.KeyboardEvent<HTMLTextAreaElement>){if(shouldSendChatMessageOnKey(e.key,e.shiftKey,e.nativeEvent.isComposing)){e.preventDefault();sendDraft();}}
  async function handleFile(file:File){if(!activeId)return;setUploading(true);setUploadError("");try{const result=await uploadChatAttachment(activeId,file);setPendingFiles(current=>[...current,result.data]);}catch(error){setUploadError(error instanceof Error?error.message:"File upload failed");}finally{setUploading(false);}}
  return <main className="chat-page">
   <header className="chat-heading"><div><span className="chat-kicker">LAUNDRYANGEL WORKSPACE</span><h1>Team Chat</h1><p>Keep your team connected across daily operations.</p></div>{notificationPermission!=="granted"&&notificationPermission!=="unsupported"?<button type="button" className="chat-notify-button" onClick={()=>void Notification.requestPermission().then(setNotificationPermission)}>Enable desktop alerts</button>:null}{canStartDirect||canCreateGroup?<button className="chat-primary" onClick={()=>{setAddToGroup(false);setGroupMode(false);setShowNew(true);}}>＋ New conversation</button>:null}</header>{!branchId?<p className="chat-branch-notice">Choose an active branch from the top navigation to open your eligible colleague directory and conversations.</p>:null}
