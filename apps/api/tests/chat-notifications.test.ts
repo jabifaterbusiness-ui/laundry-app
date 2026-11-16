@@ -4,13 +4,15 @@ import type { Request, Response } from "express";
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     chatMessage: { findMany: vi.fn() },
+    chatParticipant: { findFirst: vi.fn() },
   },
 }));
 
 import { prisma } from "../src/lib/prisma.js";
-import { listNotifications } from "../src/modules/chat/chat.controller.js";
+import { listMessages, listNotifications } from "../src/modules/chat/chat.controller.js";
 
 const findMany = vi.mocked(prisma.chatMessage.findMany);
+const findParticipant = vi.mocked(prisma.chatParticipant.findFirst);
 
 function response() {
   const res = { json: vi.fn() } as unknown as Response;
@@ -22,6 +24,7 @@ function request(query: Record<string, unknown> = {}) {
     user: { id: "user-a", businessId: "business-a" },
     branchId: "branch-a",
     query,
+    params: { id: "conversation-a" },
   } as unknown as Request;
 }
 
@@ -134,5 +137,54 @@ describe("chat notification feed", () => {
       message: "Choose an active branch to use chat",
     });
     expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("chat message history search", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findParticipant.mockResolvedValue({ id: "participant-a", conversation: { id: "conversation-a", businessId: "business-a" } } as never);
+  });
+
+  it("searches message text only inside the active member's conversation and excludes deleted matches", async () => {
+    findMany.mockResolvedValue([] as never);
+    const res = response();
+
+    await listMessages(request({ search: "  invoice overdue  " }), res);
+
+    expect(findParticipant).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        conversationId: "conversation-a",
+        userId: "user-a",
+        leftAt: null,
+        conversation: { businessId: "business-a" },
+      },
+    }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        conversationId: "conversation-a",
+        body: { contains: "invoice overdue", mode: "insensitive" },
+        deletedAt: null,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 50,
+    }));
+    expect(res.json).toHaveBeenCalledWith({ data: [] });
+  });
+
+  it("bounds search terms to 100 characters", async () => {
+    findMany.mockResolvedValue([] as never);
+    const res = response();
+    const term = "x".repeat(140);
+
+    await listMessages(request({ search: term }), res);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        conversationId: "conversation-a",
+        body: { contains: "x".repeat(100), mode: "insensitive" },
+        deletedAt: null,
+      },
+    }));
   });
 });
