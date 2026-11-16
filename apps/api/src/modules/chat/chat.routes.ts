@@ -25,4 +25,4 @@ chatRouter.patch("/groups/:id", requireAnyPermission(["chat.manage_group", "chat
 chatRouter.post("/groups/:id/members", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(addGroupMember));
 chatRouter.delete("/groups/:id/members/:userId", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(removeGroupMember));
 chatRouter.patch("/groups/:id/members/:userId/role", requireAnyPermission(["chat.manage_group", "chat.manage_all_groups"]), asyncHandler(setGroupMemberRole));
-chatRouter.post("/conversations/:id/messages/:messageId/reactions", requirePermission("chat.view"), asyncHandler(toggleReaction));
+chatRouter.post("/conversations/:id/messages/:messageId/reactions", requirePermission("chat.send_message"), asyncHandler(toggleReaction));
