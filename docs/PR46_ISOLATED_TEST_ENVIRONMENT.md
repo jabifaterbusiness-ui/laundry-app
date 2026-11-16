@@ -16,7 +16,23 @@ Do not run `docker compose down -v`, `docker volume prune`, or broad Docker clea
 
 ## Prepare on the VPS
 
-Transfer a Git archive of the exact CI-passing commit to the VPS and extract it into:
+From the LaundryAngel Codespace terminal, package the isolated-test branch (which contains the infrastructure files) and copy it to the VPS:
+
+```bash
+git fetch origin ops/pr46-isolated-test-stack
+git archive --format=tar.gz --output=/tmp/laundryangel-pr46-isolated-test.tar.gz origin/ops/pr46-isolated-test-stack
+scp /tmp/laundryangel-pr46-isolated-test.tar.gz ubuntu@148.113.149.30:/tmp/
+```
+
+Then connect to the VPS and extract it into:
+
+```bash
+ssh ubuntu@148.113.149.30
+sudo install -d -m 700 /opt/laundryangel/pr46-test/source
+sudo tar --no-same-owner --no-same-permissions -xzf /tmp/laundryangel-pr46-isolated-test.tar.gz -C /opt/laundryangel/pr46-test/source
+```
+
+The package branch is based on the CI-passing application commit and adds only isolated-test infrastructure and documentation. The application source commit to record/deploy is:
 
 `/opt/laundryangel/pr46-test/source`
 
@@ -29,6 +45,7 @@ Then run:
 ```bash
 sudo bash /opt/laundryangel/pr46-test/source/deploy/pr46-test/prepare-env.sh
 sudo bash /opt/laundryangel/pr46-test/source/deploy/pr46-test/deploy.sh 34ea676b263ad62127d892af8643659313149bbd
+sudo bash /opt/laundryangel/pr46-test/source/deploy/pr46-test/seed-permissions.sh
 ```
 
 The deploy script validates Compose, builds dedicated images, starts only the dedicated database, verifies and saves a pre-deploy database archive, then starts API and web. The API image applies Prisma migrations during startup. The script does not stop or recreate the existing staging or production containers.
