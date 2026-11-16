@@ -82,6 +82,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "migrations.manage", module: "migrations", action: "manage", description: "Manage migration jobs" },
 
   { code: "chat.view", module: "chat", action: "view", description: "View own conversations and eligible colleagues" },
+  { code: "chat.send_message", module: "chat", action: "send_message", description: "Send messages and replies in conversations" },
   { code: "chat.create_direct", module: "chat", action: "create_direct", description: "Start direct conversations" },
   { code: "chat.create_group", module: "chat", action: "create_group", description: "Create group conversations" },
   { code: "chat.manage_group", module: "chat", action: "manage_group", description: "Manage groups you own or administer" },
