@@ -2124,6 +2124,7 @@ model ChatConversation {
   updatedAt       DateTime              @updatedAt
 
   @@unique([businessId, branchId, directKey])
+  @@unique([businessId, directKey])
   @@index([businessId, lastMessageAt])
   @@map("chat_conversations")
 }
