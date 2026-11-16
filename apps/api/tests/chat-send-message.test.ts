@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 
 vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
-    chatParticipant: { findFirst: vi.fn() },
+    chatParticipant: { findFirst: vi.fn(), findMany: vi.fn() },
     chatMessage: { findFirst: vi.fn() },
     chatAttachment: { findMany: vi.fn() },
     $transaction: vi.fn(),
@@ -14,11 +14,15 @@ vi.mock("../src/modules/chat/chat-storage.service.js", () => ({
   storeChatFile: vi.fn(),
   deleteChatFile: vi.fn(),
 }));
+vi.mock("../src/modules/chat/chat-events.service.js", () => ({ publishChatEvent: vi.fn(), subscribeChatEvents: vi.fn() }));
 
 import { prisma } from "../src/lib/prisma.js";
 import { sendMessage } from "../src/modules/chat/chat.controller.js";
+import { publishChatEvent } from "../src/modules/chat/chat-events.service.js";
 
 const findParticipant = vi.mocked(prisma.chatParticipant.findFirst);
+const findParticipants = vi.mocked(prisma.chatParticipant.findMany);
+const publishEvent = vi.mocked(publishChatEvent);
 const findMessage = vi.mocked(prisma.chatMessage.findFirst);
 const findAttachments = vi.mocked(prisma.chatAttachment.findMany);
 const transaction = vi.mocked(prisma.$transaction);
@@ -103,5 +107,36 @@ describe("chat message send idempotency", () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ data: original });
   });
+  it("publishes a metadata-only event to active conversation participants after a new message commits", async () => {
+    findParticipant.mockResolvedValue({
+      id: "participant-a",
+      conversation: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", businessId: "business-a" },
+    } as never);
+    findMessage.mockResolvedValueOnce(null);
+    findAttachments.mockResolvedValue([{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }] as never);
+    const createdAt = new Date("2026-11-16T20:02:00.000Z");
+    const created = {
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      body: "Please find the attached invoice",
+      createdAt,
+      sender: { id: "user-a", fullName: "Alex" },
+      attachments: [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", originalName: "invoice.pdf", safeMimeType: "application/pdf", sizeBytes: 1024 }],
+    };
+    transaction.mockResolvedValueOnce(created as never);
+    findParticipants.mockResolvedValue([{ userId: "user-a" }, { userId: "user-b" }] as never);
+    const res = response();
+
+    await sendMessage(request(), res);
+
+    expect(publishEvent).toHaveBeenCalledWith(["user-a", "user-b"], {
+      id: created.id,
+      type: "message.created",
+      conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      messageId: created.id,
+      createdAt: createdAt.toISOString(),
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
 
 });
