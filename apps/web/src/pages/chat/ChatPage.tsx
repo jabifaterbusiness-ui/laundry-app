@@ -14,7 +14,7 @@ export function ChatPage(){
  const user=useAuthStore(s=>s.user), token=useAuthStore(s=>s.accessToken), branchId=useAuthStore(s=>s.activeBranchId), qc=useQueryClient();
  const [pageVisible,setPageVisible]=useState(typeof document!=="undefined"&&document.visibilityState==="visible"&&document.hasFocus());
  useEffect(()=>{const sync=()=>setPageVisible(document.visibilityState==="visible"&&document.hasFocus());document.addEventListener("visibilitychange",sync);window.addEventListener("focus",sync);window.addEventListener("blur",sync);return()=>{document.removeEventListener("visibilitychange",sync);window.removeEventListener("focus",sync);window.removeEventListener("blur",sync);};},[]);
- useEffect(()=>{setMobileThreadOpen(false);setShowNew(false);setAddToGroup(false);setDraft("");setPendingFiles([]);setReplyTo(null);},[branchId]);
+ useEffect(()=>{setMobileThreadOpen(false);setShowNew(false);setAddToGroup(false);setDraft("");setPendingFiles([]);setReplyTo(null);pendingSendRef.current=null;},[branchId]);
  const [notificationPermission,setNotificationPermission]=useState<NotificationPermission|"unsupported">(typeof window!=="undefined"&&"Notification" in window?Notification.permission:"unsupported");
  const messagesContainerRef=useRef<HTMLDivElement|null>(null);
  const pendingSendRef=useRef<{key:string;clientMessageId:string}|null>(null);
