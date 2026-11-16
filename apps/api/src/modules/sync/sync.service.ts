@@ -566,10 +566,17 @@ async function applySyncOperation(
           items: Array<{
             serviceId: string;
             quantity: number;
+            colors?: string[];
           }>;
           expectedReadyAt?: string;
           garmentNote?: string;
           internalNote?: string;
+          adjustments?: Array<{
+            adjustmentId: string;
+            scope: "INVOICE" | "ITEMS";
+            itemIndexes?: number[];
+          }>;
+          taxRuleIds?: string[];
         };
 
         result = await createOrder(
@@ -587,6 +594,12 @@ async function applySyncOperation(
             }),
             ...(input.internalNote !== undefined && {
               internalNote: input.internalNote,
+            }),
+            ...(input.adjustments !== undefined && {
+              adjustments: input.adjustments,
+            }),
+            ...(input.taxRuleIds !== undefined && {
+              taxRuleIds: input.taxRuleIds,
             }),
           },
           tx,
