@@ -13,6 +13,7 @@ import {
   allowAllUserPermissions,
   disallowAllUserPermissions,
   requirePermissionForGrant,
+  getEffectivePermissionCodes,
 } from "./permissions.service.js";
 import {
   rolePermissionParamsSchema,
@@ -192,14 +193,24 @@ export async function allowAllUserPermissionsController(
   const businessId = requireBusinessId(req);
   const { userId } = userIdParamSchema.parse(req.params);
 
-  // Verify the actor possesses every permission before granting the full
-  // catalogue, preventing a partial/unauthorized escalation.
-  for (const permission of await listPermissions()) {
-    await requirePermissionForGrant(
-      req.user!.id,
+  // Bulk grant only the permissions the acting user currently possesses.
+  // This makes Allow All useful for delegated managers without permitting
+  // privilege escalation beyond their own authorised catalogue.
+  const actorPermissionCodes = new Set(
+    await getEffectivePermissionCodes(
       businessId,
+      req.user!.id,
       req.user!.securityRole,
-      permission.code,
+    ),
+  );
+  const grantablePermissionCodes = (await listPermissions())
+    .map((permission) => permission.code)
+    .filter((code) => actorPermissionCodes.has(code));
+
+  if (grantablePermissionCodes.length === 0) {
+    throw new AppError(
+      "You do not have any permissions you are authorised to grant",
+      403,
     );
   }
 
@@ -212,7 +223,7 @@ export async function allowAllUserPermissionsController(
     .map((permission) => permission.code)
     .sort();
 
-  const result = await allowAllUserPermissions(businessId, userId);
+  const result = await allowAllUserPermissions(businessId, userId, grantablePermissionCodes);
 
   await recordAuditEvent({
     action: "permission.user.allow_all",
@@ -227,10 +238,12 @@ export async function allowAllUserPermissionsController(
       before: {
         allowedPermissionCodes: previousAllowed,
       },
+      grantablePermissionCodes: [...grantablePermissionCodes].sort(),
       after: {
-        allowedPermissionCodes: (await listPermissions())
-          .map((permission) => permission.code)
-          .sort(),
+        allowedPermissionCodes: [...new Set([
+          ...previousAllowed,
+          ...grantablePermissionCodes,
+        ])].sort(),
       },
       reason: normalizedReason,
     },
