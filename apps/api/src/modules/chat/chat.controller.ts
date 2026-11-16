@@ -75,7 +75,8 @@ export async function listNotifications(req: Request, res: Response) {
 }
 
 export async function streamEvents(req: Request, res: Response) {
-  const { userId } = scope(req);
+  const { userId, businessId } = scope(req);
+  const securityRole = req.user!.securityRole;
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -84,18 +85,32 @@ export async function streamEvents(req: Request, res: Response) {
   res.flushHeaders();
   res.write(": connected\n\n");
 
+  // Recheck the current chat permission before each event so a revoked grant
+  // cannot keep receiving metadata on an already-open stream.
+  let deliveryQueue = Promise.resolve();
   const unsubscribe = subscribeChatEvents(userId, (event) => {
-    if (res.writableEnded) return;
-    res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    deliveryQueue = deliveryQueue.then(async () => {
+      if (res.writableEnded) return;
+      const allowed = await hasPermission(userId, businessId, securityRole, "chat.view");
+      if (!allowed) {
+        res.end();
+        return;
+      }
+      res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    }).catch(() => {
+      if (!res.writableEnded) res.end();
+    });
   });
   const heartbeat = setInterval(() => {
     if (!res.writableEnded) res.write(": heartbeat\n\n");
   }, 25_000);
+  const maxLifetime = setTimeout(() => res.end(), 5 * 60 * 1000);
   let closed = false;
   const cleanup = () => {
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
+    clearTimeout(maxLifetime);
     unsubscribe();
   };
   res.on("close", cleanup);
