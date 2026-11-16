@@ -254,8 +254,9 @@ export async function listMessages(req: Request, res: Response) {
   const conversationId = z.string().uuid().parse(req.params.id);
   await requireMembership(conversationId, userId, businessId, branchId);
   const before = typeof req.query.before === "string" ? req.query.before : undefined;
+  const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
   const messages = await prisma.chatMessage.findMany({
-    where: { conversationId },
+    where: { conversationId, ...(search ? { body: { contains: search, mode: "insensitive" as const }, deletedAt: null } : {}) },
     ...(before ? { cursor: { id: before }, skip: 1 } : {}),
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 50,
