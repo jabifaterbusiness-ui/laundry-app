@@ -34,13 +34,20 @@ export async function listNotifications(req: Request, res: Response) {
   const rawSince = typeof req.query.since === "string" ? req.query.since : undefined;
   const since = rawSince ? new Date(rawSince) : new Date(Date.now() - 30_000);
   if (Number.isNaN(since.getTime())) throw new AppError("Invalid notification cursor", 422);
+  const rawAfterId = typeof req.query.afterId === "string" ? req.query.afterId : undefined;
+  if (rawAfterId && !z.string().uuid().safeParse(rawAfterId).success) {
+    throw new AppError("Invalid notification cursor", 422);
+  }
   // Bound the cursor to avoid unbounded history scans from a stale or forged client value.
   const boundedSince = new Date(Math.max(since.getTime(), Date.now() - 24 * 60 * 60 * 1000));
+  const cursorWasBounded = boundedSince.getTime() !== since.getTime();
   const messages = await prisma.chatMessage.findMany({
     where: {
       senderUserId: { not: userId },
       deletedAt: null,
-      createdAt: { gt: boundedSince },
+      ...(rawAfterId && !cursorWasBounded
+        ? { OR: [{ createdAt: { gt: boundedSince } }, { createdAt: boundedSince, id: { gt: rawAfterId } }] }
+        : { createdAt: { gt: boundedSince } }),
       conversation: {
         businessId,
         branchId,
