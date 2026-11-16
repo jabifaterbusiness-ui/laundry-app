@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { getChatNotifications, type ChatNotification } from "../../lib/chat-api.js";
+import { connectChatEventStream, getChatNotifications, type ChatNotification } from "../../lib/chat-api.js";
 import { hasPermission } from "../../lib/permissions.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import "./ChatAlertManager.css";
@@ -11,6 +11,8 @@ export function ChatAlertManager() {
   const user = useAuthStore((state) => state.user);
   const branchId = useAuthStore((state) => state.activeBranchId);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const canReceiveChat = Boolean(token && branchId && hasPermission(user, "chat.view"));
   const cursor = useRef({ since: new Date(Date.now() - 15_000).toISOString(), afterId: undefined as string | undefined });
   const seen = useRef(new Set<string>());
   const [alert, setAlert] = useState<ChatNotification | null>(null);
@@ -20,6 +22,36 @@ export function ChatAlertManager() {
     seen.current.clear();
     setAlert(null);
   }, [branchId]);
+
+  useEffect(() => {
+    if (!canReceiveChat || !branchId) return;
+    let disposed = false;
+    let retryTimer: number | undefined;
+    let controller: AbortController | undefined;
+
+    const connect = async () => {
+      controller = new AbortController();
+      try {
+        await connectChatEventStream(() => {
+          void queryClient.invalidateQueries({ queryKey: ["chat-notifications", branchId] });
+          void queryClient.invalidateQueries({ queryKey: ["chat-conversations", branchId] });
+          void queryClient.invalidateQueries({ queryKey: ["chat-messages", branchId] });
+        }, controller.signal);
+      } catch {
+        // The existing REST notification poll remains the fallback if streaming is unavailable.
+      }
+      if (!disposed && !controller.signal.aborted) {
+        retryTimer = window.setTimeout(() => void connect(), 5_000);
+      }
+    };
+
+    void connect();
+    return () => {
+      disposed = true;
+      controller?.abort();
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [canReceiveChat, token, branchId, queryClient]);
 
   const notifications = useQuery({
     queryKey: ["chat-notifications", branchId],
