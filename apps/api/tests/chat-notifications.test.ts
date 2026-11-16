@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 
-vi.mock("../../src/lib/prisma.js", () => ({
+vi.mock("../src/lib/prisma.js", () => ({
   prisma: {
     chatMessage: { findMany: vi.fn() },
   },
 }));
 
-import { prisma } from "../../src/lib/prisma.js";
-import { listNotifications } from "../../src/modules/chat/chat.controller.js";
+import { prisma } from "../src/lib/prisma.js";
+import { listNotifications } from "../src/modules/chat/chat.controller.js";
 
 const findMany = vi.mocked(prisma.chatMessage.findMany);
 
