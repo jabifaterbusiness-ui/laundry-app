@@ -3,10 +3,10 @@
 ## Implemented in this branch
 
 - The authenticated application now mounts a global Chat alert manager, so alerts are not limited to the Chat page.
-- A branch-scoped API feed returns recent messages only from conversations the signed-in user still belongs to. It excludes the user's own messages and deleted messages.
+- A business-scoped API feed returns recent message metadata only from conversations the signed-in user still belongs to. It excludes the user's own messages and deleted messages, and does not return message bodies. Conversation membership is the access boundary; selecting a branch resets the client alert cursor but does not hide conversations in which the user remains an active participant.
 - The web client polls the feed while the app is open, shows a dismissible in-app alert, and opens a browser notification when the page is in the background and the user has granted browser notification permission.
 - Users can explicitly grant desktop notification permission from the Team Chat page.
-- The notification feed is scoped by the authenticated user's business and selected branch; the browser cannot request another tenant's notifications by supplying a business ID.
+- The notification feed is scoped by the authenticated user's business and active conversation membership; the browser cannot request another tenant's notifications by supplying a business ID. The selected branch is validated by middleware, while existing conversation membership can span branches within the same business.
 - The API returns a short conversation label rather than message contents in operating-system notifications to reduce accidental disclosure.
 
 ## Important delivery limits
