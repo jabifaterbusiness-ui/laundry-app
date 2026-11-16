@@ -88,7 +88,7 @@ export async function streamEvents(req: Request, res: Response) {
   // Recheck the current chat permission before each event so a revoked grant
   // cannot keep receiving metadata on an already-open stream.
   let deliveryQueue = Promise.resolve();
-  const unsubscribe = subscribeChatEvents(userId, (event) => {
+  const unsubscribe = subscribeChatEvents(businessId, userId, (event) => {
     deliveryQueue = deliveryQueue.then(async () => {
       if (res.writableEnded) return;
       const allowed = await hasPermission(userId, businessId, securityRole, "chat.view");
@@ -390,7 +390,7 @@ export async function sendMessage(req: Request, res: Response) {
       where: { conversationId, leftAt: null, conversation: { businessId } },
       select: { userId: true },
     }).catch(() => []);
-    publishChatEvent(recipients.map((participant) => participant.userId), {
+    publishChatEvent(businessId, recipients.map((participant) => participant.userId), {
       id: message.id,
       type: "message.created",
       conversationId,
