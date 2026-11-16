@@ -11,12 +11,12 @@ export function ChatAlertManager() {
   const user = useAuthStore((state) => state.user);
   const branchId = useAuthStore((state) => state.activeBranchId);
   const navigate = useNavigate();
-  const cursor = useRef(new Date(Date.now() - 15_000).toISOString());
+  const cursor = useRef({ since: new Date(Date.now() - 15_000).toISOString(), afterId: undefined as string | undefined });
   const seen = useRef(new Set<string>());
   const [alert, setAlert] = useState<ChatNotification | null>(null);
 
   useEffect(() => {
-    cursor.current = new Date().toISOString();
+    cursor.current = { since: new Date().toISOString(), afterId: undefined };
     seen.current.clear();
     setAlert(null);
   }, [branchId]);
@@ -25,8 +25,13 @@ export function ChatAlertManager() {
     queryKey: ["chat-notifications", branchId],
     queryFn: async () => {
       const nextCursor = new Date().toISOString();
-      const result = await getChatNotifications(cursor.current);
-      cursor.current = nextCursor;
+      const result = await getChatNotifications(cursor.current.since, cursor.current.afterId);
+      if (result.data.length === 30) {
+        const lastMessage = result.data[result.data.length - 1];
+        cursor.current = { since: lastMessage.createdAt, afterId: lastMessage.id };
+      } else {
+        cursor.current = { since: nextCursor, afterId: undefined };
+      }
       return result.data;
     },
     enabled: Boolean(token && branchId && hasPermission(user, "chat.view")),
