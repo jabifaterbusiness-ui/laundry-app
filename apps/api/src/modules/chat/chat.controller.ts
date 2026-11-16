@@ -264,10 +264,13 @@ export async function listMessages(req: Request, res: Response) {
       sender: { select: { id: true, fullName: true } },
       attachments: { where: { deletedAt: null }, select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } },
       reactions: { include: { user: { select: { id: true, fullName: true } } } },
-      replyTo: { select: { id: true, body: true, sender: { select: { fullName: true } } } },
+      replyTo: { select: { id: true, body: true, deletedAt: true, sender: { select: { fullName: true } } } },
     },
   });
-  res.json({ data: messages.reverse() });
+  res.json({ data: messages.reverse().map((message) => ({
+    ...message,
+    replyTo: message.replyTo?.deletedAt ? null : message.replyTo,
+  })) });
 }
 
 export async function sendMessage(req: Request, res: Response) {
@@ -284,7 +287,7 @@ export async function sendMessage(req: Request, res: Response) {
     if (owned.length !== input.attachmentIds.length) throw new AppError("One or more attachments are unavailable", 404);
   }
   if (input.replyToMessageId) {
-    const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId } });
+    const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId, deletedAt: null } });
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
   }
   const message = await prisma.$transaction(async (tx) => {
@@ -498,7 +501,7 @@ export async function toggleReaction(req: Request, res: Response) {
   const messageId = z.string().uuid().parse(req.params.messageId);
   await requireMembership(conversationId, userId, businessId, branchId);
   const { emoji } = reactionSchema.parse(req.body);
-  const message = await prisma.chatMessage.findFirst({ where: { id: messageId, conversationId }, select: { id: true } });
+  const message = await prisma.chatMessage.findFirst({ where: { id: messageId, conversationId, deletedAt: null }, select: { id: true } });
   if (!message) throw new AppError("Message not found", 404);
   const existing = await prisma.chatReaction.findFirst({ where: { messageId, userId, emoji } });
   if (existing) await prisma.chatReaction.delete({ where: { id: existing.id } });
