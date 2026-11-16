@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   assignUserToBranch,
   createBranch,
@@ -12,6 +13,7 @@ import {
 import { apiFetch } from "../../lib/api-client.js";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
+import { getPlatformBusinesses } from "../../lib/platform-api.js";
 
 type ReadyTimeFormat = "12H" | "24H";
 
@@ -37,6 +39,14 @@ function formatBranchReadyTime(value: string | null, format: ReadyTimeFormat): s
 export function BranchesPage() {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const isPlatformAdmin = user?.securityRole === "PLATFORM_ADMIN";
+  const businessesQuery = useQuery({ queryKey: ["platform", "businesses"], queryFn: () => getPlatformBusinesses(accessToken), enabled: Boolean(isPlatformAdmin && accessToken) });
+  const [platformBusinessId, setPlatformBusinessId] = useState("");
+  useEffect(() => {
+    if (isPlatformAdmin && !platformBusinessId && businessesQuery.data?.length) setPlatformBusinessId(businessesQuery.data[0]!.id);
+  }, [isPlatformAdmin, platformBusinessId, businessesQuery.data]);
+  const businessContextId = isPlatformAdmin ? platformBusinessId : user?.businessId ?? "";
+  const platformHeaders = isPlatformAdmin && platformBusinessId ? { "X-Platform-Business-Id": platformBusinessId } : undefined;
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
@@ -55,11 +65,11 @@ export function BranchesPage() {
   const canUpdate = hasPermission(user, "branches.update");
   const canActivate = hasPermission(user, "branches.activate");
   const canDeactivate = hasPermission(user, "branches.deactivate");
-  const canManageUsers = hasPermission(user, "branches.manage_users");
+  const canManageUsers = !isPlatformAdmin && hasPermission(user, "branches.manage_users");
 
   async function load() {
-    if (!accessToken) return;
-    const result = await apiFetch<Branch[]>("/branches?status=all", { accessToken });
+    if (!accessToken || !businessContextId) return;
+    const result = await apiFetch<Branch[]>("/branches?status=all", { accessToken, ...(platformHeaders ? { headers: platformHeaders } : {}) });
     setBranches(result);
     setReadyTimeFormats(Object.fromEntries(
       result.map((branch) => [branch.id, branch.orderReadyTimeFormat ?? "24H"]),
@@ -71,7 +81,7 @@ export function BranchesPage() {
 
   useEffect(() => {
     void load().catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load branches."));
-  }, [accessToken]);
+  }, [accessToken, businessContextId]);
 
   async function submit() {
     if (!accessToken || !name.trim()) return;
@@ -81,10 +91,11 @@ export function BranchesPage() {
         await apiFetch(`/branches/${editing}`, {
           method: "PATCH",
           accessToken,
+          ...(platformHeaders ? { headers: platformHeaders } : {}),
           body: JSON.stringify({ name: name.trim(), address: address.trim() || undefined }),
         });
       } else {
-        await createBranch({ name: name.trim(), address: address.trim() || undefined }, accessToken);
+        await createBranch({ name: name.trim(), address: address.trim() || undefined }, accessToken, isPlatformAdmin ? businessContextId : null);
       }
       setName("");
       setAddress("");
@@ -180,6 +191,7 @@ export function BranchesPage() {
       await apiFetch(`/branches/${branch.id}/${branch.isActive ? "deactivate" : "activate"}`, {
         method: "PATCH",
         accessToken,
+        ...(platformHeaders ? { headers: platformHeaders } : {}),
       });
       await load();
       setMessage(`Branch ${branch.isActive ? "deactivated" : "activated"} successfully.`);
@@ -204,6 +216,7 @@ export function BranchesPage() {
       await apiFetch(`/branches/${branchId}`, {
         method: "PATCH",
         accessToken,
+        ...(platformHeaders ? { headers: platformHeaders } : {}),
         body: JSON.stringify({ orderReadyTimeFormat: format, defaultOrderReadyTime }),
       });
       await load();
@@ -217,6 +230,9 @@ export function BranchesPage() {
     <section className="page-card">
       <h1>Branch Management</h1>
       <p>Create and manage the branches belonging to this business.</p>
+      {isPlatformAdmin ? <label style={{ display: "grid", gap: 6, maxWidth: 520, margin: "16px 0" }}>Business<select value={platformBusinessId} onChange={(event) => { setPlatformBusinessId(event.target.value); setSelectedBranch(null); }}><option value="">Select a business</option>{(businessesQuery.data ?? []).map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}</select></label> : null}
+      {isPlatformAdmin && businessesQuery.isLoading ? <p>Loading businesses…</p> : null}
+      {isPlatformAdmin && businessesQuery.isError ? <p role="alert">Unable to load businesses. Refresh and try again.</p> : null}
 
       {message ? <div role="status" style={{ margin: "16px 0", padding: 12, borderRadius: 8, background: "#f3f4f6" }}>{message}</div> : null}
 
