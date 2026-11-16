@@ -24,13 +24,10 @@ export function ChatAlertManager() {
   const notifications = useQuery({
     queryKey: ["chat-notifications", branchId],
     queryFn: async () => {
-      const nextCursor = new Date().toISOString();
       const result = await getChatNotifications(cursor.current.since, cursor.current.afterId);
-      if (result.data.length === 30) {
+      if (result.data.length > 0) {
         const lastMessage = result.data[result.data.length - 1];
         cursor.current = { since: lastMessage.createdAt, afterId: lastMessage.id };
-      } else {
-        cursor.current = { since: nextCursor, afterId: undefined };
       }
       return result.data;
     },
