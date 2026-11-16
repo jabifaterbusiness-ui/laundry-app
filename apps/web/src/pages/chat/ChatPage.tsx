@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
-import { addChatGroupMember, connectChatEventStream, createChatGroup, deleteChatMessage, downloadChatAttachment, editChatMessage, getChatConversations, getChatDirectory, getChatMessages, markChatRead, removeChatGroupMember, sendChatMessage, setChatGroupMemberRole, startDirectChat, toggleChatReaction, updateChatGroup, uploadChatAttachment, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatPerson } from "../../lib/chat-api.js";
+import { addChatGroupMember, createChatGroup, deleteChatMessage, downloadChatAttachment, editChatMessage, getChatConversations, getChatDirectory, getChatMessages, markChatRead, removeChatGroupMember, sendChatMessage, setChatGroupMemberRole, startDirectChat, toggleChatReaction, updateChatGroup, uploadChatAttachment, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatPerson } from "../../lib/chat-api.js";
 import "./ChatPage.css";
 
 const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join("").toUpperCase();
@@ -15,37 +15,6 @@ export function ChatPage(){
  const user=useAuthStore(s=>s.user), token=useAuthStore(s=>s.accessToken), branchId=useAuthStore(s=>s.activeBranchId), qc=useQueryClient();
  const [pageVisible,setPageVisible]=useState(typeof document!=="undefined"&&document.visibilityState==="visible"&&document.hasFocus());
  useEffect(()=>{const sync=()=>setPageVisible(document.visibilityState==="visible"&&document.hasFocus());document.addEventListener("visibilitychange",sync);window.addEventListener("focus",sync);window.addEventListener("blur",sync);return()=>{document.removeEventListener("visibilitychange",sync);window.removeEventListener("focus",sync);window.removeEventListener("blur",sync);};},[]);
- useEffect(()=>{
-  if(!token||!branchId)return;
-  const controller=new AbortController();
-  let stopped=false;
-  let retryTimer:number|undefined;
-  let retryDelay=1000;
-  const connect=async()=>{
-   let disconnectedByError=false;
-   try{
-    await connectChatEventStream((event)=>{
-     void qc.invalidateQueries({queryKey:["chat-conversations",branchId]});
-     void qc.invalidateQueries({queryKey:["chat-messages",branchId,event.conversationId]});
-    },controller.signal);
-   }catch(error){
-    const status=typeof error==="object"&&error!==null&&"status" in error?(error as {status?:number}).status:undefined;
-    if(status===401||status===403)return;
-    disconnectedByError=true;
-   }
-   if(stopped||controller.signal.aborted)return;
-   if(disconnectedByError){
-    retryTimer=window.setTimeout(()=>void connect(),retryDelay);
-    retryDelay=Math.min(retryDelay*2,30000);
-   }else{
-    retryDelay=1000;
-    retryTimer=window.setTimeout(()=>void connect(),1000);
-   }
-  };
-  void connect();
-  return()=>{stopped=true;controller.abort();if(retryTimer!==undefined)window.clearTimeout(retryTimer);};
- },[token,branchId,qc]);
- useEffect(()=>{setMobileThreadOpen(false);setShowNew(false);setAddToGroup(false);setDraft("");setPendingFiles([]);setReplyTo(null);pendingSendRef.current=null;},[branchId]);
  const [notificationPermission,setNotificationPermission]=useState<NotificationPermission|"unsupported">(typeof window!=="undefined"&&"Notification" in window?Notification.permission:"unsupported");
  const messagesContainerRef=useRef<HTMLDivElement|null>(null);
  const pendingSendRef=useRef<{key:string;clientMessageId:string}|null>(null);
