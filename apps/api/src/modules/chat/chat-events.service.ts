@@ -1,8 +1,9 @@
 export interface ChatRealtimeEvent {
   id: string;
-  type: "message.created";
+  type: "message.created" | "message.updated" | "message.deleted" | "message.reaction" | "conversation.read" | "conversation.updated";
   conversationId: string;
-  messageId: string;
+  messageId?: string;
+  actorUserId?: string;
   createdAt: string;
 }
 
