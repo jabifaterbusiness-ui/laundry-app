@@ -278,6 +278,22 @@ export async function sendMessage(req: Request, res: Response) {
   await requireMembership(conversationId, userId, businessId, branchId);
   const input = messageSchema.parse(req.body);
   if (!input.body && input.attachmentIds.length === 0) throw new AppError("Write a message or attach a file", 422);
+
+  // Idempotency is checked before validating unattached uploads. A retry after
+  // a successful send must return the original message even though its files
+  // are now linked to that message rather than remaining unattached.
+  const messageInclude = {
+    sender: { select: { id: true, fullName: true } },
+    attachments: { where: { deletedAt: null }, select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } },
+  } as const;
+  if (input.clientMessageId) {
+    const existing = await prisma.chatMessage.findFirst({
+      where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+      include: messageInclude,
+    });
+    if (existing) { res.status(200).json({ data: existing }); return; }
+  }
+
   if (input.attachmentIds.length) {
     const owned = await prisma.chatAttachment.findMany({
       where: { id: { in: input.attachmentIds }, businessId, conversationId, uploadedByUserId: userId, messageId: null, deletedAt: null },
@@ -289,13 +305,16 @@ export async function sendMessage(req: Request, res: Response) {
     const reply = await prisma.chatMessage.findFirst({ where: { id: input.replyToMessageId, conversationId, deletedAt: null } });
     if (!reply) throw new AppError("The message you are replying to is unavailable", 404);
   }
-  const message = await prisma.$transaction(async (tx) => {
-    if (input.clientMessageId) {
-      const existing = await tx.chatMessage.findFirst({
-        where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
-      });
-      if (existing) return existing;
-    }
+  let message;
+  try {
+    message = await prisma.$transaction(async (tx) => {
+      if (input.clientMessageId) {
+        const existing = await tx.chatMessage.findFirst({
+          where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+          include: messageInclude,
+        });
+        if (existing) return existing;
+      }
     const created = await tx.chatMessage.create({
       data: {
         conversationId, senderUserId: userId, body: input.body,
@@ -303,11 +322,23 @@ export async function sendMessage(req: Request, res: Response) {
         ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
         ...(input.attachmentIds.length ? { attachments: { connect: input.attachmentIds.map((id) => ({ id })) } } : {}),
       },
-      include: { sender: { select: { id: true, fullName: true } }, attachments: { select: { id: true, originalName: true, safeMimeType: true, sizeBytes: true } } },
+      include: messageInclude,
+      });
+      await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
+      return created;
     });
-    await tx.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: created.createdAt } });
-    return created;
-  });
+  } catch (error) {
+    // Concurrent retries can both pass the preflight lookup. The database
+    // unique key is the final arbiter; return the winning request's message.
+    const isUniqueConflict = typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+    if (!isUniqueConflict || !input.clientMessageId) throw error;
+    const existing = await prisma.chatMessage.findFirst({
+      where: { conversationId, senderUserId: userId, clientMessageId: input.clientMessageId },
+      include: messageInclude,
+    });
+    if (!existing) throw error;
+    message = existing;
+  }
   res.status(201).json({ data: message });
 }
 
