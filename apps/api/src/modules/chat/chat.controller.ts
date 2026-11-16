@@ -349,6 +349,43 @@ export async function listMessages(req: Request, res: Response) {
       replyTo: { select: { id: true, body: true, deletedAt: true, sender: { select: { fullName: true } } } },
     },
   });
+
+  // A message is delivered when the recipient has actually fetched the
+  // conversation, not merely when the sender's POST request succeeded.
+  // Only the newest, unfiltered page advances the monotonic delivery marker.
+  const latest = messages[0];
+  if (!before && !search && latest) {
+    const deliveryUpdate = await prisma.chatParticipant.updateMany({
+      where: {
+        conversationId,
+        userId,
+        leftAt: null,
+        OR: [
+          { lastDeliveredAt: null },
+          { lastDeliveredAt: { lt: latest.createdAt } },
+          {
+            AND: [
+              { lastDeliveredAt: latest.createdAt },
+              { lastDeliveredMessageId: { lt: latest.id } },
+            ],
+          },
+        ],
+      },
+      data: {
+        lastDeliveredMessageId: latest.id,
+        lastDeliveredAt: latest.createdAt,
+      },
+    });
+    if (deliveryUpdate.count > 0) {
+      await publishConversationEvent(businessId, conversationId, {
+        id: conversationId + ":delivered:" + userId + ":" + latest.id,
+        type: "conversation.delivered",
+        actorUserId: userId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
   res.json({ data: messages.reverse().map((message) => ({
     ...message,
     replyTo: message.replyTo?.deletedAt ? null : message.replyTo,
