@@ -106,8 +106,8 @@ export const PERMISSIONS: PermissionDefinition[] = [
 ];
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
-  PLATFORM_ADMIN: PERMISSIONS.filter((permission) => permission.code !== "chat.cross_branch").map((permission) => permission.code),
-  BUSINESS_OWNER: PERMISSIONS.filter((permission) => permission.code !== "chat.cross_branch").map((permission) => permission.code),
+  PLATFORM_ADMIN: PERMISSIONS.map((permission) => permission.code),
+  BUSINESS_OWNER: PERMISSIONS.map((permission) => permission.code),
   BRANCH_MANAGER: PERMISSIONS.filter((permission) =>
     !permission.code.startsWith("business.") &&
     permission.code !== "chat.cross_branch" &&
