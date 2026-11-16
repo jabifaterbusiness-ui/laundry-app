@@ -56,6 +56,7 @@ export interface Branch {
   name: string;
   address: string | null;
   orderReadyTimeFormat?: "12H" | "24H";
+  defaultOrderReadyTime?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
