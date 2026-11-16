@@ -267,7 +267,10 @@ export async function removePriceAdjustmentToUnassigned(id: string, businessId: 
       data: { branchId: null },
     });
     if (!result.count) throw new AppError("Price adjustment not found", 404);
-    return tx.priceAdjustment.findUnique({ where: { id } });
+    const revokedShares = await tx.branchResourceShare.deleteMany({
+      where: { businessId, ownerBranchId: branchId, resourceType: "DISCOUNTS", resourceId: id },
+    });
+    return { removed: true, revokedShareCount: revokedShares.count };
   }, { isolationLevel: "Serializable" });
 }
 
@@ -278,6 +281,7 @@ export async function deletePriceAdjustment(id: string, businessId: string, bran
     if (!existing) throw new AppError("Price adjustment not found", 404);
     if (existing.branchId !== branchId) throw new AppError("Only the owning branch can permanently delete a discount", 403);
     await assertBranchResourceWriteAccess({ businessId, branchId, userId, resourceType: "DISCOUNTS", ownerBranchId: existing.branchId, resourceId: id }, tx);
+    await tx.branchResourceShare.deleteMany({ where: { businessId, ownerBranchId: branchId, resourceType: "DISCOUNTS", resourceId: id } });
     const result = await tx.priceAdjustment.deleteMany({ where: { id, businessId, branchId } });
     if (!result.count) throw new AppError("Price adjustment not found", 404);
   }, { isolationLevel: "Serializable" });
