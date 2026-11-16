@@ -86,11 +86,11 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     next();
   },
   requireBusinessContext: (
-  requirePlatformBusinessContext: (_req: any, _res: any, next: any) => next(),
     _req: express.Request,
     _res: express.Response,
     next: express.NextFunction,
   ) => next(),
+  requirePlatformBusinessContext: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
   requireSensitiveAuthorization: (
     _req: express.Request,
     _res: express.Response,
