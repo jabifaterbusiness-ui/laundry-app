@@ -83,6 +83,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "migrations.manage", module: "migrations", action: "manage", description: "Manage migration jobs" },
 
   { code: "chat.view", module: "chat", action: "view", description: "View own conversations and eligible colleagues" },
+  { code: "chat.cross_branch", module: "chat", action: "cross_branch", description: "Discover and initiate chats with colleagues in other branches of the same business" },
   { code: "chat.send_message", module: "chat", action: "send_message", description: "Send messages and replies in conversations" },
   { code: "chat.create_direct", module: "chat", action: "create_direct", description: "Start direct conversations" },
   { code: "chat.create_group", module: "chat", action: "create_group", description: "Create group conversations" },
@@ -105,10 +106,11 @@ export const PERMISSIONS: PermissionDefinition[] = [
 ];
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
-  PLATFORM_ADMIN: PERMISSIONS.map((permission) => permission.code),
-  BUSINESS_OWNER: PERMISSIONS.map((permission) => permission.code),
+  PLATFORM_ADMIN: PERMISSIONS.filter((permission) => permission.code !== "chat.cross_branch").map((permission) => permission.code),
+  BUSINESS_OWNER: PERMISSIONS.filter((permission) => permission.code !== "chat.cross_branch").map((permission) => permission.code),
   BRANCH_MANAGER: PERMISSIONS.filter((permission) =>
     !permission.code.startsWith("business.") &&
+    permission.code !== "chat.cross_branch" &&
     permission.code !== "inventory.approve" &&
     permission.code !== "inventory.reports_all_branches" &&
     !permission.code.startsWith("users.manage_permissions") &&
