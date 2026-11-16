@@ -12,14 +12,14 @@ function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"
 export function ChatPage(){
  const user=useAuthStore(s=>s.user), token=useAuthStore(s=>s.accessToken), branchId=useAuthStore(s=>s.activeBranchId), qc=useQueryClient();
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""),[search,setSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
- const chatsQ=useQuery({queryKey:["chat-conversations"],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:8000});
+ const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:8000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
  useEffect(()=>{if(!activeId&&chats[0])setActiveId(chats[0].id);else if(activeId&&!chats.some(c=>c.id===activeId))setActiveId(chats[0]?.id??"");},[chats,activeId]);
- const messagesQ=useQuery({queryKey:["chat-messages",activeId],queryFn:()=>getChatMessages(activeId),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:2500});
+ const messagesQ=useQuery({queryKey:["chat-messages",branchId,activeId],queryFn:()=>getChatMessages(activeId),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:2500});
  const messages=messagesQ.data?.data??[];
  useEffect(()=>{if(activeId&&messages.length)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations"]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc]);
- const directoryQ=useQuery({queryKey:["chat-directory",search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
+ const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
  const directory=directoryQ.data?.data??[];
  const send=useMutation({mutationFn:(input:{body:string;attachmentIds:string[];replyToMessageId?:string})=>sendChatMessage(activeId,input.body,input.attachmentIds,input.replyToMessageId),onSuccess:async()=>{setDraft("");setPendingFiles([]);setReplyTo(null);await Promise.all([qc.invalidateQueries({queryKey:["chat-messages",activeId]}),qc.invalidateQueries({queryKey:["chat-conversations"]})]);}});
  const reaction=useMutation({mutationFn:(input:{messageId:string;emoji:string})=>toggleChatReaction(activeId,input.messageId,input.emoji),onSuccess:()=>qc.invalidateQueries({queryKey:["chat-messages",activeId]})});
