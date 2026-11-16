@@ -38,7 +38,10 @@ vi.mock("../../src/lib/prisma.js", () => ({
     userPermissionOverride: {
       findUnique: vi.fn(),
     },
-    business: { findUnique: vi.fn().mockResolvedValue({ id: "biz-A" }) },
+    business: {
+      findUnique: vi.fn().mockResolvedValue({ id: "biz-A" }),
+      findFirst: vi.fn().mockResolvedValue({ id: "biz-A" }),
+    },
     branch: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
