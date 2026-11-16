@@ -128,7 +128,7 @@ describe("chat message send idempotency", () => {
 
     await sendMessage(request(), res);
 
-    expect(publishEvent).toHaveBeenCalledWith(["user-a", "user-b"], {
+    expect(publishEvent).toHaveBeenCalledWith("business-a", ["user-a", "user-b"], {
       id: created.id,
       type: "message.created",
       conversationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
