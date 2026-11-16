@@ -30,7 +30,7 @@ const memberRoleSchema = z.object({ role: z.enum(["ADMIN", "MEMBER"]) });
 const reactionSchema = z.object({ emoji: z.string().trim().min(1).max(16) });
 
 export async function listNotifications(req: Request, res: Response) {
-  const { userId, businessId, branchId } = scope(req);
+  const { userId, businessId } = scope(req);
   const rawSince = typeof req.query.since === "string" ? req.query.since : undefined;
   const since = rawSince ? new Date(rawSince) : new Date(Date.now() - 30_000);
   if (Number.isNaN(since.getTime())) throw new AppError("Invalid notification cursor", 422);
@@ -129,7 +129,7 @@ export async function listDirectory(req: Request, res: Response) {
 }
 
 export async function listConversations(req: Request, res: Response) {
-  const { userId, businessId, branchId } = scope(req);
+  const { userId, businessId } = scope(req);
   const participants = await prisma.chatParticipant.findMany({
     where: { userId, leftAt: null, archivedAt: null, conversation: { businessId } },
     include: {
