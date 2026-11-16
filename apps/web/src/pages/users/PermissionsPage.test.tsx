@@ -249,6 +249,7 @@ describe("PermissionsPage", () => {
   });
 
   it("shows all eight chat permissions and keeps each grant individually controllable", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions", ...permissions.filter((permission) => permission.code.startsWith("chat.")).map((permission) => permission.code)] };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
@@ -289,7 +290,23 @@ describe("PermissionsPage", () => {
     });
   });
 
+
+  it("keeps chat permission rows visible but disables grants the acting manager cannot delegate", async () => {
+    mockUser = { ...mockUser, permissions: ["users.manage_permissions"] };
+    renderPermissions();
+
+    const userSelect = await screen.findByLabelText("User");
+    await screen.findByRole("option", { name: /John Staff — Laundry Supervisor/ });
+    fireEvent.change(userSelect, { target: { value: "staff-1" } });
+    fireEvent.change(await screen.findByLabelText("Module"), { target: { value: "chat" } });
+
+    const viewRow = screen.getByText("View own conversations and eligible colleagues").closest("tr");
+    expect(viewRow).not.toBeNull();
+    expect(viewRow!.querySelector("button")).toBeDisabled();
+    expect(mockedUpdateUserPermission).not.toHaveBeenCalled();
+  });
   it("supports Allow All for an individual user", async () => {
+    mockUser = { ...mockUser, permissions: permissions.map((permission) => permission.code) };
     renderPermissions();
 
     const userSelect = await screen.findByLabelText("User");
