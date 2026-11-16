@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
@@ -15,6 +15,9 @@ export function ChatPage(){
  useEffect(()=>{const sync=()=>setPageVisible(document.visibilityState==="visible"&&document.hasFocus());document.addEventListener("visibilitychange",sync);window.addEventListener("focus",sync);window.addEventListener("blur",sync);return()=>{document.removeEventListener("visibilitychange",sync);window.removeEventListener("focus",sync);window.removeEventListener("blur",sync);};},[]);
  useEffect(()=>{setMobileThreadOpen(false);setShowNew(false);setAddToGroup(false);setDraft("");setPendingFiles([]);setReplyTo(null);},[branchId]);
  const [notificationPermission,setNotificationPermission]=useState<NotificationPermission|"unsupported">(typeof window!=="undefined"&&"Notification" in window?Notification.permission:"unsupported");
+ const messagesContainerRef=useRef<HTMLDivElement|null>(null);
+ const [atLatest,setAtLatest]=useState(false);
+ useEffect(()=>{setAtLatest(false);},[activeId]);
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""),[search,setSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
  const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:8000});
  const chats=chatsQ.data?.data??[];
@@ -22,7 +25,8 @@ export function ChatPage(){
  useEffect(()=>{if(!activeId&&chats[0])setActiveId(chats[0].id);else if(activeId&&!chats.some(c=>c.id===activeId))setActiveId(chats[0]?.id??"");},[chats,activeId]);
  const messagesQ=useQuery({queryKey:["chat-messages",branchId,activeId],queryFn:()=>getChatMessages(activeId),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:2500});
  const messages=messagesQ.data?.data??[];
- useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&messages.length&&pageVisible&&threadVisible)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen]);
+ useEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;if(atLatest)node.scrollTop=node.scrollHeight;else if(node.scrollHeight-node.scrollTop-node.clientHeight<72)setAtLatest(true);},[activeId,messages.length,atLatest]);
+ useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&messages.length&&pageVisible&&threadVisible&&atLatest)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen,atLatest]);
  const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
  const directory=directoryQ.data?.data??[];
  const send=useMutation({mutationFn:(input:{body:string;attachmentIds:string[];replyToMessageId?:string})=>sendChatMessage(activeId,input.body,input.attachmentIds,input.replyToMessageId),onSuccess:async()=>{setDraft("");setPendingFiles([]);setReplyTo(null);await Promise.all([qc.invalidateQueries({queryKey:["chat-messages",branchId,activeId]}),qc.invalidateQueries({queryKey:["chat-conversations",branchId]})]);}});
@@ -58,7 +62,7 @@ export function ChatPage(){
    </aside>
    <section className="chat-thread">
     {active?<><header className="chat-thread-head"><button type="button" className="chat-mobile-back" aria-label="Back to conversations" onClick={()=>setMobileThreadOpen(false)}>‹</button><span className="chat-avatar big">{initials(titleOf(active,user?.id??""))}</span><div><b>{titleOf(active,user?.id??"")}</b><small>{active.kind==="GROUP"?active.participants.length+" participants":"Direct conversation"}</small></div><span className="chat-private">● Private to participants</span></header>
-     <div className="chat-messages">{messagesQ.isLoading?<p className="chat-hint">Loading messages…</p>:null}{messagesQ.isError?<button className="chat-error" onClick={()=>void messagesQ.refetch()}>Messages unavailable. Retry</button>:null}
+     <div className="chat-messages" ref={messagesContainerRef} onScroll={event=>{const node=event.currentTarget;setAtLatest(node.scrollHeight-node.scrollTop-node.clientHeight<72);}}>{messagesQ.isLoading?<p className="chat-hint">Loading messages…</p>:null}{messagesQ.isError?<button className="chat-error" onClick={()=>void messagesQ.refetch()}>Messages unavailable. Retry</button>:null}
       {messages.map(m=>{
        const others=active?.participants.filter(p=>p.user.id!==user?.id)??[];
        const seen=others.filter(p=>p.lastReadAt&&new Date(p.lastReadAt).getTime()>=new Date(m.createdAt).getTime()).length;
