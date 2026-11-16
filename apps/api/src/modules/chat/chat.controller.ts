@@ -595,7 +595,7 @@ export async function addGroupMember(req: Request, res: Response) {
   if (existing && !existing.leftAt) throw new AppError("This colleague is already in the group", 409);
   await prisma.chatParticipant.upsert({
     where: { conversationId_userId: { conversationId: id, userId: newUserId } },
-    update: { leftAt: null, joinedAt: new Date(), role: "MEMBER", archivedAt: null, lastReadMessageId: null, lastReadAt: null },
+    update: { leftAt: null, joinedAt: new Date(), role: "MEMBER", archivedAt: null, lastReadMessageId: null, lastReadAt: null, lastDeliveredMessageId: null, lastDeliveredAt: null },
     create: { conversationId: id, userId: newUserId, role: "MEMBER" },
   });
   await prisma.chatMessage.create({ data: { conversationId: id, senderUserId: userId, kind: "SYSTEM", body: "A member was added to the group" } });
