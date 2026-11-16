@@ -9,9 +9,9 @@ export interface ChatRealtimeEvent {
 type ChatRealtimeListener = (event: ChatRealtimeEvent) => void;
 const listenersByUser = new Map<string, Set<ChatRealtimeListener>>();
 
-export function publishChatEvent(userIds: readonly string[], event: ChatRealtimeEvent): void {
+export function publishChatEvent(businessId: string, userIds: readonly string[], event: ChatRealtimeEvent): void {
   for (const userId of new Set(userIds)) {
-    for (const listener of listenersByUser.get(userId) ?? []) {
+    for (const listener of listenersByUser.get(`${businessId}:${userId}`) ?? []) {
       try {
         listener(event);
       } catch {
@@ -23,14 +23,16 @@ export function publishChatEvent(userIds: readonly string[], event: ChatRealtime
 }
 
 export function subscribeChatEvents(
+  businessId: string,
   userId: string,
   listener: ChatRealtimeListener,
 ): () => void {
-  const listeners = listenersByUser.get(userId) ?? new Set<ChatRealtimeListener>();
+  const channel = `${businessId}:${userId}`;
+  const listeners = listenersByUser.get(channel) ?? new Set<ChatRealtimeListener>();
   listeners.add(listener);
-  listenersByUser.set(userId, listeners);
+  listenersByUser.set(channel, listeners);
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) listenersByUser.delete(userId);
+    if (listeners.size === 0) listenersByUser.delete(channel);
   };
 }
