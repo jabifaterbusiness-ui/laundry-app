@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
+import { markerIncludesMessage, resolveChatClientMessageId, shouldSendChatMessageOnKey } from "./ChatPage.js";
 
 describe("chat composer keyboard behaviour", () => {
   it("sends on Enter without Shift", () => {
@@ -37,5 +37,18 @@ describe("chat send retry idempotency", () => {
       clientMessageId: "client-id-2",
     });
     expect(createId).toHaveBeenCalledOnce();
+  });
+});
+describe("chat delivery and read receipt markers", () => {
+  const message = { id: "message-b", createdAt: "2026-11-16T22:00:00.000Z" };
+
+  it("does not show a message as delivered before a recipient fetches it", () => {
+    expect(markerIncludesMessage(null, null, message)).toBe(false);
+    expect(markerIncludesMessage("2026-11-16T21:59:59.000Z", "message-z", message)).toBe(false);
+  });
+
+  it("uses message ordering to distinguish messages created in the same millisecond", () => {
+    expect(markerIncludesMessage("2026-11-16T22:00:00.000Z", "message-a", message)).toBe(false);
+    expect(markerIncludesMessage("2026-11-16T22:00:00.000Z", "message-c", message)).toBe(true);
   });
 });
