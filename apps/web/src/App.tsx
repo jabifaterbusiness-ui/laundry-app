@@ -34,6 +34,7 @@ import { HelpCentrePage } from "./pages/help/HelpCentrePage.js";
 import { InboxPage } from "./pages/inbox/InboxPage.js";
 import { CommunicationsPage } from "./pages/communications/CommunicationsPage.js";
 import { ChatPage } from "./pages/chat/ChatPage.js";
+import { ChatAlertManager } from "./components/chat/ChatAlertManager.js";
 import { AppShell } from "./components/layout/AppShell.js";
 import { OfflineSyncManager } from "./components/offline-sync/OfflineSyncManager.js";
 import { OfflineSubscriptionPaymentManager } from "./components/offline-sync/OfflineSubscriptionPaymentManager.js";
@@ -44,6 +45,7 @@ function AuthenticatedLayout() {
   return (
     <RequireAuth>
       <SensitiveAuthorizationProvider>
+        <ChatAlertManager />
         <OfflineSyncManager />
         <OfflineSubscriptionPaymentManager />
         <SensitiveAuthorizationManager />
