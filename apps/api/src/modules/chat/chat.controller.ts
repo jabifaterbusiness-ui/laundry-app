@@ -397,12 +397,16 @@ export async function updateGroup(req: Request, res: Response) {
 export async function addGroupMember(req: Request, res: Response) {
   const { userId, businessId, branchId } = scope(req);
   const id = z.string().uuid().parse(req.params.id);
-  await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
+  const actor = await requireGroupAdmin(id, userId, businessId, branchId, req.user!.securityRole);
   const { userId: newUserId } = memberSchema.parse(req.body);
   const crossBranchAllowed = await hasPermission(userId, businessId, req.user!.securityRole, "chat.cross_branch");
-  const branchEligible = await eligibleColleagueIds(businessId, branchId, userId, false);
+  // Eligibility is relative to the conversation's owning branch, not the
+  // administrator's currently selected branch. Otherwise switching branches
+  // could bypass chat.cross_branch when adding members to an existing group.
+  const conversationBranchId = actor.conversation.branchId;
+  const branchEligible = await eligibleColleagueIds(businessId, conversationBranchId, userId, false);
   if (!crossBranchAllowed && !branchEligible.includes(newUserId)) throw new AppError("Cross-branch chat permission is required to add this colleague", 403);
-  const eligible = await eligibleColleagueIds(businessId, branchId, userId, crossBranchAllowed);
+  const eligible = await eligibleColleagueIds(businessId, conversationBranchId, userId, crossBranchAllowed);
   if (!eligible.includes(newUserId)) throw new AppError("This colleague is not eligible for this business", 404);
   const existing = await prisma.chatParticipant.findFirst({ where: { conversationId: id, userId: newUserId } });
   if (existing && !existing.leftAt) throw new AppError("This colleague is already in the group", 409);
