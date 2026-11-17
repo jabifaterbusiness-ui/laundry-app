@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { AppError } from "../../middleware/error-handler.js";
 
