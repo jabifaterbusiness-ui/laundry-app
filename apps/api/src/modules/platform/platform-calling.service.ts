@@ -43,7 +43,9 @@ export async function setPlatformCallingGlobal(enabled: boolean, grantNewBusines
   }
   const updated = await prisma.platformCallingConfig.update({ where: { id: CALLING_CONFIG_ID }, data: { globallyEnabled: enabled, ...(grantNewBusinesses !== undefined ? { grantNewBusinesses } : {}) } });
   await recordAuditEvent({
-    action: enabled ? "platform.calling.globally_enabled" : "platform.calling.globally_disabled",
+    action: enabled !== current.globallyEnabled
+      ? (enabled ? "platform.calling.globally_enabled" : "platform.calling.globally_disabled")
+      : "platform.calling.new_business_auto_grant_updated",
     entityType: "PlatformCallingConfig", entityId: CALLING_CONFIG_ID, actorUserId,
     ...(correlationId ? { correlationId } : {}),
     metadata: { previousValue: current.globallyEnabled, enabled, previousGrantNewBusinesses: current.grantNewBusinesses, grantNewBusinesses: updated.grantNewBusinesses },
