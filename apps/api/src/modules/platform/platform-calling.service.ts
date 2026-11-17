@@ -14,7 +14,7 @@ async function ensureCallingConfig() {
 }
 
 export async function getPlatformCallingAccess() {
-  const [config, businesses] = await Promise.all([
+  const [callingConfig, businesses] = await Promise.all([
     ensureCallingConfig(),
     prisma.business.findMany({
       orderBy: { name: "asc" },
@@ -26,8 +26,8 @@ export async function getPlatformCallingAccess() {
   ]);
   const endpointConfigured = Boolean(config.livekit.url && config.livekit.apiKey && config.livekit.apiSecret);
   return {
-    globallyEnabled: config.globallyEnabled,
-    grantNewBusinesses: config.grantNewBusinesses,
+    globallyEnabled: callingConfig.globallyEnabled,
+    grantNewBusinesses: callingConfig.grantNewBusinesses,
     endpointConfigured,
     serverUrlConfigured: Boolean(config.livekit.url),
     businesses: businesses.map(({ callingAccess, ...business }) => ({
@@ -39,7 +39,7 @@ export async function getPlatformCallingAccess() {
 
 export async function setPlatformCallingGlobal(enabled: boolean, grantNewBusinesses: boolean | undefined, actorUserId: string, correlationId?: string) {
   const current = await ensureCallingConfig();
-  if (enabled && !(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET)) {
+  if (enabled && !(config.livekit.url && config.livekit.apiKey && config.livekit.apiSecret)) {
     throw new AppError("Configure the self-hosted LiveKit endpoint and server credentials before enabling calls globally.", 409);
   }
   const updated = await prisma.platformCallingConfig.update({ where: { id: CALLING_CONFIG_ID }, data: { globallyEnabled: enabled, ...(grantNewBusinesses !== undefined ? { grantNewBusinesses } : {}) } });
