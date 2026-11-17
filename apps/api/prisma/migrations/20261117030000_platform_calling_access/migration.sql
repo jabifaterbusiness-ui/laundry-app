@@ -2,7 +2,7 @@ CREATE TABLE "platform_calling_config" (
   "id" TEXT NOT NULL,
   "globallyEnabled" BOOLEAN NOT NULL DEFAULT false,
   "grantNewBusinesses" BOOLEAN NOT NULL DEFAULT false,
-  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "platform_calling_config_pkey" PRIMARY KEY ("id")
 );
 
