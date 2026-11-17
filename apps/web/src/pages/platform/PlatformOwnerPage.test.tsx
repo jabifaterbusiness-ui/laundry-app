@@ -35,6 +35,9 @@ import {
   upsertPlatformPaymentMethod,
   updatePlatformPaymentMethodStatus,
   deletePlatformPaymentMethod,
+  getPlatformCallingAccess,
+  updatePlatformCallingGlobal,
+  updatePlatformCallingGrants,
 } from "../../lib/platform-api.js";
 import type { PlatformBusiness } from "../../lib/platform-api.js";
 import { useAuthStore } from "../../state/auth-store.js";
@@ -69,6 +72,9 @@ vi.mock("../../lib/platform-api.js", () => ({
   upsertPlatformPaymentMethod: vi.fn(),
   updatePlatformPaymentMethodStatus: vi.fn(),
   deletePlatformPaymentMethod: vi.fn(),
+  getPlatformCallingAccess: vi.fn(),
+  updatePlatformCallingGlobal: vi.fn(),
+  updatePlatformCallingGrants: vi.fn(),
 }));
 
 const mockedActivate = vi.mocked(activatePlatformBusiness);
@@ -108,6 +114,9 @@ const mockedPaymentMethods = vi.mocked(getPlatformPaymentMethods);
 const mockedUpsertPaymentMethod = vi.mocked(upsertPlatformPaymentMethod);
 const mockedPaymentMethodStatus = vi.mocked(updatePlatformPaymentMethodStatus);
 const mockedDeletePaymentMethod = vi.mocked(deletePlatformPaymentMethod);
+const mockedCallingAccess = vi.mocked(getPlatformCallingAccess);
+const mockedUpdateCallingGlobal = vi.mocked(updatePlatformCallingGlobal);
+const mockedUpdateCallingGrants = vi.mocked(updatePlatformCallingGrants);
 
 const growth = {
   generatedAt: "2026-09-15T00:10:00.000Z",
@@ -345,6 +354,9 @@ beforeEach(() => {
   mockedGlobalStatistics.mockResolvedValue(globalStatistics);
   mockedHealth.mockResolvedValue(platformHealth);
   mockedConfiguration.mockResolvedValue(platformConfiguration);
+  mockedCallingAccess.mockResolvedValue({ globallyEnabled: false, grantNewBusinesses: false, endpointConfigured: false, serverUrlConfigured: false, businesses: businesses.map((business) => ({ id: business.id, name: business.name, slug: business.slug, isActive: business.isActive, archivedAt: business.archivedAt ?? null, callingAccess: { granted: false, grantedAt: null, revokedAt: null, updatedAt: null } })) });
+  mockedUpdateCallingGlobal.mockResolvedValue({ globallyEnabled: false, grantNewBusinesses: false });
+  mockedUpdateCallingGrants.mockResolvedValue({ mode: "SELECTED", granted: true, affectedCount: 1, businessIds: [businesses[0]!.id] });
   mockedUpdateConfiguration.mockResolvedValue({
     ...platformConfiguration,
     maintenanceMode: true,
