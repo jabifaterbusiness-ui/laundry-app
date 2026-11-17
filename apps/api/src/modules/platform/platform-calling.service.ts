@@ -66,7 +66,7 @@ export async function setPlatformCallingGrants(input: { mode: "ALL" | "SELECTED"
   const now = new Date();
   await prisma.$transaction(ids.map((businessId) => prisma.businessCallingAccess.upsert({
     where: { businessId },
-    update: { granted: input.granted, grantedAt: input.granted ? now : undefined, revokedAt: input.granted ? null : now, updatedByUserId: actorUserId },
+    update: { granted: input.granted, ...(input.granted ? { grantedAt: now, revokedAt: null } : { revokedAt: now }), updatedByUserId: actorUserId },
     create: { businessId, granted: input.granted, grantedAt: input.granted ? now : null, revokedAt: input.granted ? null : now, updatedByUserId: actorUserId },
   })));
   await recordAuditEvent({

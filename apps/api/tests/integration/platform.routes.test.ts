@@ -1808,7 +1808,7 @@ describe("Platform Owner routes - self-hosted calling access", () => {
 
   it("grants selected businesses only and records the platform audit event", async () => {
     vi.mocked(prisma.business.count).mockReset().mockResolvedValue(2);
-    vi.mocked(prisma.businessCallingAccess.upsert).mockImplementation(async (args: never) => args as never);
+    vi.mocked(prisma.businessCallingAccess.upsert).mockResolvedValue({} as never);
     vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
     const response = await request(app).post("/api/v1/platform/calling-access/grants")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
@@ -1822,7 +1822,7 @@ describe("Platform Owner routes - self-hosted calling access", () => {
   it("grants every business in one bulk action and rejects tenant users", async () => {
     vi.mocked(prisma.business.findMany).mockResolvedValue([{ id: "biz-A" }, { id: "biz-B" }] as never);
     vi.mocked(prisma.businessCallingAccess.upsert).mockImplementation(async (args: never) => args as never);
-    vi.mocked(prisma.$transaction).mockImplementation(async (operations: never) => Promise.all(operations as never[]));
+    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
     const denied = await request(app).post("/api/v1/platform/calling-access/grants")
       .set("Authorization", `Bearer ${OWNER_A}`).send({ mode: "ALL", granted: true });
     expect(denied.status).toBe(403);
