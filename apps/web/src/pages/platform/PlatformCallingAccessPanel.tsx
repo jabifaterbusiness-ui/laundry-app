@@ -11,9 +11,6 @@ export function PlatformCallingAccessPanel({ accessToken }: { accessToken: strin
     onSuccess: async () => { setFeedback("Calling platform settings saved."); await query.refetch(); },
     onError: (error) => setFeedback(error instanceof Error ? error.message : "Unable to update calling settings."),
   });
-  const grantsMutation = useMutation({
-    mutationFn: updatePlatformCallingGrants.bind(null, undefined as never),
-  });
   const grant = async (mode: "ALL" | "SELECTED", granted: boolean) => {
     try {
       setFeedback(null);

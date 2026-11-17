@@ -38,6 +38,9 @@ export async function getPlatformCallingAccess() {
 
 export async function setPlatformCallingGlobal(enabled: boolean, grantNewBusinesses: boolean | undefined, actorUserId: string, correlationId?: string) {
   const current = await ensureCallingConfig();
+  if (enabled && !(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET)) {
+    throw new AppError("Configure the self-hosted LiveKit endpoint and server credentials before enabling calls globally.", 409);
+  }
   const updated = await prisma.platformCallingConfig.update({ where: { id: CALLING_CONFIG_ID }, data: { globallyEnabled: enabled, ...(grantNewBusinesses !== undefined ? { grantNewBusinesses } : {}) } });
   await recordAuditEvent({
     action: enabled ? "platform.calling.globally_enabled" : "platform.calling.globally_disabled",

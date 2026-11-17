@@ -2364,7 +2364,6 @@ model PlatformConfig {
   subscriptionPlanPrices SubscriptionPlanPrice[]
   paymentProviderConfigs PaymentProviderConfig[]
   paymentMethodConfigs   PaymentMethodConfig[]
-  callingConfig          PlatformCallingConfig?
 
   @@map("platform_config")
 }
