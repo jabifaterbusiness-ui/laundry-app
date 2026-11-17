@@ -73,6 +73,7 @@ VALUES
   (gen_random_uuid()::text, 'chat.manage_group', 'chat', 'manage_group', 'Manage groups you own or administer', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'chat.manage_all_groups', 'chat', 'manage_all_groups', 'Moderate any group in the business', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'chat.upload_attachments', 'chat', 'upload_attachments', 'Upload files to conversations', CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'chat.call', 'chat', 'call', 'Start and join authorised audio and video calls', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'users.view', 'users', 'view', 'View users', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'users.create', 'users', 'create', 'Create users', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'users.update', 'users', 'update', 'Update users', CURRENT_TIMESTAMP),
