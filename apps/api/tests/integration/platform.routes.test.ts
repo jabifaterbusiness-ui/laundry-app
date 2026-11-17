@@ -1809,7 +1809,7 @@ describe("Platform Owner routes - self-hosted calling access", () => {
   it("grants selected businesses only and records the platform audit event", async () => {
     vi.mocked(prisma.business.count).mockResolvedValue(2);
     vi.mocked(prisma.businessCallingAccess.upsert).mockImplementation(async (args: never) => args as never);
-    vi.mocked(prisma.$transaction).mockImplementation(async (operations: never) => Promise.all(operations as never[]));
+    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
     const response = await request(app).post("/api/v1/platform/calling-access/grants")
       .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
       .send({ mode: "SELECTED", granted: true, businessIds: ["biz-A", "biz-B"] });
