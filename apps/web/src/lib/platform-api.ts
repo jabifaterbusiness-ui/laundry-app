@@ -602,3 +602,31 @@ export async function permanentlyDeletePlatformBusiness(
     },
   );
 }
+
+
+export interface PlatformCallingAccess {
+  globallyEnabled: boolean;
+  grantNewBusinesses: boolean;
+  endpointConfigured: boolean;
+  serverUrlConfigured: boolean;
+  businesses: Array<{
+    id: string; name: string; slug: string; isActive: boolean; archivedAt: string | null;
+    callingAccess: { granted: boolean; grantedAt: string | null; revokedAt: string | null; updatedAt: string | null };
+  }>;
+}
+
+export async function getPlatformCallingAccess(accessToken: string | null): Promise<PlatformCallingAccess> {
+  return apiFetch<PlatformCallingAccess>("/platform/calling-access", { accessToken });
+}
+
+export async function updatePlatformCallingGlobal(input: { enabled: boolean; grantNewBusinesses?: boolean }, accessToken: string | null) {
+  return apiFetch<{ globallyEnabled: boolean; grantNewBusinesses: boolean }>("/platform/calling-access/global", {
+    method: "PATCH", accessToken, body: JSON.stringify(input),
+  });
+}
+
+export async function updatePlatformCallingGrants(input: { mode: "ALL" | "SELECTED"; granted: boolean; businessIds?: string[] }, accessToken: string | null) {
+  return apiFetch<{ mode: "ALL" | "SELECTED"; granted: boolean; affectedCount: number; businessIds: string[] }>("/platform/calling-access/grants", {
+    method: "POST", accessToken, body: JSON.stringify(input),
+  });
+}
