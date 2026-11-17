@@ -1821,7 +1821,7 @@ describe("Platform Owner routes - self-hosted calling access", () => {
 
   it("grants every business in one bulk action and rejects tenant users", async () => {
     vi.mocked(prisma.business.findMany).mockResolvedValue([{ id: "biz-A" }, { id: "biz-B" }] as never);
-    vi.mocked(prisma.businessCallingAccess.upsert).mockImplementation(async (args: never) => args as never);
+    vi.mocked(prisma.businessCallingAccess.upsert).mockResolvedValue({} as never);
     vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
     const denied = await request(app).post("/api/v1/platform/calling-access/grants")
       .set("Authorization", `Bearer ${OWNER_A}`).send({ mode: "ALL", granted: true });

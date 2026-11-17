@@ -54,7 +54,7 @@ export async function setPlatformCallingGlobal(enabled: boolean, grantNewBusines
   return { globallyEnabled: updated.globallyEnabled, grantNewBusinesses: updated.grantNewBusinesses };
 }
 
-export async function setPlatformCallingGrants(input: { mode: "ALL" | "SELECTED"; granted: boolean; businessIds?: string[] }, actorUserId: string, correlationId?: string) {
+export async function setPlatformCallingGrants(input: { mode: "ALL" | "SELECTED"; granted: boolean; businessIds?: string[] | undefined }, actorUserId: string, correlationId?: string) {
   const ids = input.mode === "ALL"
     ? (await prisma.business.findMany({ select: { id: true } })).map((business) => business.id)
     : Array.from(new Set(input.businessIds ?? []));
