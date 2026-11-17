@@ -90,6 +90,7 @@ export const PERMISSIONS: PermissionDefinition[] = [
   { code: "chat.manage_group", module: "chat", action: "manage_group", description: "Manage groups you own or administer" },
   { code: "chat.manage_all_groups", module: "chat", action: "manage_all_groups", description: "Moderate any group in the business" },
   { code: "chat.upload_attachments", module: "chat", action: "upload_attachments", description: "Upload files to conversations" },
+  { code: "chat.call", module: "chat", action: "call", description: "Start and join authorised audio and video calls" },
 
 
   { code: "users.view", module: "users", action: "view", description: "View users" },

@@ -7,9 +7,11 @@ import {
   listDirectory, listMessages, markConversationRead, removeGroupMember, sendMessage,
   toggleReaction, updateGroup, uploadAttachment, downloadAttachment, setGroupMemberRole, editMessage, deleteMessage, listNotifications, streamEvents,
 } from "./chat.controller.js";
+import { createCallingToken } from "./chat-calling.controller.js";
 
 export const chatRouter = Router();
 chatRouter.use(asyncHandler(requireBranchContext), requirePermission("chat.view"));
+chatRouter.post("/calls/token", requirePermission("chat.call"), asyncHandler(createCallingToken));
 chatRouter.get("/events", requirePermission("chat.view"), asyncHandler(streamEvents));
 chatRouter.get("/notifications", requirePermission("chat.view"), asyncHandler(listNotifications));
 chatRouter.get("/directory", requirePermission("chat.view"), asyncHandler(listDirectory));
