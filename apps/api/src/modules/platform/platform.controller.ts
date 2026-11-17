@@ -529,7 +529,7 @@ export async function permanentlyDeleteBusiness(req: Request, res: Response) {
 }
 
 
-const callingGlobalSchema = z.object({ enabled: z.boolean() });
+const callingGlobalSchema = z.object({ enabled: z.boolean(), grantNewBusinesses: z.boolean().optional() });
 const callingGrantsSchema = z.object({
   mode: z.enum(["ALL", "SELECTED"]),
   granted: z.boolean(),
@@ -547,7 +547,7 @@ export async function getCallingAccess(_req: Request, res: Response) {
 export async function updateCallingGlobal(req: Request, res: Response) {
   if (!req.user) throw new AppError("Authentication required", 401);
   const input = callingGlobalSchema.parse(req.body);
-  res.status(200).json(await setPlatformCallingGlobal(input.enabled, req.user.id, req.correlationId));
+  res.status(200).json(await setPlatformCallingGlobal(input.enabled, input.grantNewBusinesses, req.user.id, req.correlationId));
 }
 
 export async function updateCallingGrants(req: Request, res: Response) {

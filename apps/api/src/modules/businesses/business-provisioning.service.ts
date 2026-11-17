@@ -74,6 +74,11 @@ export async function provisionBusiness(
       },
     });
 
+    const callingConfig = await tx.platformCallingConfig.findUnique({ where: { id: "00000000-0000-4000-8000-000000000002" } });
+    if (callingConfig?.grantNewBusinesses) {
+      await tx.businessCallingAccess.create({ data: { businessId: business.id, granted: true, grantedAt: new Date(), updatedByUserId: null } });
+    }
+
     await createBusinessPaymentIdentity(tx, business.id);
     await ensureDefaultColors(business.id, tx);
 

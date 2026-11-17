@@ -36,14 +36,14 @@ export async function getPlatformCallingAccess() {
   };
 }
 
-export async function setPlatformCallingGlobal(enabled: boolean, actorUserId: string, correlationId?: string) {
+export async function setPlatformCallingGlobal(enabled: boolean, grantNewBusinesses: boolean | undefined, actorUserId: string, correlationId?: string) {
   const current = await ensureCallingConfig();
-  const updated = await prisma.platformCallingConfig.update({ where: { id: CALLING_CONFIG_ID }, data: { globallyEnabled: enabled } });
+  const updated = await prisma.platformCallingConfig.update({ where: { id: CALLING_CONFIG_ID }, data: { globallyEnabled: enabled, ...(grantNewBusinesses !== undefined ? { grantNewBusinesses } : {}) } });
   await recordAuditEvent({
     action: enabled ? "platform.calling.globally_enabled" : "platform.calling.globally_disabled",
     entityType: "PlatformCallingConfig", entityId: CALLING_CONFIG_ID, actorUserId,
     ...(correlationId ? { correlationId } : {}),
-    metadata: { previousValue: current.globallyEnabled, enabled },
+    metadata: { previousValue: current.globallyEnabled, enabled, previousGrantNewBusinesses: current.grantNewBusinesses, grantNewBusinesses: updated.grantNewBusinesses },
   });
   return { globallyEnabled: updated.globallyEnabled, grantNewBusinesses: updated.grantNewBusinesses };
 }
