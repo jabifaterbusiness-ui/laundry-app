@@ -35,6 +35,9 @@ import {
   upsertPaymentMethodController,
   updatePaymentMethodStatus,
   deletePaymentMethod,
+  getCallingAccess,
+  updateCallingGlobal,
+  updateCallingGrants,
 } from "./platform.controller.js";
 
 export const platformRouter = Router();
@@ -42,6 +45,9 @@ export const platformRouter = Router();
 platformRouter.use(requireAuth, requireRole("PLATFORM_ADMIN"));
 
 platformRouter.get("/health", asyncHandler(health));
+platformRouter.get("/calling-access", asyncHandler(getCallingAccess));
+platformRouter.patch("/calling-access/global", asyncHandler(updateCallingGlobal));
+platformRouter.post("/calling-access/grants", asyncHandler(updateCallingGrants));
 platformRouter.get("/configuration", asyncHandler(configuration));
 platformRouter.patch(
   "/configuration",

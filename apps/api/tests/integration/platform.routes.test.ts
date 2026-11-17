@@ -6,6 +6,9 @@ vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
     refreshToken: { findFirst: vi.fn().mockResolvedValue({ id: "session-test" }) },
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
+    platformCallingConfig: { upsert: vi.fn(), update: vi.fn() },
+    businessCallingAccess: { upsert: vi.fn() },
     businessInboxMessage: { createMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     business: {
       count: vi.fn(),
@@ -1783,5 +1786,61 @@ describe("Platform Owner routes - business archive", () => {
     expect(active.status).toBe(409);
     expect(denied.status).toBe(403);
     expect(prisma.business.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Platform Owner routes - self-hosted calling access", () => {
+  it("shows global calling disabled and every business ungranted by default", async () => {
+    vi.mocked(prisma.platformCallingConfig.upsert).mockResolvedValue({
+      id: "calling-config", globallyEnabled: false, grantNewBusinesses: false, updatedAt: new Date(),
+    } as never);
+    vi.mocked(prisma.business.findMany).mockResolvedValue([{
+      id: "biz-A", name: "Laundry A", slug: "laundry-a", isActive: true, archivedAt: null, callingAccess: null,
+    }] as never);
+    const response = await request(app).get("/api/v1/platform/calling-access").set("Authorization", `Bearer ${PLATFORM_ADMIN}`);
+    expect(response.status).toBe(200);
+    expect(response.body.globallyEnabled).toBe(false);
+    expect(response.body.grantNewBusinesses).toBe(false);
+    expect(response.body.businesses[0].callingAccess.granted).toBe(false);
+    expect(response.body.endpointConfigured).toBe(false);
+  });
+
+  it("grants selected businesses only and records the platform audit event", async () => {
+    vi.mocked(prisma.business.count).mockReset().mockResolvedValue(2);
+    vi.mocked(prisma.businessCallingAccess.upsert).mockResolvedValue({} as never);
+    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
+    const response = await request(app).post("/api/v1/platform/calling-access/grants")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`)
+      .send({ mode: "SELECTED", granted: true, businessIds: ["biz-A", "biz-B"] });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({ mode: "SELECTED", granted: true, affectedCount: 2 }));
+    expect(prisma.businessCallingAccess.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("grants every business in one bulk action and rejects tenant users", async () => {
+    vi.mocked(prisma.business.findMany).mockResolvedValue([{ id: "biz-A" }, { id: "biz-B" }] as never);
+    vi.mocked(prisma.businessCallingAccess.upsert).mockResolvedValue({} as never);
+    vi.mocked(prisma.$transaction).mockResolvedValue([] as never);
+    const denied = await request(app).post("/api/v1/platform/calling-access/grants")
+      .set("Authorization", `Bearer ${OWNER_A}`).send({ mode: "ALL", granted: true });
+    expect(denied.status).toBe(403);
+    const response = await request(app).post("/api/v1/platform/calling-access/grants")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ mode: "ALL", granted: true });
+    expect(response.status).toBe(200);
+    expect(response.body.affectedCount).toBe(2);
+  });
+
+  it("does not allow global calling to be enabled before LiveKit credentials exist", async () => {
+    const original = { url: process.env.LIVEKIT_URL, key: process.env.LIVEKIT_API_KEY, secret: process.env.LIVEKIT_API_SECRET };
+    delete process.env.LIVEKIT_URL; delete process.env.LIVEKIT_API_KEY; delete process.env.LIVEKIT_API_SECRET;
+    vi.mocked(prisma.platformCallingConfig.upsert).mockResolvedValue({ id: "calling-config", globallyEnabled: false, grantNewBusinesses: false } as never);
+    const response = await request(app).patch("/api/v1/platform/calling-access/global")
+      .set("Authorization", `Bearer ${PLATFORM_ADMIN}`).send({ enabled: true });
+    expect(response.status).toBe(409);
+    if (original.url !== undefined) process.env.LIVEKIT_URL = original.url;
+    if (original.key !== undefined) process.env.LIVEKIT_API_KEY = original.key;
+    if (original.secret !== undefined) process.env.LIVEKIT_API_SECRET = original.secret;
   });
 });

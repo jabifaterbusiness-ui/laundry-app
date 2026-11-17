@@ -66,24 +66,31 @@ describe("chat notification feed", () => {
   it("uses a stable timestamp-and-id cursor so a full page can continue without gaps", async () => {
     findMany.mockResolvedValue([] as never);
     const res = response();
-    await listNotifications(request({
-      since: "2026-11-16T00:00:01.000Z",
-      afterId: "11111111-1111-4111-8111-111111111111",
-    }), res);
+    const originalSystemTime = new Date();
+    vi.setSystemTime(new Date("2026-11-16T12:00:00.000Z"));
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        OR: [
-          { createdAt: { gt: new Date("2026-11-16T00:00:01.000Z") } },
-          {
-            createdAt: new Date("2026-11-16T00:00:01.000Z"),
-            id: { gt: "11111111-1111-4111-8111-111111111111" },
-          },
-        ],
-      }),
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      take: 30,
-    }));
+    try {
+      await listNotifications(request({
+        since: "2026-11-16T00:00:01.000Z",
+        afterId: "11111111-1111-4111-8111-111111111111",
+      }), res);
+
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { createdAt: { gt: new Date("2026-11-16T00:00:01.000Z") } },
+            {
+              createdAt: new Date("2026-11-16T00:00:01.000Z"),
+              id: { gt: "11111111-1111-4111-8111-111111111111" },
+            },
+          ],
+        }),
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 30,
+      }));
+    } finally {
+      vi.setSystemTime(originalSystemTime);
+    }
   });
 
   it("rejects an invalid message id cursor without querying messages", async () => {

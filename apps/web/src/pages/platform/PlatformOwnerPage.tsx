@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PlatformCallingAccessPanel } from "./PlatformCallingAccessPanel.js";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   activatePlatformBusiness,
@@ -2349,6 +2350,8 @@ const subscriptionPriceDeleteMutation = useMutation({
           )}
         </div>
       </section>
+
+      <PlatformCallingAccessPanel accessToken={accessToken} />
 
       <div className="platform-footer-grid">
         <section className="platform-panel platform-control-panel" id="platform-health">

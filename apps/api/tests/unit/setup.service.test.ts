@@ -105,6 +105,12 @@ beforeEach(() => {
       color: {
         createMany: prismaMock.color.createMany,
       },
+      platformCallingConfig: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+      businessCallingAccess: {
+        create: vi.fn(),
+      },
     }),
   );
 

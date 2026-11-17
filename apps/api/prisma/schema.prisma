@@ -195,6 +195,7 @@ model Business {
   inboxMessages                BusinessInboxMessage[]
   chatConversations            ChatConversation[]
   chatAttachments               ChatAttachment[]
+  callingAccess                 BusinessCallingAccess?
 
   @@map("businesses")
 }
@@ -2365,6 +2366,31 @@ model PlatformConfig {
   paymentMethodConfigs   PaymentMethodConfig[]
 
   @@map("platform_config")
+}
+
+
+model PlatformCallingConfig {
+  id                  String   @id
+  globallyEnabled     Boolean  @default(false)
+  grantNewBusinesses  Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+
+  @@map("platform_calling_config")
+}
+
+model BusinessCallingAccess {
+  id                String   @id @default(uuid())
+  businessId        String   @unique
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  granted           Boolean  @default(false)
+  grantedAt         DateTime?
+  revokedAt         DateTime?
+  updatedByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([granted, updatedAt])
+  @@map("business_calling_access")
 }
 
 model PasswordResetToken {

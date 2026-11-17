@@ -46,7 +46,7 @@ describe("permission catalogue and bulk grants", () => {
     mocks.transaction.userPermissionOverride.upsert.mockResolvedValue({});
   });
 
-  it("grants every catalogue permission, including all eight chat permissions", async () => {
+  it("grants every catalogue permission, including all nine chat permissions", async () => {
     mocks.prisma.permission.findMany.mockResolvedValue(
       PERMISSIONS.map((permission, index) => ({
         id: `permission-${index}`,
@@ -67,7 +67,7 @@ describe("permission catalogue and bulk grants", () => {
     );
     expect(
       PERMISSIONS.filter((permission) => permission.code.startsWith("chat.")),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
   });
 
   it("grants only the permissions the actor is authorised to delegate", async () => {
