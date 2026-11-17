@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { z } from "zod";
 import { AppError } from "../../middleware/error-handler.js";
 import {
   getPlatformOverview,
@@ -524,4 +525,32 @@ export async function permanentlyDeleteBusiness(req: Request, res: Response) {
     actorUserId: req.user.id,
     ...(req.correlationId ? { correlationId: req.correlationId } : {}),
   }));
+}
+
+
+const callingGlobalSchema = z.object({ enabled: z.boolean() });
+const callingGrantsSchema = z.object({
+  mode: z.enum(["ALL", "SELECTED"]),
+  granted: z.boolean(),
+  businessIds: z.array(z.string().min(1)).max(500).optional(),
+}).superRefine((value, context) => {
+  if (value.mode === "SELECTED" && (!value.businessIds || value.businessIds.length === 0)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Select at least one business." });
+  }
+});
+
+export async function getCallingAccess(_req: Request, res: Response) {
+  res.status(200).json(await getPlatformCallingAccess());
+}
+
+export async function updateCallingGlobal(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const input = callingGlobalSchema.parse(req.body);
+  res.status(200).json(await setPlatformCallingGlobal(input.enabled, req.user.id, req.correlationId));
+}
+
+export async function updateCallingGrants(req: Request, res: Response) {
+  if (!req.user) throw new AppError("Authentication required", 401);
+  const input = callingGrantsSchema.parse(req.body);
+  res.status(200).json(await setPlatformCallingGrants(input, req.user.id, req.correlationId));
 }
