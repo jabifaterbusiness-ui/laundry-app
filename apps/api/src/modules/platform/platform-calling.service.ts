@@ -23,12 +23,12 @@ export async function getPlatformCallingAccess() {
       },
     }),
   ]);
-  const endpointConfigured = Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
+  const endpointConfigured = Boolean(config.livekit.url && config.livekit.apiKey && config.livekit.apiSecret);
   return {
     globallyEnabled: config.globallyEnabled,
     grantNewBusinesses: config.grantNewBusinesses,
     endpointConfigured,
-    serverUrlConfigured: Boolean(process.env.LIVEKIT_URL),
+    serverUrlConfigured: Boolean(config.livekit.url),
     businesses: businesses.map(({ callingAccess, ...business }) => ({
       ...business,
       callingAccess: callingAccess ?? { granted: false, grantedAt: null, revokedAt: null, updatedAt: null },

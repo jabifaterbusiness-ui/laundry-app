@@ -47,6 +47,11 @@ export const config = {
     whatsappAppId: env.WHATSAPP_APP_ID,
     whatsappEmbeddedSignupConfigId: env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
   },
+  livekit: {
+    url: env.LIVEKIT_URL,
+    apiKey: env.LIVEKIT_API_KEY,
+    apiSecret: env.LIVEKIT_API_SECRET,
+  },
   paymentProviders: {
     paystack: {
       secretKey: env.PAYSTACK_SECRET_KEY,

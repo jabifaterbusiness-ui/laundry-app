@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { config } from "../../config/index.js";
 
 const inputSchema = z.object({ conversationId: z.string().uuid() });
 
@@ -20,9 +21,9 @@ export async function createCallingToken(req: Request, res: Response) {
   ]);
   if (!platformConfig?.globallyEnabled || !access?.granted) throw new AppError("Audio and video calling is not enabled for this business.", 403);
   if (!participant || !user || !user.isActive || user.businessId !== req.user.businessId) throw new AppError("Conversation not found", 404);
-  const liveKitUrl = process.env.LIVEKIT_URL;
-  const apiKey = process.env.LIVEKIT_API_KEY;
-  const apiSecret = process.env.LIVEKIT_API_SECRET;
+  const liveKitUrl = config.livekit.url;
+  const apiKey = config.livekit.apiKey;
+  const apiSecret = config.livekit.apiSecret;
   if (!liveKitUrl || !apiKey || !apiSecret) throw new AppError("The self-hosted calling service is not configured.", 503);
   const roomName = `la-${req.user.businessId}-${conversationId}`;
   const issuedAt = Math.floor(Date.now() / 1000);
