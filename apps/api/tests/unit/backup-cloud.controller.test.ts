@@ -48,7 +48,7 @@ vi.mock("../../src/lib/audit.js", () => ({
 import { startCloudOAuthController } from "../../src/modules/migrations/backup-cloud.controller.js";
 
 describe("business cloud backup OAuth controller", () => {
-  it("rejects OneDrive start requests directly before tenant lookup or OAuth service invocation", async () => {
+  it("rejects OneDrive start requests directly before business lookup or OAuth service invocation", async () => {
     const req = {
       body: { provider: "ONEDRIVE", displayName: "Restricted OneDrive" },
     } as never;
@@ -60,5 +60,19 @@ describe("business cloud backup OAuth controller", () => {
 
     expect(mocks.beginCloudOAuth).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects OAuth initiation for a business-scoped user without calling the OAuth service", async () => {
+    const req = {
+      body: { provider: "ONEDRIVE", displayName: "Restricted OneDrive" },
+      user: { businessId: "business-1", id: "user-1" },
+    } as never;
+
+    await expect(startCloudOAuthController(req, {} as never)).rejects.toMatchObject({
+      statusCode: 403,
+      message: expect.stringContaining("restricted to Platform Admin"),
+    });
+
+    expect(mocks.beginCloudOAuth).not.toHaveBeenCalled();
   });
 });
