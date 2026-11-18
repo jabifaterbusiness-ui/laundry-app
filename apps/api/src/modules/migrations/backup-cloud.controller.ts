@@ -64,6 +64,15 @@ const backupScheduleSchema = z.object({
 
 const backupSchedulePatchSchema = backupScheduleSchema.partial().strict();
 
+
+async function assertBusinessOneDriveDisabled(businessId: string, connectionId: string) {
+  const connections = await listBackupConnections(businessId);
+  const connection = connections.find((item) => item.id === connectionId);
+  if (connection?.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive backups are reserved for Platform Admin access.", 403);
+  }
+}
+
 export async function listCloudBackupSchedulesController(req: Request, res: Response) {
   res.status(200).json({ schedules: await listBackupSchedules(businessId(req)) });
 }
@@ -132,7 +141,8 @@ export async function deleteCloudBackupScheduleController(req: Request, res: Res
 }
 
 export async function listCloudConnectionsController(req: Request, res: Response) {
-  res.status(200).json({ connections: await listBackupConnections(businessId(req)) });
+  const connections = await listBackupConnections(businessId(req));
+  res.status(200).json({ connections: connections.filter((connection) => connection.provider !== "ONEDRIVE" || req.user?.securityRole === "PLATFORM_ADMIN") });
 }
 
 export async function createCloudConnectionController(req: Request, res: Response) {
@@ -201,6 +211,7 @@ export async function verifyCloudConnectionController(req: Request, res: Respons
   const tenantId = businessId(req);
   let connection;
   try {
+    await assertBusinessOneDriveDisabled(tenantId, req.params.id!);
     connection = await verifyBackupCloudConnection(tenantId, req.params.id!);
   } catch (error) {
     await recordAuditEvent({
@@ -232,6 +243,7 @@ export async function createCloudBackupRunController(req: Request, res: Response
   const connectionId = z.object({ connectionId: z.string().uuid() }).parse(req.body).connectionId;
   let run;
   try {
+    await assertBusinessOneDriveDisabled(tenantId, connectionId);
     run = await createCloudBackupRun(tenantId, connectionId);
   } catch (error) {
     await recordAuditEvent({
@@ -264,7 +276,7 @@ export async function listCloudBackupRunsController(req: Request, res: Response)
 
 
 const cloudOAuthStartSchema = z.object({
-  provider: z.enum(["GOOGLE_DRIVE", "DROPBOX", "ONEDRIVE"]),
+  provider: z.enum(["GOOGLE_DRIVE", "DROPBOX"]),
   displayName: z.string().trim().min(1).max(100),
 }).strict();
 
