@@ -203,6 +203,24 @@ describe("cloud backup OAuth", () => {
     );
   });
 
+  it("rejects business-tenant OneDrive OAuth callbacks before consuming state or exchanging tokens", async () => {
+    mocks.stateFindUnique.mockResolvedValue({
+      ...validState(),
+      provider: "ONEDRIVE",
+    });
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      completeCloudOAuth({ state: "onedrive-state", code: "auth-code" }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mocks.stateUpdateMany).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.connectionCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects expired or already-consumed state before exchanging tokens", async () => {
     mocks.stateFindUnique.mockResolvedValue({
       ...validState(),
