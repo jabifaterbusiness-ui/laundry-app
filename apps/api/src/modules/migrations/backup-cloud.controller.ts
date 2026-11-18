@@ -169,7 +169,6 @@ export async function createCloudConnectionController(req: Request, res: Respons
 
 export async function deleteCloudConnectionController(req: Request, res: Response) {
   const tenantId = businessId(req);
-  await assertBusinessOneDriveDisabled(tenantId, req.params.id!);
   const result = await deleteBackupConnection(tenantId, req.params.id!);
   await recordAuditEvent({
     action: "backup.cloud_connection.deleted",
