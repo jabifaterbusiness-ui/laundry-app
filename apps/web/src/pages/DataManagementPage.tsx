@@ -65,7 +65,6 @@ export function DataManagementPage() {
   const cloudProviders = [
     { provider: "GOOGLE_DRIVE" as const, label: "Google Drive", description: "Back up securely to your Google account." },
     { provider: "DROPBOX" as const, label: "Dropbox", description: "Keep encrypted backups in Dropbox." },
-    { provider: "ONEDRIVE" as const, label: "OneDrive", description: "Store encrypted backups in Microsoft OneDrive." },
   ].map((item) => ({
     ...item,
     connections: cloudConnections.filter((connection) => connection.provider === item.provider),

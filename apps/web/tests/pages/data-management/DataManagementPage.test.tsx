@@ -94,7 +94,7 @@ describe("DataManagementPage authorization", () => {
     vi.mocked(saveCloudBackupSettings).mockClear();
   });
 
-  it("shows the three cloud providers once and groups repeated accounts", async () => {
+  it("shows only the two customer cloud providers and groups repeated accounts", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
     const connection = {
@@ -116,7 +116,7 @@ describe("DataManagementPage authorization", () => {
 
     expect(await screen.findByRole("heading", { name: "Google Drive" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Dropbox" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "OneDrive" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "OneDrive" })).toBeNull();
     expect(await screen.findByRole("button", { name: /2 saved accounts.*view details/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Verify" })).toBeNull();
 

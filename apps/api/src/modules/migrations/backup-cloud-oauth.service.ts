@@ -146,6 +146,9 @@ export async function completeCloudOAuth(input: {
   if (!state || state.consumedAt || state.expiresAt.getTime() <= Date.now()) {
     throw new AppError("OAuth state is invalid, expired, or already used. Start the connection again.", 400);
   }
+  if (state.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive OAuth is restricted to Platform Admin and cannot be completed through business backup accounts.", 403);
+  }
 
   const consumed = await prisma.backupCloudOAuthState.updateMany({
     where: { id: state.id, consumedAt: null, expiresAt: { gt: new Date() } },
