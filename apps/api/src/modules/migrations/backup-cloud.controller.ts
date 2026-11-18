@@ -270,6 +270,9 @@ const cloudOAuthStartSchema = z.object({
 
 export async function startCloudOAuthController(req: Request, res: Response) {
   const input = cloudOAuthStartSchema.parse(req.body);
+  if (input.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive is restricted to Platform Admin and is not available through business backup accounts.", 403);
+  }
   const result = await beginCloudOAuth({
     businessId: businessId(req),
     userId: req.user!.id,
