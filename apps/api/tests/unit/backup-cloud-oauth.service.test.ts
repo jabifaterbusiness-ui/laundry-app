@@ -326,3 +326,20 @@ describe("cloud backup OAuth", () => {
     });
   });
 });
+
+
+describe("business OneDrive OAuth restriction", () => {
+  it("rejects OneDrive callback state before consuming it or exchanging tokens", async () => {
+    mocks.stateFindUnique.mockResolvedValue({ ...validState(), provider: "ONEDRIVE" });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      completeCloudOAuth({ state: "valid-state", code: "auth-code" }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mocks.stateUpdateMany).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.connectionCreate).not.toHaveBeenCalled();
+  });
+});
