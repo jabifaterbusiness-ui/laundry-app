@@ -356,3 +356,33 @@ describe("pruneCloudBackupRuns", () => {
     expect(backupRunFindMany).not.toHaveBeenCalled();
   });
 });
+
+
+describe("OneDrive business-account restriction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("blocks verification of OneDrive connections for business backup workflows", async () => {
+    connectionFindFirst.mockResolvedValue({
+      id: "connection-1", provider: "ONEDRIVE", credentialsCiphertext: "encrypted",
+    });
+
+    await expect(verifyBackupCloudConnection("business-1", "connection-1"))
+      .rejects.toMatchObject({ statusCode: 403 });
+    expect(verifyOAuthCloudDestination).not.toHaveBeenCalled();
+    expect(backupCloudConnectionUpdate).not.toHaveBeenCalled();
+  });
+
+
+  it("blocks manual and scheduled backup runs from OneDrive connections", async () => {
+    connectionFindFirst.mockResolvedValue({
+      id: "connection-1", provider: "ONEDRIVE", credentialsCiphertext: "encrypted",
+    });
+
+    await expect(createCloudBackupRun("business-1", "connection-1"))
+      .rejects.toMatchObject({ statusCode: 403 });
+    expect(backupRunCreate).not.toHaveBeenCalled();
+    expect(createArtifact).not.toHaveBeenCalled();
+  });
+});
