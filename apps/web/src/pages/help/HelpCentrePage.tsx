@@ -151,7 +151,7 @@ const GROUPS: { category: string; intro: string; guides: Guide[] }[] = [
    "Check local backup history after a run. If the browser reports that the folder is unavailable, reselect the folder and verify browser permissions."
   ],links:[{label:"Backup & data migration",href:"/data-management"}]},
   {title:"Cloud backups and schedules",summary:"Store encrypted backups with a verified cloud destination.",steps:[
-   "Connect a supported provider shown in the cloud backup section: Google Drive, Dropbox or OneDrive. Complete provider authorization/configuration and then run connection verification.",
+   "Connect one of the available customer cloud backup providers: Google Drive or Dropbox. Complete provider authorization/configuration and then run connection verification.",
    "A destination is selectable only when its status is Connected and it has a verification timestamp. A saved but unverified or errored connection is not a usable destination.",
    "Choose the destination, configure frequency (Daily, Weekly or Monthly), time, time zone and retention, save, and create a cloud schedule. Cloud schedules are server-managed, unlike browser-managed local schedules. You can also start a manual cloud backup and pause, resume or delete a schedule; deleting a schedule preserves existing backup history.",
    "Use MCB (Manual Cloud Backup) from the top search field or Help Centre Quick Operations to run an immediate encrypted backup without opening this page. It uses the last selected verified destination, or the first verified destination if no selection is saved, and asks for sensitive authorization before starting.",
