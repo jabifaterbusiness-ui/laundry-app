@@ -65,7 +65,6 @@ export function DataManagementPage() {
   const cloudProviders = [
     { provider: "GOOGLE_DRIVE" as const, label: "Google Drive", description: "Back up securely to your Google account." },
     { provider: "DROPBOX" as const, label: "Dropbox", description: "Keep encrypted backups in Dropbox." },
-    { provider: "ONEDRIVE" as const, label: "OneDrive", description: "Store encrypted backups in Microsoft OneDrive." },
   ].map((item) => ({
     ...item,
     connections: cloudConnections.filter((connection) => connection.provider === item.provider),
@@ -272,7 +271,7 @@ export function DataManagementPage() {
     }
   }, [searchParams, setSearchParams, canManageCloud, accessToken]);
 
-  async function handleCloudOAuth(provider: "GOOGLE_DRIVE" | "DROPBOX" | "ONEDRIVE") {
+  async function handleCloudOAuth(provider: "GOOGLE_DRIVE" | "DROPBOX") {
     if (!accessToken) return;
 
     const authorization = await requestSensitiveAuthorization();
@@ -291,7 +290,7 @@ export function DataManagementPage() {
           provider,
           displayName: cloudName.trim() || (
             provider === "GOOGLE_DRIVE" ? "Google Drive backups" :
-            provider === "DROPBOX" ? "Dropbox backups" : "OneDrive backups"
+            provider === "DROPBOX" ? "Dropbox backups" : "Google Drive backups"
           ),
         },
       );
