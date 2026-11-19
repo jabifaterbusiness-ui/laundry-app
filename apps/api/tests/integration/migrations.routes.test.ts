@@ -320,6 +320,22 @@ describe("Migrations routes - permission enforcement", () => {
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
   });
 
+  it("requires a restore reason before processing the backup", async () => {
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockResolvedValue(true);
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Backup-Password", "secure-backup-password")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("encrypted backup"));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/restore reason/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
   it("rejects an empty encrypted backup restore before restore processing", async () => {
     authAs("BUSINESS_OWNER");
     hasPermission.mockResolvedValue(true);
