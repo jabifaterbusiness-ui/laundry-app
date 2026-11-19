@@ -332,7 +332,7 @@ describe("Migrations routes - permission enforcement", () => {
       .send(Buffer.from("encrypted backup"));
 
     expect(response.status).toBe(422);
-    expect(response.body.error?.message ?? response.body.message).toMatch(/restore reason/i);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/restore[- ]reason/i);
     expect(restoreBusinessBackup).not.toHaveBeenCalled();
   });
 
