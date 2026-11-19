@@ -9,6 +9,7 @@ import {
   listCloudBackupConnections,
   listCloudBackupRuns,
   listCloudBackupSchedules,
+  restoreBackup,
   saveCloudBackupSettings,
   updateCloudBackupSchedule,
   verifyCloudBackupConnection,
@@ -421,6 +422,33 @@ describe("DataManagementPage authorization", () => {
     expect(await screen.findByText("Provider verification failed.")).toBeTruthy();
     expect(vi.mocked(verifyCloudBackupConnection)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(listCloudBackupConnections)).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires a restore reason and reports a successful merge", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(restoreBackup).mockResolvedValue({
+      created: 2, updated: 3, mapped: 1, skippedUsers: 0,
+    } as any);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /restore encrypted backup/i }));
+    const file = new File(["encrypted backup bytes"], "test.laundry-backup", { type: "application/octet-stream" });
+    fireEvent.change(screen.getByLabelText(/choose encrypted backup/i), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText(/backup password/i), { target: { value: "long-backup-password" } });
+    const restoreButton = screen.getByRole("button", { name: "Restore backup" });
+    expect(restoreButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/reason for restore/i), { target: { value: "Restore records from a verified backup" } });
+    expect(restoreButton).toBeEnabled();
+    fireEvent.click(restoreButton);
+
+    await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith(
+      file,
+      "long-backup-password",
+      "Restore records from a verified backup",
+      { accessToken: "test-access-token" },
+    ));
+    expect(await screen.findByRole("status")).toHaveTextContent(/restore completed successfully: 2 records created, 3 updated/i);
   });
 
   it("allows a Business Owner with a custom visible job title", () => {

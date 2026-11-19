@@ -693,6 +693,7 @@ describe("#20 backup service", () => {
       userId,
       encrypted,
       password,
+      "Restoring from verified archive",
     );
 
     expect(result.created).toBeGreaterThan(0);
@@ -768,6 +769,7 @@ describe("#20 backup service", () => {
         actorUserId: userId,
         metadata: expect.objectContaining({
           version: 2,
+          reason: "Restoring from verified archive",
         }),
       }),
     );
@@ -822,6 +824,7 @@ describe("#20 backup service", () => {
         userId,
         encrypted,
         password,
+        "Restoring from verified archive",
       ),
     ).rejects.toThrow(/different business/i);
 

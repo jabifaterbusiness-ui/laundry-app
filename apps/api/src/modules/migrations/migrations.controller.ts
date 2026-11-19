@@ -53,6 +53,7 @@ const importSchema = z.object({
 });
 
 const restoreSchema = z.object({ password: z.string().min(12) });
+const restoreReasonSchema = z.string().trim().min(10, "Restore reason must be at least 10 characters").max(500, "Restore reason must be 500 characters or fewer");
 
 export async function analyze(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
@@ -104,12 +105,16 @@ export async function restoreBackup(req: Request, res: Response) {
   const passwordHeader = req.headers["x-backup-password"];
   if (typeof passwordHeader !== "string") throw new AppError("X-Backup-Password header is required", 422);
   const password = restoreSchema.parse({ password: passwordHeader }).password;
+  const reasonHeader = req.headers["x-restore-reason"];
+  if (typeof reasonHeader !== "string") throw new AppError("X-Restore-Reason header is required", 422);
+  const reason = restoreReasonSchema.parse(reasonHeader);
   const buffer = await readRawBody(req, config.migrations.minUploadBytes, config.migrations.maxUploadBytes);
   const result = await restoreBusinessBackup(
     businessId,
     req.user!.id,
     buffer,
     password,
+    reason,
   );
   res.status(200).json(result);
 }

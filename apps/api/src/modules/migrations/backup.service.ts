@@ -655,6 +655,7 @@ export async function restoreBusinessBackup(
   userId: string,
   buffer: Buffer,
   password: string,
+  reason: string,
 ): Promise<RestoreCounts> {
   const payload = decrypt(buffer, password);
 
@@ -1484,6 +1485,7 @@ export async function restoreBusinessBackup(
     correlationId: null,
     metadata: {
       version: VERSION,
+      reason,
       ...result,
     },
   });

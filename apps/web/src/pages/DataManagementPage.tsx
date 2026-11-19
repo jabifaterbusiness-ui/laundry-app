@@ -33,6 +33,7 @@ export function DataManagementPage() {
   const [customerMapping, setCustomerMapping] = useState<MigrationAnalysisResponse["summary"]["customerMapping"]>({});
   const [restorePassword, setRestorePassword] = useState("");
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreReason, setRestoreReason] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cloudConnections, setCloudConnections] = useState<CloudBackupConnection[]>([]);
@@ -609,20 +610,20 @@ export function DataManagementPage() {
   }
 
   async function handleRestore() {
-    if (!restoreFile || !restorePassword) {
-      setMessage("Choose a backup file and enter its password.");
+    if (!restoreFile || !restorePassword || restoreReason.trim().length < 10) {
+      setMessage("Choose a backup file, enter its password, and provide a restore reason (at least 10 characters).");
       return;
     }
 
     setBusy(true);
-    setMessage(null);
+    setMessage("Restore in progress. Please keep this page open while the backup is safely merged…");
     try {
-      const result = await restoreBackup(restoreFile, restorePassword, { accessToken });
+      const result = await restoreBackup(restoreFile, restorePassword, restoreReason.trim(), { accessToken });
       setMessage(
-        `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
+        `Restore completed successfully: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
       );
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Restore failed.");
+      setMessage(error instanceof ApiError ? error.message : "Restore failed. No success was reported; check the error and try again only after confirming the backup file.");
     } finally {
       setBusy(false);
     }
@@ -734,7 +735,7 @@ export function DataManagementPage() {
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("restore") ? "−" : "+"}</span>
                 </button>
                 </h3>
-                <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || restorePassword.length < 12} onClick={handleRestore}>Restore backup</button>
+                <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || restorePassword.length < 12 || restoreReason.trim().length < 10} onClick={handleRestore}>{busy ? "Restoring backup…" : "Restore backup"}</button>
               </div>
               <div id="data-management-restore-panel" className="data-management-tool-content" hidden={!panelIsOpen("restore")}>
                 <p>Restore is merge-only: it never deletes current data, never overwrites passwords or security access, and restores the operational business dataset transactionally.</p>
@@ -745,6 +746,10 @@ export function DataManagementPage() {
                 <label>Backup password
                   <input type="password" autoComplete="new-password" placeholder="At least 12 characters" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
                 </label>
+                <label>Reason for restore (required)
+                  <textarea rows={3} maxLength={500} placeholder="Explain why this restore is needed (at least 10 characters)." value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
+                </label>
+                <p>Restore reasons are recorded in the business audit history. Restores merge data and may update existing records.</p>
               </div>
             </article>
           </>
