@@ -769,6 +769,7 @@ describe("#20 backup service", () => {
         actorUserId: userId,
         metadata: expect.objectContaining({
           version: 2,
+          reason: "Restoring from verified archive",
         }),
       }),
     );
