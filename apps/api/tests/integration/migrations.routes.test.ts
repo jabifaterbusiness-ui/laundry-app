@@ -321,6 +321,7 @@ describe("Migrations routes - permission enforcement", () => {
   });
 
   it("requires a restore reason before processing the backup", async () => {
+    // Header spelling is hyphenated; the server reports that exact header name when missing.
     authAs("BUSINESS_OWNER");
     hasPermission.mockResolvedValue(true);
 
