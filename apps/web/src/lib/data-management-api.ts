@@ -100,6 +100,7 @@ export async function exportBackup(
 export async function restoreBackup(
   file: File,
   password: string,
+  reason: string,
   auth: { accessToken: string | null },
 ) {
   const res = await fetch(`${API_BASE_URL}/migrations/backup/restore`, {
@@ -108,6 +109,7 @@ export async function restoreBackup(
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
       "Content-Type": file.type || "application/octet-stream",
       "X-Backup-Password": password,
+      "X-Restore-Reason": reason,
     },
     body: file,
   });
