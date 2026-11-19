@@ -328,6 +328,7 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Restore-Reason", "Restoring from verified archive")
       .set("Content-Type", "application/octet-stream")
       .send(Buffer.alloc(0));
 
@@ -346,6 +347,7 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Restore-Reason", "Restoring from verified archive")
       .set("Content-Type", "application/octet-stream")
       .send(oversized);
 
@@ -451,6 +453,7 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Restore-Reason", "Restoring from verified archive")
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);
@@ -614,6 +617,7 @@ describe("Migrations routes - existing role boundaries", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
+      .set("X-Restore-Reason", "Restoring from verified archive")
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);
