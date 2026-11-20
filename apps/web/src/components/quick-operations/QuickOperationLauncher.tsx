@@ -181,7 +181,6 @@ export function QuickOperationLauncher({
   const [method, setMethod] = useState("CASH");
   const [receiptType, setReceiptType] = useState("CUSTOMER");
   const [channel, setChannel] = useState("EMAIL");
-  const [backupPassword, setBackupPassword] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +209,6 @@ export function QuickOperationLauncher({
     setMethod("CASH");
     setReceiptType("CUSTOMER");
     setChannel("EMAIL");
-    setBackupPassword("");
     setConfirmed(false);
     setIsSubmitting(false);
     setError(null);
@@ -505,11 +503,6 @@ export function QuickOperationLauncher({
       return;
     }
 
-    if (activeOperation.code === "MLB" && backupPassword.length < 12) {
-      setError("Use an encryption password of at least 12 characters for this local backup.");
-      return;
-    }
-
     if (
       activeOperation.sensitive &&
       !reason.trim()
@@ -547,9 +540,9 @@ export function QuickOperationLauncher({
     setIsSubmitting(true);
 
     try {
-      if (activeOperation.code === "MLB" || activeOperation.code === "MCB") {
+      if (activeOperation.code === "MCB") {
         if (user?.securityRole !== "BUSINESS_OWNER") {
-          throw new Error("Only the Business Owner can run manual backups.");
+          throw new Error("Only the Business Owner can run manual cloud backups.");
         }
       }
 
@@ -559,7 +552,6 @@ export function QuickOperationLauncher({
         }
         const backup = await createManualLocalBackup(
           user.businessId,
-          backupPassword,
           { accessToken },
         );
         setSuccess(`Encrypted local backup saved as ${backup.fileName} in ${backup.destination}.`);
@@ -846,16 +838,7 @@ export function QuickOperationLauncher({
             </div>
           ) : (
             <>
-              {activeOperation.code === "MLB" ? (
-        <Field
-          label="Backup encryption password (minimum 12 characters)"
-          value={backupPassword}
-          onChange={setBackupPassword}
-          type="password"
-          placeholder="Enter a strong backup password"
-          disabled={isSubmitting}
-        />
-      ) : null}
+
 
       {activeOperation.code === "MCB" ? (
         <div style={{ padding: 14, borderRadius: 8, background: "#eef6ff", color: "#174a78", lineHeight: 1.5, fontSize: 13 }}>

@@ -52,8 +52,7 @@ const importSchema = z.object({
   }).optional(),
 });
 
-const restoreSchema = z.object({ password: z.string().min(12) });
-const restoreReasonSchema = z.string().trim().min(10, "Restore reason must be at least 10 characters").max(500, "Restore reason must be 500 characters or fewer");
+const restoreSchema = z.object({ password: z.string().min(5).optional() });
 
 export async function analyze(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
@@ -87,11 +86,9 @@ const result = await importMigrationJob({
 
 export async function exportBackup(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
-  const password = restoreSchema.parse(req.body).password;
   const backup = await exportBusinessBackup(
     businessId,
     req.user!.id,
-    password,
   );
   res.status(200);
   res.setHeader("Content-Type", "application/octet-stream");
@@ -103,18 +100,27 @@ export async function exportBackup(req: Request, res: Response) {
 export async function restoreBackup(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const passwordHeader = req.headers["x-backup-password"];
-  if (typeof passwordHeader !== "string") throw new AppError("X-Backup-Password header is required", 422);
-  const password = restoreSchema.parse({ password: passwordHeader }).password;
+  const password =
+    typeof passwordHeader === "string"
+      ? restoreSchema.parse({ password: passwordHeader }).password
+      : undefined;
+
   const reasonHeader = req.headers["x-restore-reason"];
-  if (typeof reasonHeader !== "string") throw new AppError("X-Restore-Reason header is required", 422);
-  const reason = restoreReasonSchema.parse(reasonHeader);
+  if (typeof reasonHeader !== "string") {
+    throw new AppError("A restore reason is required.", 422);
+  }
+  const restoreReason = reasonHeader.trim();
+  if (restoreReason.length < 10 || restoreReason.length > 500) {
+    throw new AppError("Restore reason must be between 10 and 500 characters.", 422);
+  }
+
   const buffer = await readRawBody(req, config.migrations.minUploadBytes, config.migrations.maxUploadBytes);
   const result = await restoreBusinessBackup(
     businessId,
     req.user!.id,
     buffer,
     password,
-    reason,
+    restoreReason,
   );
   res.status(200).json(result);
 }

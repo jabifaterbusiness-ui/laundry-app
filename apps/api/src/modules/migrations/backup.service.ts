@@ -6,6 +6,7 @@ import {
   scryptSync,
 } from "node:crypto";
 import { gzipSync, gunzipSync } from "node:zlib";
+import { decryptBackupData, encryptBackupData } from "./backup-crypto.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
@@ -139,8 +140,8 @@ function serializeRecord(value: JsonRecord): JsonRecord {
 }
 
 function deriveKey(password: string, salt: Buffer): Buffer {
-  if (password.length < 12) {
-    throw new AppError("Backup password must be at least 12 characters", 422);
+  if (password.length < 5) {
+    throw new AppError("Backup password must be at least 5 characters", 422);
   }
   return scryptSync(password, salt, KEY_BYTES, {
     N: SCRYPT_N,
@@ -385,6 +386,7 @@ async function upsertByNameWhenAllowed(
 
 async function restoreChild(
   tx: unknown,
+  businessId: string,
   model: string,
   record: JsonRecord,
   relationIdFields: Array<[string, Map<string, string>]>,
@@ -418,6 +420,34 @@ async function restoreChild(
   const existing = await delegate(tx, model).findUnique({ where: { id } });
 
   if (existing) {
+    if (
+      existing.businessId !== undefined &&
+      existing.businessId !== businessId
+    ) {
+      throw new AppError(
+        `Backup ${model} ${id} belongs to a different business`,
+        409,
+      );
+    }
+
+    for (const [field] of relationIdFields) {
+      if (existing[field] !== data[field]) {
+        throw new AppError(
+          `Backup ${model} ${id} conflicts with an existing ${field} relationship`,
+          409,
+        );
+      }
+    }
+
+    for (const [field, expectedValue] of Object.entries(extraData)) {
+      if (existing[field] !== expectedValue) {
+        throw new AppError(
+          `Backup ${model} ${id} conflicts with an existing ${field} relationship`,
+          409,
+        );
+      }
+    }
+
     await delegate(tx, model).update({
       where: { id },
       data: Object.fromEntries(
@@ -431,7 +461,6 @@ async function restoreChild(
   return "created";
 }
 
-import { encryptBackupData } from "./backup-crypto.service.js";
 
 async function buildBusinessBackupPayload(
   businessId: string,
@@ -609,10 +638,16 @@ async function buildBusinessBackupPayload(
 export async function exportBusinessBackup(
   businessId: string,
   userId: string,
-  password: string,
 ): Promise<Buffer> {
   const payload = await buildBusinessBackupPayload(businessId);
-  const encrypted = encrypt(payload, password);
+  const compressed = gzipSync(
+    Buffer.from(JSON.stringify(payload), "utf8"),
+    { level: 9 },
+  );
+  const encrypted = encryptBackupData(compressed, {
+    businessId,
+    purpose: "artifact",
+  });
   const counts = countsFromPayload(payload);
 
   await recordAuditEvent({
@@ -650,14 +685,71 @@ export async function createScheduledBackupArtifact(businessId: string) {
   };
 }
 
+function decodeBusinessBackup(
+  businessId: string,
+  buffer: Buffer,
+  password?: string,
+): BackupPayload {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new AppError("Invalid or unsupported Laundry backup file", 422);
+  }
+
+  let payload: BackupPayload;
+
+  const automaticMagic = Buffer.from("LABK1", "ascii");
+  if (
+    buffer.length >= automaticMagic.length &&
+    buffer.subarray(0, automaticMagic.length).equals(automaticMagic)
+  ) {
+    try {
+      const compressed = decryptBackupData(buffer, {
+        businessId,
+        purpose: "artifact",
+      });
+      payload = JSON.parse(gunzipSync(compressed).toString("utf8")) as BackupPayload;
+    } catch {
+      throw new AppError("Backup file could not be decrypted or is invalid", 422);
+    }
+  } else if (
+    buffer.length >= MAGIC.length &&
+    buffer.subarray(0, MAGIC.length).equals(MAGIC)
+  ) {
+    if (!password) {
+      throw new AppError(
+        "This older backup requires the original backup password",
+        422,
+      );
+    }
+    payload = decrypt(buffer, password);
+  } else {
+    throw new AppError("Unsupported or invalid Laundry backup file", 422);
+  }
+
+  if (
+    !payload ||
+    payload.format !== "laundry-business-backup" ||
+    payload.version !== VERSION ||
+    !payload.business ||
+    typeof payload.business !== "object" ||
+    !Array.isArray(payload.branches) ||
+    !Array.isArray(payload.users) ||
+    !Array.isArray(payload.customers) ||
+    !Array.isArray(payload.orders)
+  ) {
+    throw new AppError("Backup does not contain a valid business backup", 422);
+  }
+
+  return payload;
+}
+
 export async function restoreBusinessBackup(
   businessId: string,
   userId: string,
   buffer: Buffer,
-  password: string,
-  reason: string,
+  password: string | undefined,
+  restoreReason: string,
 ): Promise<RestoreCounts> {
-  const payload = decrypt(buffer, password);
+  const payload = decodeBusinessBackup(businessId, buffer, password);
 
   if (payload.business.id !== businessId) {
     throw new AppError(
@@ -779,7 +871,7 @@ export async function restoreBusinessBackup(
       }
 
       for (const history of payload.customerStatusHistory) {
-        await restoreChild(tx, "customerStatusHistory", history, [
+        await restoreChild(tx, businessId, "customerStatusHistory", history, [
           ["customerId", customerMap],
         ]);
         counts.updated += 1;
@@ -928,9 +1020,12 @@ export async function restoreBusinessBackup(
         }
 
         const backupId = String(garment.id);
-        const existing = await delegate(tx, "garment").findUnique({
-          where: { id: backupId },
-        });
+        const existing = await assertExistingBelongsToBusiness(
+          tx,
+          "garment",
+          backupId,
+          businessId,
+        );
 
         delete (data as Record<string, unknown>).id;
         delete (data as Record<string, unknown>).businessId;
@@ -1009,14 +1104,14 @@ export async function restoreBusinessBackup(
       }
 
       for (const item of payload.invoiceItems) {
-        const status = await restoreChild(tx, "invoiceItem", item, [
+        const status = await restoreChild(tx, businessId, "invoiceItem", item, [
           ["invoiceId", invoiceMap],
         ]);
         counts[status] += 1;
       }
 
       for (const history of payload.invoiceHistory) {
-        const status = await restoreChild(tx, "invoiceHistory", history, [
+        const status = await restoreChild(tx, businessId, "invoiceHistory", history, [
           ["invoiceId", invoiceMap],
         ]);
         counts[status] += 1;
@@ -1107,9 +1202,12 @@ export async function restoreBusinessBackup(
         }
 
         const backupId = String(stock.id);
-        const existing = await delegate(tx, "inventoryStock").findUnique({
-          where: { id: backupId },
-        });
+        const existing = await assertExistingBelongsToBusiness(
+          tx,
+          "inventoryStock",
+          backupId,
+          businessId,
+        );
 
         delete (data as Record<string, unknown>).id;
         delete (data as Record<string, unknown>).businessId;
@@ -1148,9 +1246,12 @@ export async function restoreBusinessBackup(
         }
 
         const backupId = String(movement.id);
-        const existing = await delegate(tx, "inventoryMovement").findUnique({
-          where: { id: backupId },
-        });
+        const existing = await assertExistingBelongsToBusiness(
+          tx,
+          "inventoryMovement",
+          backupId,
+          businessId,
+        );
 
         delete (data as Record<string, unknown>).id;
         delete (data as Record<string, unknown>).businessId;
@@ -1459,6 +1560,7 @@ export async function restoreBusinessBackup(
 
         const status = await restoreChild(
           tx,
+          businessId,
           "financialStatementDelivery",
           delivery,
           [["statementId", statementMap]],
@@ -1485,7 +1587,7 @@ export async function restoreBusinessBackup(
     correlationId: null,
     metadata: {
       version: VERSION,
-      reason,
+      reason: restoreReason.trim(),
       ...result,
     },
   });
@@ -1497,4 +1599,6 @@ export const __backupTestHooks = {
   encrypt,
   decrypt,
   countsFromPayload,
+  restoreChild,
+  assertExistingBelongsToBusiness,
 };

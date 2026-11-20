@@ -352,17 +352,20 @@ describe("QuickOperationLauncher", () => {
     });
   });
 
-  it("requires a strong encryption password for a manual local backup", async () => {
+  it("runs a manual local backup without asking for an encryption password", async () => {
     render(
       <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
-    expect(
-      await screen.findByText(/at least 12 characters/i),
-    ).toBeInTheDocument();
-    expect(exportBackupMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(createManualLocalBackupMock).toHaveBeenCalledWith(
+        "business-1",
+        { accessToken: "access-token" },
+      );
+    });
+    expect(await screen.findByText(/Encrypted local backup saved/i)).toBeInTheDocument();
   });
 
   it("saves a manual local backup using the remembered destination", async () => {
@@ -370,16 +373,11 @@ describe("QuickOperationLauncher", () => {
       <QuickOperationLauncher operation={operations.MLB} onClose={vi.fn()} />,
     );
 
-    fireEvent.change(
-      screen.getByLabelText(/backup encryption password/i),
-      { target: { value: "a-strong-backup-password" } },
-    );
     fireEvent.click(screen.getByRole("button", { name: /execute/i }));
 
     await waitFor(() => {
       expect(createManualLocalBackupMock).toHaveBeenCalledWith(
         "business-1",
-        "a-strong-backup-password",
         { accessToken: "access-token" },
       );
     });

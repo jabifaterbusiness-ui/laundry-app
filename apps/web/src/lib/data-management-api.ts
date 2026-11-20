@@ -82,16 +82,13 @@ export async function importMigrationJob(jobId: string, duplicatePolicy: "skip" 
 }
 
 export async function exportBackup(
-  password: string,
   auth: { accessToken: string | null },
 ): Promise<Blob> {
   const res = await fetch(`${API_BASE_URL}/migrations/backup/export`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
     },
-    body: JSON.stringify({ password }),
   });
   if (!res.ok) return parseError(res);
   return res.blob();
@@ -108,8 +105,8 @@ export async function restoreBackup(
     headers: {
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
       "Content-Type": file.type || "application/octet-stream",
-      "X-Backup-Password": password,
-      "X-Restore-Reason": reason,
+      ...(password ? { "X-Backup-Password": password } : {}),
+      "X-Restore-Reason": reason.trim(),
     },
     body: file,
   });
