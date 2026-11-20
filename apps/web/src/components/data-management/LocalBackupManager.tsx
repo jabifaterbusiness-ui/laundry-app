@@ -115,10 +115,9 @@ function downloadBackup(blob: Blob) {
 
 export async function createManualLocalBackup(
   businessId: string,
-  password: string,
   auth: { accessToken: string | null },
 ): Promise<{ fileName: string; destination: string }> {
-  const blob = await exportBackup(password, auth);
+  const blob = await exportBackup(auth);
   let fileName = "";
   let destination = "your browser's default Downloads folder";
 
@@ -196,7 +195,6 @@ export function LocalBackupManager() {
   const scheduleKey = useMemo(() => scheduleStorageKey(businessId), [businessId]);
   const folderKey = useMemo(() => folderStorageKey(businessId), [businessId]);
   const historyKey = useMemo(() => historyStorageKey(businessId), [businessId]);
-  const [backupPassword, setBackupPassword] = useState("");
   const [folderHandle, setFolderHandle] = useState<LocalDirectoryHandle | null>(null);
   const [schedules, setSchedules] = useState<LocalBackupSchedule[]>(() => readSchedules(scheduleStorageKey(businessId)));
   const [history, setHistory] = useState<LocalBackupHistory[]>(() => readHistory(historyStorageKey(businessId)));
@@ -258,12 +256,12 @@ export function LocalBackupManager() {
   }
 
   async function runManualBackup() {
-    if (!accessToken || backupPassword.length < 12) return;
+    if (!accessToken) return;
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const blob = await exportBackup(backupPassword, { accessToken });
+      const blob = await exportBackup({ accessToken });
       let fileName: string;
       if (folderHandle) {
         const permission = await folderHandle.requestPermission?.({ mode: "readwrite" });
@@ -283,7 +281,7 @@ export function LocalBackupManager() {
   }
 
   useEffect(() => {
-    if (!accessToken || backupPassword.length < 12 || !folderHandle || !schedules.some((schedule) => schedule.enabled)) return;
+    if (!accessToken || !folderHandle || !schedules.some((schedule) => schedule.enabled)) return;
     let cancelled = false;
     const runDueSchedules = async () => {
       if (schedulerBusy.current || cancelled) return;
@@ -299,7 +297,7 @@ export function LocalBackupManager() {
         }
         for (const schedule of due) {
           if (cancelled) break;
-          const blob = await exportBackup(backupPassword, { accessToken });
+          const blob = await exportBackup({ accessToken });
           const fileName = await writeBackupToFolder(folderHandle, blob);
           setHistory((current) => [{ id: `local-history-${Date.now()}-${schedule.id}`, fileName, savedAt: now.toISOString(), trigger: "SCHEDULED" as const, scheduleName: schedule.name }, ...current].slice(0, 20));
           const key = dateKey(now);
@@ -315,7 +313,7 @@ export function LocalBackupManager() {
     void runDueSchedules();
     const interval = window.setInterval(() => { void runDueSchedules(); }, 30_000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, [accessToken, backupPassword, folderHandle, schedules]);
+  }, [accessToken, folderHandle, schedules]);
 
   function startScheduleEdit(schedule?: LocalBackupSchedule) {
     setEditingScheduleId(schedule?.id ?? null);
@@ -381,10 +379,7 @@ export function LocalBackupManager() {
       </div>
 
       <div className="data-management-local-manual">
-        <label>Backup encryption password
-          <input type="password" autoComplete="new-password" minLength={12} placeholder="At least 12 characters" value={backupPassword} onChange={(event) => setBackupPassword(event.target.value)} />
-        </label>
-        <button className="data-management-button data-management-button-manual" type="button" disabled={busy || !accessToken || backupPassword.length < 12} onClick={() => void runManualBackup()}>{busy ? "Creating backup…" : "↓ Create local backup"}</button>
+        <button className="data-management-button data-management-button-manual" type="button" disabled={busy || !accessToken} onClick={() => void runManualBackup()}>{busy ? "Creating backup…" : "↓ Create local backup"}</button>
       </div>
 
       {message && <p className="data-management-feedback" role="status">{message}</p>}
@@ -419,7 +414,7 @@ export function LocalBackupManager() {
             <small>{item.fileName}</small>
           </li>)}</ul> : <p>No local backups have been saved on this device yet.</p>}
         </div>
-        <p className="data-management-local-note">Local schedules are stored on this device. They run only while the Data Management page remains open, the backup password is entered, and the browser grants access to the selected folder. They do not run while the browser or app is closed. The password is never saved in browser storage. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
+        <p className="data-management-local-note">Local schedules are stored on this device. They run only while the Data Management page remains open and the browser grants access to the selected folder. They do not run while the browser or app is closed. Folder scheduling requires HTTPS and a browser with folder access; on unsupported devices, manual backups use the normal download flow.</p>
       </div>
     </section>
   );

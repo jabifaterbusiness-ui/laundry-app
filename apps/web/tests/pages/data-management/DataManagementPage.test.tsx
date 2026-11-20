@@ -93,9 +93,12 @@ describe("DataManagementPage authorization", () => {
     vi.mocked(deleteCloudBackupSchedule).mockReset();
     vi.mocked(verifyCloudBackupConnection).mockReset();
     vi.mocked(saveCloudBackupSettings).mockClear();
+    vi.mocked(restoreBackup).mockReset().mockResolvedValue({
+      created: 1, updated: 2, mapped: 3, skippedUsers: 4,
+    } as any);
   });
 
-  it("shows only the two customer cloud providers and groups repeated accounts", async () => {
+  it("shows the supported cloud providers once and groups repeated accounts", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
     const connection = {
@@ -424,33 +427,6 @@ describe("DataManagementPage authorization", () => {
     expect(vi.mocked(listCloudBackupConnections)).toHaveBeenCalledTimes(2);
   });
 
-  it("requires a restore reason and reports a successful merge", async () => {
-    mockUser.current = businessUser();
-    mockCloudOAuth.accessToken = "test-access-token";
-    vi.mocked(restoreBackup).mockResolvedValue({
-      created: 2, updated: 3, mapped: 1, skippedUsers: 0,
-    } as any);
-
-    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: /restore encrypted backup/i }));
-    const file = new File(["encrypted backup bytes"], "test.laundry-backup", { type: "application/octet-stream" });
-    fireEvent.change(screen.getByLabelText(/choose encrypted backup/i), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText(/backup password/i), { target: { value: "long-backup-password" } });
-    const restoreButton = screen.getByRole("button", { name: "Restore backup" });
-    expect(restoreButton).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/reason for restore/i), { target: { value: "Restore records from a verified backup" } });
-    expect(restoreButton).toBeEnabled();
-    fireEvent.click(restoreButton);
-
-    await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith(
-      file,
-      "long-backup-password",
-      "Restore records from a verified backup",
-      { accessToken: "test-access-token" },
-    ));
-    expect(await screen.findByRole("status")).toHaveTextContent(/restore completed successfully: 2 records created, 3 updated/i);
-  });
-
   it("allows a Business Owner with a custom visible job title", () => {
     mockUser.current = businessUser({ role: "Manager" });
 
@@ -473,7 +449,7 @@ describe("DataManagementPage authorization", () => {
     mockUser.current = businessUser({
       role: "Accountant",
       securityRole: "STAFF",
-      permissions: ["migrations.view", "migrations.manage"],
+      permissions: [],
     });
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
@@ -545,4 +521,81 @@ describe("DataManagementPage authorization", () => {
       screen.queryByRole("heading", { name: /restore encrypted backup/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("restores a current LABK1 backup without requesting a password", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /restore encrypted backup/i }));
+
+    const file = new File(["LABK1encrypted-payload"], "current.laundry-backup", {
+      type: "application/octet-stream",
+    });
+    Object.defineProperty(file, "slice", {
+      value: () => ({
+        arrayBuffer: async () => new TextEncoder().encode("LABK1").buffer,
+      }),
+    });
+    fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByText(/no password is required/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/original backup password/i)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
+      target: { value: "Quarterly recovery test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore backup" }));
+
+    await waitFor(() => {
+      expect(restoreBackup).toHaveBeenCalledWith(
+        file, "", "Quarterly recovery test", { accessToken: "test-access-token" },
+      );
+    });
+    expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
+  });
+
+  it("requires the original password for a legacy LAUNDRYBK backup", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /restore encrypted backup/i }));
+
+    const file = new File(["LAUNDRYBKlegacy-payload"], "legacy.laundry-backup", {
+      type: "application/octet-stream",
+    });
+    Object.defineProperty(file, "slice", {
+      value: () => ({
+        arrayBuffer: async () => new TextEncoder().encode("LAUNDRYBK").buffer,
+      }),
+    });
+    fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
+      target: { files: [file] },
+    });
+
+    const password = await screen.findByLabelText(/original backup password/i);
+    fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
+      target: { value: "Legacy recovery validation" },
+    });
+
+    const restoreButton = screen.getByRole("button", { name: "Restore backup" });
+    expect(restoreButton).toBeDisabled();
+    expect(restoreBackup).not.toHaveBeenCalled();
+
+    fireEvent.change(password, { target: { value: "legacy-pass-123" } });
+    expect(restoreButton).toBeEnabled();
+    fireEvent.click(restoreButton);
+
+    await waitFor(() => {
+      expect(restoreBackup).toHaveBeenCalledWith(
+        file, "legacy-pass-123", "Legacy recovery validation",
+        { accessToken: "test-access-token" },
+      );
+    });
+    expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
+  });
+
 });

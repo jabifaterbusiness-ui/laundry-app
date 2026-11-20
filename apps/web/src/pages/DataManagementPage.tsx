@@ -32,8 +32,10 @@ export function DataManagementPage() {
   const [duplicatePolicy, setDuplicatePolicy] = useState<"skip" | "merge" | "create">("skip");
   const [customerMapping, setCustomerMapping] = useState<MigrationAnalysisResponse["summary"]["customerMapping"]>({});
   const [restorePassword, setRestorePassword] = useState("");
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreFormat, setRestoreFormat] = useState<"LABK1" | "LAUNDRYBK" | "UNKNOWN" | null>(null);
+  const restoreFileReadId = useRef(0);
   const [restoreReason, setRestoreReason] = useState("");
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cloudConnections, setCloudConnections] = useState<CloudBackupConnection[]>([]);
@@ -137,12 +139,13 @@ export function DataManagementPage() {
     };
   }, [accessToken, jobIdFromUrl]);
 
-  const canManage =
+  const canExport = hasPermission(user, "migrations.view");
+  const canRestore = hasPermission(user, "migrations.manage");
+  const canImport =
     hasPermission(user, "migrations.view") &&
-    (securityRole === "BUSINESS_OWNER" || securityRole === "BRANCH_MANAGER");
-  const canRestore =
     hasPermission(user, "migrations.manage") &&
-    securityRole === "BUSINESS_OWNER";
+    (securityRole === "BUSINESS_OWNER" || securityRole === "BRANCH_MANAGER");
+  const canManage = canExport || canRestore || canImport;
 
   const canManageCloud =
     securityRole === "BUSINESS_OWNER" &&
@@ -609,21 +612,48 @@ export function DataManagementPage() {
     } finally { setBusy(false); }
   }
 
+  async function selectRestoreFile(file: File | null) {
+    const requestId = ++restoreFileReadId.current;
+    setRestoreFile(file);
+    setRestorePassword("");
+    setRestoreFormat(null);
+    if (!file) return;
+
+    try {
+      const prefix = new TextDecoder().decode(await file.slice(0, 9).arrayBuffer());
+      if (requestId !== restoreFileReadId.current) return;
+      if (prefix.startsWith("LABK1")) setRestoreFormat("LABK1");
+      else if (prefix.startsWith("LAUNDRYBK")) setRestoreFormat("LAUNDRYBK");
+      else setRestoreFormat("UNKNOWN");
+    } catch {
+      if (requestId === restoreFileReadId.current) setRestoreFormat("UNKNOWN");
+    }
+  }
+
   async function handleRestore() {
-    if (!restoreFile || !restorePassword || restoreReason.trim().length < 10) {
-      setMessage("Choose a backup file, enter its password, and provide a restore reason (at least 10 characters).");
+    const trimmedReason = restoreReason.trim();
+    if (!restoreFile || !restoreFormat || restoreFormat === "UNKNOWN") {
+      setMessage("Choose a supported LaundryAngel backup file.");
+      return;
+    }
+    if (restoreFormat === "LAUNDRYBK" && restorePassword.length < 5) {
+      setMessage("This older backup requires its original password (at least 5 characters).");
+      return;
+    }
+    if (trimmedReason.length < 10 || trimmedReason.length > 500) {
+      setMessage("Restore reason must be between 10 and 500 characters.");
       return;
     }
 
     setBusy(true);
-    setMessage("Restore in progress. Please keep this page open while the backup is safely merged…");
+    setMessage(null);
     try {
-      const result = await restoreBackup(restoreFile, restorePassword, restoreReason.trim(), { accessToken });
+      const result = await restoreBackup(restoreFile, restoreFormat === "LAUNDRYBK" ? restorePassword : "", trimmedReason, { accessToken });
       setMessage(
-        `Restore completed successfully: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
+        `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,
       );
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Restore failed. No success was reported; check the error and try again only after confirming the backup file.");
+      setMessage(error instanceof ApiError ? error.message : "Restore failed.");
     } finally {
       setBusy(false);
     }
@@ -655,7 +685,7 @@ export function DataManagementPage() {
           </div>
         </div>
 
-        <article className="data-management-tool-card data-management-tool-import">
+        {canImport && <article className="data-management-tool-card data-management-tool-import">
           <div className="data-management-tool-heading">
             <h3 className="data-management-tool-semantic-heading">
             <button
@@ -720,12 +750,13 @@ export function DataManagementPage() {
               </div>
             )}
           </div>
-        </article>
+        </article>}
+
+        {canExport && (
+          <LocalBackupManager key={user?.businessId ?? user?.id ?? "default"} />
+        )}
 
         {canRestore && (
-          <>
-            <LocalBackupManager key={user?.businessId ?? user?.id ?? "default"} />
-
             <article className="data-management-tool-card data-management-tool-restore">
               <div className="data-management-tool-heading">
                 <h3 className="data-management-tool-semantic-heading">
@@ -735,24 +766,26 @@ export function DataManagementPage() {
                   <span className="data-management-chevron" aria-hidden="true">{panelIsOpen("restore") ? "−" : "+"}</span>
                 </button>
                 </h3>
-                <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || restorePassword.length < 12 || restoreReason.trim().length < 10} onClick={handleRestore}>{busy ? "Restoring backup…" : "Restore backup"}</button>
+                <button className="data-management-button data-management-button-warning" type="button" disabled={busy || !restoreFile || !restoreFormat || restoreFormat === "UNKNOWN" || (restoreFormat === "LAUNDRYBK" && restorePassword.length < 5) || restoreReason.trim().length < 10 || restoreReason.trim().length > 500} onClick={handleRestore}>Restore backup</button>
               </div>
               <div id="data-management-restore-panel" className="data-management-tool-content" hidden={!panelIsOpen("restore")}>
                 <p>Restore is merge-only: it never deletes current data, never overwrites passwords or security access, and restores the operational business dataset transactionally.</p>
                 <label>Choose encrypted backup
-                  <input type="file" accept=".laundry-backup" onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)} />
+                  <input type="file" accept=".laundry-backup" onChange={(e) => void selectRestoreFile(e.target.files?.[0] ?? null)} />
                 </label>
                 {restoreFile && <p className="data-management-selected-file">Selected: {restoreFile.name}</p>}
-                <label>Backup password
-                  <input type="password" autoComplete="new-password" placeholder="At least 12 characters" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
+                {restoreFormat === "LABK1" && <p role="status">This is a current encrypted backup. No password is required; LaundryAngel decrypts it securely on the server.</p>}
+                {restoreFormat === "LAUNDRYBK" && (
+                  <label>Original backup password (required for this older backup)
+                    <input type="password" autoComplete="new-password" placeholder="At least 5 characters" value={restorePassword} onChange={(e) => setRestorePassword(e.target.value)} />
+                  </label>
+                )}
+                {restoreFormat === "UNKNOWN" && <p className="data-management-feedback data-management-feedback-error" role="alert">Unsupported backup format. Select a valid LaundryAngel backup file.</p>}
+                <label>Reason for restoring (required, 10–500 characters)
+                  <textarea maxLength={500} required rows={4} placeholder="Explain why this backup is being restored..." value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
                 </label>
-                <label>Reason for restore (required)
-                  <textarea rows={3} maxLength={500} placeholder="Explain why this restore is needed (at least 10 characters)." value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} />
-                </label>
-                <p>Restore reasons are recorded in the business audit history. Restores merge data and may update existing records.</p>
               </div>
             </article>
-          </>
         )}
       </section>
 

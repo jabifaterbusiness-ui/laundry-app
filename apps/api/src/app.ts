@@ -65,6 +65,7 @@ export function createApp() {
       // the migration controller can enforce its own upload-size limit.
       type: (req) =>
         !req.url?.endsWith("/migrations/jobs/analyze") &&
+        !req.url?.endsWith("/migrations/backup/restore") &&
         !req.url?.endsWith("/businesses/logo"),
     }),
   );

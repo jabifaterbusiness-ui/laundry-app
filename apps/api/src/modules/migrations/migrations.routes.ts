@@ -33,8 +33,8 @@ migrationsRouter.use(requireAuth, requireBusinessContext);
 migrationsRouter.post("/jobs/analyze", requireRole(...ADMIN_ROLES), requirePermission("migrations.view"), asyncHandler(analyze));
 migrationsRouter.get("/jobs/:id", requireRole(...ADMIN_ROLES), requirePermission("migrations.view"), asyncHandler(getJob));
 migrationsRouter.post("/jobs/:id/import", requireRole(...ADMIN_ROLES), requirePermission("migrations.manage"), asyncHandler(importJob));
-migrationsRouter.post("/backup/export", requireRole(...OWNER_ONLY), requirePermission("migrations.view"), asyncHandler(exportBackup));
-migrationsRouter.post("/backup/restore", requireRole(...OWNER_ONLY), requirePermission("migrations.manage"), asyncHandler(restoreBackup));
+migrationsRouter.post("/backup/export", requirePermission("migrations.view"), asyncHandler(exportBackup));
+migrationsRouter.post("/backup/restore", requirePermission("migrations.manage"), asyncHandler(restoreBackup));
 
 migrationsRouter.post(
   "/backup/cloud/oauth/start",

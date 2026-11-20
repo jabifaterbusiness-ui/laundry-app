@@ -66,8 +66,11 @@ vi.mock("../../src/config/index.js", () => ({
   },
 }));
 
-import { gunzipSync } from "node:zlib";
-import { decryptBackupData } from "../../src/modules/migrations/backup-crypto.service.js";
+import { gunzipSync, gzipSync } from "node:zlib";
+import {
+  decryptBackupData,
+  encryptBackupData,
+} from "../../src/modules/migrations/backup-crypto.service.js";
 import {
   __backupTestHooks,
   createScheduledBackupArtifact,
@@ -138,6 +141,140 @@ describe("#20 backup service", () => {
     vi.clearAllMocks();
     emptyExportMocks();
   });
+
+  it("refuses to overwrite a child record owned by another business", async () => {
+    const update = vi.fn();
+    const tx = {
+      customerStatusHistory: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "history-1",
+          businessId: "business-b",
+          customerId: "customer-target",
+        }),
+        update,
+        create: vi.fn(),
+      },
+    };
+
+    await expect(
+      __backupTestHooks.restoreChild(
+        tx,
+        businessId,
+        "customerStatusHistory",
+        { id: "history-1", customerId: "customer-source" },
+        [["customerId", new Map([["customer-source", "customer-target"]])]],
+      ),
+    ).rejects.toThrow("belongs to a different business");
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to overwrite an invoice item attached to a different invoice", async () => {
+    const update = vi.fn();
+    const tx = {
+      invoiceItem: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "item-1",
+          invoiceId: "invoice-other",
+        }),
+        update,
+        create: vi.fn(),
+      },
+    };
+
+    await expect(
+      __backupTestHooks.restoreChild(
+        tx,
+        businessId,
+        "invoiceItem",
+        { id: "item-1", invoiceId: "invoice-source" },
+        [["invoiceId", new Map([["invoice-source", "invoice-target"]])]],
+      ),
+    ).rejects.toThrow("conflicts with an existing invoiceId relationship");
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("allows updating an existing child when its parent relationship matches", async () => {
+    const update = vi.fn().mockResolvedValue({ id: "item-1" });
+    const tx = {
+      invoiceItem: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "item-1",
+          invoiceId: "invoice-target",
+        }),
+        update,
+        create: vi.fn(),
+      },
+    };
+
+    const result = await __backupTestHooks.restoreChild(
+      tx,
+      businessId,
+      "invoiceItem",
+      { id: "item-1", invoiceId: "invoice-source", description: "Updated item" },
+      [["invoiceId", new Map([["invoice-source", "invoice-target"]])]],
+    );
+
+    expect(result).toBe("updated");
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a financial statement delivery linked to a different recipient", async () => {
+    const update = vi.fn();
+    const tx = {
+      financialStatementDelivery: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "delivery-1",
+          businessId,
+          statementId: "statement-target",
+          recipientId: "recipient-other",
+        }),
+        update,
+        create: vi.fn(),
+      },
+    };
+
+    await expect(
+      __backupTestHooks.restoreChild(
+        tx,
+        businessId,
+        "financialStatementDelivery",
+        {
+          id: "delivery-1",
+          statementId: "statement-source",
+          recipientId: "recipient-source",
+        },
+        [["statementId", new Map([["statement-source", "statement-target"]])]],
+        { recipientId: "recipient-target" },
+      ),
+    ).rejects.toThrow("conflicts with an existing recipientId relationship");
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it.each(["garment", "inventoryStock", "inventoryMovement"])(
+    "refuses to reuse a %s record belonging to another business",
+    async (model) => {
+      const tx = {
+        [model]: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "record-1",
+            businessId: "business-b",
+          }),
+        },
+      };
+
+      await expect(
+        __backupTestHooks.assertExistingBelongsToBusiness(
+          tx,
+          model,
+          "record-1",
+          businessId,
+        ),
+      ).rejects.toThrow("belongs to another business");
+    },
+  );
 
   it("round-trips encrypted v2 payloads", () => {
     const payload = {
@@ -333,10 +470,14 @@ describe("#20 backup service", () => {
     const backup = await exportBusinessBackup(
       businessId,
       userId,
-      password,
     );
 
-    const payload = __backupTestHooks.decrypt(backup, password);
+    expect(backup.subarray(0, 5).toString("ascii")).toBe("LABK1");
+    const compressed = decryptBackupData(backup, {
+      businessId,
+      purpose: "artifact",
+    });
+    const payload = JSON.parse(gunzipSync(compressed).toString("utf8"));
 
     expect(payload.version).toBe(2);
     expect(payload.users[0]).not.toHaveProperty("passwordHash");
@@ -686,14 +827,19 @@ describe("#20 backup service", () => {
         ],
     };
 
-    const encrypted = __backupTestHooks.encrypt(payload, password);
+    const encrypted = encryptBackupData(
+      gzipSync(Buffer.from(JSON.stringify(payload), "utf8")),
+      { businessId, purpose: "artifact" },
+    );
+
+    expect(encrypted.subarray(0, 5).toString("ascii")).toBe("LABK1");
 
     const result = await restoreBusinessBackup(
       businessId,
       userId,
       encrypted,
-      password,
-      "Restoring from verified archive",
+      undefined,
+      "Testing a verified backup restoration",
     );
 
     expect(result.created).toBeGreaterThan(0);
@@ -769,10 +915,48 @@ describe("#20 backup service", () => {
         actorUserId: userId,
         metadata: expect.objectContaining({
           version: 2,
-          reason: "Restoring from verified archive",
         }),
       }),
     );
+  });
+
+  it("accepts a legacy backup password of 5 characters and rejects shorter passwords", () => {
+    const payload = {
+      format: "laundry-business-backup" as const,
+      version: 2 as const,
+      exportedAt: new Date().toISOString(),
+      business: { id: businessId, name: "Laundry A" },
+    } as unknown as Parameters<typeof __backupTestHooks.encrypt>[0];
+
+    const encrypted = __backupTestHooks.encrypt(payload, "12345");
+    expect(__backupTestHooks.decrypt(encrypted, "12345")).toEqual(payload);
+    expect(() => __backupTestHooks.encrypt(payload, "1234")).toThrow(/at least 5 characters/i);
+    expect(() => __backupTestHooks.decrypt(encrypted, "1234")).toThrow(/at least 5 characters/i);
+  });
+
+
+  it("requires the original password for a legacy backup", async () => {
+    const encrypted = __backupTestHooks.encrypt(
+      {
+        format: "laundry-business-backup",
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        business: { id: businessId, name: "Laundry A" },
+      } as unknown as Parameters<typeof __backupTestHooks.encrypt>[0],
+      password,
+    );
+
+    await expect(
+      restoreBusinessBackup(
+        businessId,
+        userId,
+        encrypted,
+        undefined,
+        "Testing legacy password protection",
+      ),
+    ).rejects.toThrow(/older backup requires the original backup password/i);
+
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects a cross-business restore before opening a transaction", async () => {
@@ -824,7 +1008,7 @@ describe("#20 backup service", () => {
         userId,
         encrypted,
         password,
-        "Restoring from verified archive",
+        "Testing a verified backup restoration",
       ),
     ).rejects.toThrow(/different business/i);
 

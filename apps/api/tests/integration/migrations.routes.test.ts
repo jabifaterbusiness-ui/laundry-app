@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { migrationsRouter } from "../../src/modules/migrations/migrations.routes.js";
-import { AppError } from "../../src/middleware/error-handler.js";
+import { AppError, errorHandler } from "../../src/middleware/error-handler.js";
 
 const {
   verifyAccessToken,
@@ -188,20 +188,7 @@ function createApp() {
   const app = express();
   app.use(express.json());
   app.use("/api/v1/migrations", migrationsRouter);
-  app.use(
-    (
-      error: unknown,
-      _req: express.Request,
-      res: express.Response,
-      _next: express.NextFunction,
-    ) => {
-      if (error instanceof AppError) {
-        res.status(error.statusCode).json({ message: error.message });
-        return;
-      }
-      res.status(500).json({ message: "Internal server error" });
-    },
-  );
+  app.use(errorHandler);
   return app;
 }
 
@@ -284,7 +271,7 @@ describe("Migrations routes - permission enforcement", () => {
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);
-    expect(response.body.message).toBe("Insufficient permissions for this action");
+    expect(response.body.error.message).toBe("Insufficient permissions for this action");
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
   });
 
@@ -320,23 +307,6 @@ describe("Migrations routes - permission enforcement", () => {
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
   });
 
-  it("requires a restore reason before processing the backup", async () => {
-    // Header spelling is hyphenated; the server reports that exact header name when missing.
-    authAs("BUSINESS_OWNER");
-    hasPermission.mockResolvedValue(true);
-
-    const response = await request(createApp())
-      .post("/api/v1/migrations/backup/restore")
-      .set("Authorization", "Bearer test-token")
-      .set("X-Backup-Password", "secure-backup-password")
-      .set("Content-Type", "application/octet-stream")
-      .send(Buffer.from("encrypted backup"));
-
-    expect(response.status).toBe(422);
-    expect(response.body.error?.message ?? response.body.message).toMatch(/restore[- ]reason/i);
-    expect(restoreBusinessBackup).not.toHaveBeenCalled();
-  });
-
   it("rejects an empty encrypted backup restore before restore processing", async () => {
     authAs("BUSINESS_OWNER");
     hasPermission.mockResolvedValue(true);
@@ -345,7 +315,7 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Restore-Reason", "Restoring from verified archive")
+      .set("X-Restore-Reason", "Testing empty backup rejection")
       .set("Content-Type", "application/octet-stream")
       .send(Buffer.alloc(0));
 
@@ -364,7 +334,7 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Restore-Reason", "Restoring from verified archive")
+      .set("X-Restore-Reason", "Testing oversized backup rejection")
       .set("Content-Type", "application/octet-stream")
       .send(oversized);
 
@@ -470,7 +440,6 @@ describe("Migrations routes - permission enforcement", () => {
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
       .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Restore-Reason", "Restoring from verified archive")
       .send(Buffer.from("backup"));
 
     expect(response.status).toBe(403);
@@ -522,18 +491,19 @@ describe("Migrations routes - existing role boundaries", () => {
     expect(analyzeMigrationSource).toHaveBeenCalledOnce();
   });
 
-  it("allows a business owner with default migrations.view permission to export", async () => {
+  it("allows a user with migrations.view permission to export without a password", async () => {
     authAs("BUSINESS_OWNER");
 
     const response = await request(createApp())
       .post("/api/v1/migrations/backup/export")
-      .set("Authorization", "Bearer test-token")
-      .send({
-        password: "secure-backup-password",
-      });
+      .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
     expect(exportBusinessBackup).toHaveBeenCalledOnce();
+    expect(exportBusinessBackup).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+    );
   });
 
   it("does not allow STAFF to access migration analysis", async () => {
@@ -627,17 +597,106 @@ describe("Migrations routes - existing role boundaries", () => {
     expect(createCloudBackupScheduleController).not.toHaveBeenCalled();
   });
 
-  it("does not allow a branch manager to restore a backup", async () => {
+  it("rejects backup restore when the restore reason is missing", async () => {
+    authAs("BUSINESS_OWNER");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/restore reason is required/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("rejects backup restore when the restore reason is shorter than 10 characters", async () => {
+    authAs("BUSINESS_OWNER");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Too short")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/between 10 and 500/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("rejects backup restore when the restore reason exceeds 500 characters", async () => {
+    authAs("BUSINESS_OWNER");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "R".repeat(501))
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(422);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/between 10 and 500/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("rejects legacy backup passwords shorter than 5 characters", async () => {
+    authAs("BUSINESS_OWNER");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved legacy backup restore")
+      .set("X-Backup-Password", "1234")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LAUNDRYBKmock-backup"));
+
+    expect(response.status, JSON.stringify(response.body)).toBe(422);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+
+  it("accepts a legacy backup password of exactly 5 characters", async () => {
+    authAs("BUSINESS_OWNER");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved legacy backup restore")
+      .set("X-Backup-Password", "12345")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LAUNDRYBKmock-backup"));
+
+    expect(response.status).toBe(200);
+    expect(restoreBusinessBackup).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(Buffer),
+      "12345",
+      "Approved legacy backup restore",
+    );
+  });
+
+
+  it("allows a branch manager with migrations.manage permission to restore a LABK1 backup", async () => {
     authAs("BRANCH_MANAGER");
 
     const response = await request(createApp())
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", "Bearer test-token")
-      .set("X-Backup-Password", "secure-backup-password")
-      .set("X-Restore-Reason", "Restoring from verified archive")
-      .send(Buffer.from("backup"));
+      .set("X-Restore-Reason", "Approved business backup recovery")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
 
-    expect(response.status).toBe(403);
-    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(restoreBusinessBackup).toHaveBeenCalledOnce();
+    expect(restoreBusinessBackup).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(Buffer),
+      undefined,
+      "Approved business backup recovery",
+    );
   });
 });
