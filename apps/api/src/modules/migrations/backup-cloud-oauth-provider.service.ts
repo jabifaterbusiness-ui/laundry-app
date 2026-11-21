@@ -26,6 +26,44 @@ type TokenResponse = {
 };
 
 const REQUEST_TIMEOUT_MS = 120_000;
+const BACKUP_FOLDER_NAME = "Laundry Angels Backup";
+const BACKUP_FOLDER_MIME = "application/vnd.google-apps.folder";
+const DROPBOX_BACKUP_FOLDER = "/Laundry Angels Backup";
+const LEGACY_DROPBOX_BACKUP_PATH = /^\/laundryangel\/backups\/[0-9a-f-]+\.enc$/i;
+const DROPBOX_BACKUP_PATH = /^\/laundry angels backup\/laundry angel (?:manual|auto) backup \d{2}-\d{2}-\d{4}_\d{2}:\d{2}(?:am|pm)_[0-9a-f-]+\.enc$/i;
+
+export function formatCloudBackupFilename(
+  trigger: "MANUAL" | "SCHEDULED",
+  at: Date,
+  timezone: string,
+  runId: string,
+): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h12",
+  }).formatToParts(at);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value;
+  const day = value("day");
+  const month = value("month");
+  const year = value("year");
+  const hour = value("hour");
+  const minute = value("minute");
+  const period = value("dayPeriod")?.toLowerCase();
+  if (!day || !month || !year || !hour || !minute || !period) {
+    throw new AppError("Unable to format the backup timestamp for the business timezone.", 422);
+  }
+  const prefix = trigger === "MANUAL" ? "Manual" : "Auto";
+  return `Laundry Angel ${prefix} Backup ${day}-${month}-${year}_${hour}:${minute}${period}_${runId}.enc`;
+}
+
+function validDropboxBackupPath(path: string): boolean {
+  return LEGACY_DROPBOX_BACKUP_PATH.test(path) || DROPBOX_BACKUP_PATH.test(path);
+}
 
 function assertOAuthProvider(provider: BackupCloudProvider): asserts provider is OAuthProvider {
   if (
@@ -259,6 +297,9 @@ export async function uploadOAuthCloudArtifact(input: {
   provider: BackupCloudProvider;
   credentialsCiphertext: string;
   runId: string;
+  trigger: "MANUAL" | "SCHEDULED";
+  businessTimezone: string;
+  executionTime: Date;
   encryptedArtifact: Buffer;
 }): Promise<string> {
   assertOAuthProvider(input.provider);
@@ -271,45 +312,126 @@ export async function uploadOAuthCloudArtifact(input: {
   let response: Response;
 
   if (input.provider === "GOOGLE_DRIVE") {
-    const boundary = `laundryangel_${input.runId.replace(/-/g, "")}`;
-    const metadata = JSON.stringify({
-      name: `laundryangel-backup-${input.runId}.enc`,
-      mimeType: "application/octet-stream",
-    });
-    const prefix = Buffer.from(
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
-      `--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n`,
-    );
-    const suffix = Buffer.from(`\r\n--${boundary}--`);
+    // Google Drive does not enforce unique folder names. Serialize lookup and
+    // creation by the business connection across API instances using a
+    // transaction-scoped advisory lock.
+    const folderId = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${input.businessId}), hashtext(${input.connectionId}))`;
+      const query = new URLSearchParams({
+        q: `'root' in parents and name = '${BACKUP_FOLDER_NAME}' and mimeType = '${BACKUP_FOLDER_MIME}' and trashed = false`,
+        fields: "files(id,name,mimeType,createdTime)",
+        orderBy: "createdTime asc",
+        pageSize: "100",
+      });
+      const listResponse = await authorizedRequest(
+        `https://www.googleapis.com/drive/v3/files?${query.toString()}`,
+        credentials,
+      );
+      await assertProviderSuccess(listResponse);
+      let folders: { files?: Array<{ id?: unknown; mimeType?: unknown }> };
+      try {
+        folders = await listResponse.json() as typeof folders;
+      } catch {
+        throw new AppError("Google Drive returned an invalid folder search response.", 502);
+      }
+      let folderId = folders.files?.find((file) =>
+        typeof file.id === "string" && file.id && file.mimeType === BACKUP_FOLDER_MIME,
+      )?.id as string | undefined;
 
-    response = await authorizedRequest(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
-      credentials,
-      {
-        method: "POST",
-        headers: { "content-type": `multipart/related; boundary=${boundary}` },
-        body: Buffer.concat([prefix, input.encryptedArtifact, suffix]),
-      },
-    );
+      if (!folderId) {
+        const createResponse = await authorizedRequest(
+          "https://www.googleapis.com/drive/v3/files?fields=id",
+          credentials,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: BACKUP_FOLDER_NAME, mimeType: BACKUP_FOLDER_MIME, parents: ["root"] }),
+          },
+        );
+        await assertProviderSuccess(createResponse);
+        let created: { id?: unknown };
+        try {
+          created = await createResponse.json() as { id?: unknown };
+        } catch {
+          throw new AppError("Google Drive returned an invalid folder creation response.", 502);
+        }
+        if (typeof created.id !== "string" || !created.id) {
+          throw new AppError("Google Drive did not return a backup folder identifier.", 502);
+        }
+        folderId = created.id;
+      }
+      return folderId;
+    }, { maxWait: 15_000, timeout: REQUEST_TIMEOUT_MS + 15_000 });
 
-    await assertProviderSuccess(response);
-
-    let result: { id?: unknown };
-    try {
-      result = await response.json() as { id?: unknown };
-    } catch {
-      throw new AppError("Google Drive returned an invalid upload response.", 502);
-    }
-
-    if (typeof result.id !== "string" || !result.id) {
-      throw new AppError("Google Drive did not return a backup file identifier.", 502);
-    }
-
+    const filename = formatCloudBackupFilename(input.trigger, input.executionTime, input.businessTimezone, input.runId);
+      const boundary = `laundryangel_${input.runId.replace(/-/g, "")}`;
+      const metadata = JSON.stringify({ name: filename, mimeType: "application/octet-stream", parents: [folderId] });
+      const prefix = Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+        `--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n`,
+      );
+      const suffix = Buffer.from(`\r\n--${boundary}--`);
+      const uploadResponse = await authorizedRequest(
+        `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id`,
+        credentials,
+        {
+          method: "POST",
+          headers: { "content-type": `multipart/related; boundary=${boundary}` },
+          body: Buffer.concat([prefix, input.encryptedArtifact, suffix]),
+        },
+      );
+      await assertProviderSuccess(uploadResponse);
+      let result: { id?: unknown };
+      try {
+        result = await uploadResponse.json() as { id?: unknown };
+      } catch {
+        throw new AppError("Google Drive returned an invalid upload response.", 502);
+      }
+      if (typeof result.id !== "string" || !result.id) {
+        throw new AppError("Google Drive did not return a backup file identifier.", 502);
+      }
     return `google:${result.id}`;
   }
 
   if (input.provider === "DROPBOX") {
-    const path = `/LaundryAngel/backups/${input.runId}.enc`;
+    const createFolderResponse = await authorizedRequest(
+      "https://api.dropboxapi.com/2/files/create_folder_v2",
+      credentials,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: DROPBOX_BACKUP_FOLDER, autorename: false }),
+      },
+    );
+    if (createFolderResponse.ok) {
+      let folder: { metadata?: { path_lower?: unknown } };
+      try {
+        folder = await createFolderResponse.json() as typeof folder;
+      } catch {
+        throw new AppError("Dropbox returned an invalid folder creation response.", 502);
+      }
+      if (folder.metadata?.path_lower !== DROPBOX_BACKUP_FOLDER.toLowerCase()) {
+        throw new AppError("Dropbox did not confirm the backup folder.", 502);
+      }
+    } else {
+      let conflictIsFolder = false;
+      if (createFolderResponse.status === 409) {
+        try {
+          const body = await createFolderResponse.json() as { error?: { ".tag"?: unknown; path?: { ".tag"?: unknown; conflict?: { ".tag"?: unknown } } }; error_summary?: unknown };
+          conflictIsFolder = body.error?.[".tag"] === "path" &&
+            body.error.path?.[".tag"] === "conflict" &&
+            body.error.path.conflict?.[".tag"] === "folder";
+        } catch {
+          conflictIsFolder = false;
+        }
+      }
+      if (!conflictIsFolder) {
+        throw new AppError("Dropbox could not create or reuse the backup folder.", 502);
+      }
+    }
+
+    const filename = formatCloudBackupFilename(input.trigger, input.executionTime, input.businessTimezone, input.runId);
+    const path = `${DROPBOX_BACKUP_FOLDER}/${filename}`;
 
     response = await authorizedRequest(
       "https://content.dropboxapi.com/2/files/upload",
@@ -339,8 +461,7 @@ export async function uploadOAuthCloudArtifact(input: {
       throw new AppError("Dropbox returned an invalid upload response.", 502);
     }
 
-    if (typeof result.path_lower !== "string" ||
-        !/^\/laundryangel\/backups\/[0-9a-f-]+\.enc$/i.test(result.path_lower)) {
+    if (typeof result.path_lower !== "string" || !DROPBOX_BACKUP_PATH.test(result.path_lower)) {
       throw new AppError("Dropbox did not return a valid backup reference.", 502);
     }
 
@@ -399,8 +520,8 @@ export async function deleteOAuthCloudArtifact(input: {
     if (!fileId) throw new AppError("Stored Google Drive backup reference is invalid.", 422);
     url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`;
   } else if (input.provider === "DROPBOX") {
-    const match = /^dropbox:(\/laundryangel\/backups\/[0-9a-f-]+\.enc)$/i.exec(input.storageKey);
-    if (!match) throw new AppError("Stored Dropbox backup reference is invalid.", 422);
+    const match = /^dropbox:(.+)$/i.exec(input.storageKey);
+    if (!match || !validDropboxBackupPath(match[1]!)) throw new AppError("Stored Dropbox backup reference is invalid.", 422);
     url = "https://api.dropboxapi.com/2/files/delete_v2";
     method = "POST";
     headers = { "content-type": "application/json" };
@@ -413,8 +534,8 @@ export async function deleteOAuthCloudArtifact(input: {
 
   const init: RequestInit = { method, ...(headers ? { headers } : {}) };
   if (input.provider === "DROPBOX") {
-    const match = /^dropbox:(\/laundryangel\/backups\/[0-9a-f-]+\.enc)$/i.exec(input.storageKey);
-    if (!match) throw new AppError("Stored Dropbox backup reference is invalid.", 422);
+    const match = /^dropbox:(.+)$/i.exec(input.storageKey);
+    if (!match || !validDropboxBackupPath(match[1]!)) throw new AppError("Stored Dropbox backup reference is invalid.", 422);
     init.body = JSON.stringify({ path: match[1] });
   }
 

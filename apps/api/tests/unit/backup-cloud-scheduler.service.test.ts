@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findMany, createCloudBackupRun } = vi.hoisted(() => ({
-  findMany: vi.fn(),
+const { scheduleFindMany, settingsFindMany, createCloudBackupRun } = vi.hoisted(() => ({
+  scheduleFindMany: vi.fn(),
+  settingsFindMany: vi.fn(),
   createCloudBackupRun: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
-  prisma: { backupSchedule: { findMany } },
+  prisma: {
+    backupSchedule: { findMany: scheduleFindMany },
+    backupSettings: { findMany: settingsFindMany },
+  },
 }));
 vi.mock("../../src/modules/migrations/backup-cloud-runs.service.js", () => ({
   createCloudBackupRun,
@@ -74,7 +78,8 @@ describe("isBackupScheduleDue", () => {
 describe("processScheduledCloudBackups", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    findMany.mockResolvedValue([baseSchedule]);
+    scheduleFindMany.mockResolvedValue([baseSchedule]);
+    settingsFindMany.mockResolvedValue([]);
     createCloudBackupRun.mockResolvedValue({ id: "run-1" });
   });
 
@@ -82,6 +87,7 @@ describe("processScheduledCloudBackups", () => {
     const now = new Date("2026-10-14T01:30:42.321Z");
     await expect(processScheduledCloudBackups(now)).resolves.toEqual({
       schedulesScanned: 1,
+      settingsScanned: 0,
       due: 1,
       started: 1,
     });
@@ -100,6 +106,7 @@ describe("processScheduledCloudBackups", () => {
     createCloudBackupRun.mockRejectedValueOnce({ code: "P2002" });
     await expect(processScheduledCloudBackups(new Date("2026-10-14T01:30:42.321Z"))).resolves.toEqual({
       schedulesScanned: 1,
+      settingsScanned: 0,
       due: 1,
       started: 0,
     });
@@ -108,6 +115,52 @@ describe("processScheduledCloudBackups", () => {
   it("does not start a run when the configured time is not due", async () => {
     await expect(processScheduledCloudBackups(new Date("2026-10-14T01:31:00.000Z"))).resolves.toEqual({
       schedulesScanned: 1,
+      settingsScanned: 0,
+      due: 0,
+      started: 0,
+    });
+    expect(createCloudBackupRun).not.toHaveBeenCalled();
+  });
+
+  it("runs legacy automatic backup settings with the configured timezone and one minute slot", async () => {
+    scheduleFindMany.mockResolvedValue([]);
+    settingsFindMany.mockResolvedValue([{
+      ...baseSchedule,
+      id: undefined,
+    }]);
+    const now = new Date("2026-10-14T01:30:42.321Z");
+    await expect(processScheduledCloudBackups(now)).resolves.toEqual({
+      schedulesScanned: 0,
+      settingsScanned: 1,
+      due: 1,
+      started: 1,
+    });
+    expect(createCloudBackupRun).toHaveBeenCalledWith("business-1", "connection-1", {
+      trigger: "SCHEDULED",
+      scheduledFor: new Date("2026-10-14T01:30:00.000Z"),
+    });
+  });
+
+  it("does not process stale legacy settings alongside a matching schedule", async () => {
+    settingsFindMany.mockResolvedValue([{ ...baseSchedule, id: undefined }]);
+    await expect(processScheduledCloudBackups(new Date("2026-10-14T01:30:00.000Z"))).resolves.toEqual({
+      schedulesScanned: 1,
+      settingsScanned: 1,
+      due: 1,
+      started: 1,
+    });
+    expect(createCloudBackupRun).toHaveBeenCalledTimes(1);
+    expect(createCloudBackupRun).toHaveBeenCalledWith("business-1", "connection-1", expect.objectContaining({
+      scheduleId: "schedule-1",
+    }));
+  });
+
+  it("does not revive legacy settings when the matching newer schedule is disabled", async () => {
+    scheduleFindMany.mockResolvedValue([{ ...baseSchedule, enabled: false }]);
+    settingsFindMany.mockResolvedValue([{ ...baseSchedule, id: undefined }]);
+    await expect(processScheduledCloudBackups(new Date("2026-10-14T01:30:00.000Z"))).resolves.toEqual({
+      schedulesScanned: 1,
+      settingsScanned: 1,
       due: 0,
       started: 0,
     });

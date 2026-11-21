@@ -1,14 +1,13 @@
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
 import { renderSubscriptionPaymentConfirmationEmail } from "./templates/subscription-payment-confirmation-email.js";
 import { isAutomatedNotificationsEnabled } from "../platform/platform-controls.middleware.js";
 
 function sanitizeEmailError(error: unknown): string {
-  const message =
-    error instanceof Error ? error.message : String(error);
-
-  return message.length > 500 ? message.slice(0, 500) : message;
+  return error instanceof EmailDeliveryError
+    ? error.message
+    : "Email submission failed.";
 }
 
 export async function sendSubscriptionPaymentConfirmationEmail(
@@ -16,7 +15,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
   actorUserId?: string | null,
   correlationId?: string | null,
 ): Promise<{
-  sent: boolean;
+  submitted: boolean;
   skipped: boolean;
   messageId?: string;
 }> {
@@ -72,7 +71,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
     });
 
     return {
-      sent: false,
+      submitted: false,
       skipped: true,
     };
   }
@@ -80,14 +79,24 @@ export async function sendSubscriptionPaymentConfirmationEmail(
   if (payment.confirmationEmailSentAt) {
     return payment.confirmationEmailProviderMessageId
       ? {
-          sent: false,
+          submitted: false,
           skipped: true,
           messageId: payment.confirmationEmailProviderMessageId,
         }
       : {
-          sent: false,
+          submitted: false,
           skipped: true,
         };
+  }
+
+  const attemptCount = payment.confirmationEmailAttemptCount ?? 0;
+  if (attemptCount >= 5 ||
+      (payment.confirmationEmailLastError && !payment.confirmationEmailRetryable)) {
+    return { submitted: false, skipped: true };
+  }
+  if (payment.confirmationEmailLastAttemptAt &&
+      Date.now() - payment.confirmationEmailLastAttemptAt.getTime() < 15 * 60 * 1000) {
+    return { submitted: false, skipped: true };
   }
 
   if (!payment.business.email) {
@@ -105,7 +114,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
     });
 
     return {
-      sent: false,
+      submitted: false,
       skipped: true,
     };
   }
@@ -117,6 +126,23 @@ export async function sendSubscriptionPaymentConfirmationEmail(
   }
 
   try {
+    const attemptAt = new Date();
+    const claimed = await prisma.subscriptionPayment.updateMany({
+      where: {
+        id: payment.id,
+        confirmationEmailSentAt: null,
+        confirmationEmailAttemptCount: attemptCount,
+        confirmationEmailLastAttemptAt: payment.confirmationEmailLastAttemptAt ?? null,
+      },
+      data: {
+        confirmationEmailAttemptCount: { increment: 1 },
+        confirmationEmailLastAttemptAt: attemptAt,
+        confirmationEmailLastError: null,
+        confirmationEmailRetryable: false,
+      },
+    });
+    if (claimed.count !== 1) return { submitted: false, skipped: true };
+
     const html = renderSubscriptionPaymentConfirmationEmail({
       companyName: payment.business.name,
       paymentReference: payment.paymentReference,
@@ -131,10 +157,12 @@ export async function sendSubscriptionPaymentConfirmationEmail(
       paymentCode: payment.business.paymentIdentity?.paymentCode ?? null,
     });
 
-    const result = await sendHtmlEmail({
+    const result = await sendEmail({
       to: payment.business.email,
       subject: `Subscription payment confirmed — ${payment.business.name}`,
       html,
+      feature: "subscription",
+      idempotencyKey: `subscription-payment:${payment.id}:confirmation`,
     });
 
     await prisma.subscriptionPayment.update({
@@ -143,11 +171,12 @@ export async function sendSubscriptionPaymentConfirmationEmail(
         confirmationEmailSentAt: new Date(),
         confirmationEmailProviderMessageId: result.id,
         confirmationEmailLastError: null,
+        confirmationEmailRetryable: false,
       },
     });
 
     await recordAuditEvent({
-      action: "subscription.payment.confirmation_email_sent",
+      action: "subscription.payment.confirmation_email_submitted",
       entityType: "SubscriptionPayment",
       entityId: payment.id,
       businessId: payment.businessId,
@@ -160,7 +189,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
     });
 
     return {
-      sent: true,
+      submitted: true,
       skipped: false,
       messageId: result.id,
     };
@@ -171,6 +200,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
       where: { id: payment.id },
       data: {
         confirmationEmailLastError: safeError,
+        confirmationEmailRetryable: error instanceof EmailDeliveryError && error.retryable,
       },
     });
 
@@ -188,7 +218,7 @@ export async function sendSubscriptionPaymentConfirmationEmail(
     });
 
     return {
-      sent: false,
+      submitted: false,
       skipped: false,
     };
   }

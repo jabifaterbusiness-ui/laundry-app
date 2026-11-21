@@ -126,6 +126,12 @@ export async function createCloudBackupRun(
   connectionId: string,
   options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date; scheduleId?: string } = {},
 ) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
+  });
+  if (!business) throw new AppError("Business not found.", 404);
+
   const connection = await prisma.backupCloudConnection.findFirst({
     where: { businessId, id: connectionId },
     select: { id: true, provider: true, credentialsCiphertext: true },
@@ -152,49 +158,78 @@ export async function createCloudBackupRun(
   }
 
   const trigger = options.trigger ?? "MANUAL";
+  let scheduledFor: Date | undefined;
   let scheduleId: string | null = null;
 
   if (trigger === "SCHEDULED") {
-    if (!options.scheduleId || !options.scheduledFor) {
-      throw new AppError("A scheduled backup requires a schedule and scheduled time.", 422);
+    if (!options.scheduledFor) {
+      throw new AppError("A scheduled backup requires a scheduled time.", 422);
     }
+    scheduledFor = options.scheduledFor;
 
-    const schedule = await prisma.backupSchedule.findFirst({
-      where: {
-        id: options.scheduleId,
-        businessId,
-        enabled: true,
-        destinationConnectionId: connectionId,
-      },
-      select: { id: true },
-    });
-
-    if (!schedule) {
-      throw new AppError("The backup schedule is unavailable for this destination.", 422);
+    if (options.scheduleId) {
+      const schedule = await prisma.backupSchedule.findFirst({
+        where: {
+          id: options.scheduleId,
+          businessId,
+          enabled: true,
+          destinationConnectionId: connectionId,
+        },
+        select: { id: true },
+      });
+      if (!schedule) {
+        throw new AppError("The backup schedule is unavailable for this destination.", 422);
+      }
+      scheduleId = schedule.id;
+    } else {
+      const settings = await prisma.backupSettings.findFirst({
+        where: { businessId, enabled: true, destinationConnectionId: connectionId },
+        select: { businessId: true },
+      });
+      if (!settings) {
+        throw new AppError("Automatic backup settings are unavailable for this destination.", 422);
+      }
     }
-
-    scheduleId = schedule.id;
   }
 
-  const run = await prisma.backupRun.create({
-    data: {
-      businessId,
-      connectionId,
-      scheduleId,
-      trigger,
-      status: "PENDING",
-      ...(trigger === "SCHEDULED" ? { scheduledFor: options.scheduledFor } : {}),
-    },
-    select: { id: true },
-  });
+  const runData = {
+    businessId,
+    connectionId,
+    scheduleId,
+    trigger,
+    status: "PENDING" as const,
+    ...(scheduledFor ? { scheduledFor } : {}),
+  };
+  const run = trigger === "SCHEDULED"
+    ? await prisma.$transaction(async (tx) => {
+        // Serialize all scheduled slots for this business destination, then
+        // check the slot before inserting. This also protects legacy rows and
+        // avoids a migration that could fail on historical duplicate records.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${businessId}), hashtext(${connectionId}))`;
+        const existing = await tx.backupRun.findFirst({
+          where: {
+            businessId,
+            connectionId,
+            trigger: "SCHEDULED",
+            scheduledFor: scheduledFor!,
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          throw Object.assign(new Error("Scheduled backup slot already exists."), { code: "P2002" });
+        }
+        return tx.backupRun.create({ data: runData, select: { id: true } });
+      })
+    : await prisma.backupRun.create({ data: runData, select: { id: true } });
 
   let uploadedStorageKey: string | null = null;
   let failureStage = "mark_running";
 
   try {
+    const executionTime = new Date();
     await prisma.backupRun.update({
       where: { id: run.id },
-      data: { status: "RUNNING", startedAt: new Date() },
+      data: { status: "RUNNING", startedAt: executionTime },
     });
 
     failureStage = "generate_artifact";
@@ -217,6 +252,9 @@ export async function createCloudBackupRun(
         provider: connection.provider,
         credentialsCiphertext: connection.credentialsCiphertext,
         runId: run.id,
+        trigger,
+        businessTimezone: business.timezone,
+        executionTime,
         encryptedArtifact: artifact.encrypted,
       });
     }
@@ -241,23 +279,24 @@ export async function createCloudBackupRun(
       },
     });
 
-    // Retention runs after the new backup is safely uploaded. A cleanup error
-    // must not turn a successfully stored backup into a failed backup run.
-    try {
-      const retention = await pruneCloudBackupRuns(businessId, connectionId, scheduleId ?? undefined);
-      if (retention.deleted > 0) {
-        logger.info(
-          `Cloud backup retention completed for business ${businessId}: deleted=${retention.deleted}.`,
+    // Preserve all historical Drive and Dropbox artifacts. Retention pruning
+    // remains enabled only for providers outside this workstream.
+    if (connection.provider !== "GOOGLE_DRIVE" && connection.provider !== "DROPBOX") {
+      try {
+        const retention = await pruneCloudBackupRuns(businessId, connectionId, scheduleId ?? undefined);
+        if (retention.deleted > 0) {
+          logger.info(
+            `Cloud backup retention completed for business ${businessId}: deleted=${retention.deleted}.`,
+          );
+        }
+      } catch (error) {
+        // Keep the successful backup successful and preserve old object references.
+        logger.error(
+          error instanceof Error
+            ? `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}: ${error.message}`
+            : `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}.`,
         );
       }
-    } catch (error) {
-      // Keep the successful backup successful and preserve references to old objects.
-      // The next successful backup on this destination will retry retention.
-      logger.error(
-        error instanceof Error
-          ? `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}: ${error.message}`
-          : `Cloud backup retention cleanup failed for business ${businessId}, destination ${connectionId}.`,
-      );
     }
 
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
@@ -272,16 +311,17 @@ export async function createCloudBackupRun(
     }, "Cloud backup run failed.");
 
     try {
-      // If upload succeeded but recording the run failed, avoid leaving an
-      // untracked remote artifact where its provider reference is available.
-      // Cleanup failure must not hide the original sanitized backup error.
+      // Clean up only an artifact this attempt received a new remote reference
+      // for. If upload confirmation was ambiguous, preserve the remote object.
       try {
         const candidateKey = uploadedStorageKey ?? (
-          await prisma.backupRun.findFirst({
-            where: { id: run.id, businessId, connectionId },
-            select: { storageKey: true },
-          })
-        )?.storageKey;
+          connection.provider === "GOOGLE_DRIVE" || connection.provider === "DROPBOX"
+            ? null
+            : (await prisma.backupRun.findFirst({
+                where: { id: run.id, businessId, connectionId },
+                select: { storageKey: true },
+              }))?.storageKey ?? null
+        );
         if (candidateKey) {
           if (s3Destination) {
             await deleteS3CompatibleArtifact({
@@ -385,6 +425,9 @@ export async function pruneCloudBackupRuns(
   });
 
   if (!destinationRecord) throw new AppError("Cloud connection not found.", 404);
+  if (destinationRecord.provider === "GOOGLE_DRIVE" || destinationRecord.provider === "DROPBOX") {
+    return { deleted: 0 };
+  }
 
   const s3Destination = destinationRecord.provider === "S3_COMPATIBLE"
     ? await getS3Connection(businessId, connectionId)

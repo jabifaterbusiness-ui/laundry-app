@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
 import { sendWhatsAppText } from "../invoices/providers/whatsapp.provider.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import { replayPendingWhatsAppStatusEvents } from "../whatsapp/whatsapp-webhook.service.js";
@@ -129,10 +129,12 @@ async function deliverMessage(input: {
   try {
     let providerMessageId: string;
     if (input.channel === "EMAIL") {
-      providerMessageId = (await sendHtmlEmail({
+      providerMessageId = (await sendEmail({
         to: input.destination,
         subject: input.subject,
         html: `<div style="font-family:Arial,sans-serif;line-height:1.6;white-space:pre-wrap">${escapeHtml(input.body).replace(/\n/g, "<br>")}</div>`,
+        feature: "communication",
+        idempotencyKey: `communication:${input.dedupeKey}`,
       })).id;
     } else {
       await assertWhatsAppMessagingEnabled();
@@ -157,14 +159,16 @@ async function deliverMessage(input: {
     // callback is never overwritten by this later API response.
     await prisma.communicationDelivery.updateMany({
       where: { id: delivery.id, status: "PENDING" },
-      data: { status: "SENT", providerMessageId, sentAt: new Date() },
+      data: { status: input.channel === "EMAIL" ? "SUBMITTED" : "SENT", providerMessageId, sentAt: new Date() },
     });
     if (input.channel === "WHATSAPP") {
       await replayPendingWhatsAppStatusEvents(providerMessageId);
     }
-    return { status: "SENT" as const, deliveryId: delivery.id, providerMessageId };
+    return { status: input.channel === "EMAIL" ? "SUBMITTED" as const : "SENT" as const, deliveryId: delivery.id, providerMessageId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Message delivery failed";
+    const message = input.channel === "EMAIL"
+      ? error instanceof EmailDeliveryError ? error.message : "Email submission failed."
+      : error instanceof Error ? error.message : "Message delivery failed";
     // A provider callback can race with the send request (or status replay).
     // Only mark a still-pending delivery as failed; never downgrade a status
     // already confirmed by Meta as SENT, DELIVERED, or READ.
@@ -447,9 +451,10 @@ export async function createAnnouncement(input: {
     results.push(...await Promise.all(jobs.slice(offset, offset + 10).map((job) => job())));
   }
   const failed = results.filter((result) => result.status === "FAILED").length;
+  const submitted = results.some((result) => result.status === "SUBMITTED");
   await prisma.announcementCampaign.update({
     where: { id: campaign.id },
-    data: { status: failed === results.length ? "FAILED" : failed ? "PARTIAL" : "SENT" },
+    data: { status: failed === results.length ? "FAILED" : failed ? "PARTIAL" : submitted ? "SUBMITTED" : "SENT" },
   });
   return { campaignId: campaign.id, recipientCount: customers.length, results };
 }

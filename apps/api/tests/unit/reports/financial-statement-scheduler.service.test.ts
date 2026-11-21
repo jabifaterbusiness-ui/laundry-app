@@ -42,7 +42,7 @@ const { prismaMock, auditMock, loggerMock, generationMock, emailMock, whatsappMo
       generateBusinessFinancialStatement: vi.fn(),
     },
     emailMock: {
-      sendHtmlEmail: vi.fn(),
+      sendEmail: vi.fn(),
     },
     whatsappMock: {
       sendWhatsAppReceipt: vi.fn(),
@@ -71,8 +71,14 @@ vi.mock(
 );
 
 vi.mock(
-  "../../../src/modules/invoices/providers/resend.provider.js",
-  () => emailMock,
+  "../../../src/modules/email/email.service.js",
+  () => ({
+    ...emailMock,
+    EmailDeliveryError: class EmailDeliveryError extends Error {
+      retryable: boolean;
+      constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable; }
+    },
+  }),
 );
 
 vi.mock(
@@ -95,6 +101,7 @@ import {
   startFinancialStatementScheduler,
   stopFinancialStatementScheduler,
 } from "../../../src/modules/reports/financial-statement-scheduler.service.js";
+import { EmailDeliveryError } from "../../../src/modules/email/email.service.js";
 
 describe("financial statement scheduler", () => {
   const now = new Date("2026-09-01T07:59:00.000Z");
@@ -165,7 +172,7 @@ describe("financial statement scheduler", () => {
       statement,
       report,
     });
-    emailMock.sendHtmlEmail.mockResolvedValue({ id: "email-1" });
+    emailMock.sendEmail.mockResolvedValue({ status: "SUBMITTED", id: "email-1" });
     whatsappMock.sendWhatsAppReceipt.mockResolvedValue({ id: "whatsapp-1" });
     templateMock.renderFinancialStatementEmail.mockReturnValue("<html>statement</html>");
     templateMock.renderFinancialStatementImage.mockResolvedValue(
@@ -333,7 +340,7 @@ describe("financial statement scheduler", () => {
       new Date("2026-09-01T08:00:00.000Z"),
     );
 
-    expect(emailMock.sendHtmlEmail).toHaveBeenCalledWith(
+    expect(emailMock.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "owner@example.com",
         subject:
@@ -350,7 +357,7 @@ describe("financial statement scheduler", () => {
       expect.objectContaining({
         where: { id: "delivery-1" },
         data: expect.objectContaining({
-          status: "SENT",
+          status: "SUBMITTED",
           providerMessageId: "email-1",
         }),
       }),
@@ -392,7 +399,7 @@ describe("financial statement scheduler", () => {
       new Date("2026-09-01T08:00:00.000Z"),
     );
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
 
     expect(whatsappMock.sendWhatsAppReceipt).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -432,7 +439,7 @@ describe("financial statement scheduler", () => {
       new Date("2026-09-01T08:30:00.000Z"),
     );
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
   });
 
   it("does not retry a failed delivery before 15 minutes", async () => {
@@ -460,13 +467,14 @@ describe("financial statement scheduler", () => {
       status: "FAILED",
       attemptCount: 1,
       lastAttemptAt: new Date("2026-09-01T08:00:00.000Z"),
+      retryable: true,
     });
 
     await processMonthlyFinancialStatements(
       new Date("2026-09-01T08:10:00.000Z"),
     );
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
   });
 
   it("does not retry after five failed attempts", async () => {
@@ -491,13 +499,14 @@ describe("financial statement scheduler", () => {
       status: "FAILED",
       attemptCount: 5,
       lastAttemptAt: new Date("2026-08-01T08:00:00.000Z"),
+      retryable: true,
     });
 
     await processMonthlyFinancialStatements(
       new Date("2026-09-01T08:00:00.000Z"),
     );
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
   });
 
   it("records a failed delivery when the email provider throws", async () => {
@@ -517,9 +526,7 @@ describe("financial statement scheduler", () => {
       },
     ]);
 
-    emailMock.sendHtmlEmail.mockRejectedValue(
-      new Error("Resend unavailable"),
-    );
+    emailMock.sendEmail.mockRejectedValue(new EmailDeliveryError("Email provider is temporarily unavailable.", true));
 
     await processMonthlyFinancialStatements(
       new Date("2026-09-01T08:00:00.000Z"),
@@ -532,7 +539,8 @@ describe("financial statement scheduler", () => {
         where: { id: "delivery-1" },
         data: expect.objectContaining({
           status: "FAILED",
-          failureReason: "Resend unavailable",
+          failureReason: "Email provider is temporarily unavailable.",
+          retryable: true,
         }),
       }),
     );

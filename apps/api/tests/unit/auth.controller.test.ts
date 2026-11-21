@@ -17,8 +17,8 @@ vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
-  sendReceiptEmail: vi.fn().mockResolvedValue({ id: "email-1" }),
+vi.mock("../../src/modules/email/email.service.js", () => ({
+  sendEmail: vi.fn().mockResolvedValue({ status: "SUBMITTED", id: "email-1" }),
 }));
 
 vi.mock("../../src/modules/permissions/permissions.service.js", () => ({
@@ -315,7 +315,7 @@ describe("auth controller - password reset", () => {
 
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(payload).toEqual({
-      message: "If an account exists for that email, a password reset link has been sent.",
+      message: "If an account exists for that email, reset instructions will be sent when delivery is available.",
     });
   });
 
@@ -340,20 +340,29 @@ describe("auth controller - password reset", () => {
       isActive: true,
     } as never);
 
-    const resendModule = await import("../../src/modules/invoices/providers/resend.provider.js");
-    const sendReceiptEmailMock = vi.mocked(resendModule.sendReceiptEmail);
-    sendReceiptEmailMock.mockRejectedValueOnce(new Error("provider unavailable"));
+    const emailModule = await import("../../src/modules/email/email.service.js");
+    const sendEmailMock = vi.mocked(emailModule.sendEmail);
+    sendEmailMock.mockRejectedValueOnce(new Error("provider unavailable"));
 
     const req = {
       body: { email: "owner@example.com" },
       correlationId: "corr-reset-2",
     } as unknown as Request;
 
-    await expect(forgotPassword(req, makeRes())).rejects.toThrow(
-      "Unable to send password reset email",
-    );
+    const res = makeRes();
+    await expect(forgotPassword(req, res)).resolves.toBeUndefined();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect((res.json as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toEqual({
+      message: "If an account exists for that email, reset instructions will be sent when delivery is available.",
+    });
 
     expect(invalidatePasswordResetTokenMock).toHaveBeenCalledWith("raw-reset-token");
+  });
+
+  it("normalizes mixed-case reset addresses before lookup", async () => {
+    findUniqueUser.mockResolvedValue(null);
+    await forgotPassword({ body: { email: " Owner@Example.COM " } } as unknown as Request, makeRes());
+    expect(findUniqueUser).toHaveBeenCalledWith({ where: { email: "owner@example.com" }, select: { id: true, email: true, isActive: true } });
   });
 
   it("resets the password and records the completion audit event", async () => {

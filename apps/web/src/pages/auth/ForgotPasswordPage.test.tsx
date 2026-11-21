@@ -17,7 +17,7 @@ describe("ForgotPasswordPage", () => {
 
   it("submits the email and displays the generic success response", async () => {
     apiFetchMock.mockResolvedValueOnce({
-      message: "If an account exists for that email, a password reset link has been sent.",
+      message: "If an account exists for that email, reset instructions will be sent when delivery is available.",
     });
 
     render(
@@ -43,7 +43,7 @@ describe("ForgotPasswordPage", () => {
 
     expect(
       await screen.findByRole("status"),
-    ).toHaveTextContent("If an account exists for that email, a password reset link has been sent.");
+    ).toHaveTextContent("If an account exists for that email, reset instructions will be sent when delivery is available.");
   });
 
   it("displays an API error without submitting again", async () => {

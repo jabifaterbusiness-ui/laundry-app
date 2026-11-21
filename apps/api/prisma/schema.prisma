@@ -809,6 +809,7 @@ enum FinancialStatementChannel {
 enum FinancialStatementDeliveryStatus {
   PENDING
   SENT
+  SUBMITTED
   FAILED
 }
 
@@ -2603,6 +2604,9 @@ model SubscriptionPayment {
   confirmationEmailSentAt            DateTime?
   confirmationEmailProviderMessageId String?
   confirmationEmailLastError         String?
+  confirmationEmailAttemptCount      Int       @default(0)
+  confirmationEmailLastAttemptAt     DateTime?
+  confirmationEmailRetryable         Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2755,6 +2759,7 @@ model FinancialStatementDelivery {
   lastAttemptAt DateTime?
   sentAt        DateTime?
   failureReason String?
+  retryable     Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

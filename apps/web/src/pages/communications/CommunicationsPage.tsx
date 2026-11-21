@@ -132,7 +132,7 @@ export function CommunicationsPage() {
       ...(audience === "CUSTOMER_GROUP" ? { groupId } : {}),
     }, { accessToken }),
     onSuccess: async (result) => {
-      setFeedback(`Announcement processed for ${result.recipientCount} customers. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
+      setFeedback(`Announcement processed for ${result.recipientCount} customers. ${result.results.filter((item) => item.status === "SENT" || item.status === "SUBMITTED").length} deliveries accepted by providers; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
       setTitle(""); setAnnouncementMessage(""); setCustomerIds([]);
       await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
     },
@@ -183,7 +183,7 @@ export function CommunicationsPage() {
   const reminderMutation = useMutation({
     mutationFn: () => sendUnpickedReminders({ orderIds: selectedOrderIds, channels: reminderChannels, message: reminderMessage.trim() }, { accessToken, branchId: activeBranchId }),
     onSuccess: async (result) => {
-      setFeedback(`Reminder processed for ${result.orderCount} orders. ${result.results.filter((item) => item.status === "SENT").length} deliveries sent; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
+      setFeedback(`Reminder processed for ${result.orderCount} orders. ${result.results.filter((item) => item.status === "SENT" || item.status === "SUBMITTED").length} deliveries accepted by providers; ${result.results.filter((item) => item.status === "FAILED").length} failed.`);
       setSelectedOrderIds([]);
       await queryClient.invalidateQueries({ queryKey: ["communications", "deliveries"] });
     },

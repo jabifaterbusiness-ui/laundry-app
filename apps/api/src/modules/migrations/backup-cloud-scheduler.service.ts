@@ -3,7 +3,7 @@ import { logger } from "../../lib/logger.js";
 import { createCloudBackupRun } from "./backup-cloud-runs.service.js";
 
 type Schedule = {
-  id: string;
+  id?: string;
   businessId: string;
   enabled: boolean;
   frequency: "DAILY" | "WEEKLY" | "MONTHLY";
@@ -66,7 +66,6 @@ function isDuplicateSlot(error: unknown): boolean {
 export async function processScheduledCloudBackups(now = new Date()) {
   const schedules = await prisma.backupSchedule.findMany({
     where: {
-      enabled: true,
       destinationConnectionId: { not: null },
       business: { isActive: true },
     },
@@ -109,7 +108,51 @@ export async function processScheduledCloudBackups(now = new Date()) {
     }
   }
 
-  return { schedulesScanned: schedules.length, due, started };
+  const settings = await prisma.backupSettings.findMany({
+    where: {
+      enabled: true,
+      destinationConnectionId: { not: null },
+      business: { isActive: true },
+    },
+    select: {
+      businessId: true,
+      enabled: true,
+      frequency: true,
+      dayOfWeek: true,
+      dayOfMonth: true,
+      hour: true,
+      minute: true,
+      timezone: true,
+      destinationConnectionId: true,
+    },
+  });
+
+  const scheduledDestinations = new Set(
+    schedules.map((schedule) => `${schedule.businessId}:${schedule.destinationConnectionId}`),
+  );
+  for (const setting of settings) {
+    // New schedule rows take precedence when both the old settings record and
+    // new schedule record still exist for the same business destination.
+    if (scheduledDestinations.has(`${setting.businessId}:${setting.destinationConnectionId}`)) continue;
+    try {
+      if (!isBackupScheduleDue(setting, now)) continue;
+      due += 1;
+      await createCloudBackupRun(setting.businessId, setting.destinationConnectionId!, {
+        trigger: "SCHEDULED",
+        scheduledFor,
+      });
+      started += 1;
+    } catch (error) {
+      if (isDuplicateSlot(error)) continue;
+      logger.error(
+        error instanceof Error
+          ? `Automatic cloud backup failed for business ${setting.businessId}: ${error.message}`
+          : `Automatic cloud backup failed for business ${setting.businessId}.`,
+      );
+    }
+  }
+
+  return { schedulesScanned: schedules.length, settingsScanned: settings.length, due, started };
 }
 
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;

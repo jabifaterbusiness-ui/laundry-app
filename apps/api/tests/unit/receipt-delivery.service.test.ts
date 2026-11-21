@@ -5,7 +5,7 @@ const {
   getCustomerReceiptMock,
   renderCustomerReceiptEmailMock,
   renderCustomerReceiptImageMock,
-  sendReceiptEmailMock,
+  sendEmailMock,
   sendWhatsAppReceiptMock,
   connectionFindUniqueMock,
   sendAutomatedWhatsAppTemplateMock,
@@ -15,7 +15,7 @@ const {
   getCustomerReceiptMock: vi.fn(),
   renderCustomerReceiptEmailMock: vi.fn(),
   renderCustomerReceiptImageMock: vi.fn(),
-  sendReceiptEmailMock: vi.fn(),
+  sendEmailMock: vi.fn(),
   sendWhatsAppReceiptMock: vi.fn(),
   connectionFindUniqueMock: vi.fn(),
   sendAutomatedWhatsAppTemplateMock: vi.fn(),
@@ -64,8 +64,12 @@ vi.mock(
   }),
 );
 
-vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
-  sendReceiptEmail: sendReceiptEmailMock,
+vi.mock("../../src/modules/email/email.service.js", () => ({
+  sendEmail: sendEmailMock,
+  EmailDeliveryError: class EmailDeliveryError extends Error {
+    retryable: boolean;
+    constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable; }
+  },
 }));
 
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({
@@ -132,7 +136,8 @@ describe("receipt-delivery.service", () => {
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
-    sendReceiptEmailMock.mockResolvedValue({
+    sendEmailMock.mockResolvedValue({
+      status: "SUBMITTED",
       id: "resend-message-123",
     });
 
@@ -143,16 +148,18 @@ describe("receipt-delivery.service", () => {
       }),
     ).resolves.toEqual({
       channel: "EMAIL",
+      status: "SUBMITTED",
       destination: "john@example.com",
       providerMessageId: "resend-message-123",
     });
 
     expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT);
 
-    expect(sendReceiptEmailMock).toHaveBeenCalledWith({
+    expect(sendEmailMock).toHaveBeenCalledWith({
       to: "john@example.com",
       subject: "Test Laundry — Receipt INV-00001",
       html: "<html>receipt</html>",
+      feature: "receipt",
     });
 
     expect(customerFindFirstMock).toHaveBeenCalledWith({
@@ -192,9 +199,7 @@ describe("receipt-delivery.service", () => {
     });
 
     getCustomerReceiptMock.mockResolvedValue(RECEIPT);
-    sendReceiptEmailMock.mockRejectedValue(
-      new Error("Resend email delivery failed: provider unavailable"),
-    );
+    sendEmailMock.mockRejectedValue(new Error("Email submission could not be confirmed."));
 
     await expect(
       resendDigitalReceipt({
@@ -202,7 +207,7 @@ describe("receipt-delivery.service", () => {
         channel: "EMAIL",
       }),
     ).rejects.toMatchObject({
-      message: "Resend email delivery failed: provider unavailable",
+      message: "Email receipt submission failed.",
       statusCode: 503,
     });
   });
@@ -433,7 +438,7 @@ describe("receipt-delivery.service", () => {
 
     expect(renderCustomerReceiptEmailMock).not.toHaveBeenCalled();
     expect(renderCustomerReceiptImageMock).not.toHaveBeenCalled();
-    expect(sendReceiptEmailMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
     expect(sendWhatsAppReceiptMock).not.toHaveBeenCalled();
   });
 });

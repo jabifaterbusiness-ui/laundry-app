@@ -17,6 +17,7 @@ const prismaMock = vi.hoisted(() => ({
   subscriptionPayment: {
     findUnique: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
 }));
 
@@ -25,7 +26,7 @@ const auditMock = vi.hoisted(() => ({
 }));
 
 const emailMock = vi.hoisted(() => ({
-  sendHtmlEmail: vi.fn(),
+  sendEmail: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -35,8 +36,14 @@ vi.mock("../../src/lib/prisma.js", () => ({
 vi.mock("../../src/lib/audit.js", () => auditMock);
 
 vi.mock(
-  "../../src/modules/invoices/providers/resend.provider.js",
-  () => emailMock,
+  "../../src/modules/email/email.service.js",
+  () => ({
+    ...emailMock,
+    EmailDeliveryError: class EmailDeliveryError extends Error {
+      retryable: boolean;
+      constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable; }
+    },
+  }),
 );
 
 import { sendSubscriptionPaymentConfirmationEmail } from "../../src/modules/subscriptions/subscription-payment-confirmation-email.service.js";
@@ -55,6 +62,9 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
     confirmationEmailSentAt: null,
     confirmationEmailProviderMessageId: null,
     confirmationEmailLastError: null,
+    confirmationEmailAttemptCount: 0,
+    confirmationEmailLastAttemptAt: null,
+    confirmationEmailRetryable: true,
     business: {
       id: "business-1",
       name: "Test Laundry",
@@ -81,10 +91,8 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
       confirmationEmailSentAt: new Date(),
       confirmationEmailProviderMessageId: "email-123",
     });
-
-    emailMock.sendHtmlEmail.mockResolvedValue({
-      id: "email-123",
-    });
+    prismaMock.subscriptionPayment.updateMany.mockResolvedValue({ count: 1 });
+    emailMock.sendEmail.mockResolvedValue({ status: "SUBMITTED", id: "email-123" });
   });
 
   it("sends and records a successful confirmation email", async () => {
@@ -95,18 +103,32 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
     );
 
     expect(result).toEqual({
-      sent: true,
+      submitted: true,
       skipped: false,
       messageId: "email-123",
     });
 
-    expect(emailMock.sendHtmlEmail).toHaveBeenCalledWith(
+    expect(emailMock.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "owner@example.com",
         subject: "Subscription payment confirmed — Test Laundry",
         html: expect.stringContaining("LA-PAY-TEST-123"),
       }),
     );
+    expect(prismaMock.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "payment-1",
+        confirmationEmailSentAt: null,
+        confirmationEmailAttemptCount: 0,
+        confirmationEmailLastAttemptAt: null,
+      },
+      data: {
+        confirmationEmailAttemptCount: { increment: 1 },
+        confirmationEmailLastAttemptAt: expect.any(Date),
+        confirmationEmailLastError: null,
+        confirmationEmailRetryable: false,
+      },
+    });
 
     expect(prismaMock.subscriptionPayment.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,7 +141,7 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
 
     expect(auditMock.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "subscription.payment.confirmation_email_sent",
+        action: "subscription.payment.confirmation_email_submitted",
         entityId: "payment-1",
       }),
     );
@@ -137,12 +159,12 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
     );
 
     expect(result).toEqual({
-      sent: false,
+      submitted: false,
       skipped: true,
       messageId: "email-existing",
     });
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
     expect(prismaMock.subscriptionPayment.update).not.toHaveBeenCalled();
   });
 
@@ -160,11 +182,11 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
     );
 
     expect(result).toEqual({
-      sent: false,
+      submitted: false,
       skipped: true,
     });
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
 
     expect(auditMock.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -174,16 +196,14 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
   });
 
   it("does not fail payment processing when email delivery fails", async () => {
-    emailMock.sendHtmlEmail.mockRejectedValueOnce(
-      new Error("Resend email delivery failed: provider unavailable"),
-    );
+    emailMock.sendEmail.mockRejectedValueOnce(new Error("private provider diagnostic"));
 
     const result = await sendSubscriptionPaymentConfirmationEmail(
       "payment-1",
     );
 
     expect(result).toEqual({
-      sent: false,
+      submitted: false,
       skipped: false,
     });
 
@@ -191,8 +211,8 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
       expect.objectContaining({
         where: { id: "payment-1" },
         data: {
-          confirmationEmailLastError:
-            "Resend email delivery failed: provider unavailable",
+          confirmationEmailLastError: "Email submission failed.",
+          confirmationEmailRetryable: false,
         },
       }),
     );
@@ -214,6 +234,6 @@ describe("sendSubscriptionPaymentConfirmationEmail", () => {
       sendSubscriptionPaymentConfirmationEmail("payment-1"),
     ).rejects.toThrow(/requires a successful payment/);
 
-    expect(emailMock.sendHtmlEmail).not.toHaveBeenCalled();
+    expect(emailMock.sendEmail).not.toHaveBeenCalled();
   });
 });

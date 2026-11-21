@@ -35,9 +35,14 @@ export const config = {
     storageDir: env.BUSINESS_BRANDING_STORAGE_DIR,
     maxUploadBytes: env.BUSINESS_BRANDING_MAX_UPLOAD_BYTES,
   },
+  email: {
+    apiKey: env.RESEND_API_KEY,
+    from: env.EMAIL_FROM ?? env.RECEIPT_EMAIL_FROM,
+    requestTimeoutMs: env.EMAIL_REQUEST_TIMEOUT_MS,
+    maxAttempts: env.EMAIL_MAX_ATTEMPTS,
+    retryDelayMs: env.EMAIL_RETRY_DELAY_MS,
+  },
   receiptDelivery: {
-    resendApiKey: env.RESEND_API_KEY,
-    emailFrom: env.RECEIPT_EMAIL_FROM,
     whatsappApiVersion: env.WHATSAPP_API_VERSION,
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN,

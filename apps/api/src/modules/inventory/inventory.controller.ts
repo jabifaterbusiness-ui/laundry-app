@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { sendEmail } from "../email/email.service.js";
 import { listApprovedWhatsAppTemplates, sendSupplierPurchaseOrderTemplate } from "../whatsapp/whatsapp-templates.service.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
 import {
@@ -401,7 +401,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
     metadata: { orderNumber: order.orderNumber, supplierId: order.supplierId, lineCount: order.lines.length, notificationChannel: input.notificationChannel, whatsappConsentConfirmed: input.whatsappConsentConfirmed ?? false } });
   const notificationChannel = input.notificationChannel;
   const destination = notificationChannel === "EMAIL" ? order.supplier.email : order.supplier.phone;
-  let notification: { channel: "EMAIL" | "WHATSAPP"; status: "SENT" | "FAILED"; destination: string | null; providerMessageId?: string; error?: string } = {
+  let notification: { channel: "EMAIL" | "WHATSAPP"; status: "SUBMITTED" | "SENT" | "FAILED"; destination: string | null; providerMessageId?: string; error?: string } = {
     channel: notificationChannel,
     status: "FAILED",
     destination,
@@ -422,8 +422,8 @@ export async function createPurchaseOrder(req: Request, res: Response) {
         }
       });
       const html = `<div style="font-family:Arial,sans-serif;color:#172033"><h2>Purchase Order ${escapeHtml(order.orderNumber)}</h2><p>Hello ${escapeHtml(order.supplier.contactName || order.supplier.name)},</p><p>Please find our purchase order details below.</p><table style="border-collapse:collapse;width:100%"><thead><tr><th align="left">Item</th><th align="right">Quantity</th><th align="right">Unit cost</th><th align="right">Line total</th></tr></thead><tbody>${order.lines.map((line) => `<tr><td>${escapeHtml(line.inventoryItem.name)}</td><td align="right">${line.quantityOrdered}</td><td align="right">₦${line.unitCost.toLocaleString("en-NG")}</td><td align="right">₦${(line.quantityOrdered * line.unitCost).toLocaleString("en-NG")}</td></tr>`).join("")}</tbody></table><p><strong>Estimated total: ₦${total.toLocaleString("en-NG")}</strong></p>${order.expectedAt ? `<p>Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}</p>` : ""}${order.notes ? `<p>Notes: ${escapeHtml(order.notes)}</p>` : ""}<p>Please confirm receipt of this purchase order.</p></div>`;
-      const sent = await sendHtmlEmail({ to: destination, subject: `Purchase Order ${order.orderNumber}`, html });
-      notification = { channel: notificationChannel, status: "SENT", destination, providerMessageId: sent.id };
+      const sent = await sendEmail({ to: destination, subject: `Purchase Order ${order.orderNumber}`, html, feature: "purchase_order", idempotencyKey: `purchase-order:${businessId}:${order.id}` });
+      notification = { channel: notificationChannel, status: "SUBMITTED", destination, providerMessageId: sent.id };
     } else {
       await assertWhatsAppMessagingEnabled();
       const sent = await sendSupplierPurchaseOrderTemplate({
@@ -450,7 +450,11 @@ export async function createPurchaseOrder(req: Request, res: Response) {
     };
   }
   await recordAuditEvent({
-    action: notification.status === "SENT" ? "inventory.purchase_order_notification_sent" : "inventory.purchase_order_notification_failed",
+    action: notification.status === "FAILED"
+      ? "inventory.purchase_order_notification_failed"
+      : notification.channel === "EMAIL"
+        ? "inventory.purchase_order_notification_submitted"
+        : "inventory.purchase_order_notification_sent",
     entityType: "InventoryPurchaseOrder",
     entityId: order.id,
     businessId,

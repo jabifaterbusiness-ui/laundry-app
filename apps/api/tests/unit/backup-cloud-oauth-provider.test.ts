@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   connectionUpdate: vi.fn(),
   encrypt: vi.fn((_plaintext: string, _businessId: string) => "encrypted-refreshed"),
   decrypt: vi.fn((_ciphertext: string, _businessId: string) => ""),
+  transaction: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -11,6 +12,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     backupCloudConnection: {
       update: mocks.connectionUpdate,
     },
+    $transaction: mocks.transaction,
   },
 }));
 
@@ -52,6 +54,9 @@ const inputBase = {
   businessId,
   connectionId,
   credentialsCiphertext: "encrypted-test",
+  trigger: "MANUAL" as const,
+  businessTimezone: "Africa/Lagos",
+  executionTime: new Date("2026-11-21T13:09:00.000Z"),
 };
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -63,6 +68,9 @@ describe("OAuth cloud provider adapter", () => {
 
     mocks.decrypt.mockReturnValue(JSON.stringify(freshCredentials()));
     mocks.connectionUpdate.mockResolvedValue({});
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
+      callback({ $queryRaw: vi.fn().mockResolvedValue([]) }),
+    );
 
     process.env.GOOGLE_DRIVE_CLIENT_ID = "google-client";
     process.env.GOOGLE_DRIVE_CLIENT_SECRET = "google-secret";
@@ -84,51 +92,93 @@ describe("OAuth cloud provider adapter", () => {
     delete process.env.MICROSOFT_TENANT_ID;
   });
 
-  it.each([
-    {
-      provider: "GOOGLE_DRIVE" as const,
-      response: { id: "google-file_123" },
-      expectedKey: "google:google-file_123",
-      url: "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
-    },
-    {
-      provider: "DROPBOX" as const,
-      response: { path_lower: `/laundryangel/backups/${runId}.enc` },
-      expectedKey: `dropbox:/laundryangel/backups/${runId}.enc`,
-      url: "https://content.dropboxapi.com/2/files/upload",
-    },
-    {
-      provider: "ONEDRIVE" as const,
-      response: { id: "oneDrive_item-123" },
-      expectedKey: "onedrive:oneDrive_item-123",
-      url: `https://graph.microsoft.com/v1.0/me/drive/root:/LaundryAngel/backups/${runId}.enc:/content`,
-    },
-  ])("uploads an artifact to $provider and returns its provider-scoped key", async ({
-    provider,
-    response,
-    expectedKey,
-    url,
-  }) => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(response));
+  it("reuses a visible Google Drive folder and creates a new file beneath it", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: "drive-folder-1", mimeType: "application/vnd.google-apps.folder" }] }))
+      .mockResolvedValueOnce(jsonResponse({ id: "google-file_123" }));
     vi.stubGlobal("fetch", fetchMock);
+    await expect(uploadOAuthCloudArtifact({
+      ...inputBase, provider: "GOOGLE_DRIVE", runId, encryptedArtifact: Buffer.from("encrypted-backup-fixture"),
+    })).resolves.toBe("google:google-file_123");
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get("q")).toContain("Laundry Angels Backup");
+    const upload = fetchMock.mock.calls[1];
+    const body = String((upload?.[1] as RequestInit).body);
+    expect(body).toContain('"parents":["drive-folder-1"]');
+    expect(body).toMatch(/Laundry Angel Manual Backup \d{2}-\d{2}-\d{4}_\d{2}:\d{2}(?:am|pm)_[0-9a-f-]+\.enc/);
+  });
 
+  it("creates a Google Drive folder only when search finds none", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: "drive-folder-new" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "google-file-new" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(uploadOAuthCloudArtifact({
+      ...inputBase, provider: "GOOGLE_DRIVE", runId, encryptedArtifact: Buffer.from("fixture"),
+    })).resolves.toBe("google:google-file-new");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("https://www.googleapis.com/drive/v3/files?fields=id");
+    expect(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body)).toContain('"name":"Laundry Angels Backup"');
+  });
+
+  it("creates the Dropbox backup folder and uploads unique files with add-only semantics", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ metadata: { path_lower: "/laundry angels backup" } }))
+      .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+        const args = JSON.parse(new Headers(init.headers).get("dropbox-api-arg") ?? "{}") as { path: string };
+        return jsonResponse({ path_lower: args.path.toLowerCase() });
+      });
+    vi.stubGlobal("fetch", fetchMock);
     const result = await uploadOAuthCloudArtifact({
-      ...inputBase,
-      provider,
-      runId,
-      encryptedArtifact: Buffer.from("encrypted-backup-fixture"),
+      ...inputBase, provider: "DROPBOX", runId, encryptedArtifact: Buffer.from("fixture"),
     });
+    expect(result).toMatch(/^dropbox:\/laundry angels backup\/laundry angel manual backup \d{2}-\d{2}-\d{4}_\d{2}:\d{2}(?:am|pm)_[0-9a-f-]+\.enc$/i);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.dropboxapi.com/2/files/create_folder_v2");
+    const upload = fetchMock.mock.calls[1];
+    const uploadArgs = JSON.parse(new Headers((upload?.[1] as RequestInit).headers).get("dropbox-api-arg") ?? "{}") as Record<string, unknown>;
+    expect(uploadArgs).toMatchObject({ mode: "add", autorename: false, strict_conflict: true });
+    expect(uploadArgs.path).toMatch(/^\/Laundry Angels Backup\/Laundry Angel Manual Backup /);
+  });
 
-    expect(result).toBe(expectedKey);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const uploadCall = fetchMock.mock.calls[0];
-    expect(uploadCall?.[0]).toBe(url);
-    if (!uploadCall) throw new Error("Expected upload fetch call.");
+  it("reuses Dropbox's existing folder after a concurrent create conflict", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { ".tag": "path", path: { ".tag": "conflict", conflict: { ".tag": "folder" } } } }, 409))
+      .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+        const args = JSON.parse(new Headers(init.headers).get("dropbox-api-arg") ?? "{}") as { path: string };
+        return jsonResponse({ path_lower: args.path.toLowerCase() });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(uploadOAuthCloudArtifact({
+      ...inputBase, provider: "DROPBOX", runId, encryptedArtifact: Buffer.from("fixture"),
+    })).resolves.toMatch(/^dropbox:\/laundry angels backup\//i);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 
-    const request = uploadCall[1] as RequestInit;
-    expect(request.redirect).toBe("error");
-    expect(new Headers(request.headers).get("authorization"))
-      .toBe("Bearer test-access-token");
+  it("keeps the OneDrive upload path unchanged", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "oneDrive_item-123" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(uploadOAuthCloudArtifact({
+      ...inputBase, provider: "ONEDRIVE", runId, encryptedArtifact: Buffer.from("fixture"),
+    })).resolves.toBe("onedrive:oneDrive_item-123");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://graph.microsoft.com/v1.0/me/drive/root:/LaundryAngel/backups/${runId}.enc:/content`);
+  });
+
+  it("formats filenames with the business timezone, AM/PM, and unique run IDs", async () => {
+    const { formatCloudBackupFilename } = await import("../../src/modules/migrations/backup-cloud-oauth-provider.service.js");
+    const at = new Date("2026-11-21T13:09:00.000Z");
+    expect(formatCloudBackupFilename("MANUAL", at, "Africa/Lagos", runId))
+      .toBe(`Laundry Angel Manual Backup 21-11-2026_02:09pm_${runId}.enc`);
+    expect(formatCloudBackupFilename("SCHEDULED", at, "UTC", runId))
+      .toBe(`Laundry Angel Auto Backup 21-11-2026_01:09pm_${runId}.enc`);
+    expect(formatCloudBackupFilename("MANUAL", new Date("2026-11-21T11:00:00.000Z"), "Africa/Lagos", runId))
+      .toContain("12:00pm");
+    expect(formatCloudBackupFilename("SCHEDULED", new Date("2026-11-21T23:00:00.000Z"), "Africa/Lagos", runId))
+      .toBe(`Laundry Angel Auto Backup 22-11-2026_12:00am_${runId}.enc`);
+    expect(formatCloudBackupFilename("MANUAL", at, "Africa/Lagos", runId))
+      .not.toBe(formatCloudBackupFilename("MANUAL", at, "Africa/Lagos", "22222222-2222-4222-8222-222222222222"));
   });
 
   it.each([
@@ -141,6 +191,12 @@ describe("OAuth cloud provider adapter", () => {
     {
       provider: "DROPBOX" as const,
       storageKey: `dropbox:/laundryangel/backups/${runId}.enc`,
+      url: "https://api.dropboxapi.com/2/files/delete_v2",
+      method: "POST",
+    },
+    {
+      provider: "DROPBOX" as const,
+      storageKey: `dropbox:/laundry angels backup/laundry angel manual backup 21-11-2026_02:09pm_${runId}.enc`,
       url: "https://api.dropboxapi.com/2/files/delete_v2",
       method: "POST",
     },
@@ -247,7 +303,10 @@ describe("OAuth cloud provider adapter", () => {
   });
 
   it("rejects malformed Google Drive upload responses", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ name: "missing-id" })));
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: "drive-folder" }))
+      .mockResolvedValueOnce(jsonResponse({ name: "missing-id" })));
 
     await expect(uploadOAuthCloudArtifact({
       ...inputBase,

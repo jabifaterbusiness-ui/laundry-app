@@ -89,7 +89,7 @@ describe("verifySubscriptionPayment", () => {
     prismaMock.subscription.findUnique.mockResolvedValue(subscription);
 
     confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail.mockResolvedValue({
-      sent: true,
+      submitted: true,
       skipped: false,
       messageId: "email-123",
     });
@@ -345,7 +345,7 @@ describe("verifySubscriptionPayment", () => {
 
   it("does not fail successful payment verification when confirmation email delivery fails", async () => {
     confirmationEmailMock.sendSubscriptionPaymentConfirmationEmail.mockResolvedValueOnce({
-      sent: false,
+      submitted: false,
       skipped: false,
     });
 

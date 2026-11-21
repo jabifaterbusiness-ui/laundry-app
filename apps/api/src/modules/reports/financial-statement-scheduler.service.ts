@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
-import { sendHtmlEmail } from "../invoices/providers/resend.provider.js";
+import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
 import { sendWhatsAppReceipt } from "../invoices/providers/whatsapp.provider.js";
 import { generateBusinessFinancialStatement } from "./business-financial-statement.persistence.service.js";
 import { renderFinancialStatementEmail } from "./templates/financial-statement-email.js";
@@ -240,9 +240,11 @@ async function deliverOne(
     },
   });
 
-  if (delivery.status === "SENT") {
+  if (delivery.status === "SENT" || delivery.status === "SUBMITTED") {
     return;
   }
+
+  if (delivery.status === "FAILED" && !delivery.retryable) return;
 
   if (delivery.attemptCount >= MAX_DELIVERY_ATTEMPTS) {
     return;
@@ -271,10 +273,12 @@ async function deliverOne(
   try {
     const result =
       channel === "EMAIL"
-        ? await sendHtmlEmail({
+        ? await sendEmail({
             to: destination,
             subject: `${input.businessName} — Monthly Financial Statement — ${input.periodLabel}`,
             html: renderFinancialStatementEmail(input),
+            feature: "statement",
+            idempotencyKey: `financial-statement:${businessId}:${statementId}:${recipientId}:${channel}`,
           })
         : await sendWhatsAppReceipt({
             businessId,
@@ -286,21 +290,24 @@ async function deliverOne(
     await prisma.financialStatementDelivery.update({
       where: { id: delivery.id },
       data: {
-        status: "SENT",
+        status: channel === "EMAIL" ? "SUBMITTED" : "SENT",
         providerMessageId: result.id,
         sentAt: new Date(),
         failureReason: null,
+        retryable: false,
       },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown delivery error";
+    const message = channel === "EMAIL"
+      ? error instanceof EmailDeliveryError ? error.message : "Email submission failed."
+      : error instanceof Error ? error.message : "Unknown delivery error";
 
     await prisma.financialStatementDelivery.update({
       where: { id: delivery.id },
       data: {
         status: "FAILED",
         failureReason: message.slice(0, 1000),
+        retryable: channel !== "EMAIL" || (error instanceof EmailDeliveryError && error.retryable),
       },
     });
 

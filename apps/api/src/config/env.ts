@@ -32,7 +32,12 @@ const envSchema = z.object({
   BUSINESS_BRANDING_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
 
   // --- Digital receipt delivery ---
+  EMAIL_FROM: z.string().trim().min(1).optional(),
+  EMAIL_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
+  EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(3),
+  EMAIL_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(5000).default(250),
   RESEND_API_KEY: z.string().min(1).optional(),
+  /** @deprecated Use EMAIL_FROM; retained for existing deployment configurations. */
   RECEIPT_EMAIL_FROM: z.string().min(1).optional(),
   WHATSAPP_API_VERSION: z.string().min(1).optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),

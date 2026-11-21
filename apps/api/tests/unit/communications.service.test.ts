@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   customerGroupFindMany: vi.fn(),
   branchResourceShareFindMany: vi.fn(),
   sendWhatsAppText: vi.fn(),
+  sendEmail: vi.fn(),
   sendAutomatedWhatsAppTemplate: vi.fn(),
   assertWhatsAppMessagingEnabled: vi.fn(),
   replayPendingWhatsAppStatusEvents: vi.fn(),
@@ -36,8 +37,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
   },
 }));
 
-vi.mock("../../src/modules/invoices/providers/resend.provider.js", () => ({
-  sendHtmlEmail: vi.fn(),
+vi.mock("../../src/modules/email/email.service.js", () => ({
+  EmailDeliveryError: class EmailDeliveryError extends Error {
+    retryable: boolean;
+    constructor(message: string, retryable: boolean) { super(message); this.retryable = retryable; }
+  },
+  sendEmail: mocks.sendEmail,
 }));
 
 vi.mock("../../src/modules/invoices/providers/whatsapp.provider.js", () => ({

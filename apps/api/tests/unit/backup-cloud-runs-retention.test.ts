@@ -38,6 +38,7 @@ const {
 
 vi.mock("../../src/lib/prisma.js", () => ({
   prisma: {
+    business: { findUnique: vi.fn().mockResolvedValue({ timezone: "Africa/Lagos" }) },
     backupSettings: { findUnique: backupSettingsFindUnique },
     backupSchedule: { findFirst: backupScheduleFindFirst },
     backupCloudConnection: {
@@ -198,7 +199,7 @@ describe("pruneCloudBackupRuns", () => {
     deleteOAuthArtifact.mockResolvedValue(undefined);
   });
 
-  it("uses the OAuth provider adapter when pruning a Google Drive destination", async () => {
+  it("never prunes existing Google Drive backup artifacts", async () => {
     connectionFindFirst.mockResolvedValue({
       ...connection,
       provider: "GOOGLE_DRIVE",
@@ -209,25 +210,21 @@ describe("pruneCloudBackupRuns", () => {
       { id: "oldest", storageKey: "google:oldest-file-id" },
     ]);
 
-    await expect(
-      pruneCloudBackupRuns("business-1", "connection-1"),
-    ).resolves.toEqual({ deleted: 1 });
+    await expect(pruneCloudBackupRuns("business-1", "connection-1"))
+      .resolves.toEqual({ deleted: 0 });
 
-    expect(deleteOAuthArtifact).toHaveBeenCalledTimes(1);
-    expect(deleteOAuthArtifact).toHaveBeenCalledWith(expect.objectContaining({
-      businessId: "business-1",
-      connectionId: "connection-1",
-      provider: "GOOGLE_DRIVE",
-      storageKey: "google:oldest-file-id",
-    }));
+    expect(deleteOAuthArtifact).not.toHaveBeenCalled();
     expect(deleteArtifact).not.toHaveBeenCalled();
-    expect(backupRunUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        id: "oldest",
-        storageKey: "google:oldest-file-id",
-      }),
-      data: { storageKey: null },
-    }));
+    expect(backupRunUpdateMany).not.toHaveBeenCalled();
+    expect(backupRunFindMany).not.toHaveBeenCalled();
+  });
+
+  it("never prunes existing Dropbox backup artifacts", async () => {
+    connectionFindFirst.mockResolvedValue({ ...connection, provider: "DROPBOX" });
+    await expect(pruneCloudBackupRuns("business-1", "connection-1"))
+      .resolves.toEqual({ deleted: 0 });
+    expect(deleteOAuthArtifact).not.toHaveBeenCalled();
+    expect(backupRunUpdateMany).not.toHaveBeenCalled();
   });
 
   it("isolates retention to the selected schedule", async () => {

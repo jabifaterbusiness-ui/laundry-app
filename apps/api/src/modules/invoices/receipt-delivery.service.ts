@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getCustomerReceipt } from "./receipts.service.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
 import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
-import { sendReceiptEmail } from "./providers/resend.provider.js";
+import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
 import { sendWhatsAppReceipt } from "./providers/whatsapp.provider.js";
 import { sendAutomatedWhatsAppTemplate, uploadWhatsAppTemplateImage } from "../whatsapp/whatsapp-templates.service.js";
 import { assertWhatsAppMessagingEnabled } from "../platform/platform-controls.middleware.js";
@@ -82,22 +82,24 @@ export async function resendDigitalReceipt(
     const html = renderCustomerReceiptEmail(receipt);
 
     try {
-      const delivery = await sendReceiptEmail({
+      const delivery = await sendEmail({
         to: destination,
         subject: `${receipt.companyName} — Receipt ${receipt.invoiceNumber}`,
         html,
+        feature: "receipt",
       });
 
       return {
         channel: input.channel,
+        status: delivery.status,
         destination,
         providerMessageId: delivery.id,
       };
     } catch (error) {
       throw new AppError(
-        error instanceof Error
+        error instanceof EmailDeliveryError
           ? error.message
-          : "Email receipt delivery failed",
+          : "Email receipt submission failed.",
         503,
       );
     }

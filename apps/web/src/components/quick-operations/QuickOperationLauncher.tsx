@@ -714,6 +714,11 @@ export function QuickOperationLauncher({
             ? "Reconciliation completed successfully with no outstanding issues."
             : `Reconciliation completed with ${result.issueCount ?? 0} issue(s).`,
         );
+      } else if (activeOperation.code === "RS") {
+        const result = response.result as { channel?: string; status?: string };
+        setSuccess(result.channel === "EMAIL" && result.status === "SUBMITTED"
+          ? "Receipt email submitted to the provider. Delivery is not confirmed."
+          : "Receipt message submitted successfully.");
       } else {
         setSuccess(
           `${activeOperation.name} completed successfully.`,

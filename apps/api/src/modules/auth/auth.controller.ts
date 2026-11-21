@@ -3,7 +3,9 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../config/index.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { logger } from "../../lib/logger.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { sendEmail } from "../email/email.service.js";
 import { getEffectivePermissionCodes } from "../permissions/permissions.service.js";
 import {
   createPasswordResetToken,
@@ -314,7 +316,7 @@ export async function changePassword(req: Request, res: Response) {
 }
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
 
 const resetPasswordSchema = z.object({
@@ -323,7 +325,7 @@ const resetPasswordSchema = z.object({
 });
 
 export async function forgotPassword(req: Request, res: Response) {
-  const { email } = forgotPasswordSchema.parse(req.body);
+  const email = forgotPasswordSchema.parse(req.body).email;
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -334,10 +336,8 @@ export async function forgotPassword(req: Request, res: Response) {
     const token = await createPasswordResetToken(user.id);
     const resetUrl = `${config.webAppUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
-    const { sendReceiptEmail } = await import("../invoices/providers/resend.provider.js");
-
     try {
-      await sendReceiptEmail({
+      await sendEmail({
         to: user.email,
         subject: "Reset your LaundryAngel password",
         html: `
@@ -354,10 +354,26 @@ export async function forgotPassword(req: Request, res: Response) {
             <p>If you did not request this, you can safely ignore this email.</p>
           </div>
         `,
+        feature: "password_reset",
       });
-    } catch {
+    } catch (error) {
       await invalidatePasswordResetToken(token);
-      throw new AppError("Unable to send password reset email", 503);
+      logger.warn({ feature: "password_reset", retryable: error instanceof Error && "retryable" in error && error.retryable === true }, "Password reset email submission failed.");
+      await recordAuditEvent({
+        action: "user.password_reset_email_failed",
+        entityType: "User",
+        entityId: user.id,
+        businessId: null,
+        actorUserId: null,
+        correlationId: req.correlationId ?? null,
+        metadata: { outcome: "failed" },
+      });
+      // Keep the response indistinguishable from an unknown account while
+      // making clear that this endpoint accepted a request, not delivery.
+      res.status(200).json({
+        message: "If an account exists for that email, reset instructions will be sent when delivery is available.",
+      });
+      return;
     }
 
     await recordAuditEvent({
@@ -371,7 +387,7 @@ export async function forgotPassword(req: Request, res: Response) {
   }
 
   res.status(200).json({
-    message: "If an account exists for that email, a password reset link has been sent.",
+    message: "If an account exists for that email, reset instructions will be sent when delivery is available.",
   });
 }
 
