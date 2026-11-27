@@ -10,11 +10,13 @@ import "./ReceiptStyles.css";
 interface CustomerReceiptProps {
   receipt: CustomerReceiptData;
   branding?: BusinessBranding | null;
+  logoUrl?: string | null;
 }
 
 export function CustomerReceipt({
   receipt,
   branding,
+  logoUrl,
 }: CustomerReceiptProps) {
   const style = {
     "--receipt-primary": branding?.receiptPrimaryColor ?? "#111111",
@@ -25,10 +27,10 @@ export function CustomerReceipt({
   return (
     <article className="receipt receipt--customer" style={style}>
       <header className="receipt__header">
-        {branding?.logoUrl ? (
+        {branding?.logoUrl && logoUrl ? (
           <img
             className="receipt__logo"
-            src={branding.logoUrl}
+            src={logoUrl}
             alt={`${receipt.companyName} logo`}
           />
         ) : (

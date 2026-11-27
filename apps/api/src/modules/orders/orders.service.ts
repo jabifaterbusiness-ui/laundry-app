@@ -24,6 +24,7 @@ export interface CreateOrderData {
   expectedReadyAt?: Date;
   adjustments?: Array<{ adjustmentId: string; scope: "INVOICE" | "ITEMS"; itemIndexes?: number[] }>;
   taxRuleIds?: string[];
+  idempotencyKey?: string;
 }
 
 export interface ListOrdersParams {
@@ -35,6 +36,10 @@ export interface ListOrdersParams {
   status?: OrderStatus;
   page: number;
   pageSize: number;
+}
+
+function markOrderReplay<T extends object>(order: T) {
+  return { ...order, idempotencyReplay: true as const };
 }
 
 /**
@@ -54,13 +59,43 @@ export async function createOrder(
     throw new AppError("An order must contain at least one item", 422);
   }
 
+  const existingOrder = data.idempotencyKey
+    ? await (db ?? prisma).order.findFirst({
+        where: {
+          businessId: data.businessId,
+          branchId: data.branchId,
+          idempotencyKey: data.idempotencyKey,
+        },
+        include: { customer: true, branch: true, items: true },
+      })
+    : null;
+  if (existingOrder) return markOrderReplay(existingOrder);
+
   if (db) {
     return createOrderWithTx(db, data);
   }
 
-  return prisma.$transaction(async (tx) => {
-    return createOrderWithTx(tx, data);
-  });
+  try {
+    return await prisma.$transaction(async (tx) => createOrderWithTx(tx, data));
+  } catch (error) {
+    // A concurrent request with the same key may win the unique index race.
+    // Read its committed result after the failed transaction has rolled back.
+    if (
+      data.idempotencyKey && error && typeof error === "object" &&
+      "code" in error && error.code === "P2002"
+    ) {
+      const concurrentOrder = await prisma.order.findFirst({
+        where: {
+          businessId: data.businessId,
+          branchId: data.branchId,
+          idempotencyKey: data.idempotencyKey,
+        },
+        include: { customer: true, branch: true, items: true },
+      });
+      if (concurrentOrder) return markOrderReplay(concurrentOrder);
+    }
+    throw error;
+  }
 }
 
 async function createOrderWithTx(
@@ -237,6 +272,7 @@ async function createOrderWithTx(
         garmentNote: data.garmentNote ?? null,
         internalNote: data.internalNote ?? null,
         expectedReadyAt: data.expectedReadyAt ?? null,
+        idempotencyKey: data.idempotencyKey ?? null,
         items: {
           create: items,
         },
@@ -573,6 +609,7 @@ export interface OrderStatusHistoryContext {
   actorRole?: Role;
   correlationId?: string | null;
   pickupOverrideReason?: string;
+  notificationChoice?: "EMAIL" | "WHATSAPP" | "NONE";
 }
 
 export async function updateOrderStatus(
@@ -609,6 +646,7 @@ export async function updateOrderStatus(
               orderNumber: updated.orderNumber,
               previousStatus: existing.status,
               status: updated.status,
+              notificationChoice: history?.notificationChoice ?? "AUTOMATIC",
             },
           },
         });
@@ -620,15 +658,19 @@ export async function updateOrderStatus(
 
     let notificationResults: Awaited<ReturnType<typeof notifyOrderStatus>> = [];
     let notificationError: string | undefined;
-    try {
-      notificationResults = await notifyOrderStatus({
-        orderId: id, businessId, branchId, status,
-      });
-    } catch {
-      notificationError = "Notification processing failed. Check Delivery History for details.";
+    if (history?.notificationChoice !== "NONE") {
+      try {
+        notificationResults = await notifyOrderStatus({
+          orderId: id, businessId, branchId, status,
+          ...(history?.notificationChoice ? { channelOverride: history.notificationChoice } : {}),
+        });
+      } catch {
+        notificationError = "Notification processing failed. Check Delivery History for details.";
+      }
     }
     return {
       ...result.updated,
+      notificationChoice: history?.notificationChoice ?? "AUTOMATIC",
       notificationResults,
       ...(notificationError ? { notificationError } : {}),
     };

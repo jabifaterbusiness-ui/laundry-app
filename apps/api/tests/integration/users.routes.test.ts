@@ -220,6 +220,7 @@ describe("Users routes - permissions", () => {
       .set("Authorization", `Bearer ${STAFF_A}`)
       .send({
         fullName: "New Staff",
+        phone: "+234 (801) 234-5678",
         email: "new@example.com",
         password: "password123",
         role: "STAFF",
@@ -357,6 +358,7 @@ describe("Users routes - permissions", () => {
         data: expect.objectContaining({
           businessId: "biz-A",
           email: "new@example.com",
+          phone: null,
           role: "Laundry Supervisor",
           securityRole: "STAFF",
         }),

@@ -5,7 +5,7 @@ import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { encryptBackupCredentials, decryptBackupCredentials } from "./backup-crypto.service.js";
 
-type OAuthProvider = "GOOGLE_DRIVE" | "DROPBOX" | "ONEDRIVE";
+type OAuthProvider = "GOOGLE_DRIVE" | "DROPBOX";
 
 const CALLBACK_PATH = "/api/v1/migrations/backup/cloud/oauth/callback";
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -36,19 +36,7 @@ function providerConfig(provider: OAuthProvider) {
       scope: "account_info.read files.content.write",
     };
   }
-  if (!env.MICROSOFT_CLIENT_ID || !env.MICROSOFT_CLIENT_SECRET) {
-    throw new AppError("OneDrive OAuth is not configured on the server.", 503);
-  }
-  const tenant = /^[a-zA-Z0-9.-]+$/.test(env.MICROSOFT_TENANT_ID ?? "common")
-    ? env.MICROSOFT_TENANT_ID ?? "common"
-    : "common";
-  return {
-    clientId: env.MICROSOFT_CLIENT_ID,
-    clientSecret: env.MICROSOFT_CLIENT_SECRET,
-    authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
-    token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    scope: "Files.ReadWrite offline_access User.Read",
-  };
+  throw new AppError("This provider is not supported for business cloud backups.", 403);
 }
 
 function callbackUrl() {
@@ -124,8 +112,6 @@ export async function beginCloudOAuth(input: {
   } else if (input.provider === "DROPBOX") {
     url.searchParams.set("scope", provider.scope);
     url.searchParams.set("token_access_type", "offline");
-  } else {
-    url.searchParams.set("scope", provider.scope);
   }
 
   return { authorizationUrl: url.toString() };
@@ -146,8 +132,8 @@ export async function completeCloudOAuth(input: {
   if (!state || state.consumedAt || state.expiresAt.getTime() <= Date.now()) {
     throw new AppError("OAuth state is invalid, expired, or already used. Start the connection again.", 400);
   }
-  if (state.provider === "ONEDRIVE") {
-    throw new AppError("OneDrive OAuth is restricted to Platform Admin and cannot be completed through business backup accounts.", 403);
+  if (state.provider !== "GOOGLE_DRIVE" && state.provider !== "DROPBOX") {
+    throw new AppError("This provider is not supported for business cloud backups.", 403);
   }
 
   const consumed = await prisma.backupCloudOAuthState.updateMany({

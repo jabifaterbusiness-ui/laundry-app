@@ -159,6 +159,8 @@ describe("receipt-delivery.service", () => {
       to: "john@example.com",
       subject: "Test Laundry — Receipt INV-00001",
       html: "<html>receipt</html>",
+      fromName: "Test Laundry",
+      replyTo: "hello@testlaundry.com",
       feature: "receipt",
     });
 

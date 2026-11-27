@@ -97,6 +97,7 @@ export async function exportBackup(
 export async function restoreBackup(
   file: File,
   password: string,
+  organizationPassword: string,
   reason: string,
   auth: { accessToken: string | null },
 ) {
@@ -106,6 +107,7 @@ export async function restoreBackup(
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
       "Content-Type": file.type || "application/octet-stream",
       ...(password ? { "X-Backup-Password": password } : {}),
+      "X-Organization-Restore-Password": organizationPassword,
       "X-Restore-Reason": reason.trim(),
     },
     body: file,
@@ -153,10 +155,17 @@ export async function restoreBackup(
     }>;
 }
 
+export function getBusinessRestorePassword(auth: { accessToken: string | null }) {
+  return apiFetch<{ password: string }>("/migrations/backup/restore-password", { accessToken: auth.accessToken });
+}
+
+export function setBusinessRestorePassword(password: string, auth: { accessToken: string | null }) {
+  return apiFetch<void>("/migrations/backup/restore-password", { method: "PUT", accessToken: auth.accessToken, body: JSON.stringify({ password }) });
+}
+
 export type CloudBackupProvider =
   | "GOOGLE_DRIVE"
   | "DROPBOX"
-  | "ONEDRIVE"
   | "S3_COMPATIBLE";
 
 export type CloudBackupConnection = {
@@ -306,12 +315,28 @@ export async function deleteCloudBackupConnection(
 export async function createCloudBackupRun(
   connectionId: string,
   auth: CloudAuth,
+  idempotencyKey: string,
 ): Promise<CloudBackupRun> {
   const result = await apiFetch<{ run: CloudBackupRun }>(
     "/migrations/backup/cloud/runs",
-    cloudRequestOptions(auth, "POST", { connectionId }),
+    cloudRequestOptions(auth, "POST", { connectionId, idempotencyKey }),
   );
   return result.run;
+}
+
+export function getCloudBackupIdempotencyKey(businessId: string, connectionId: string): string {
+  const storageKey = `laundryangel:cloud-backup-run:${businessId}:${connectionId}`;
+  const existing = sessionStorage.getItem(storageKey);
+  if (existing && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing)) {
+    return existing;
+  }
+  const generated = crypto.randomUUID();
+  sessionStorage.setItem(storageKey, generated);
+  return generated;
+}
+
+export function clearCloudBackupIdempotencyKey(businessId: string, connectionId: string): void {
+  sessionStorage.removeItem(`laundryangel:cloud-backup-run:${businessId}:${connectionId}`);
 }
 
 export async function listCloudBackupRuns(

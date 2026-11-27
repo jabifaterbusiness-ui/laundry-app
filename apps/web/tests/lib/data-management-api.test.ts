@@ -5,6 +5,9 @@ import {
   createCloudBackupSchedule,
   updateCloudBackupSchedule,
   deleteCloudBackupSchedule,
+  createCloudBackupRun,
+  getCloudBackupIdempotencyKey,
+  clearCloudBackupIdempotencyKey,
   type CloudBackupSchedule,
   type CloudBackupScheduleInput,
 } from "../../src/lib/data-management-api.js";
@@ -230,5 +233,40 @@ describe("cloud backup schedule API", () => {
         }),
       }),
     );
+  });
+});
+
+describe("cloud backup run idempotency", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
+
+  it("sends a stable manual run key with the authenticated request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ run: { id: "run-1", status: "SUCCEEDED" } }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await createCloudBackupRun("connection-1", { accessToken: "access-token" }, "7b74a7c2-4f3d-4c56-9c19-0dd626520026");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/v1/migrations/backup/cloud/runs",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
+        body: JSON.stringify({ connectionId: "connection-1", idempotencyKey: "7b74a7c2-4f3d-4c56-9c19-0dd626520026" }),
+      }),
+    );
+  });
+
+  it("reuses a pending logical-operation key and clears it only when asked", () => {
+    const first = getCloudBackupIdempotencyKey("business-1", "connection-1");
+    expect(getCloudBackupIdempotencyKey("business-1", "connection-1")).toBe(first);
+
+    clearCloudBackupIdempotencyKey("business-1", "connection-1");
+    expect(getCloudBackupIdempotencyKey("business-1", "connection-1")).not.toBe(first);
   });
 });

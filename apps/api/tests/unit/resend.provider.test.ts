@@ -45,6 +45,22 @@ describe("central email delivery", () => {
     );
   });
 
+  it("uses the business name on the verified platform sender and business email only as Reply-To", async () => {
+    await sendEmail({ ...input, fromName: "10 Star Laundry", replyTo: "contact@10star.example" });
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "10 Star Laundry <receipts@testlaundry.com>",
+        replyTo: "contact@10star.example",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("sanitizes line breaks in business display names", async () => {
+    await sendEmail({ ...input, fromName: "Business\r\nBcc: attacker@example.com" });
+    expect(sendMock.mock.calls[0]?.[0].from).toBe("Business Bcc: attacker@example.com <receipts@testlaundry.com>");
+  });
+
   it.each([
     [undefined, "LaundryAngel <receipts@testlaundry.com>"],
     ["re_test_key", undefined],

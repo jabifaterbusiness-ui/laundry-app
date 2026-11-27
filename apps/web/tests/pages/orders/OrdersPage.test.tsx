@@ -1248,6 +1248,60 @@ describe("OrdersPage customer names", () => {
     expect(screen.queryByText(customerA.id)).not.toBeInTheDocument();
   });
 });
+
+describe("New Order customer creation regression", () => {
+  it("submits an order for the reported new-customer scenario after customer creation succeeds", async () => {
+    const reportedCustomer = {
+      ...customerA,
+      id: "reported-customer",
+      name: "email and whatsapp test",
+      phone: "08088761675",
+      email: "jabifaterbusiness@gmail.com",
+    };
+    useAuthStore.setState((state) => ({
+      ...state,
+      user: { ...state.user!, permissions: [...state.user!.permissions, "customers.create"] },
+    }));
+    vi.mocked(listCustomers).mockResolvedValue({
+      data: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
+    });
+    vi.mocked(createCustomerWithOfflineQueue).mockResolvedValue({ queued: false, customer: reportedCustomer });
+    vi.mocked(createOrderWithOfflineQueue).mockResolvedValue({
+      queued: false,
+      order: { ...orderA, customerId: reportedCustomer.id, customer: reportedCustomer } as Order,
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /^New order$/i }));
+    fireEvent.change(screen.getByPlaceholderText("Name, phone, email, order number or invoice number"), {
+      target: { value: reportedCustomer.name },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Add New Customer" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: reportedCustomer.name } });
+    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: reportedCustomer.phone } });
+    fireEvent.change(screen.getByLabelText("Email (optional)"), { target: { value: reportedCustomer.email } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("heading", { name: /^New Order$/i })).toBeInTheDocument();
+    const serviceSelect = screen.getAllByRole("combobox").find((select) =>
+      Array.from((select as HTMLSelectElement).options).some((option) => option.value === serviceA.id),
+    );
+    expect(serviceSelect).toBeDefined();
+    fireEvent.change(serviceSelect!, { target: { value: serviceA.id } });
+    fireEvent.click(screen.getByRole("button", { name: /create order/i }));
+
+    await waitFor(() => expect(createCustomerWithOfflineQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ name: reportedCustomer.name, phone: reportedCustomer.phone, email: reportedCustomer.email }),
+      { accessToken: "test-token" },
+      expect.objectContaining({ businessId: "business-a", branchId: "branch-a", actorUserId: "user-a" }),
+    ));
+    await waitFor(() => expect(createOrderWithOfflineQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: reportedCustomer.id, items: [expect.objectContaining({ serviceId: serviceA.id, quantity: 1 })] }),
+      { accessToken: "test-token" },
+      expect.objectContaining({ businessId: "business-a", branchId: "branch-a", actorUserId: "user-a" }),
+    ));
+  });
+});
 });
 
 

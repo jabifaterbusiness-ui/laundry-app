@@ -12,6 +12,7 @@ import {
 } from "./backup-s3.provider.js";
 import {
   deleteOAuthCloudArtifact,
+  recoverOAuthCloudArtifact,
   uploadOAuthCloudArtifact,
   verifyOAuthCloudDestination,
 } from "./backup-cloud-oauth-provider.service.js";
@@ -28,6 +29,9 @@ async function getS3Connection(businessId: string, connectionId: string) {
   });
 
   if (!connection) throw new AppError("Cloud connection not found.", 404);
+  if (connection.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive is not an available business backup destination.", 403);
+  }
 
   if (connection.provider !== "S3_COMPATIBLE") {
     throw new AppError(
@@ -67,6 +71,9 @@ export async function verifyBackupCloudConnection(
   });
 
   if (!record) throw new AppError("Cloud connection not found.", 404);
+  if (record.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive is not an available business backup destination.", 403);
+  }
 
   try {
     if (record.provider === "S3_COMPATIBLE") {
@@ -124,7 +131,7 @@ export async function verifyBackupCloudConnection(
 export async function createCloudBackupRun(
   businessId: string,
   connectionId: string,
-  options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date; scheduleId?: string } = {},
+  options: { trigger?: "MANUAL" | "SCHEDULED"; scheduledFor?: Date; scheduleId?: string; idempotencyKey?: string } = {},
 ) {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
@@ -138,6 +145,9 @@ export async function createCloudBackupRun(
   });
 
   if (!connection) throw new AppError("Cloud connection not found.", 404);
+  if (connection.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive is not an available business backup destination.", 403);
+  }
 
   const s3Destination = connection.provider === "S3_COMPATIBLE"
     ? await getS3Connection(businessId, connectionId)
@@ -158,6 +168,10 @@ export async function createCloudBackupRun(
   }
 
   const trigger = options.trigger ?? "MANUAL";
+  const idempotencyKey = trigger === "MANUAL" ? options.idempotencyKey : undefined;
+  if (trigger === "MANUAL" && (!idempotencyKey || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey))) {
+    throw new AppError("A valid idempotency key is required for a manual backup.", 422);
+  }
   let scheduledFor: Date | undefined;
   let scheduleId: string | null = null;
 
@@ -198,10 +212,110 @@ export async function createCloudBackupRun(
     scheduleId,
     trigger,
     status: "PENDING" as const,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(scheduledFor ? { scheduledFor } : {}),
   };
-  const run = trigger === "SCHEDULED"
-    ? await prisma.$transaction(async (tx) => {
+  const completedFields = {
+    id: true, trigger: true, status: true, storageKey: true,
+    checksumSha256: true, sizeBytes: true, startedAt: true,
+    completedAt: true, createdAt: true,
+  } as const;
+  const existingRun = idempotencyKey
+    ? await prisma.backupRun.findFirst({
+        where: { businessId, idempotencyKey },
+        select: { ...completedFields, errorMessage: true },
+      })
+    : null;
+
+  if (existingRun?.status === "SUCCEEDED") {
+    return { ...existingRun, sizeBytes: existingRun.sizeBytes?.toString() ?? null };
+  }
+
+  const historyPersistenceFailure =
+    "The upload completed, but backup history could not confirm the result. Contact an administrator before retrying.";
+  const staleRunningRun = existingRun?.status === "RUNNING" &&
+    Date.now() - existingRun.startedAt.getTime() > 10 * 60 * 1000;
+  if (
+    (existingRun?.status === "FAILED" && existingRun.errorMessage === historyPersistenceFailure) ||
+    staleRunningRun
+  ) {
+    if (connection.provider !== "GOOGLE_DRIVE" && connection.provider !== "DROPBOX") {
+      throw new AppError("This backup upload needs provider reconciliation before it can be retried.", 409);
+    }
+    try {
+      const recovered = await recoverOAuthCloudArtifact({
+        businessId,
+        connectionId,
+        provider: connection.provider,
+        credentialsCiphertext: connection.credentialsCiphertext,
+        runId: existingRun.id,
+        trigger: existingRun.trigger === "SCHEDULED" ? "SCHEDULED" : "MANUAL",
+        businessTimezone: business.timezone,
+        executionTime: existingRun.startedAt,
+      });
+      if (!recovered) {
+        throw new AppError("The provider has not confirmed this upload yet. Retry after checking the destination.", 409);
+      }
+      const completed = await prisma.backupRun.update({
+        where: { id: existingRun.id },
+        data: {
+          status: "SUCCEEDED",
+          storageKey: recovered.storageKey,
+          checksumSha256: recovered.checksumSha256,
+          sizeBytes: BigInt(recovered.sizeBytes),
+          completedAt: new Date(),
+          errorMessage: null,
+        },
+        select: completedFields,
+      });
+      return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
+    } catch (error) {
+      logger.warn({
+        backupRunId: existingRun.id,
+        provider: connection.provider,
+        errorType: error instanceof Error ? error.name : typeof error,
+      }, "Cloud backup provider reconciliation did not complete.");
+      if (error instanceof AppError && error.statusCode === 409) throw error;
+      throw new AppError("The previous cloud upload could not be reconciled. Retry after checking the destination.", 409);
+    }
+  }
+
+  const safeToRetryFailureMessages = [
+    "Backup generation failed before upload.",
+    "The backup run could not be started or finalized.",
+  ];
+  let run: { id: string };
+  if (existingRun && existingRun.status === "FAILED" && safeToRetryFailureMessages.includes(existingRun.errorMessage ?? "")) {
+    const retry = await prisma.backupRun.updateMany({
+      where: {
+        id: existingRun.id,
+        businessId,
+        idempotencyKey: idempotencyKey!,
+        status: "FAILED",
+        errorMessage: { in: safeToRetryFailureMessages },
+      },
+      data: { status: "PENDING", errorMessage: null, completedAt: null },
+    });
+    if (!retry.count) {
+      const latest = await prisma.backupRun.findFirst({
+        where: { businessId, idempotencyKey: idempotencyKey! },
+        select: { ...completedFields, errorMessage: true },
+      });
+      if (latest?.status === "SUCCEEDED") {
+        return { ...latest, sizeBytes: latest.sizeBytes?.toString() ?? null };
+      }
+      throw new AppError("This backup request is already being processed. Check backup history before retrying.", 409);
+    }
+    run = { id: existingRun.id };
+  } else if (existingRun) {
+    throw new AppError(
+      existingRun.status === "FAILED"
+        ? "This backup attempt has an uncertain upload result. Check provider storage and backup history before starting another backup."
+        : "This backup request is already being processed. Check backup history before retrying.",
+      409,
+    );
+  } else if (trigger === "SCHEDULED") {
+    run = await prisma.$transaction(async (tx) => {
         // Serialize all scheduled slots for this business destination, then
         // check the slot before inserting. This also protects legacy rows and
         // avoids a migration that could fail on historical duplicate records.
@@ -218,9 +332,23 @@ export async function createCloudBackupRun(
         if (existing) {
           throw Object.assign(new Error("Scheduled backup slot already exists."), { code: "P2002" });
         }
-        return tx.backupRun.create({ data: runData, select: { id: true } });
-      })
-    : await prisma.backupRun.create({ data: runData, select: { id: true } });
+      return tx.backupRun.create({ data: runData, select: { id: true } });
+    });
+  } else {
+    try {
+      run = await prisma.backupRun.create({ data: runData, select: { id: true } });
+    } catch (error) {
+      if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") throw error;
+      const concurrentRun = await prisma.backupRun.findFirst({
+        where: { businessId, idempotencyKey: idempotencyKey! },
+        select: { ...completedFields, errorMessage: true },
+      });
+      if (concurrentRun?.status === "SUCCEEDED") {
+        return { ...concurrentRun, sizeBytes: concurrentRun.sizeBytes?.toString() ?? null };
+      }
+      throw new AppError("This backup request is already being processed. Check backup history before retrying.", 409);
+    }
+  }
 
   let uploadedStorageKey: string | null = null;
   let failureStage = "mark_running";
@@ -272,11 +400,7 @@ export async function createCloudBackupRun(
         completedAt: new Date(),
         errorMessage: null,
       },
-      select: {
-        id: true, trigger: true, status: true, storageKey: true,
-        checksumSha256: true, sizeBytes: true, startedAt: true,
-        completedAt: true, createdAt: true,
-      },
+      select: completedFields,
     });
 
     // Preserve all historical Drive and Dropbox artifacts. Retention pruning
@@ -301,6 +425,13 @@ export async function createCloudBackupRun(
 
     return { ...completed, sizeBytes: completed.sizeBytes?.toString() ?? null };
   } catch (error) {
+    const failureMessage = failureStage === "generate_artifact"
+      ? "Backup generation failed before upload."
+      : failureStage === "upload_artifact"
+        ? "Cloud upload failed. Verify the destination connection and provider authorization."
+        : failureStage === "persist_success"
+          ? "The upload completed, but backup history could not confirm the result. Contact an administrator before retrying."
+          : "The backup run could not be started or finalized.";
     logger.error({
       backupRunId: run.id,
       provider: connection.provider,
@@ -311,10 +442,11 @@ export async function createCloudBackupRun(
     }, "Cloud backup run failed.");
 
     try {
-      // Clean up only an artifact this attempt received a new remote reference
-      // for. If upload confirmation was ambiguous, preserve the remote object.
+      // Keep a provider-confirmed upload if only history persistence failed.
+      // It is safer to retain a recoverable backup than to delete the only
+      // confirmed artifact while reporting that persistence was ambiguous.
       try {
-        const candidateKey = uploadedStorageKey ?? (
+        const candidateKey = failureStage === "persist_success" ? null : uploadedStorageKey ?? (
           connection.provider === "GOOGLE_DRIVE" || connection.provider === "DROPBOX"
             ? null
             : (await prisma.backupRun.findFirst({
@@ -355,7 +487,7 @@ export async function createCloudBackupRun(
         data: {
           status: "FAILED",
           completedAt: new Date(),
-          errorMessage: "Backup generation or cloud upload failed.",
+          errorMessage: failureMessage,
         },
       });
     } catch (persistenceError) {

@@ -1010,6 +1010,7 @@ describe("replaySyncOperation", () => {
         businessId: BUSINESS_A,
         branchId: BRANCH_A,
         actorUserId: USER_A,
+        idempotencyKey: "client-order-create",
         customerId: "550e8400-e29b-41d4-a716-446655440000",
         items: [
           {
@@ -1152,6 +1153,7 @@ describe("replaySyncOperation", () => {
       {
         actorUserId: USER_A,
         actorRole: "BUSINESS_OWNER",
+        notificationChoice: "NONE",
         pickupOverrideReason: "Approved by branch manager",
       },
     );
@@ -1203,7 +1205,7 @@ describe("replaySyncOperation", () => {
       BRANCH_A,
       "PICKED_UP",
       prismaMock,
-      { actorUserId: USER_A, actorRole: "BUSINESS_OWNER" },
+      { actorUserId: USER_A, actorRole: "BUSINESS_OWNER", notificationChoice: "NONE" },
     );
     expect(result).toMatchObject({ status: "FAILED", operation: failed });
   });

@@ -15,6 +15,7 @@ import {
   type InvoiceHistoryEntry,
 } from "../../lib/invoices-api.js";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
+import { useBusinessLogo } from "../../lib/use-business-logo.js";
 import { getCustomerAccount } from "../../lib/customer-account-api.js";
 import {
   createPayment,
@@ -125,6 +126,7 @@ function OrderManagementContent({
   const [error, setError] = useState<string | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [pickupOverrideReason, setPickupOverrideReason] = useState("");
+  const [pendingStatus, setPendingStatus] = useState<OrderStatus | null>(null);
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] =
@@ -305,6 +307,7 @@ function OrderManagementContent({
     queryFn: () => getBusinessBranding({ accessToken }, activeBranchId),
     enabled: Boolean(accessToken && activeBranchId && printInvoiceId),
   });
+  const businessLogo = useBusinessLogo({ accessToken, branchId: activeBranchId, hasLogo: Boolean(brandingQuery.data?.logoUrl) });
 
   const customerReceiptQuery = useQuery({
     queryKey: [
@@ -576,7 +579,7 @@ function OrderManagementContent({
   });
 
   const statusMutation = useMutation({
-    mutationFn: (input: { status: OrderStatus; pickupOverrideReason?: string }) =>
+    mutationFn: (input: { status: OrderStatus; notificationChoice: "EMAIL" | "WHATSAPP" | "NONE"; pickupOverrideReason?: string }) =>
       updateOrderStatusWithOfflineQueue(
         order!.id,
         input.status,
@@ -587,6 +590,7 @@ function OrderManagementContent({
           actorUserId: user?.id ?? "",
         },
         input.pickupOverrideReason,
+        input.notificationChoice,
       ),
     onSuccess: (result) => {
       setStatusFeedback(null);
@@ -602,7 +606,9 @@ function OrderManagementContent({
         const sent = deliveries.filter((item) => item.status === "SENT").length;
         const failed = deliveries.filter((item) => item.status === "FAILED").length;
         const duplicate = deliveries.filter((item) => item.status === "DUPLICATE").length;
-        const deliverySummary = deliveries.length
+        const deliverySummary = result.order.notificationChoice === "NONE"
+          ? "No customer notification was sent."
+          : deliveries.length
           ? `Customer notification: ${sent} sent, ${failed} failed, ${duplicate} already processed.`
           : "No enabled customer notification rule applies to this status.";
 
@@ -662,12 +668,19 @@ function OrderManagementContent({
     }
 
     setError(null);
+    setPendingStatus(item);
+  }
+
+  function confirmStatusChange(notificationChoice: "EMAIL" | "WHATSAPP" | "NONE") {
+    if (!pendingStatus) return;
     statusMutation.mutate({
-      status: item,
-      ...(item === "PICKED_UP" && pickupOverrideReason.trim()
+      status: pendingStatus,
+      notificationChoice,
+      ...(pendingStatus === "PICKED_UP" && pickupOverrideReason.trim()
         ? { pickupOverrideReason: pickupOverrideReason.trim() }
         : {}),
     });
+    setPendingStatus(null);
   }
 
   const customerMutation = useMutation({
@@ -690,6 +703,7 @@ function OrderManagementContent({
       );
       setDirty(false);
       setLayer("none");
+      setPendingStatus(null);
       setError(null);
     },
     onError: (err) => {
@@ -819,7 +833,7 @@ function OrderManagementContent({
         ? customerReceiptQuery
         : companyReceiptQuery;
 
-    if (receiptQuery.isLoading || receiptQuery.isFetching) return;
+    if (receiptQuery.isLoading || receiptQuery.isFetching || businessLogo.isLoading || businessLogo.isFetching) return;
 
     if (receiptQuery.isError || !receiptQuery.data) {
       setError(
@@ -849,7 +863,8 @@ function OrderManagementContent({
     window.addEventListener("afterprint", cleanup);
 
     const timer = window.setTimeout(() => {
-      window.print();
+      const images = Array.from(document.querySelectorAll<HTMLImageElement>(".invoice-print-area img"));
+      void Promise.all(images.map((image) => image.decode().catch(() => undefined))).then(() => window.print());
     }, 50);
 
     return () => {
@@ -870,6 +885,8 @@ function OrderManagementContent({
     companyReceiptQuery.isError,
     companyReceiptQuery.error,
     companyReceiptQuery.data,
+    businessLogo.isLoading,
+    businessLogo.isFetching,
   ]);
 
   // A customer can have no existing orders yet. Keep the customer workspace
@@ -2037,6 +2054,7 @@ function OrderManagementContent({
             <CustomerReceipt
               receipt={customerReceiptQuery.data}
               branding={brandingQuery.data}
+              logoUrl={businessLogo.logoUrl}
             />
           )}
         </div>
@@ -2046,10 +2064,24 @@ function OrderManagementContent({
             <CompanyReceipt
               receipt={companyReceiptQuery.data}
               branding={brandingQuery.data}
+              logoUrl={businessLogo.logoUrl}
             />
           )}
         </div>
       </div>
+
+      {pendingStatus && (
+        <div role="dialog" aria-modal="true" aria-labelledby="status-notification-title" style={{ position: "fixed", inset: 0, zIndex: 1100, display: "grid", placeItems: "center", background: "rgba(15,23,42,.55)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: "min(420px, calc(100vw - 32px))" }}>
+            <h3 id="status-notification-title">Notify the customer?</h3>
+            <p>Change status to {statusLabel(pendingStatus)} and choose how to notify the customer.</p>
+            <button type="button" disabled={statusMutation.isPending} onClick={() => confirmStatusChange("EMAIL")}>Send Email</button>
+            <button type="button" disabled={statusMutation.isPending} onClick={() => confirmStatusChange("WHATSAPP")}>Send WhatsApp</button>
+            <button type="button" disabled={statusMutation.isPending} onClick={() => confirmStatusChange("NONE")}>No Notification</button>
+            <button type="button" disabled={statusMutation.isPending} onClick={() => setPendingStatus(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {warningOpen && (
         <div

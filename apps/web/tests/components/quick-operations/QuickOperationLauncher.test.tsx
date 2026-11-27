@@ -17,6 +17,8 @@ const {
   listCloudBackupConnectionsMock,
   getCloudBackupSettingsMock,
   createCloudBackupRunMock,
+  getCloudBackupIdempotencyKeyMock,
+  clearCloudBackupIdempotencyKeyMock,
   requestSensitiveAuthorizationMock,
   createManualLocalBackupMock,
   publishCloudBackupNotificationMock,
@@ -34,6 +36,8 @@ const {
   listCloudBackupConnectionsMock: vi.fn(),
   getCloudBackupSettingsMock: vi.fn(),
   createCloudBackupRunMock: vi.fn(),
+  getCloudBackupIdempotencyKeyMock: vi.fn(() => "7b74a7c2-4f3d-4c56-9c19-0dd626520026"),
+  clearCloudBackupIdempotencyKeyMock: vi.fn(),
   requestSensitiveAuthorizationMock: vi.fn().mockResolvedValue("sensitive-auth"),
   createManualLocalBackupMock: vi.fn(),
   publishCloudBackupNotificationMock: vi.fn(),
@@ -48,6 +52,8 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   listCloudBackupConnections: listCloudBackupConnectionsMock,
   getCloudBackupSettings: getCloudBackupSettingsMock,
   createCloudBackupRun: createCloudBackupRunMock,
+  getCloudBackupIdempotencyKey: getCloudBackupIdempotencyKeyMock,
+  clearCloudBackupIdempotencyKey: clearCloudBackupIdempotencyKeyMock,
 }));
 
 vi.mock("../../../src/components/auth/SensitiveAuthorizationProvider.tsx", () => ({
@@ -409,6 +415,7 @@ describe("QuickOperationLauncher", () => {
           accessToken: "access-token",
           sensitiveAuthorization: "sensitive-auth",
         },
+        "7b74a7c2-4f3d-4c56-9c19-0dd626520026",
       );
     });
     expect(requestSensitiveAuthorizationMock).toHaveBeenCalledOnce();
@@ -457,6 +464,7 @@ describe("QuickOperationLauncher", () => {
     await waitFor(() => expect(createCloudBackupRunMock).toHaveBeenCalledWith(
       "connection-first",
       { accessToken: "access-token", sensitiveAuthorization: "sensitive-auth" },
+      "7b74a7c2-4f3d-4c56-9c19-0dd626520026",
     ));
   });
 

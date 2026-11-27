@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
+import { prisma } from "../../lib/prisma.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { sendEmail } from "../email/email.service.js";
 import { listApprovedWhatsAppTemplates, sendSupplierPurchaseOrderTemplate } from "../whatsapp/whatsapp-templates.service.js";
@@ -411,6 +412,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
     const lines = order.lines.map((line) => `${line.inventoryItem.name}: ${line.quantityOrdered} × ₦${line.unitCost.toLocaleString("en-NG")}`);
     const total = order.lines.reduce((sum, line) => sum + line.quantityOrdered * line.unitCost, 0);
     if (notificationChannel === "EMAIL") {
+      const business = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true, email: true } });
       const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => {
         switch (character) {
           case "&": return "&amp;";
@@ -422,7 +424,7 @@ export async function createPurchaseOrder(req: Request, res: Response) {
         }
       });
       const html = `<div style="font-family:Arial,sans-serif;color:#172033"><h2>Purchase Order ${escapeHtml(order.orderNumber)}</h2><p>Hello ${escapeHtml(order.supplier.contactName || order.supplier.name)},</p><p>Please find our purchase order details below.</p><table style="border-collapse:collapse;width:100%"><thead><tr><th align="left">Item</th><th align="right">Quantity</th><th align="right">Unit cost</th><th align="right">Line total</th></tr></thead><tbody>${order.lines.map((line) => `<tr><td>${escapeHtml(line.inventoryItem.name)}</td><td align="right">${line.quantityOrdered}</td><td align="right">₦${line.unitCost.toLocaleString("en-NG")}</td><td align="right">₦${(line.quantityOrdered * line.unitCost).toLocaleString("en-NG")}</td></tr>`).join("")}</tbody></table><p><strong>Estimated total: ₦${total.toLocaleString("en-NG")}</strong></p>${order.expectedAt ? `<p>Expected delivery: ${new Date(order.expectedAt).toLocaleDateString("en-NG")}</p>` : ""}${order.notes ? `<p>Notes: ${escapeHtml(order.notes)}</p>` : ""}<p>Please confirm receipt of this purchase order.</p></div>`;
-      const sent = await sendEmail({ to: destination, subject: `Purchase Order ${order.orderNumber}`, html, feature: "purchase_order", idempotencyKey: `purchase-order:${businessId}:${order.id}` });
+      const sent = await sendEmail({ to: destination, subject: `${business?.name ?? "Business"} — Purchase Order ${order.orderNumber}`, html, ...(business?.name ? { fromName: business.name } : {}), replyTo: business?.email ?? null, feature: "purchase_order", idempotencyKey: `purchase-order:${businessId}:${order.id}` });
       notification = { channel: notificationChannel, status: "SUBMITTED", destination, providerMessageId: sent.id };
     } else {
       await assertWhatsAppMessagingEnabled();

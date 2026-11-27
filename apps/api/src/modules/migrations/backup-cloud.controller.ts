@@ -229,10 +229,13 @@ export async function verifyCloudConnectionController(req: Request, res: Respons
 
 export async function createCloudBackupRunController(req: Request, res: Response) {
   const tenantId = businessId(req);
-  const connectionId = z.object({ connectionId: z.string().uuid() }).parse(req.body).connectionId;
+  const { connectionId, idempotencyKey } = z.object({
+    connectionId: z.string().uuid(),
+    idempotencyKey: z.string().uuid(),
+  }).strict().parse(req.body);
   let run;
   try {
-    run = await createCloudBackupRun(tenantId, connectionId);
+    run = await createCloudBackupRun(tenantId, connectionId, { idempotencyKey });
   } catch (error) {
     await recordAuditEvent({
       action: "backup.cloud_run.attempt_failed",

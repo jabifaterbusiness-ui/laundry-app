@@ -251,10 +251,10 @@ describe("SubscriptionPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Monthly" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("NGN 2,500")).toBeInTheDocument();
-    expect(screen.getByText("NGN 8,000")).toBeInTheDocument();
-    expect(screen.getByText("NGN 22,000")).toBeInTheDocument();
-    expect(screen.getByText("NGN 80,000")).toBeInTheDocument();
+    expect(screen.getByText("₦2,500")).toBeInTheDocument();
+    expect(screen.getByText("₦8,000")).toBeInTheDocument();
+    expect(screen.getByText("₦22,000")).toBeInTheDocument();
+    expect(screen.getByText("₦80,000")).toBeInTheDocument();
 
     expect(mockedGetSubscriptionPrices).toHaveBeenCalledWith("token");
     expect(mockedGetSubscriptionPaymentOptions).toHaveBeenCalledWith("token");
@@ -275,7 +275,7 @@ describe("SubscriptionPage", () => {
   it("keeps configured plans enabled after payment selection", async () => {
     renderSubscription();
 
-    expect(await screen.findByText("NGN 8,000")).toBeInTheDocument();
+    expect(await screen.findByText("₦8,000")).toBeInTheDocument();
 
     const providerSelect = screen.getByLabelText("Payment provider");
     const methodSelect = screen.getByLabelText("Payment method");

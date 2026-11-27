@@ -1,4 +1,4 @@
-import { apiFetch } from "./api-client.js";
+import { apiFetch, apiFetchBlob } from "./api-client.js";
 
 export type BusinessBranding = {
   id: string;
@@ -23,6 +23,10 @@ export async function getBusinessBranding(
     accessToken: auth.accessToken,
     branchId,
   });
+}
+
+export function getBusinessLogo(auth: { accessToken: string | null }, branchId?: string | null): Promise<Blob> {
+  return apiFetchBlob("/businesses/logo", { accessToken: auth.accessToken, branchId });
 }
 
 

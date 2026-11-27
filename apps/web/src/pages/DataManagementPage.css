@@ -331,7 +331,6 @@
   font-weight: 850;
 }
 .data-management-provider-dropbox { background: #eaf3ff; color: #1670ce; }
-.data-management-provider-onedrive { background: #e8f5ff; color: #1478a8; }
 .data-management-provider-copy { flex: 1 1 120px; min-width: 0; }
 .data-management-provider-copy h4 { margin-bottom: 3px; }
 .data-management-provider-copy p { margin: 0 0 5px; color: var(--dm-muted); font-size: .73rem; line-height: 1.4; }

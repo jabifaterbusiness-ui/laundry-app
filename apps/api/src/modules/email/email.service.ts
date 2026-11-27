@@ -8,6 +8,10 @@ export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  /** Business-facing name; the authenticated platform domain remains the sender address. */
+  fromName?: string;
+  /** Optional business email reply target. Never used as an unverified sender. */
+  replyTo?: string | null;
   /** Stable feature event key; Resend deduplicates retries for this event. */
   idempotencyKey?: string;
   /** Non-sensitive feature label used only for diagnostics. */

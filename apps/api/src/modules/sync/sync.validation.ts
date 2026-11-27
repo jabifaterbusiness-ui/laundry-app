@@ -103,6 +103,7 @@ const orderUpdatePayloadSchema = z.discriminatedUnion("action", [
         "CANCELLED",
       ]),
       pickupOverrideReason: z.string().trim().min(1).max(1000).optional(),
+      notificationChoice: z.enum(["EMAIL", "WHATSAPP", "NONE"]).default("NONE"),
     })
     .strict(),
 ]);

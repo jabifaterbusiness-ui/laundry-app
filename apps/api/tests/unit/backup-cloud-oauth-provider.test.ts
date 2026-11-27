@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 const mocks = vi.hoisted(() => ({
   connectionUpdate: vi.fn(),
@@ -35,8 +36,10 @@ vi.mock("../../src/middleware/error-handler.js", () => ({
 
 import {
   deleteOAuthCloudArtifact,
+  recoverOAuthCloudArtifact,
   uploadOAuthCloudArtifact,
   verifyOAuthCloudDestination,
+  formatCloudBackupFilename,
 } from "../../src/modules/migrations/backup-cloud-oauth-provider.service.js";
 
 const businessId = "business-1";
@@ -143,6 +146,52 @@ describe("OAuth cloud provider adapter", () => {
     expect(uploadArgs.path).toMatch(/^\/Laundry Angels Backup\/Laundry Angel Manual Backup /);
   });
 
+  it("recovers a confirmed Google Drive artifact and hashes the downloaded encrypted bytes", async () => {
+    const bytes = Buffer.from("remote-google-artifact");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: "drive-recovered", name: formatCloudBackupFilename("MANUAL", inputBase.executionTime, inputBase.businessTimezone, runId), mimeType: "application/octet-stream" }] }))
+      .mockResolvedValueOnce(new Response(bytes));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(recoverOAuthCloudArtifact({
+      ...inputBase, provider: "GOOGLE_DRIVE", runId,
+    })).resolves.toEqual({
+      storageKey: "google:drive-recovered",
+      checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      sizeBytes: bytes.byteLength,
+    });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/files/drive-recovered?alt=media");
+  });
+
+  it("recovers a confirmed Dropbox artifact from its deterministic run path", async () => {
+    const filename = formatCloudBackupFilename("MANUAL", inputBase.executionTime, inputBase.businessTimezone, runId);
+    const path = `/Laundry Angels Backup/${filename}`;
+    const bytes = Buffer.from("remote-dropbox-artifact");
+    const download = new Response(bytes, {
+      headers: { "Dropbox-API-Result": JSON.stringify({ name: filename, path_lower: path.toLowerCase() }) },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(download);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(recoverOAuthCloudArtifact({
+      ...inputBase, provider: "DROPBOX", runId,
+    })).resolves.toEqual({
+      storageKey: `dropbox:${path.toLowerCase()}`,
+      checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      sizeBytes: bytes.byteLength,
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://content.dropboxapi.com/2/files/download");
+  });
+
+  it("returns no recovery candidate when Google Drive has not confirmed an artifact", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ files: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(recoverOAuthCloudArtifact({
+      ...inputBase, provider: "GOOGLE_DRIVE", runId,
+    })).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("reuses Dropbox's existing folder after a concurrent create conflict", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ error: { ".tag": "path", path: { ".tag": "conflict", conflict: { ".tag": "folder" } } } }, 409))
@@ -157,13 +206,13 @@ describe("OAuth cloud provider adapter", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps the OneDrive upload path unchanged", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "oneDrive_item-123" }));
+  it("rejects stale OneDrive uploads before provider access", async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     await expect(uploadOAuthCloudArtifact({
       ...inputBase, provider: "ONEDRIVE", runId, encryptedArtifact: Buffer.from("fixture"),
-    })).resolves.toBe("onedrive:oneDrive_item-123");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://graph.microsoft.com/v1.0/me/drive/root:/LaundryAngel/backups/${runId}.enc:/content`);
+    })).rejects.toMatchObject({ statusCode: 403 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("formats filenames with the business timezone, AM/PM, and unique run IDs", async () => {
@@ -200,12 +249,6 @@ describe("OAuth cloud provider adapter", () => {
       url: "https://api.dropboxapi.com/2/files/delete_v2",
       method: "POST",
     },
-    {
-      provider: "ONEDRIVE" as const,
-      storageKey: "onedrive:item-123",
-      url: "https://graph.microsoft.com/v1.0/me/drive/items/item-123",
-      method: "DELETE",
-    },
   ])("deletes a valid $provider artifact reference", async ({
     provider,
     storageKey,
@@ -234,6 +277,15 @@ describe("OAuth cloud provider adapter", () => {
     if (provider === "DROPBOX") {
       expect(JSON.parse(request.body as string)).toEqual({ path: storageKey.slice("dropbox:".length) });
     }
+  });
+
+  it("rejects stale OneDrive artifact deletion before provider access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(deleteOAuthCloudArtifact({
+      ...inputBase, provider: "ONEDRIVE", storageKey: "onedrive:item-123",
+    })).rejects.toMatchObject({ statusCode: 403 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("verifies Dropbox destinations using POST", async () => {

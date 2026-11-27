@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getBusinessBranding } from "../../lib/businesses-api.js";
+import { useBusinessLogo } from "../../lib/use-business-logo.js";
 import type { InvoiceStatus } from "@laundry-app/shared";
 import { ApiError } from "../../lib/api-client.js";
 import {
@@ -105,6 +106,7 @@ export function InvoicesPage() {
       ),
     enabled: Boolean(accessToken && activeBranchId),
   });
+  const businessLogo = useBusinessLogo({ accessToken, branchId: activeBranchId, hasLogo: Boolean(brandingQuery.data?.logoUrl) });
 
   const invoicesQuery = useQuery({
     queryKey: [
@@ -509,7 +511,7 @@ export function InvoicesPage() {
         ? customerReceiptQuery
         : companyReceiptQuery;
 
-    if (receiptQuery.isLoading || receiptQuery.isFetching) {
+    if (receiptQuery.isLoading || receiptQuery.isFetching || businessLogo.isLoading || businessLogo.isFetching) {
       return;
     }
 
@@ -533,7 +535,8 @@ export function InvoicesPage() {
     document.body.classList.add(printClass);
 
     const timer = window.setTimeout(() => {
-      window.print();
+      const images = Array.from(document.querySelectorAll<HTMLImageElement>(".invoice-print-area img"));
+      void Promise.all(images.map((image) => image.decode().catch(() => undefined))).then(() => window.print());
     }, 50);
 
     function handleAfterPrint() {
@@ -566,6 +569,8 @@ export function InvoicesPage() {
     companyReceiptQuery.isFetching,
     companyReceiptQuery.isError,
     companyReceiptQuery.data,
+    businessLogo.isLoading,
+    businessLogo.isFetching,
   ]);
 
   return (
@@ -1401,13 +1406,13 @@ export function InvoicesPage() {
         <div className="invoice-print-area" aria-hidden="true">
           <div className="invoice-print-customer">
             {customerReceiptQuery.data && (
-              <CustomerReceipt receipt={customerReceiptQuery.data} branding={brandingQuery.data} />
+              <CustomerReceipt receipt={customerReceiptQuery.data} branding={brandingQuery.data} logoUrl={businessLogo.logoUrl} />
             )}
           </div>
 
           <div className="invoice-print-company">
             {companyReceiptQuery.data && (
-              <CompanyReceipt receipt={companyReceiptQuery.data} branding={brandingQuery.data} />
+              <CompanyReceipt receipt={companyReceiptQuery.data} branding={brandingQuery.data} logoUrl={businessLogo.logoUrl} />
             )}
           </div>
         </div>

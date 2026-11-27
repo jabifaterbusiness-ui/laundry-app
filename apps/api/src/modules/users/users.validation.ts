@@ -31,6 +31,10 @@ export const userActionReasonSchema = z.object({
 const fullNameSchema = z.string().trim().min(1, "Full name is required").max(120);
 const emailSchema = z.string().trim().email("Invalid email address").max(254);
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(128);
+const phoneSchema = z.string().trim().max(20).regex(/^\+?[0-9()\-\s]{7,20}$/, "Phone number format is invalid").refine((value) => {
+  const digits = value.replace(/\D/g, "").length;
+  return digits >= 7 && digits <= 15;
+}, "Phone number must have between 7 and 15 digits").optional().or(z.literal(""));
 
 const usernameSchema = z
   .string()
@@ -44,6 +48,7 @@ const usernameSchema = z
 
 export const createUserSchema = z.object({
   fullName: fullNameSchema,
+  phone: phoneSchema,
   email: emailSchema,
   username: usernameSchema.optional(),
   password: passwordSchema,
@@ -53,6 +58,7 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = z.object({
   fullName: fullNameSchema.optional(),
+  phone: phoneSchema,
   email: emailSchema.optional(),
   username: usernameSchema.nullable().optional(),
   password: passwordSchema.optional(),
@@ -61,6 +67,7 @@ export const updateUserSchema = z.object({
 }).refine(
   (data) =>
     data.fullName !== undefined ||
+    data.phone !== undefined ||
     data.email !== undefined ||
     data.username !== undefined ||
     data.password !== undefined ||

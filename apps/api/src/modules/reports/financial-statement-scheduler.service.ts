@@ -11,6 +11,7 @@ import { getPlatformConfig } from "../platform/platform-config.service.js";
 type BusinessForScheduler = {
   id: string;
   name: string;
+  email: string | null;
   timezone: string;
   currencyCode: string;
   financialStatementConfig: {
@@ -215,6 +216,7 @@ async function deliverOne(
   destination: string,
   input: {
     businessName: string;
+    businessEmail: string | null;
     periodLabel: string;
     currencyCode: string;
     report: Awaited<ReturnType<typeof generateBusinessFinancialStatement>>["report"];
@@ -277,6 +279,8 @@ async function deliverOne(
             to: destination,
             subject: `${input.businessName} — Monthly Financial Statement — ${input.periodLabel}`,
             html: renderFinancialStatementEmail(input),
+            fromName: input.businessName,
+            replyTo: input.businessEmail,
             feature: "statement",
             idempotencyKey: `financial-statement:${businessId}:${statementId}:${recipientId}:${channel}`,
           })
@@ -375,6 +379,7 @@ async function processBusiness(
           recipient.user.email,
           {
             businessName: business.name,
+            businessEmail: business.email,
             periodLabel,
             currencyCode: business.currencyCode,
             report,
@@ -403,6 +408,7 @@ async function processBusiness(
           recipient.whatsappNumber,
           {
             businessName: business.name,
+            businessEmail: business.email,
             periodLabel,
             currencyCode: business.currencyCode,
             report,
@@ -451,6 +457,7 @@ export async function processMonthlyFinancialStatements(
     select: {
       id: true,
       name: true,
+      email: true,
       timezone: true,
       currencyCode: true,
       financialStatementConfig: {
