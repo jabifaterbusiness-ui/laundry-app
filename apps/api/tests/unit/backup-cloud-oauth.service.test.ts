@@ -329,6 +329,10 @@ describe("cloud backup OAuth", () => {
 
 
 describe("business OneDrive OAuth restriction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("rejects OneDrive callback state before consuming it or exchanging tokens", async () => {
     mocks.stateFindUnique.mockResolvedValue({ ...validState(), provider: "ONEDRIVE" });
     const fetchMock = vi.fn();
