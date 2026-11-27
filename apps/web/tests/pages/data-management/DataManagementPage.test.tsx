@@ -625,6 +625,7 @@ describe("DataManagementPage authorization", () => {
     fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
       target: { files: [file] },
     });
+    expect(await screen.findByText(/no password is required/i)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
       target: { value: "Cancelled restore authorization test" },
     });
