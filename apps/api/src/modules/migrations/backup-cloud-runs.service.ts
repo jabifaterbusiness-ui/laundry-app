@@ -67,6 +67,9 @@ export async function verifyBackupCloudConnection(
   });
 
   if (!record) throw new AppError("Cloud connection not found.", 404);
+  if (record.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive backups are reserved for Platform Admin access.", 403);
+  }
 
   try {
     if (record.provider === "S3_COMPATIBLE") {
@@ -138,6 +141,9 @@ export async function createCloudBackupRun(
   });
 
   if (!connection) throw new AppError("Cloud connection not found.", 404);
+  if (connection.provider === "ONEDRIVE") {
+    throw new AppError("OneDrive backups are reserved for Platform Admin access.", 403);
+  }
 
   const s3Destination = connection.provider === "S3_COMPATIBLE"
     ? await getS3Connection(businessId, connectionId)
