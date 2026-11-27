@@ -30,6 +30,7 @@ const {
   createCloudBackupScheduleController,
   updateCloudBackupScheduleController,
   deleteCloudBackupScheduleController,
+  requireSensitiveAuthorizationMock,
 } = vi.hoisted(() => ({
   verifyAccessToken: vi.fn(),
   findUser: vi.fn(),
@@ -56,6 +57,7 @@ const {
   createCloudBackupScheduleController: vi.fn((_req, res) => res.status(201).json({ id: "schedule-1" })),
   updateCloudBackupScheduleController: vi.fn((_req, res) => res.status(200).json({ id: "schedule-1" })),
   deleteCloudBackupScheduleController: vi.fn((_req, res) => res.status(204).end()),
+  requireSensitiveAuthorizationMock: vi.fn((_req, _res, next) => next()),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -91,11 +93,7 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     next: express.NextFunction,
   ) => next(),
   requirePlatformBusinessContext: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireSensitiveAuthorization: (
-    _req: express.Request,
-    _res: express.Response,
-    next: express.NextFunction,
-  ) => next(),
+  requireSensitiveAuthorization: requireSensitiveAuthorizationMock,
 }));
 
 vi.mock("../../src/middleware/permissions.js", () => ({
@@ -213,6 +211,7 @@ function authAs(role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF") {
 describe("Migrations routes - permission enforcement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => next());
 
     hasPermission.mockResolvedValue(true);
 
@@ -429,6 +428,40 @@ describe("Migrations routes - permission enforcement", () => {
 
     expect(response.status).toBe(403);
     expect(exportBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("denies backup restore when recent sensitive re-authorization is missing", async () => {
+    authAs("BUSINESS_OWNER");
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => {
+      next(new AppError("Sensitive authorization is required", 403));
+    });
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved business backup recovery")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/sensitive authorization is required/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("allows backup restore after the sensitive authorization middleware accepts the request", async () => {
+    authAs("BUSINESS_OWNER");
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => next());
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved business backup recovery")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(200);
+    expect(requireSensitiveAuthorizationMock).toHaveBeenCalledOnce();
+    expect(restoreBusinessBackup).toHaveBeenCalledOnce();
   });
 
   it("denies backup restore when migrations.manage is explicitly denied", async () => {
