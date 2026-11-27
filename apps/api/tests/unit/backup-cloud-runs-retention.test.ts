@@ -374,9 +374,20 @@ describe("business OneDrive backup restrictions", () => {
   });
 
   it("blocks manual and scheduled OneDrive backup runs before creating a run or artifact", async () => {
-    await expect(
-      createCloudBackupRun("business-1", "connection-1"),
-    ).rejects.toMatchObject({ statusCode: 403 });
+    const attempts = [
+      {},
+      {
+        trigger: "SCHEDULED" as const,
+        scheduledFor: new Date("2026-11-27T02:00:00.000Z"),
+        scheduleId: "schedule-1",
+      },
+    ];
+
+    for (const options of attempts) {
+      await expect(
+        createCloudBackupRun("business-1", "connection-1", options),
+      ).rejects.toMatchObject({ statusCode: 403 });
+    }
 
     expect(backupRunCreate).not.toHaveBeenCalled();
     expect(createArtifact).not.toHaveBeenCalled();
