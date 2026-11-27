@@ -522,7 +522,7 @@ describe("DataManagementPage authorization", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("restores a current LABK1 backup without requesting a password", async () => {
+  it("restores a current LABK1 backup without requesting its original backup password", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
 
@@ -551,9 +551,13 @@ describe("DataManagementPage authorization", () => {
 
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
-        file, "", "Quarterly recovery test", { accessToken: "test-access-token" },
+        file, "", "Quarterly recovery test", {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
   });
 
@@ -592,9 +596,13 @@ describe("DataManagementPage authorization", () => {
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
         file, "legacy-pass-123", "Legacy recovery validation",
-        { accessToken: "test-access-token" },
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
   });
 
