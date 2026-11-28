@@ -62,6 +62,21 @@ jobs:
         run: npm run build:shared
       - name: Generate Prisma Client
         run: npm run db:generate
+      - name: Rehearse upgrade from PR base migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          UPGRADE_DATABASE_URL="postgresql://ci:ci@localhost:5432/laundryangel_upgrade_ci?schema=public"
+          PGPASSWORD=ci psql -h localhost -U ci -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE laundryangel_upgrade_ci'
+          BASE_PRISMA_DIR="$(mktemp -d)"
+          trap 'rm -rf "$BASE_PRISMA_DIR"' EXIT
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          git archive FETCH_HEAD apps/api/prisma | tar -x -C "$BASE_PRISMA_DIR"
+          DATABASE_URL="$UPGRADE_DATABASE_URL" npm run db:migrate:deploy --workspace=apps/api -- \
+            --schema "$BASE_PRISMA_DIR/apps/api/prisma/schema.prisma"
+          DATABASE_URL="$UPGRADE_DATABASE_URL" npm run db:migrate:deploy --workspace=apps/api
+
       - name: Apply database migrations
         run: npm run db:migrate:deploy --workspace=apps/api
       - name: Run API tests
