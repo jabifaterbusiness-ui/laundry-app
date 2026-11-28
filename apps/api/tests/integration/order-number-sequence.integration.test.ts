@@ -10,12 +10,17 @@ describe("order number allocation against PostgreSQL", () => {
   let customerId: string | null = null;
 
   afterAll(async () => {
-    if (!businessId) return;
-    await prisma.order.deleteMany({ where: { businessId } });
-    await prisma.orderNumberSequence.deleteMany({ where: { businessId } });
-    if (customerId) await prisma.customer.deleteMany({ where: { id: customerId } });
-    if (branchId) await prisma.branch.deleteMany({ where: { id: branchId } });
-    await prisma.business.delete({ where: { id: businessId } });
+    try {
+      if (businessId) {
+        await prisma.order.deleteMany({ where: { businessId } });
+        await prisma.orderNumberSequence.deleteMany({ where: { businessId } });
+        if (customerId) await prisma.customer.deleteMany({ where: { id: customerId } });
+        if (branchId) await prisma.branch.deleteMany({ where: { id: branchId } });
+        await prisma.business.delete({ where: { id: businessId } });
+      }
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   it("reconciles a stale counter and serializes concurrent allocations per business", async () => {
