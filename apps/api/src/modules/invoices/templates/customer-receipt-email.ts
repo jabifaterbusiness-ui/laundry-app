@@ -31,7 +31,10 @@ function safeColor(value: string | null, fallback: string): string {
   return value && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : fallback;
 }
 
-export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
+export function renderCustomerReceiptEmail(
+  receipt: CustomerReceipt,
+  options: { logoContentId?: string } = {},
+): string {
   const items = receipt.items
     .map((item) => {
       const piecesPerUnit =
@@ -106,8 +109,8 @@ export function renderCustomerReceiptEmail(receipt: CustomerReceipt): string {
   const textColor = safeColor(receipt.receiptTextColor, "#111827");
   const headerStyle = receipt.receiptHeaderStyle?.trim() || "standard";
 
-  const logo = receipt.logoUrl
-    ? `<img src="${escapeAttribute(receipt.logoUrl)}" alt="${escapeAttribute(receipt.companyName)} logo" class="logo">`
+  const logo = receipt.logoUrl && options.logoContentId
+    ? `<img src="cid:${escapeAttribute(options.logoContentId)}" alt="${escapeAttribute(receipt.companyName)} logo" class="logo">`
     : "";
 
   const headerClass =
