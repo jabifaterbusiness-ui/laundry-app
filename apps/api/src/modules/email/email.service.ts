@@ -56,7 +56,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         retryable ? "Email provider is temporarily unavailable." : "Email provider rejected the message.",
         retryable,
       );
-      logger.warn({ feature: input.feature, attempt, retryable, providerStatusCode: result.statusCode, providerErrorCode: result.providerErrorCode }, "Email submission failed.");
+      logger.warn({ feature: input.feature, attempt, retryable, providerStatusCode: result.statusCode, providerErrorCode: result.providerErrorCode, providerErrorMessage: result.providerErrorMessage }, "Email submission failed.");
     } catch (error) {
       if (error instanceof EmailDeliveryError) throw error;
       const configured = Boolean((error as Error)?.message?.includes("not configured"));
