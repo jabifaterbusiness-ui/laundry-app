@@ -10,6 +10,8 @@ const {
   connectionFindUniqueMock,
   sendAutomatedWhatsAppTemplateMock,
   uploadWhatsAppTemplateImageMock,
+  readBusinessLogoMock,
+  sharpMock,
 } = vi.hoisted(() => ({
   customerFindFirstMock: vi.fn(),
   getCustomerReceiptMock: vi.fn(),
@@ -20,6 +22,8 @@ const {
   connectionFindUniqueMock: vi.fn(),
   sendAutomatedWhatsAppTemplateMock: vi.fn(),
   uploadWhatsAppTemplateImageMock: vi.fn(),
+  readBusinessLogoMock: vi.fn(),
+  sharpMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma.js", () => ({
@@ -46,6 +50,12 @@ vi.mock("../../src/lib/prisma.js", () => ({
   },
 }));
 
+vi.mock("../../src/modules/businesses/business-branding.storage.js", () => ({
+  readBusinessLogo: readBusinessLogoMock,
+}));
+vi.mock("sharp", () => ({
+  default: sharpMock,
+}));
 vi.mock("../../src/modules/invoices/receipts.service.js", () => ({
   getCustomerReceipt: getCustomerReceiptMock,
 }));
@@ -153,7 +163,7 @@ describe("receipt-delivery.service", () => {
       providerMessageId: "resend-message-123",
     });
 
-    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT);
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT, { logoContentId: undefined });
 
     expect(sendEmailMock).toHaveBeenCalledWith({
       to: "john@example.com",
@@ -190,6 +200,36 @@ describe("receipt-delivery.service", () => {
       INPUT.businessId,
       INPUT.branchId,
     );
+  });
+
+  it("embeds a private business logo as a CID attachment instead of a session URL", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A", name: "John Doe", email: "john@example.com", phone: null,
+    });
+    const receiptWithLogo = {
+      ...RECEIPT,
+      businessId: INPUT.businessId,
+      logoUrl: "https://www.laundryangelweb.com/api/v1/businesses/logo",
+    };
+    getCustomerReceiptMock.mockResolvedValue(receiptWithLogo);
+    sendEmailMock.mockResolvedValue({ status: "SUBMITTED", id: "resend-logo-1" });
+
+    await resendDigitalReceipt({ ...INPUT, channel: "EMAIL" });
+
+    expect(readBusinessLogoMock).toHaveBeenCalledWith(INPUT.businessId);
+    expect(sharpMock).toHaveBeenCalledWith(Buffer.from("stored-logo"));
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(receiptWithLogo, {
+      logoContentId: "laundryangel-business-logo",
+    });
+    expect(sendEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [{
+        filename: "business-logo.png",
+        content: Buffer.from("optimized-logo"),
+        contentType: "image/png",
+        contentId: "laundryangel-business-logo",
+      }],
+      html: "<html>receipt</html>",
+    }));
   });
 
   it("returns 503 when Resend email delivery fails", async () => {
