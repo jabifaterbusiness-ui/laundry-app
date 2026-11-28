@@ -19,7 +19,7 @@ export interface ProviderEmailInput {
 
 export type ProviderEmailResult =
   | { ok: true; id: string }
-  | { ok: false; statusCode: number | null; timedOut: boolean };
+  | { ok: false; statusCode: number | null; timedOut: boolean; providerErrorCode: string | null };
 
 function validSender(value: string): boolean {
   if (/[\r\n]/.test(value)) return false;
@@ -58,7 +58,11 @@ export async function sendWithResend(
 
   if (error) {
     const statusCode = typeof error.statusCode === "number" ? error.statusCode : null;
-    return { ok: false, statusCode, timedOut: signal.aborted };
+    const rawErrorCode = typeof error.name === "string" ? error.name : "";
+    const providerErrorCode = /^[a-z0-9_]{1,64}$/i.test(rawErrorCode)
+      ? rawErrorCode
+      : null;
+    return { ok: false, statusCode, timedOut: signal.aborted, providerErrorCode };
   }
 
   if (!data?.id) {
