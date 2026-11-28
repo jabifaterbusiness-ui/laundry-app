@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { AppError } from "../../middleware/error-handler.js";
 import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 import { getCustomerReceipt } from "./receipts.service.js";
 import { readBusinessLogo } from "../businesses/business-branding.storage.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
@@ -86,12 +87,20 @@ export async function resendDigitalReceipt(
     const storedLogo = receipt.logoUrl
       ? await readBusinessLogo(receipt.businessId)
       : null;
-    const emailLogo = storedLogo
-      ? await sharp(storedLogo)
+    let emailLogo: Buffer | null = null;
+    if (storedLogo) {
+      try {
+        emailLogo = await sharp(storedLogo)
           .resize(600, 600, { fit: "inside", withoutEnlargement: true })
           .png({ compressionLevel: 9 })
-          .toBuffer()
-      : null;
+          .toBuffer();
+      } catch {
+        logger.warn(
+          { businessId: receipt.businessId },
+          "Business logo could not be optimized for receipt email; sending receipt without it.",
+        );
+      }
+    }
     const logoContentId = "laundryangel-business-logo";
     const html = renderCustomerReceiptEmail(
       receipt,
