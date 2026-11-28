@@ -544,6 +544,12 @@ body.printing-company .invoice-print-customer {
     border: 2px solid #111 !important;
   }
 
+  .receipt__brand-mark {
+    color: #111 !important;
+    background: #fff !important;
+    border: 2px solid #111 !important;
+  }
+
   .receipt__logo {
     filter: none !important;
     opacity: 1 !important;
