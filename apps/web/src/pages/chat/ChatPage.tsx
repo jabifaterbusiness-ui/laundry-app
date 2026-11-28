@@ -12,6 +12,7 @@ export function appendChatEmoji(draft:string,emoji:string){return draft+emoji;}
 export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
 export function preserveChatScrollPosition(scrollTop:number,previousScrollHeight:number,nextScrollHeight:number){return scrollTop+(nextScrollHeight-previousScrollHeight);}
+export function preserveDroppedLatestChatMessages<T extends {id:string;createdAt:string}>(older:T[],previousLatest:T[],currentLatest:T[]){const currentOldest=currentLatest[0];if(!currentOldest||!previousLatest.length)return older;const compare=(left:T,right:T)=>new Date(left.createdAt).getTime()-new Date(right.createdAt).getTime()||left.id.localeCompare(right.id);const dropped=previousLatest.filter(message=>compare(message,currentOldest)<0);if(!dropped.length)return older;const known=new Set(older.map(message=>message.id));return [...older,...dropped.filter(message=>!known.has(message.id))].sort(compare);}
 export function markerIncludesMessage(markerAt:string|null|undefined,markerId:string|null|undefined,message:Pick<ChatMessage,"id"|"createdAt">){if(!markerAt)return false;const markerTime=new Date(markerAt).getTime();const messageTime=new Date(message.createdAt).getTime();if(markerTime>messageTime)return true;if(markerTime<messageTime)return false;return markerId?markerId>=message.id:true;}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
@@ -27,6 +28,7 @@ export function ChatPage(){
  const pendingScrollAdjustmentRef=useRef<{scrollHeight:number;scrollTop:number}|null>(null);
  const initialScrollPendingRef=useRef(true);
  const initialPageLoadedRef=useRef(false);
+ const previousLatestMessagesRef=useRef<ChatMessage[]>([]);
  const [olderMessages,setOlderMessages]=useState<ChatMessage[]>([]);
  const [hasMoreMessages,setHasMoreMessages]=useState(true);
  const [loadingOlder,setLoadingOlder]=useState(false);
@@ -34,7 +36,7 @@ export function ChatPage(){
  
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""), [emojiPickerOpen,setEmojiPickerOpen]=useState(false),[search,setSearch]=useState(""),[messageSearch,setMessageSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[confirmLargeGroup,setConfirmLargeGroup]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
  useEffect(()=>{setAtLatest(true);setMessageSearch("");},[activeId]);
- useEffect(()=>{setOlderMessages([]);setHasMoreMessages(!messageSearch.trim());setLoadingOlder(false);loadingOlderRef.current=false;pendingScrollAdjustmentRef.current=null;initialScrollPendingRef.current=true;initialPageLoadedRef.current=false;olderRequestIdRef.current+=1;},[activeId,messageSearch]);
+ useEffect(()=>{setOlderMessages([]);setHasMoreMessages(!messageSearch.trim());setLoadingOlder(false);loadingOlderRef.current=false;pendingScrollAdjustmentRef.current=null;initialScrollPendingRef.current=true;initialPageLoadedRef.current=false;previousLatestMessagesRef.current=[];olderRequestIdRef.current+=1;},[activeId,messageSearch]);
  const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:3000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
@@ -42,7 +44,7 @@ export function ChatPage(){
  const messagesQ=useQuery({queryKey:["chat-messages",branchId,activeId,messageSearch.trim()],queryFn:()=>getChatMessages(activeId,messageSearch),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:messageSearch.trim()?false:2500});
  const latestMessages=messagesQ.data?.data??[];
  const messages=[...olderMessages,...latestMessages];
- useEffect(()=>{if(!initialPageLoadedRef.current&&messagesQ.data){setHasMoreMessages(!messageSearch.trim()&&latestMessages.length===50);initialPageLoadedRef.current=true;}},[activeId,messageSearch,latestMessages.length,messagesQ.data]);
+ useEffect(()=>{if(!initialPageLoadedRef.current&&messagesQ.data){setHasMoreMessages(!messageSearch.trim()&&latestMessages.length===50);initialPageLoadedRef.current=true;}if(olderMessages.length&&previousLatestMessagesRef.current.length){const merged=preserveDroppedLatestChatMessages(olderMessages,previousLatestMessagesRef.current,latestMessages);if(merged.length!==olderMessages.length)setOlderMessages(merged);}previousLatestMessagesRef.current=latestMessages;},[activeId,messageSearch,latestMessages,olderMessages.length,messagesQ.data]);
  useLayoutEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;const pending=pendingScrollAdjustmentRef.current;if(pending){node.scrollTop=preserveChatScrollPosition(pending.scrollTop,pending.scrollHeight,node.scrollHeight);pendingScrollAdjustmentRef.current=null;return;}if(initialScrollPendingRef.current){node.scrollTop=node.scrollHeight;initialScrollPendingRef.current=false;setAtLatest(true);return;}if(atLatest)node.scrollTop=node.scrollHeight;},[activeId,messages.length,latestMessages.at(-1)?.id,atLatest]);
  useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&!messageSearch.trim()&&messages.length&&pageVisible&&threadVisible&&atLatest)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen,atLatest,messageSearch]);
  const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
