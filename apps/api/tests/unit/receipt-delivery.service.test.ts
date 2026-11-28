@@ -163,7 +163,7 @@ describe("receipt-delivery.service", () => {
       providerMessageId: "resend-message-123",
     });
 
-    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT, { logoContentId: undefined });
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(RECEIPT, {});
 
     expect(sendEmailMock).toHaveBeenCalledWith({
       to: "john@example.com",
