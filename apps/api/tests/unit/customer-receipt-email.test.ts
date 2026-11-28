@@ -48,7 +48,7 @@ function makeReceipt(
 
 describe("renderCustomerReceiptEmail", () => {
   it("renders the customer receipt with the required receipt fields", () => {
-    const html = renderCustomerReceiptEmail(makeReceipt());
+    const html = renderCustomerReceiptEmail(makeReceipt(), { logoContentId: "business-logo" });
 
     expect(html).toContain("Fresh &amp; Clean Laundry");
     expect(html).toContain("INV-00001");
@@ -72,12 +72,19 @@ describe("renderCustomerReceiptEmail", () => {
     expect(html).toContain("Customer Agreement");
     expect(html).toContain("Customer agrees to the laundry service terms.");
     expect(html).toContain("Handle with care");
-    expect(html).toContain('src="https://example.com/logo.png"');
+    expect(html).toContain('src="cid:business-logo"');
+    expect(html).not.toContain('src="https://example.com/logo.png"');
     expect(html).toContain("background: #f8f8f8");
     expect(html).toContain("color: #222222");
     expect(html).toContain("background: #123456");
     expect(html).toContain("border-bottom: 2px solid #abcdef");
     expect(html).toContain("header header-centered");
+  });
+
+  it("never emits a private logo URL when no inline attachment is supplied", () => {
+    const html = renderCustomerReceiptEmail(makeReceipt());
+    expect(html).not.toContain('src="https://example.com/logo.png"');
+    expect(html).not.toContain("cid:");
   });
 
   it("includes each payment method, amount paid, and balance due", () => {
