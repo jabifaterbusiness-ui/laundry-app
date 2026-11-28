@@ -1,4 +1,4 @@
-import type { OrderStatus, Prisma, Role } from "@prisma/client";
+import { Prisma, type OrderStatus, type Role } from "@prisma/client";
 import { hasPermission } from "../permissions/permissions.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
