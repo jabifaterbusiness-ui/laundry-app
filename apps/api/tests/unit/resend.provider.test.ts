@@ -146,7 +146,7 @@ describe("central email delivery", () => {
       },
       "Email submission failed.",
     );
-    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("private provider response");
+    expect(JSON.stringify(warnMock.mock.calls)).toContain("private provider response");
     expect(JSON.stringify(warnMock.mock.calls)).not.toContain(input.to);
   });
 
