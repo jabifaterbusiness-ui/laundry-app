@@ -86,7 +86,7 @@ describe("central email delivery", () => {
     });
     expect(warnMock).toHaveBeenNthCalledWith(
       1,
-      { feature: "receipt", attempt: 1, retryable: true, providerStatusCode: 429 },
+      { feature: "receipt", attempt: 1, retryable: true, providerStatusCode: 429, providerErrorCode: null },
       "Email submission failed.",
     );
     expect(warnMock).toHaveBeenCalledTimes(emailConfig.maxAttempts);
@@ -100,6 +100,27 @@ describe("central email delivery", () => {
     await expect(sendEmail(input)).rejects.toMatchObject({ retryable: false });
     sendMock.mockResolvedValueOnce({ data: {}, error: null });
     await expect(sendEmail(input)).rejects.toBeInstanceOf(EmailDeliveryError);
+  });
+
+  it("records a safe provider error code for permanent 403 rejections without retrying", async () => {
+    sendMock.mockResolvedValue({
+      data: null,
+      error: { statusCode: 403, name: "authorization_error", message: "private provider response" },
+    });
+    await expect(sendEmail(input)).rejects.toMatchObject({ retryable: false });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(warnMock).toHaveBeenCalledWith(
+      {
+        feature: "receipt",
+        attempt: 1,
+        retryable: false,
+        providerStatusCode: 403,
+        providerErrorCode: "authorization_error",
+      },
+      "Email submission failed.",
+    );
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("private provider response");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain(input.to);
   });
 
   it("retries transient failures with the same idempotency key", async () => {
