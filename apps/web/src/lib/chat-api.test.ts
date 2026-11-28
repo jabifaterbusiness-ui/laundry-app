@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consumeChatEventFrames, type ChatRealtimeEvent } from "./chat-api.js";
+import { buildChatMessagesPath, consumeChatEventFrames, type ChatRealtimeEvent } from "./chat-api.js";
 
 describe("chat realtime event frame parser", () => {
   it("preserves partial chunks and parses CRLF-delimited message events", () => {
@@ -40,5 +40,16 @@ describe("chat realtime event frame parser", () => {
     };
     const input = "data: not-json\n\ndata: " + JSON.stringify(event) + "\n\n";
     expect(consumeChatEventFrames(input)).toEqual({ remaining: "", events: [event] });
+  });
+});
+
+describe("chat history pagination URL", () => {
+  it("adds the before cursor while preserving a bounded search term", () => {
+    expect(buildChatMessagesPath("conversation/1", " old messages ", "message-50"))
+      .toBe("/chat/conversations/conversation%2F1/messages?search=old+messages&before=message-50");
+  });
+
+  it("omits empty search and cursor parameters for the latest page", () => {
+    expect(buildChatMessagesPath("conversation-1")).toBe("/chat/conversations/conversation-1/messages");
   });
 });
