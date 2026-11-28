@@ -19,7 +19,7 @@ export interface ProviderEmailInput {
 
 export type ProviderEmailResult =
   | { ok: true; id: string }
-  | { ok: false; statusCode: number | null; timedOut: boolean; providerErrorCode: string | null };
+  | { ok: false; statusCode: number | null; timedOut: boolean; providerErrorCode: string | null; providerErrorMessage: string | null };
 
 function validSender(value: string): boolean {
   if (/[\r\n]/.test(value)) return false;
@@ -62,7 +62,22 @@ export async function sendWithResend(
     const providerErrorCode = /^[a-z0-9_]{1,64}$/i.test(rawErrorCode)
       ? rawErrorCode
       : null;
-    return { ok: false, statusCode, timedOut: signal.aborted, providerErrorCode };
+    const rawErrorMessage = typeof error.message === "string" ? error.message : "";
+    const providerErrorMessage = rawErrorMessage
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
+      .replace(/https?:\\/\\/\\S+/gi, "[url]")
+      .replace(/\\b(?:re|sk|whsec)_[A-Za-z0-9_-]+\\b/gi, "[redacted]")
+      .replace(/\\b[A-Za-z0-9_-]{32,}\\b/g, "[redacted]")
+      .replace(/\\s+/g, " ")
+      .trim()
+      .slice(0, 180) || null;
+    return {
+      ok: false,
+      statusCode,
+      timedOut: signal.aborted,
+      providerErrorCode,
+      providerErrorMessage,
+    };
   }
 
   if (!data?.id) {
