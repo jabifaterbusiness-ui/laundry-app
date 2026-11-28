@@ -461,8 +461,8 @@ body.printing-company .invoice-print-customer {
   body {
     background: #fff !important;
     color: #111 !important;
-    -webkit-print-color-adjust: economy;
-    print-color-adjust: economy;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .receipt,
