@@ -257,6 +257,31 @@ describe("receipt-delivery.service", () => {
     expect(sendEmailMock.mock.calls[0]?.[0]).not.toHaveProperty("attachments");
   });
 
+  it("still sends the receipt when the stored logo cannot be decoded", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A", name: "John Doe", email: "john@example.com", phone: null,
+    });
+    const receiptWithLogo = {
+      ...RECEIPT,
+      businessId: INPUT.businessId,
+      logoUrl: "https://www.laundryangelweb.com/api/v1/businesses/logo",
+    };
+    getCustomerReceiptMock.mockResolvedValue(receiptWithLogo);
+    sharpMock.mockImplementation(() => ({
+      resize: vi.fn().mockReturnThis(),
+      png: vi.fn().mockReturnThis(),
+      toBuffer: vi.fn().mockRejectedValue(new Error("invalid image bytes")),
+    }));
+    sendEmailMock.mockResolvedValue({ status: "SUBMITTED", id: "resend-fallback-1" });
+
+    await expect(resendDigitalReceipt({ ...INPUT, channel: "EMAIL" })).resolves.toMatchObject({
+      status: "SUBMITTED",
+      providerMessageId: "resend-fallback-1",
+    });
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(receiptWithLogo, {});
+    expect(sendEmailMock.mock.calls[0]?.[0]).not.toHaveProperty("attachments");
+  });
+
   it("returns 503 when Resend email delivery fails", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
