@@ -166,6 +166,15 @@ describe("createUniqueOrderNumber", () => {
     }));
   });
 
+  it("initializes a missing sequence after existing orders", async () => {
+    const tx = sequenceClient(27, null);
+    await expect(createUniqueOrderNumber(tx as never, "biz-A")).resolves.toBe("00028");
+    expect(tx.orderNumberSequence.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: { businessId: "biz-A", nextNumber: 29 },
+      update: { nextNumber: 29 },
+    }));
+  });
+
   it("preserves a sequence that is already ahead of existing orders", async () => {
     const tx = sequenceClient(27, 50);
     await expect(createUniqueOrderNumber(tx as never, "biz-A")).resolves.toBe("00050");
