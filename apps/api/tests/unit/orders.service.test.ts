@@ -26,6 +26,7 @@ import { prisma } from "../../src/lib/prisma.js";
 import { hasPermission } from "../../src/modules/permissions/permissions.service.js";
 import {
   createOrder,
+  createUniqueOrderNumber,
   getOrderForBusiness,
   getPickupPaymentEligibility,
   listOrders,
@@ -74,7 +75,9 @@ function createTransactionClient() {
     taxRule: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ maxOrderNumber: 0 }]),
     orderNumberSequence: {
+      findUnique: vi.fn().mockResolvedValue(null),
       upsert: vi.fn(),
     },
     order: {
@@ -125,6 +128,60 @@ beforeEach(() => {
     totalAmount: 4500,
     payments: [{ amount: 4500, type: "PAYMENT", status: "POSTED" }],
   } as never);
+});
+
+describe("createUniqueOrderNumber", () => {
+  function sequenceClient(maxOrderNumber: number, nextNumber: number | null) {
+    const tx = createTransactionClient();
+    tx.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ maxOrderNumber }]);
+    tx.orderNumberSequence.findUnique.mockResolvedValue(
+      nextNumber === null ? null : { nextNumber } as never,
+    );
+    tx.orderNumberSequence.upsert.mockResolvedValue({
+      nextNumber: Math.max(nextNumber ?? 1, maxOrderNumber + 1) + 1,
+    });
+    return tx;
+  }
+
+  it("repairs a stale sequence using the highest existing numeric order", async () => {
+    const tx = sequenceClient(27, 9);
+    await expect(createUniqueOrderNumber(tx as never, "biz-A")).resolves.toBe("00028");
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(tx.orderNumberSequence.upsert).toHaveBeenCalledWith({
+      where: { businessId: "biz-A" },
+      create: { businessId: "biz-A", nextNumber: 29 },
+      update: { nextNumber: 29 },
+      select: { nextNumber: true },
+    });
+  });
+
+  it("starts at 00001 when neither orders nor a sequence exist", async () => {
+    const tx = sequenceClient(0, null);
+    await expect(createUniqueOrderNumber(tx as never, "biz-A")).resolves.toBe("00001");
+    expect(tx.orderNumberSequence.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: { businessId: "biz-A", nextNumber: 2 },
+      update: { nextNumber: 2 },
+    }));
+  });
+
+  it("preserves a sequence that is already ahead of existing orders", async () => {
+    const tx = sequenceClient(27, 50);
+    await expect(createUniqueOrderNumber(tx as never, "biz-A")).resolves.toBe("00050");
+    expect(tx.orderNumberSequence.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: { businessId: "biz-A", nextNumber: 51 },
+      update: { nextNumber: 51 },
+    }));
+  });
+
+  it("rejects allocation beyond the five-digit limit", async () => {
+    const tx = sequenceClient(99999, 99999);
+    await expect(createUniqueOrderNumber(tx as never, "biz-A")).rejects.toThrow(
+      "The order number limit of 99999 has been reached",
+    );
+    expect(tx.orderNumberSequence.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("getPickupPaymentEligibility", () => {
