@@ -372,9 +372,11 @@ describe("real database order creation integration", () => {
     storedBusiness = await prisma.business.findUnique({ where: { id: businessId } });
     const changedCiphertext = storedBusiness?.backupRestorePasswordCiphertext;
 
+    const rejectedPasswordAuthorization = await issueSensitiveAuthorization({ userId, businessId });
     const rejectedOldPassword = await request(app)
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", `Bearer ${accessToken}`)
+      .set("X-Sensitive-Authorization", rejectedPasswordAuthorization.token)
       .set("Content-Type", "application/octet-stream")
       .set("X-Organization-Restore-Password", initialRestorePassword)
       .set("X-Backup-Password", legacyCreatorPassword)
@@ -384,9 +386,11 @@ describe("real database order creation integration", () => {
     expect(JSON.stringify(rejectedOldPassword.body)).not.toContain(initialRestorePassword);
     expect((await prisma.business.findUnique({ where: { id: businessId } }))?.name).toBe("Mutated Before Restore");
 
+    const restoreAuthorization = await issueSensitiveAuthorization({ userId, businessId });
     const restored = await request(app)
       .post("/api/v1/migrations/backup/restore")
       .set("Authorization", `Bearer ${accessToken}`)
+      .set("X-Sensitive-Authorization", restoreAuthorization.token)
       .set("Content-Type", "application/octet-stream")
       .set("X-Organization-Restore-Password", changedRestorePassword)
       .set("X-Backup-Password", legacyCreatorPassword)
