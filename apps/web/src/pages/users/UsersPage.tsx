@@ -17,6 +17,7 @@ import { useAuthStore } from "../../state/auth-store.js";
 
 const EMPTY_FORM = {
   fullName: "",
+  phone: "",
   email: "",
   username: "",
   password: "",
@@ -69,6 +70,7 @@ export function UsersPage() {
       createUser(
         {
           fullName: form.fullName.trim(),
+          phone: form.phone.trim() || undefined,
           email: form.email.trim(),
           username: form.username.trim() || undefined,
           password: form.password,
@@ -96,6 +98,7 @@ export function UsersPage() {
         editingUser!.id,
         {
           fullName: form.fullName.trim(),
+          phone: form.phone.trim() || null,
           email: form.email.trim(),
           username: form.username.trim() || null,
           password: form.password || undefined,
@@ -161,6 +164,7 @@ export function UsersPage() {
     setEditingUser(user);
     setForm({
       fullName: user.fullName,
+      phone: user.phone ?? "",
       email: user.email,
       username: user.username ?? "",
       password: "",
@@ -297,6 +301,7 @@ export function UsersPage() {
             <tr>
               <th>Name</th>
               <th>Email</th>
+              <th>Phone</th>
               <th>Username</th>
               <th>Role</th>
               <th>Branches</th>
@@ -322,6 +327,8 @@ export function UsersPage() {
                 </td>
 
                 <td>{user.email}</td>
+
+                <td>{user.phone || "—"}</td>
 
                 <td>{user.username || "—"}</td>
 
@@ -456,6 +463,21 @@ export function UsersPage() {
                     email: event.target.value,
                   }))
                 }
+              />
+            </div>
+
+            <div>
+              <label htmlFor="user-phone">Phone number</label>
+              <input
+                id="user-phone"
+                type="tel"
+                autoComplete="tel"
+                value={form.phone}
+                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="Optional"
+                maxLength={20}
+                pattern="\\+?[0-9()\\-\\s]{7,20}"
+                title="Enter 7 to 15 digits; spaces, parentheses, dashes and a leading + are allowed."
               />
             </div>
 

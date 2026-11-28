@@ -44,6 +44,8 @@ vi.mock("../../../src/lib/data-management-api.js", () => ({
   startCloudBackupOAuth: mockCloudOAuth.start,
   verifyCloudBackupConnection: vi.fn(),
   createCloudBackupRun: vi.fn(),
+  getCloudBackupIdempotencyKey: vi.fn().mockReturnValue("7b74a7c2-4f3d-4c56-9c19-0dd626520026"),
+  clearCloudBackupIdempotencyKey: vi.fn(),
   listCloudBackupRuns: vi.fn().mockResolvedValue([]),
   listCloudBackupSchedules: vi.fn().mockResolvedValue([]),
   createCloudBackupSchedule: vi.fn(),
@@ -71,7 +73,7 @@ function businessUser(overrides: Record<string, unknown> = {}) {
     securityRole: "BUSINESS_OWNER",
     businessId: "business-1",
     branches: [],
-    permissions: ["migrations.view", "migrations.manage"],
+    permissions: ["migrations.view", "migrations.manage", "backups.view", "backups.connections.view", "backups.connections.manage", "backups.connections.verify", "backups.history.view", "backups.schedules.view", "backups.schedules.manage", "backups.run", "backups.settings.view", "backups.settings.manage", "backups.restore", "backups.restore_password.view", "backups.restore_password.manage"],
     ...overrides,
   };
 }
@@ -88,11 +90,12 @@ describe("DataManagementPage authorization", () => {
     vi.mocked(listCloudBackupConnections).mockReset().mockResolvedValue([]);
     vi.mocked(listCloudBackupRuns).mockReset().mockResolvedValue([]);
     vi.mocked(listCloudBackupSchedules).mockReset().mockResolvedValue([]);
+    vi.mocked(getCloudBackupSettings).mockReset().mockResolvedValue(null as any);
     vi.mocked(createCloudBackupSchedule).mockReset();
     vi.mocked(updateCloudBackupSchedule).mockReset();
     vi.mocked(deleteCloudBackupSchedule).mockReset();
     vi.mocked(verifyCloudBackupConnection).mockReset();
-    vi.mocked(saveCloudBackupSettings).mockClear();
+    vi.mocked(saveCloudBackupSettings).mockReset();
     vi.mocked(restoreBackup).mockReset().mockResolvedValue({
       created: 1, updated: 2, mapped: 3, skippedUsers: 4,
     } as any);
@@ -154,6 +157,34 @@ describe("DataManagementPage authorization", () => {
       expect(screen.queryByRole("option", { name: /onedrive/i })).toBeNull();
     });
     expect(screen.getByText(/Only connected and verified accounts appear in this list/i)).toBeTruthy();
+  });
+
+  it("shows backup settings to viewers and only enables saving for managers", async () => {
+    const settings = {
+      id: "settings-1", enabled: false, frequency: "DAILY" as const,
+      dayOfWeek: 1, dayOfMonth: 1, hour: 2, minute: 15,
+      timezone: "Africa/Lagos", retentionCount: 30,
+      destinationConnectionId: null,
+      createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z",
+    };
+    mockUser.current = businessUser({ permissions: ["backups.settings.view"] });
+    mockCloudOAuth.accessToken = "test-access-token";
+    vi.mocked(getCloudBackupSettings).mockResolvedValue(settings);
+
+    const view = render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    expect(await screen.findByRole("heading", { name: "Automatic backup settings" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save automatic backup settings" })).toBeNull();
+    view.unmount();
+
+    mockUser.current = businessUser({ permissions: ["backups.settings.manage"] });
+    vi.mocked(saveCloudBackupSettings).mockResolvedValue(settings);
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    const save = await screen.findByRole("button", { name: "Save automatic backup settings" });
+    fireEvent.click(save);
+    await waitFor(() => expect(saveCloudBackupSettings).toHaveBeenCalledWith(
+      { accessToken: "test-access-token", sensitiveAuthorization: "test-authorization" },
+      expect.objectContaining({ frequency: "DAILY", timezone: "Africa/Lagos", retentionCount: 30 }),
+    ));
   });
 
   it("keeps local backup schedules separate from the cloud schedule manager", async () => {
@@ -333,6 +364,7 @@ describe("DataManagementPage authorization", () => {
         accessToken: "test-access-token",
         sensitiveAuthorization: "test-authorization",
       },
+      "7b74a7c2-4f3d-4c56-9c19-0dd626520026",
     );
 
     window.removeEventListener(CLOUD_BACKUP_NOTIFICATION_EVENT, listener);
@@ -455,7 +487,7 @@ describe("DataManagementPage authorization", () => {
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
 
     expect(
-      screen.getByText(/you do not have permission to manage business data migration/i),
+      screen.getByText(/ask a business manager to grant backup permissions/i),
     ).toBeInTheDocument();
   });
 
@@ -508,7 +540,7 @@ describe("DataManagementPage authorization", () => {
     mockUser.current = businessUser({
       role: "Laundry Supervisor",
       securityRole: "BRANCH_MANAGER",
-      permissions: ["migrations.view"],
+      permissions: ["migrations.view", "migrations.manage"],
     });
 
     render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
@@ -522,7 +554,7 @@ describe("DataManagementPage authorization", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("restores a current LABK1 backup without requesting a password", async () => {
+  it("restores a current LABK1 backup with the business password and no legacy password", async () => {
     mockUser.current = businessUser();
     mockCloudOAuth.accessToken = "test-access-token";
 
@@ -540,6 +572,9 @@ describe("DataManagementPage authorization", () => {
     fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
       target: { files: [file] },
     });
+    fireEvent.change(screen.getByLabelText(/business restoration password/i), {
+      target: { value: "business-restore-pass" },
+    });
 
     expect(await screen.findByText(/no password is required/i)).toBeTruthy();
     expect(screen.queryByLabelText(/original backup password/i)).toBeNull();
@@ -551,9 +586,17 @@ describe("DataManagementPage authorization", () => {
 
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
-        file, "", "Quarterly recovery test", { accessToken: "test-access-token" },
+        file,
+        "",
+        "business-restore-pass",
+        "Quarterly recovery test",
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
   });
 
@@ -577,6 +620,9 @@ describe("DataManagementPage authorization", () => {
     });
 
     const password = await screen.findByLabelText(/original backup password/i);
+    fireEvent.change(screen.getByLabelText(/business restoration password/i), {
+      target: { value: "business-restore-pass" },
+    });
     fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
       target: { value: "Legacy recovery validation" },
     });
@@ -591,11 +637,50 @@ describe("DataManagementPage authorization", () => {
 
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
-        file, "legacy-pass-123", "Legacy recovery validation",
-        { accessToken: "test-access-token" },
+        file,
+        "legacy-pass-123",
+        "business-restore-pass",
+        "Legacy recovery validation",
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
+  });
+
+  it("does not restore a backup when sensitive reauthorization is cancelled", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue(null);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /restore encrypted backup/i }));
+
+    const file = new File(["LABK1encrypted-payload"], "cancelled.laundry-backup", {
+      type: "application/octet-stream",
+    });
+    Object.defineProperty(file, "slice", {
+      value: () => ({
+        arrayBuffer: async () => new TextEncoder().encode("LABK1").buffer,
+      }),
+    });
+    fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
+      target: { files: [file] },
+    });
+    expect(await screen.findByText(/no password is required/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Business restoration password (required)"), {
+      target: { value: "test-business-restore-password" },
+    });
+    fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
+      target: { value: "Cancelled restore authorization test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore backup" }));
+
+    expect(await screen.findByText(/Sensitive authorization was cancelled/i)).toBeTruthy();
+    expect(restoreBackup).not.toHaveBeenCalled();
   });
 
 });

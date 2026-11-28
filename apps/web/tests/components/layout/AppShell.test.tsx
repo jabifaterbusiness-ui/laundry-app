@@ -197,12 +197,10 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides business management navigation from staff", () => {
+  it("keeps backup and data migration visible to staff", () => {
     renderShell();
 
-    expect(
-      screen.queryByRole("link", { name: "Backup & Data Migration" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Backup & Data Migration" })).toBeInTheDocument();
   });
 
   it("highlights the active navigation item", () => {

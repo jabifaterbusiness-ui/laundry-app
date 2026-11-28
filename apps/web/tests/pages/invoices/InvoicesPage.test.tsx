@@ -111,6 +111,7 @@ const invoice = {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuthStore.getState().clearSession();
+  mockedBusinessesApi.getBusinessLogo.mockResolvedValue(new Blob(["test-logo"], { type: "image/png" }));
 
   mockedBusinessesApi.getBusinessBranding.mockResolvedValue({
     id: "business-1",
@@ -878,7 +879,7 @@ describe("InvoicesPage digital receipt shortcut", () => {
     expect(screen.getByText("Test Address")).toBeInTheDocument();
 
     const logo = screen.getByAltText("Test Laundry logo");
-    expect(logo).toHaveAttribute("src", "https://example.com/logo.png");
+    expect(logo.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
 
     const customerReceipt = document.querySelector(".receipt--customer");
     expect(customerReceipt).not.toBeNull();

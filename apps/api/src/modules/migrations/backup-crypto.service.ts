@@ -11,7 +11,7 @@ const TAG_BYTES = 16;
 const KEY_BYTES = 32;
 const HEADER_BYTES = MAGIC.length + IV_BYTES + TAG_BYTES;
 
-export type BackupEncryptionPurpose = "artifact" | "provider-credentials";
+export type BackupEncryptionPurpose = "artifact" | "provider-credentials" | "restore-password";
 
 export type BackupEncryptionContext = {
   businessId: string;

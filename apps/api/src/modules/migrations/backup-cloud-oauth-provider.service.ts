@@ -1,4 +1,5 @@
 import type { BackupCloudProvider } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import {
@@ -8,7 +9,7 @@ import {
 
 type OAuthProvider = Extract<
   BackupCloudProvider,
-  "GOOGLE_DRIVE" | "DROPBOX" | "ONEDRIVE"
+  "GOOGLE_DRIVE" | "DROPBOX"
 >;
 
 type OAuthCredentials = {
@@ -68,10 +69,9 @@ function validDropboxBackupPath(path: string): boolean {
 function assertOAuthProvider(provider: BackupCloudProvider): asserts provider is OAuthProvider {
   if (
     provider !== "GOOGLE_DRIVE" &&
-    provider !== "DROPBOX" &&
-    provider !== "ONEDRIVE"
+    provider !== "DROPBOX"
   ) {
-    throw new AppError("This operation requires an OAuth cloud provider.", 422);
+    throw new AppError("This provider is not supported for business cloud backups.", 403);
   }
 }
 
@@ -100,20 +100,7 @@ function tokenConfiguration(provider: OAuthProvider) {
     };
   }
 
-  if (!env.MICROSOFT_CLIENT_ID || !env.MICROSOFT_CLIENT_SECRET) {
-    throw new AppError("OneDrive OAuth is not configured on the server.", 503);
-  }
-
-  const configuredTenant = env.MICROSOFT_TENANT_ID ?? "common";
-  const tenant = /^[a-zA-Z0-9.-]+$/.test(configuredTenant)
-    ? configuredTenant
-    : "common";
-
-  return {
-    url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    clientId: env.MICROSOFT_CLIENT_ID,
-    clientSecret: env.MICROSOFT_CLIENT_SECRET,
-  };
+  throw new AppError("This provider is not supported for business cloud backups.", 403);
 }
 
 function parseCredentials(ciphertext: string, businessId: string): OAuthCredentials {
@@ -279,9 +266,7 @@ export async function verifyOAuthCloudDestination(input: {
 
   const url = input.provider === "GOOGLE_DRIVE"
     ? "https://www.googleapis.com/drive/v3/about?fields=user"
-    : input.provider === "DROPBOX"
-      ? "https://api.dropboxapi.com/2/users/get_current_account"
-      : "https://graph.microsoft.com/v1.0/me/drive";
+    : "https://api.dropboxapi.com/2/users/get_current_account";
 
   const response = await authorizedRequest(
     url,
@@ -468,32 +453,120 @@ export async function uploadOAuthCloudArtifact(input: {
     return `dropbox:${result.path_lower}`;
   }
 
-  const path = `/LaundryAngel/backups/${input.runId}.enc`;
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  response = await authorizedRequest(
-    `https://graph.microsoft.com/v1.0/me/drive/root:${encodedPath}:/content`,
-    credentials,
-    {
-      method: "PUT",
-      headers: { "content-type": "application/octet-stream" },
-      body: input.encryptedArtifact,
-    },
+  throw new AppError("This provider is not supported for business cloud backups.", 403);
+}
+
+/**
+ * Reconciles an upload whose provider response was confirmed but whose history
+ * write failed. The run UUID is part of the remote filename, so this lookup
+ * never creates a second artifact. Downloading the artifact lets us persist an
+ * exact SHA-256 and byte count instead of trusting provider-specific hashes.
+ */
+export async function recoverOAuthCloudArtifact(input: {
+  businessId: string;
+  connectionId: string;
+  provider: BackupCloudProvider;
+  credentialsCiphertext: string;
+  runId: string;
+  trigger: "MANUAL" | "SCHEDULED";
+  businessTimezone: string;
+  executionTime: Date;
+}): Promise<{ storageKey: string; checksumSha256: string; sizeBytes: number } | null> {
+  assertOAuthProvider(input.provider);
+  const credentials = await getValidCredentials({ ...input, provider: input.provider });
+  const filename = formatCloudBackupFilename(
+    input.trigger, input.executionTime, input.businessTimezone, input.runId,
   );
 
-  await assertProviderSuccess(response);
-
-  let result: { id?: unknown };
-  try {
-    result = await response.json() as { id?: unknown };
-  } catch {
-    throw new AppError("OneDrive returned an invalid upload response.", 502);
+  if (input.provider === "GOOGLE_DRIVE") {
+    const query = new URLSearchParams({
+      q: `name = '${filename}' and trashed = false`,
+      fields: "files(id,name,mimeType)",
+      pageSize: "10",
+    });
+    const lookup = await authorizedRequest(
+      `https://www.googleapis.com/drive/v3/files?${query.toString()}`,
+      credentials,
+    );
+    await assertProviderSuccess(lookup);
+    let result: { files?: Array<{ id?: unknown; name?: unknown; mimeType?: unknown }> };
+    try {
+      result = await lookup.json() as typeof result;
+    } catch {
+      throw new AppError("Google Drive returned an invalid backup recovery response.", 502);
+    }
+    const matches = (result.files ?? []).filter((file) =>
+      file.name === filename && typeof file.id === "string" && file.id &&
+      file.mimeType !== BACKUP_FOLDER_MIME,
+    );
+    if (matches.length > 1) {
+      throw new AppError("Multiple provider artifacts match this backup operation.", 409);
+    }
+    const fileId = matches[0]?.id;
+    if (typeof fileId !== "string") return null;
+    const download = await authorizedRequest(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`,
+      credentials,
+    );
+    await assertProviderSuccess(download);
+    const bytes = Buffer.from(await download.arrayBuffer());
+    return {
+      storageKey: `google:${fileId}`,
+      checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      sizeBytes: bytes.byteLength,
+    };
   }
 
-  if (typeof result.id !== "string" || !/^[A-Za-z0-9!_-]+$/.test(result.id)) {
-    throw new AppError("OneDrive did not return a valid backup file identifier.", 502);
+  if (input.provider === "DROPBOX") {
+    const path = `${DROPBOX_BACKUP_FOLDER}/${filename}`;
+    const download = await authorizedRequest(
+      "https://content.dropboxapi.com/2/files/download",
+      credentials,
+      {
+        method: "POST",
+        headers: { "dropbox-api-arg": JSON.stringify({ path }) },
+      },
+    );
+    if (download.status === 409) {
+      let missing = false;
+      try {
+        const error = await download.json() as {
+          error?: { ".tag"?: unknown; path?: { ".tag"?: unknown } };
+        };
+        missing = error.error?.[".tag"] === "path" && error.error.path?.[".tag"] === "not_found";
+      } catch {
+        missing = false;
+      }
+      if (missing) return null;
+      throw new AppError("Dropbox could not confirm this backup artifact during recovery.", 502);
+    }
+    await assertProviderSuccess(download);
+    const resultHeader = download.headers.get("dropbox-api-result");
+    if (!resultHeader) {
+      throw new AppError("Dropbox did not confirm the recovered backup metadata.", 502);
+    }
+    let metadata: { name?: unknown; path_lower?: unknown };
+    try {
+      metadata = JSON.parse(resultHeader) as typeof metadata;
+    } catch {
+      throw new AppError("Dropbox returned invalid backup recovery metadata.", 502);
+    }
+    const bytes = Buffer.from(await download.arrayBuffer());
+    if (
+      metadata.name !== filename ||
+      metadata.path_lower !== path.toLowerCase() ||
+      bytes.byteLength === 0
+    ) {
+      throw new AppError("Dropbox did not confirm the expected backup artifact.", 502);
+    }
+    return {
+      storageKey: `dropbox:${metadata.path_lower}`,
+      checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      sizeBytes: bytes.byteLength,
+    };
   }
 
-  return `onedrive:${result.id}`;
+  throw new AppError("This provider does not support recoverable OAuth backups.", 403);
 }
 
 export async function deleteOAuthCloudArtifact(input: {
@@ -526,10 +599,7 @@ export async function deleteOAuthCloudArtifact(input: {
     method = "POST";
     headers = { "content-type": "application/json" };
   } else {
-    const match = /^onedrive:([A-Za-z0-9!_-]+)$/.exec(input.storageKey);
-    const itemId = match?.[1];
-    if (!itemId) throw new AppError("Stored OneDrive backup reference is invalid.", 422);
-    url = `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(itemId)}`;
+    throw new AppError("This provider is not supported for business cloud backups.", 403);
   }
 
   const init: RequestInit = { method, ...(headers ? { headers } : {}) };

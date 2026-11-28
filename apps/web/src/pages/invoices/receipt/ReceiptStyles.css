@@ -297,6 +297,7 @@
   left: -100000px;
   top: 0;
   width: 100%;
+  z-index: 101;
   visibility: hidden;
   pointer-events: none;
 }

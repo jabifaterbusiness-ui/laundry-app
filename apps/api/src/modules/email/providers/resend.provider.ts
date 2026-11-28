@@ -5,6 +5,8 @@ export interface ProviderEmailInput {
   to: string;
   subject: string;
   html: string;
+  fromName?: string;
+  replyTo?: string | null;
 }
 
 export type ProviderEmailResult =
@@ -38,8 +40,11 @@ export async function sendWithResend(
     signal,
     ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
   } as NonNullable<Parameters<typeof resend.emails.send>[1]> & { signal: AbortSignal };
+  const verifiedAddress = from.match(/<([^<>]+)>/)?.[1] ?? from;
+  const safeName = input.fromName?.replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+  const replyTo = input.replyTo && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(input.replyTo) ? input.replyTo : undefined;
   const { data, error } = await resend.emails.send(
-    { from, to: input.to, subject: input.subject, html: input.html },
+    { from: safeName ? `${safeName} <${verifiedAddress}>` : from, to: input.to, subject: input.subject, html: input.html, ...(replyTo ? { replyTo } : {}) },
     requestOptions,
   );
 

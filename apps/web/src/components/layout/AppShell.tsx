@@ -311,6 +311,7 @@ export function AppShell({ children }: PropsWithChildren) {
   }, []);
 
   const canViewMigrations = hasPermission(user, "migrations.view");
+  const canSeeBackupSection = Boolean(user?.businessId);
   const canViewFinance =
     hasPermission(user, "reports.view") ||
     hasPermission(user, "expenses.view");
@@ -722,7 +723,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 </Link>
               ) : null}
 
-              {canViewMigrations ? (
+              {canViewMigrations || canSeeBackupSection ? (
                 <Link
                   to="/data-management"
                   className={`nav-item ${

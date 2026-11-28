@@ -33,6 +33,7 @@ export interface Order {
   customer?: { id: string; name: string; phone: string; email?: string | null };
   notificationResults?: Array<{ status: "SENT" | "FAILED" | "DUPLICATE"; channel: "WHATSAPP" | "EMAIL"; error?: string }>;
   notificationError?: string;
+  notificationChoice?: "EMAIL" | "WHATSAPP" | "NONE" | "AUTOMATIC";
   orderNumber: string;
   status: OrderStatus;
   orderTotal: number;

@@ -162,11 +162,13 @@ export async function createOrder(
   input: CreateOrderInput,
   auth: { accessToken: string | null },
   branchId?: string | null,
+  idempotencyKey?: string,
 ): Promise<Order> {
   return apiFetch<Order>("/orders", {
     method: "POST",
     accessToken: auth.accessToken,
     branchId,
+    ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}),
     body: JSON.stringify(input),
   });
 }
@@ -205,6 +207,7 @@ export async function updateOrderStatus(
   auth: { accessToken: string | null },
   branchId?: string | null,
   pickupOverrideReason?: string,
+  notificationChoice: "EMAIL" | "WHATSAPP" | "NONE" = "NONE",
 ): Promise<Order> {
   return apiFetch<Order>(`/orders/${id}/status`, {
     method: "PATCH",
@@ -213,6 +216,7 @@ export async function updateOrderStatus(
     body: JSON.stringify({
       status,
       ...(pickupOverrideReason?.trim() ? { pickupOverrideReason: pickupOverrideReason.trim() } : {}),
+      notificationChoice,
     }),
   });
 }
@@ -222,11 +226,13 @@ export async function createOrderWithOfflineQueue(
   auth: { accessToken: string | null },
   syncContext: OfflineOrderSyncContext,
 ): Promise<OrderMutationResult> {
+  const clientOperationId = crypto.randomUUID();
   try {
     const order = await createOrder(
       input,
       auth,
       syncContext.branchId,
+      clientOperationId,
     );
 
     return {
@@ -248,7 +254,7 @@ export async function createOrderWithOfflineQueue(
       businessId: syncContext.businessId,
       branchId: syncContext.branchId,
       actorUserId: syncContext.actorUserId,
-      clientOperationId: crypto.randomUUID(),
+      clientOperationId,
       operationType: "ORDER_CREATE",
       payload: input,
     });
@@ -266,6 +272,7 @@ export async function updateOrderStatusWithOfflineQueue(
   auth: { accessToken: string | null },
   syncContext: OfflineOrderSyncContext,
   pickupOverrideReason?: string,
+  notificationChoice: "EMAIL" | "WHATSAPP" | "NONE" = "NONE",
 ): Promise<OrderMutationResult> {
   try {
     const order = await updateOrderStatus(
@@ -274,6 +281,7 @@ export async function updateOrderStatusWithOfflineQueue(
       auth,
       syncContext.branchId,
       pickupOverrideReason,
+      notificationChoice,
     );
 
     return {
@@ -302,6 +310,7 @@ export async function updateOrderStatusWithOfflineQueue(
         orderId: id,
         status,
         ...(pickupOverrideReason?.trim() ? { pickupOverrideReason: pickupOverrideReason.trim() } : {}),
+        notificationChoice,
       },
     });
 

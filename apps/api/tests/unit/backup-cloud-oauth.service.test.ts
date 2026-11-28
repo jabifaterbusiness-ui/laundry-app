@@ -108,25 +108,13 @@ describe("cloud backup OAuth", () => {
     expect(url.searchParams.get("code_challenge")).toBeTruthy();
   });
 
-  it("starts OneDrive OAuth with the configured Microsoft tenant and offline access", async () => {
-    process.env.MICROSOFT_CLIENT_ID = "test-microsoft-client";
-    process.env.MICROSOFT_CLIENT_SECRET = "test-microsoft-secret";
-    process.env.MICROSOFT_TENANT_ID = "organizations";
-
-    const result = await beginCloudOAuth({
+  it("rejects new OneDrive OAuth starts", async () => {
+    await expect(beginCloudOAuth({
       businessId: "business-1",
       userId: "user-1",
-      provider: "ONEDRIVE",
+      provider: "ONEDRIVE" as never,
       displayName: "OneDrive backups",
-    });
-
-    const url = new URL(result.authorizationUrl);
-    expect(url.origin).toBe("https://login.microsoftonline.com");
-    expect(url.pathname).toBe("/organizations/oauth2/v2.0/authorize");
-    expect(url.searchParams.get("client_id")).toBe("test-microsoft-client");
-    expect(url.searchParams.get("scope")).toBe("Files.ReadWrite offline_access User.Read");
-    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(url.searchParams.get("state")).toBeTruthy();
+    })).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it("cleans up only expired or consumed OAuth state for the requesting business", async () => {

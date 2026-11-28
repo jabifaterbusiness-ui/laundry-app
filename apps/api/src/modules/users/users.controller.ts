@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../middleware/error-handler.js";
+import { normalizePhone } from "../customers/customers.validation.js";
 import { requireReason } from "../../lib/reason.js";
 import {
   createUserSchema,
@@ -64,6 +65,7 @@ export async function create(req: Request, res: Response) {
     input.username === undefined
       ? {
           fullName: input.fullName,
+          phone: input.phone ? normalizePhone(input.phone) : null,
           email: input.email,
           password: input.password,
           role: input.role,
@@ -71,6 +73,7 @@ export async function create(req: Request, res: Response) {
         }
       : {
           fullName: input.fullName,
+          phone: input.phone ? normalizePhone(input.phone) : null,
           email: input.email,
           username: input.username,
           password: input.password,
@@ -96,6 +99,7 @@ export async function update(req: Request, res: Response) {
 
   const updateInput = {
     ...(input.fullName !== undefined && { fullName: input.fullName }),
+    ...(input.phone !== undefined && { phone: input.phone ? normalizePhone(input.phone) : null }),
     ...(input.email !== undefined && { email: input.email }),
     ...(input.password !== undefined && { password: input.password }),
     ...(input.role !== undefined && { role: input.role }),

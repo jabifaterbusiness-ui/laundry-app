@@ -9,6 +9,7 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { hasPermission } from "../permissions/permissions.service.js";
 import { recordAuditEvent } from "../../lib/audit.js";
+import { notifyOrderStatus } from "../communications/communications.service.js";
 import {
   createCustomer,
   findPossibleDuplicates,
@@ -586,6 +587,7 @@ async function applySyncOperation(
             actorUserId: context.actorUserId,
             customerId: input.customerId,
             items: input.items,
+            idempotencyKey: operation.clientOperationId,
             ...(input.expectedReadyAt !== undefined && {
               expectedReadyAt: new Date(input.expectedReadyAt),
             }),
@@ -619,6 +621,7 @@ async function applySyncOperation(
               orderId: string;
               status: OrderStatus;
               pickupOverrideReason?: string;
+              notificationChoice: "EMAIL" | "WHATSAPP" | "NONE";
             };
 
         if (input.action === "TRANSFER_CUSTOMER") {
@@ -641,6 +644,7 @@ async function applySyncOperation(
               actorUserId: context.actorUserId,
               actorRole: context.actorRole,
               ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
+              notificationChoice: input.notificationChoice,
             },
           );
         }
@@ -741,6 +745,26 @@ export async function replaySyncOperation(
       claim.operation,
       input.context,
     );
+    let result = applied.result;
+    if (operationType.operationType === "ORDER_UPDATE" && (payload as { action?: string }).action === "UPDATE_STATUS") {
+      const statusInput = payload as { action: string; orderId: string; status: OrderStatus; notificationChoice: "EMAIL" | "WHATSAPP" | "NONE" };
+      let notificationResults: Awaited<ReturnType<typeof notifyOrderStatus>> = [];
+      let notificationError: string | undefined;
+      if (statusInput.notificationChoice !== "NONE") {
+        try {
+          notificationResults = await notifyOrderStatus({
+            orderId: statusInput.orderId,
+            businessId: input.context.businessId,
+            branchId: input.context.branchId,
+            status: statusInput.status,
+            channelOverride: statusInput.notificationChoice,
+          });
+        } catch {
+          notificationError = "Notification processing failed. Check Delivery History for details.";
+        }
+      }
+      result = { ...(result as Record<string, unknown>), notificationChoice: statusInput.notificationChoice, notificationResults, ...(notificationError ? { notificationError } : {}) };
+    }
 
     await recordAuditEvent({
       action: "sync.operation_applied",
@@ -760,7 +784,7 @@ export async function replaySyncOperation(
     return {
       status: "APPLIED" as const,
       operation: applied.operation,
-      result: applied.result,
+      result,
     };
   } catch (error) {
     if (isDuplicateConflict(error)) {

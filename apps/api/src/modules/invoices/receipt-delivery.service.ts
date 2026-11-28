@@ -86,6 +86,8 @@ export async function resendDigitalReceipt(
         to: destination,
         subject: `${receipt.companyName} — Receipt ${receipt.invoiceNumber}`,
         html,
+        fromName: receipt.companyName,
+        replyTo: receipt.companyEmail,
         feature: "receipt",
       });
 

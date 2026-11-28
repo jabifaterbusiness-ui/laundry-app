@@ -129,10 +129,16 @@ async function deliverMessage(input: {
   try {
     let providerMessageId: string;
     if (input.channel === "EMAIL") {
+      const business = await prisma.business.findUnique({
+        where: { id: input.businessId },
+        select: { name: true, email: true },
+      });
       providerMessageId = (await sendEmail({
         to: input.destination,
         subject: input.subject,
         html: `<div style="font-family:Arial,sans-serif;line-height:1.6;white-space:pre-wrap">${escapeHtml(input.body).replace(/\n/g, "<br>")}</div>`,
+        ...(business?.name ? { fromName: business.name } : {}),
+        replyTo: business?.email ?? null,
         feature: "communication",
         idempotencyKey: `communication:${input.dedupeKey}`,
       })).id;
@@ -180,7 +186,7 @@ async function deliverMessage(input: {
   }
 }
 
-export async function notifyOrderStatus(input: { orderId: string; businessId: string; branchId: string; status: string }) {
+export async function notifyOrderStatus(input: { orderId: string; businessId: string; branchId: string; status: string; channelOverride?: "EMAIL" | "WHATSAPP" }) {
   const order = await prisma.order.findFirst({
     where: { id: input.orderId, businessId: input.businessId, branchId: input.branchId },
     include: { customer: true, business: { select: { name: true } } },
@@ -192,14 +198,16 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
         where: { businessId: input.businessId, status: input.status },
       });
   const rule = configuredRule?.enabled ? configuredRule : null;
-  if (!rule) return [];
+  if (!rule && !input.channelOverride) return [];
   const values = {
     customerName: order.customer.name,
     orderNumber: order.orderNumber,
     companyName: order.business.name,
     status: input.status.replaceAll("_", " ").toLowerCase(),
   };
-  const channels: Channel[] = rule.channel === "BOTH" ? ["WHATSAPP", "EMAIL"] : [rule.channel as Channel];
+  const channels: Channel[] = input.channelOverride
+    ? [input.channelOverride]
+    : rule!.channel === "BOTH" ? ["WHATSAPP", "EMAIL"] : [rule!.channel as Channel];
   const results = [];
   for (const channel of channels) {
     const destination = channel === "EMAIL" ? order.customer.email : order.customer.phone;
@@ -207,7 +215,7 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
       const missingResult = await recordMissingDestination({
         businessId: input.businessId, customerId: order.customerId, orderId: order.id,
         channel, messageType: "ORDER_STATUS",
-        dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
+        dedupeKey: `order-status:${order.id}:${rule?.id ?? "direct"}:${input.status}:${channel}`,
         reason: channel === "EMAIL" ? "Customer email is missing" : "Customer phone is missing",
       });
       results.push({ ...missingResult, channel });
@@ -219,10 +227,10 @@ export async function notifyOrderStatus(input: { orderId: string; businessId: st
     const deliveryResult = await deliverMessage({
       businessId: input.businessId, customerId: order.customerId, orderId: order.id,
       channel, messageType: "ORDER_STATUS", destination,
-      subject: renderTemplate(rule.emailSubject || "Order update from {{companyName}}", values),
-      body: renderTemplate((channel === "EMAIL" ? rule.emailMessage : rule.whatsappMessage) || fallback, values),
-      dedupeKey: `order-status:${order.id}:${rule.id}:${input.status}:${channel}`,
-      ...(channel === "WHATSAPP" && rule.whatsappTemplateName && rule.whatsappTemplateLanguage ? {
+      subject: renderTemplate(rule?.emailSubject || "Order update from {{companyName}}", values),
+      body: renderTemplate((channel === "EMAIL" ? rule?.emailMessage : rule?.whatsappMessage) || fallback, values),
+      dedupeKey: `order-status:${order.id}:${rule?.id ?? "direct"}:${input.status}:${channel}`,
+      ...(channel === "WHATSAPP" && rule?.whatsappTemplateName && rule.whatsappTemplateLanguage ? {
         whatsappTemplateName: rule.whatsappTemplateName,
         whatsappTemplateLanguage: rule.whatsappTemplateLanguage,
         whatsappTemplateVariables: [values.customerName, values.orderNumber, values.status, values.companyName],

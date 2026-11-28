@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  restoreBackup,
   saveCloudBackupSettings,
   listCloudBackupSchedules,
   createCloudBackupSchedule,
   updateCloudBackupSchedule,
   deleteCloudBackupSchedule,
+  createCloudBackupRun,
+  getCloudBackupIdempotencyKey,
+  clearCloudBackupIdempotencyKey,
   type CloudBackupSchedule,
   type CloudBackupScheduleInput,
 } from "../../src/lib/data-management-api.js";
@@ -228,6 +232,85 @@ describe("cloud backup schedule API", () => {
           Authorization: "Bearer access-token",
           "X-Sensitive-Authorization": "sensitive-token",
         }),
+      }),
+    );
+  });
+});
+
+describe("cloud backup run idempotency", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
+
+  it("sends a stable manual run key with the authenticated request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ run: { id: "run-1", status: "SUCCEEDED" } }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await createCloudBackupRun("connection-1", { accessToken: "access-token" }, "7b74a7c2-4f3d-4c56-9c19-0dd626520026");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/v1/migrations/backup/cloud/runs",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
+        body: JSON.stringify({ connectionId: "connection-1", idempotencyKey: "7b74a7c2-4f3d-4c56-9c19-0dd626520026" }),
+      }),
+    );
+  });
+
+  it("reuses a pending logical-operation key and clears it only when asked", () => {
+    const first = getCloudBackupIdempotencyKey("business-1", "connection-1");
+    expect(getCloudBackupIdempotencyKey("business-1", "connection-1")).toBe(first);
+
+    clearCloudBackupIdempotencyKey("business-1", "connection-1");
+    expect(getCloudBackupIdempotencyKey("business-1", "connection-1")).not.toBe(first);
+  });
+});
+
+describe("restoreBackup sensitive authorization", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the recent sensitive authorization token with the restore request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ created: 1, updated: 0, mapped: 0, skippedUsers: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const file = new File(["encrypted-backup"], "business.laundry-backup", {
+      type: "application/octet-stream",
+    });
+
+    await restoreBackup(
+      file,
+      "backup-password",
+      "business-restore-password",
+      "Approved business backup recovery",
+      {
+        accessToken: "access-token",
+        sensitiveAuthorization: "fresh-sensitive-token",
+      },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/v1/migrations/backup/restore",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token",
+          "X-Sensitive-Authorization": "fresh-sensitive-token",
+          "X-Backup-Password": "backup-password",
+          "X-Organization-Restore-Password": "business-restore-password",
+          "X-Restore-Reason": "Approved business backup recovery",
+        }),
+        body: file,
       }),
     );
   });

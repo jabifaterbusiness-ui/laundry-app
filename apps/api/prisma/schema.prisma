@@ -98,6 +98,7 @@ model Business {
   // The logo is stored outside PostgreSQL; this field stores its
   // publicly usable application URL/reference.
   logoUrl String?
+  backupRestorePasswordCiphertext String?
 
   // Automatically generated from the business logo by default.
   // The owner may override these values through receipt customization.
@@ -291,6 +292,7 @@ model User {
   username     String?   @unique
   passwordHash String
   fullName     String
+  phone        String?
   // Visible business job title chosen by management.
   // This is descriptive only and never grants access.
   role         String    @default("Staff")
@@ -724,6 +726,10 @@ model Order {
   // PRIVATE. Never expose this on customer-facing receipts.
   internalNote String?
 
+  // Stable client operation identifier used to make online retries and
+  // offline replay idempotent within the tenant branch.
+  idempotencyKey String?
+
   items    OrderItem[]
   garments Garment[]
   invoice  Invoice?
@@ -734,6 +740,7 @@ model Order {
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, orderNumber])
+  @@unique([businessId, branchId, idempotencyKey])
   @@index([businessId, createdAt])
   @@index([businessId, status])
   @@index([businessId, branchId, createdAt])
@@ -2893,6 +2900,7 @@ model BackupRun {
   id           String          @id @default(uuid())
   businessId   String
   business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  idempotencyKey String?
   scheduleId   String?
   schedule     BackupSchedule? @relation(fields: [businessId, scheduleId], references: [businessId, id], onDelete: Restrict)
   connectionId String?
@@ -2910,6 +2918,7 @@ model BackupRun {
   updatedAt    DateTime        @updatedAt
 
   @@unique([scheduleId, scheduledFor])
+  @@unique([businessId, idempotencyKey])
   @@index([businessId, scheduleId, createdAt])
   @@index([businessId, createdAt])
   @@index([businessId, status, createdAt])

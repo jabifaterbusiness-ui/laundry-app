@@ -16,6 +16,9 @@ const {
   importMigrationJob,
   exportBusinessBackup,
   restoreBusinessBackup,
+  getBusinessRestorePassword,
+  changeBusinessRestorePassword,
+  verifyBusinessRestorePassword,
   recordAuditEvent,
   listCloudConnectionsController,
   createCloudConnectionController,
@@ -30,6 +33,7 @@ const {
   createCloudBackupScheduleController,
   updateCloudBackupScheduleController,
   deleteCloudBackupScheduleController,
+  requireSensitiveAuthorizationMock,
 } = vi.hoisted(() => ({
   verifyAccessToken: vi.fn(),
   findUser: vi.fn(),
@@ -42,6 +46,9 @@ const {
   importMigrationJob: vi.fn(),
   exportBusinessBackup: vi.fn(),
   restoreBusinessBackup: vi.fn(),
+  getBusinessRestorePassword: vi.fn().mockResolvedValue("organization-secret-123"),
+  changeBusinessRestorePassword: vi.fn().mockResolvedValue(undefined),
+  verifyBusinessRestorePassword: vi.fn().mockResolvedValue(undefined),
   recordAuditEvent: vi.fn(),
   listCloudConnectionsController: vi.fn((_req, res) => res.status(200).json([])),
   createCloudConnectionController: vi.fn((_req, res) => res.status(201).json({ id: "connection-1" })),
@@ -56,6 +63,7 @@ const {
   createCloudBackupScheduleController: vi.fn((_req, res) => res.status(201).json({ id: "schedule-1" })),
   updateCloudBackupScheduleController: vi.fn((_req, res) => res.status(200).json({ id: "schedule-1" })),
   deleteCloudBackupScheduleController: vi.fn((_req, res) => res.status(204).end()),
+  requireSensitiveAuthorizationMock: vi.fn((_req, _res, next) => next()),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -91,11 +99,7 @@ vi.mock("../../src/modules/auth/auth.middleware.js", () => ({
     next: express.NextFunction,
   ) => next(),
   requirePlatformBusinessContext: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireSensitiveAuthorization: (
-    _req: express.Request,
-    _res: express.Response,
-    next: express.NextFunction,
-  ) => next(),
+  requireSensitiveAuthorization: requireSensitiveAuthorizationMock,
 }));
 
 vi.mock("../../src/middleware/permissions.js", () => ({
@@ -123,6 +127,16 @@ vi.mock("../../src/middleware/permissions.js", () => ({
 
         next();
       })
+      .catch(next);
+  },
+  requireAnyPermission: (permissionCodes: string[]) => (
+    req: express.Request,
+    _res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (!req.user) { next(new AppError("Authentication required", 401)); return; }
+    void Promise.all(permissionCodes.map((code) => hasPermission(req.user!.id, req.user!.businessId, req.user!.role, code)))
+      .then((allowed: boolean[]) => allowed.some(Boolean) ? next() : next(new AppError("Insufficient permissions for this action", 403)))
       .catch(next);
   },
 }));
@@ -171,6 +185,12 @@ vi.mock("../../src/modules/migrations/backup-cloud.controller.js", () => ({
   deleteCloudBackupScheduleController,
 }));
 
+vi.mock("../../src/modules/migrations/backup-restore-password.service.js", () => ({
+  getBusinessRestorePassword,
+  changeBusinessRestorePassword,
+  verifyBusinessRestorePassword,
+}));
+
 vi.mock("../../src/lib/audit.js", () => ({
   recordAuditEvent,
 }));
@@ -213,6 +233,7 @@ function authAs(role: "BUSINESS_OWNER" | "BRANCH_MANAGER" | "STAFF") {
 describe("Migrations routes - permission enforcement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => next());
 
     hasPermission.mockResolvedValue(true);
 
@@ -431,7 +452,41 @@ describe("Migrations routes - permission enforcement", () => {
     expect(exportBusinessBackup).not.toHaveBeenCalled();
   });
 
-  it("denies backup restore when migrations.manage is explicitly denied", async () => {
+  it("denies backup restore when recent sensitive re-authorization is missing", async () => {
+    authAs("BUSINESS_OWNER");
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => {
+      next(new AppError("Sensitive authorization is required", 403));
+    });
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved business backup recovery")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error?.message ?? response.body.message).toMatch(/sensitive authorization is required/i);
+    expect(restoreBusinessBackup).not.toHaveBeenCalled();
+  });
+
+  it("allows backup restore after the sensitive authorization middleware accepts the request", async () => {
+    authAs("BUSINESS_OWNER");
+    requireSensitiveAuthorizationMock.mockImplementation((_req, _res, next) => next());
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/restore")
+      .set("Authorization", "Bearer test-token")
+      .set("X-Restore-Reason", "Approved business backup recovery")
+      .set("Content-Type", "application/octet-stream")
+      .send(Buffer.from("LABK1mock-backup"));
+
+    expect(response.status).toBe(200);
+    expect(requireSensitiveAuthorizationMock).toHaveBeenCalledOnce();
+    expect(restoreBusinessBackup).toHaveBeenCalledOnce();
+  });
+
+  it("denies backup restore when backups.restore is explicitly denied", async () => {
     authAs("BUSINESS_OWNER");
     hasPermission.mockResolvedValue(false);
     findUserOverride.mockResolvedValue({ allowed: false });
@@ -519,25 +574,26 @@ describe("Migrations routes - existing role boundaries", () => {
     expect(analyzeMigrationSource).not.toHaveBeenCalled();
   });
 
-  it("does not allow a branch manager to list cloud backup connections", async () => {
+  it("allows a branch manager with backups.connections.view to list cloud backup connections", async () => {
     authAs("BRANCH_MANAGER");
+    hasPermission.mockImplementation(async (_user, _business, _role, code) => code === "backups.connections.view");
 
     const response = await request(createApp())
       .get("/api/v1/migrations/backup/cloud/connections")
       .set("Authorization", "Bearer test-token");
 
-    expect(response.status).toBe(403);
-    expect(listCloudConnectionsController).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(listCloudConnectionsController).toHaveBeenCalled();
   });
 
-  it("denies cloud connection creation when migrations.manage is explicitly denied", async () => {
+  it("denies cloud connection creation when backups.connections.manage is explicitly denied", async () => {
     authAs("BUSINESS_OWNER");
     hasPermission.mockImplementation(async (
       _userId: string,
       _businessId: string,
       _role: string,
       permissionCode: string,
-    ) => permissionCode !== "migrations.manage");
+    ) => permissionCode !== "backups.connections.manage");
 
     const response = await request(createApp())
       .post("/api/v1/migrations/backup/cloud/connections")
@@ -556,25 +612,26 @@ describe("Migrations routes - existing role boundaries", () => {
     expect(createCloudConnectionController).not.toHaveBeenCalled();
   });
 
-  it("does not allow a branch manager to list cloud backup schedules", async () => {
+  it("allows a branch manager with backups.schedules.view to list cloud backup schedules", async () => {
     authAs("BRANCH_MANAGER");
+    hasPermission.mockImplementation(async (_user, _business, _role, code) => code === "backups.schedules.view");
 
     const response = await request(createApp())
       .get("/api/v1/migrations/backup/cloud/schedules")
       .set("Authorization", "Bearer test-token");
 
-    expect(response.status).toBe(403);
-    expect(listCloudBackupSchedulesController).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(listCloudBackupSchedulesController).toHaveBeenCalled();
   });
 
-  it("denies schedule creation when migrations.manage is explicitly denied", async () => {
+  it("denies schedule creation when backups.schedules.manage is explicitly denied", async () => {
     authAs("BUSINESS_OWNER");
     hasPermission.mockImplementation(async (
       _userId: string,
       _businessId: string,
       _role: string,
       permissionCode: string,
-    ) => permissionCode !== "migrations.manage");
+    ) => permissionCode !== "backups.schedules.manage");
 
     const response = await request(createApp())
       .post("/api/v1/migrations/backup/cloud/schedules")
@@ -595,6 +652,19 @@ describe("Migrations routes - existing role boundaries", () => {
 
     expect(response.status).toBe(403);
     expect(createCloudBackupScheduleController).not.toHaveBeenCalled();
+  });
+
+  it("denies a view-only user from running a cloud backup", async () => {
+    authAs("BRANCH_MANAGER");
+    hasPermission.mockImplementation(async (_user, _business, _role, code) => code === "backups.history.view");
+
+    const response = await request(createApp())
+      .post("/api/v1/migrations/backup/cloud/runs")
+      .set("Authorization", "Bearer test-token")
+      .send({ connectionId: "connection-1" });
+
+    expect(response.status).toBe(403);
+    expect(createCloudBackupRunController).not.toHaveBeenCalled();
   });
 
   it("rejects backup restore when the restore reason is missing", async () => {
@@ -698,5 +768,76 @@ describe("Migrations routes - existing role boundaries", () => {
       undefined,
       "Approved business backup recovery",
     );
+  });
+});
+
+describe("business restore password authorization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authAs("BUSINESS_OWNER");
+    hasPermission.mockImplementation(async (_userId, _businessId, _role, code) =>
+      code === "backups.restore_password.view" || code === "backups.restore_password.manage");
+    getBusinessRestorePassword.mockResolvedValue("secret-that-must-not-be-audited");
+    changeBusinessRestorePassword.mockResolvedValue(undefined);
+    recordAuditEvent.mockResolvedValue(undefined);
+  });
+
+  it("does not let a business-owner role bypass restore-password permissions", async () => {
+    hasPermission.mockResolvedValue(false);
+    const app = createApp();
+
+    const read = await request(app)
+      .get("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token");
+    const change = await request(app)
+      .put("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token")
+      .send({ password: "replacement-secret-123" });
+
+    expect(read.status).toBe(403);
+    expect(change.status).toBe(403);
+    expect(getBusinessRestorePassword).not.toHaveBeenCalled();
+    expect(changeBusinessRestorePassword).not.toHaveBeenCalled();
+  });
+
+  it("requires separate view and manage grants and never audits the secret", async () => {
+    hasPermission.mockImplementation(async (_userId, _businessId, _role, code) => code === "backups.restore_password.view");
+    const app = createApp();
+    const read = await request(app)
+      .get("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token");
+    const deniedChange = await request(app)
+      .put("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token")
+      .send({ password: "replacement-secret-123" });
+
+    expect(read.status).toBe(200);
+    expect(read.body.password).toBe("secret-that-must-not-be-audited");
+    expect(deniedChange.status).toBe(403);
+    expect(JSON.stringify(recordAuditEvent.mock.calls)).not.toContain("secret-that-must-not-be-audited");
+
+    hasPermission.mockImplementation(async (_userId, _businessId, _role, code) => code === "backups.restore_password.manage");
+    const allowedChange = await request(app)
+      .put("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token")
+      .send({ password: "replacement-secret-123" });
+    expect(allowedChange.status).toBe(200);
+    expect(changeBusinessRestorePassword).toHaveBeenCalledWith("business-1", "replacement-secret-123");
+    expect(JSON.stringify(recordAuditEvent.mock.calls)).not.toContain("replacement-secret-123");
+  });
+
+  it("passes the authenticated tenant to restore-password lookup", async () => {
+    verifyAccessToken.mockReturnValue({
+      userId: "user-2", email: "staff@other.example", role: "STAFF", businessId: "business-2",
+    });
+    hasPermission.mockImplementation(async (_userId, businessId, _role, code) =>
+      businessId === "business-2" && code === "backups.restore_password.view");
+
+    const response = await request(createApp())
+      .get("/api/v1/migrations/backup/restore-password")
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(getBusinessRestorePassword).toHaveBeenCalledWith("business-2");
   });
 });

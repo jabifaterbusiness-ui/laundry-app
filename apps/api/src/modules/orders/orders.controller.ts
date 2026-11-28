@@ -47,6 +47,10 @@ export async function create(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
   const branchId = requireBranchId(req);
   const input = createOrderSchema.parse(req.body);
+  const idempotencyKey = req.header("Idempotency-Key")?.trim();
+  if (idempotencyKey && idempotencyKey.length > 200) {
+    throw new AppError("Idempotency-Key must be 200 characters or fewer", 422);
+  }
 
   const order = await createOrder({
     businessId,
@@ -54,6 +58,7 @@ export async function create(req: Request, res: Response) {
     actorUserId: req.user!.id,
     customerId: input.customerId,
     items: input.items,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(input.adjustments !== undefined ? {
       adjustments: input.adjustments.map((selection) => ({
         adjustmentId: selection.adjustmentId,
@@ -72,24 +77,30 @@ export async function create(req: Request, res: Response) {
       expectedReadyAt: input.expectedReadyAt,
     }),
   });
+  const replayed = "idempotencyReplay" in order && order.idempotencyReplay === true;
+  const responseOrder = replayed
+    ? Object.fromEntries(Object.entries(order).filter(([key]) => key !== "idempotencyReplay"))
+    : order;
 
-  await recordAuditEvent({
-    action: "order.created",
-    entityType: "Order",
-    entityId: order.id,
-    businessId,
-    branchId,
-    actorUserId: req.user!.id,
-    correlationId: req.correlationId ?? null,
-    metadata: {
-      orderNumber: order.orderNumber,
-      customerId: order.customerId,
-      orderTotal: order.orderTotal,
-      itemCount: order.items.length,
-    },
-  });
+  if (!replayed) {
+    await recordAuditEvent({
+      action: "order.created",
+      entityType: "Order",
+      entityId: order.id,
+      businessId,
+      branchId,
+      actorUserId: req.user!.id,
+      correlationId: req.correlationId ?? null,
+      metadata: {
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        orderTotal: order.orderTotal,
+        itemCount: order.items.length,
+      },
+    });
+  }
 
-  res.status(201).json(order);
+  res.status(replayed ? 200 : 201).json(responseOrder);
 }
 
 export async function list(req: Request, res: Response) {
@@ -200,6 +211,7 @@ export async function updateStatus(req: Request, res: Response) {
       actorRole: req.user!.securityRole as Role,
       correlationId: req.correlationId ?? null,
       ...(input.pickupOverrideReason ? { pickupOverrideReason: input.pickupOverrideReason } : {}),
+      notificationChoice: input.notificationChoice,
     },
   );
 

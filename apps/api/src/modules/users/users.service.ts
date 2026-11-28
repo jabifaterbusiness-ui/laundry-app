@@ -9,6 +9,7 @@ const USER_SELECT = {
   email: true,
   username: true,
   fullName: true,
+  phone: true,
   role: true,
   securityRole: true,
   isActive: true,
@@ -198,6 +199,7 @@ export async function getUser(
 export async function createUser(
   input: {
     fullName: string;
+    phone?: string | null;
     email: string;
     username?: string;
     password: string;
@@ -250,6 +252,7 @@ export async function createUser(
       data: {
         businessId: context.businessId,
         fullName: input.fullName.trim(),
+        phone: input.phone ?? null,
         email,
         username,
         passwordHash,
@@ -293,6 +296,7 @@ export async function updateUser(
   userId: string,
   input: {
     fullName?: string;
+    phone?: string | null;
     email?: string;
     username?: string | null;
     password?: string;
@@ -411,6 +415,7 @@ export async function updateUser(
           ...(input.fullName !== undefined
             ? { fullName: input.fullName.trim() }
             : {}),
+          ...(input.phone !== undefined ? { phone: input.phone } : {}),
           ...(input.email !== undefined
             ? { email: input.email.trim().toLowerCase() }
             : {}),

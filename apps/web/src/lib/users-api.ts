@@ -17,6 +17,7 @@ export interface ManagedUser {
   email: string;
   username: string | null;
   fullName: string;
+  phone?: string | null;
   role: UserRole;
   isActive: boolean;
   businessId: string;
@@ -34,6 +35,7 @@ export interface ListUsersParams {
 
 export interface CreateUserInput {
   fullName: string;
+  phone?: string;
   email: string;
   username?: string;
   password: string;
@@ -43,6 +45,7 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   fullName?: string;
+  phone?: string | null;
   email?: string;
   username?: string | null;
   password?: string;

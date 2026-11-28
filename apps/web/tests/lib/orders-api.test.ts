@@ -56,6 +56,8 @@ describe("orders-api offline queue", () => {
     expect(result.operation.actorUserId).toBe("user-1");
     expect(result.operation.payload).toEqual(createInput);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const request = fetchSpy.mock.calls[0]?.[1];
+    expect(new Headers(request?.headers).get("Idempotency-Key")).toBe(result.operation.clientOperationId);
 
     const queued = await listOfflineSyncOperations(
       "business-1",
@@ -86,6 +88,7 @@ describe("orders-api offline queue", () => {
       action: "UPDATE_STATUS",
       orderId: "order-1",
       status: "READY_FOR_PICKUP",
+      notificationChoice: "NONE",
     });
   });
 
@@ -109,6 +112,26 @@ describe("orders-api offline queue", () => {
       orderId: "order-2",
       status: "PICKED_UP",
       pickupOverrideReason: "Approved by branch manager after customer confirmation",
+      notificationChoice: "NONE",
+    });
+  });
+
+  it("preserves the selected notification channel in the offline operation", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new NetworkError("Unable to reach the server"),
+    );
+
+    const result = await updateOrderStatusWithOfflineQueue(
+      "order-3", "READY_FOR_PICKUP", auth, syncContext, undefined, "WHATSAPP",
+    );
+
+    expect(result.queued).toBe(true);
+    if (!result.queued) throw new Error("Expected operation to be queued");
+    expect(result.operation.payload).toEqual({
+      action: "UPDATE_STATUS",
+      orderId: "order-3",
+      status: "READY_FOR_PICKUP",
+      notificationChoice: "WHATSAPP",
     });
   });
 

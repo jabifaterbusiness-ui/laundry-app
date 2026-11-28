@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { recordAuditEvent } from "../../lib/audit.js";
 import { analyzeMigrationSource, getMigrationJob, importMigrationJob } from "./migration.service.js";
 import { exportBusinessBackup, restoreBusinessBackup } from "./backup.service.js";
+import { changeBusinessRestorePassword, getBusinessRestorePassword, verifyBusinessRestorePassword } from "./backup-restore-password.service.js";
 
 function requireBusinessId(req: Request): string {
   if (!req.user?.businessId) throw new AppError("This action requires an account scoped to a business", 403);
@@ -53,6 +54,22 @@ const importSchema = z.object({
 });
 
 const restoreSchema = z.object({ password: z.string().min(5).optional() });
+const restorePasswordSchema = z.object({ password: z.string().min(12).max(256) }).strict();
+
+export async function getRestorePassword(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const password = await getBusinessRestorePassword(businessId);
+  await recordAuditEvent({ action: "backup.restore_password.viewed", entityType: "Business", entityId: businessId, businessId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  res.status(200).json({ password });
+}
+
+export async function setRestorePassword(req: Request, res: Response) {
+  const businessId = requireBusinessId(req);
+  const { password } = restorePasswordSchema.parse(req.body);
+  await changeBusinessRestorePassword(businessId, password);
+  await recordAuditEvent({ action: "backup.restore_password.changed", entityType: "Business", entityId: businessId, businessId, actorUserId: req.user!.id, correlationId: req.correlationId ?? null });
+  res.status(200).json({ updated: true });
+}
 
 export async function analyze(req: Request, res: Response) {
   const businessId = requireBusinessId(req);
@@ -104,6 +121,8 @@ export async function restoreBackup(req: Request, res: Response) {
     typeof passwordHeader === "string"
       ? restoreSchema.parse({ password: passwordHeader }).password
       : undefined;
+  const organizationPasswordHeader = req.headers["x-organization-restore-password"];
+  const organizationPassword = typeof organizationPasswordHeader === "string" ? organizationPasswordHeader : undefined;
 
   const reasonHeader = req.headers["x-restore-reason"];
   if (typeof reasonHeader !== "string") {
@@ -115,6 +134,7 @@ export async function restoreBackup(req: Request, res: Response) {
   }
 
   const buffer = await readRawBody(req, config.migrations.minUploadBytes, config.migrations.maxUploadBytes);
+  await verifyBusinessRestorePassword(businessId, organizationPassword);
   const result = await restoreBusinessBackup(
     businessId,
     req.user!.id,

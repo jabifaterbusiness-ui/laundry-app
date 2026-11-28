@@ -161,6 +161,8 @@ export async function sendSubscriptionPaymentConfirmationEmail(
       to: payment.business.email,
       subject: `Subscription payment confirmed — ${payment.business.name}`,
       html,
+      fromName: payment.business.name,
+      replyTo: payment.business.email,
       feature: "subscription",
       idempotencyKey: `subscription-payment:${payment.id}:confirmation`,
     });

@@ -147,7 +147,7 @@ describe("UsersPage", () => {
     renderUsers();
 
     const johnRow = await screen.findByRole("row", {
-      name: /John Staff john@example.com john\.staff Laundry Supervisor/i,
+      name: /John Staff john@example.com — john\.staff Laundry Supervisor/i,
     });
 
     expect(within(johnRow).getByText("john.staff")).toBeInTheDocument();
@@ -212,7 +212,7 @@ describe("UsersPage", () => {
     renderUsers();
 
     const johnRow = await screen.findByRole("row", {
-      name: /John Staff john@example.com john\.staff Laundry Supervisor/,
+      name: /John Staff john@example.com — john\.staff Laundry Supervisor/,
     });
 
     expect(
@@ -252,7 +252,7 @@ describe("UsersPage", () => {
     await screen.findByText("John Staff");
 
     const johnRow = screen.getByRole("row", {
-      name: /John Staff john@example.com john\.staff Laundry Supervisor/i,
+      name: /John Staff john@example.com — john\.staff Laundry Supervisor/i,
     });
 
     fireEvent.click(

@@ -784,6 +784,10 @@ export async function restoreBusinessBackup(
       delete businessData.createdAt;
       delete businessData.updatedAt;
       delete businessData.slug;
+      // A business restore password is managed separately from backup data.
+      // Older backups may contain its ciphertext; never roll a newer password
+      // back while restoring otherwise valid historical business data.
+      delete businessData.backupRestorePasswordCiphertext;
       await delegate(tx, "business").update({
         where: { id: businessId },
         data: businessData,

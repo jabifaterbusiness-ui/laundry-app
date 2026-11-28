@@ -8,6 +8,12 @@ const migrationSql = readFileSync(
     import.meta.url,
   ),
   "utf8",
+) + readFileSync(
+  new URL(
+    "../../prisma/migrations/20261122110000_backup_restore_password_and_permissions/migration.sql",
+    import.meta.url,
+  ),
+  "utf8",
 );
 
 describe("complete permission catalogue migration", () => {

@@ -7,6 +7,8 @@ import { saveOrderWorkspaceState } from "../../lib/order-workspace-persistence.j
 import { listOfflineSyncOperations } from "../../lib/offline-sync-queue.js";
 import {
   createCloudBackupRun,
+  getCloudBackupIdempotencyKey,
+  clearCloudBackupIdempotencyKey,
   getCloudBackupSettings,
   listCloudBackupConnections,
 } from "../../lib/data-management-api.js";
@@ -582,13 +584,16 @@ export function QuickOperationLauncher({
         if (!authorization) {
           throw new Error("Sensitive authorization was cancelled. No cloud backup was started.");
         }
+        const businessId = user?.businessId ?? "";
+        const idempotencyKey = getCloudBackupIdempotencyKey(businessId, destination.id);
         const run = await createCloudBackupRun(destination.id, {
           accessToken,
           sensitiveAuthorization: authorization,
-        });
+        }, idempotencyKey);
         if (run.status !== "SUCCEEDED") {
           throw new Error(run.errorMessage || "The cloud backup did not complete successfully.");
         }
+        clearCloudBackupIdempotencyKey(businessId, destination.id);
         publishCloudBackupNotification({
           status: "success",
           title: "Manual cloud backup",

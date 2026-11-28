@@ -109,6 +109,7 @@ describe("financial statement scheduler", () => {
   const business = {
     id: "business-1",
     name: "Laundry Angel",
+    email: "hello@laundryangel.test",
     timezone: "Africa/Lagos",
     currencyCode: "NGN",
     financialStatementConfig: null,

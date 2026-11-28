@@ -132,7 +132,9 @@ export async function deleteCloudBackupScheduleController(req: Request, res: Res
 }
 
 export async function listCloudConnectionsController(req: Request, res: Response) {
-  res.status(200).json({ connections: await listBackupConnections(businessId(req)) });
+  const connections = await listBackupConnections(businessId(req));
+  // Business backup screens must not expose legacy OneDrive connections.
+  res.status(200).json({ connections: connections.filter((connection) => connection.provider !== "ONEDRIVE") });
 }
 
 export async function createCloudConnectionController(req: Request, res: Response) {
@@ -229,10 +231,13 @@ export async function verifyCloudConnectionController(req: Request, res: Respons
 
 export async function createCloudBackupRunController(req: Request, res: Response) {
   const tenantId = businessId(req);
-  const connectionId = z.object({ connectionId: z.string().uuid() }).parse(req.body).connectionId;
+  const { connectionId, idempotencyKey } = z.object({
+    connectionId: z.string().uuid(),
+    idempotencyKey: z.string().uuid(),
+  }).strict().parse(req.body);
   let run;
   try {
-    run = await createCloudBackupRun(tenantId, connectionId);
+    run = await createCloudBackupRun(tenantId, connectionId, { idempotencyKey });
   } catch (error) {
     await recordAuditEvent({
       action: "backup.cloud_run.attempt_failed",
