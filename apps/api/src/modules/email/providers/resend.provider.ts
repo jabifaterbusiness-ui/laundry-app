@@ -28,7 +28,7 @@ function validSender(value: string): boolean {
     (!value.includes("<") || /^[^<>]+<[^<>]+>$/.test(value));
 }
 
-/** Resend-only transport boundary. Provider diagnostics are deliberately not returned. */
+/** Resend-only transport boundary. Only status and allowlisted error codes leave this boundary. */
 export async function sendWithResend(
   input: ProviderEmailInput,
   options: { idempotencyKey?: string } = {},
