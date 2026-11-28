@@ -45,6 +45,20 @@ describe("central email delivery", () => {
     );
   });
 
+  it("passes inline CID attachment data through the Resend single-send API", async () => {
+    const attachment = {
+      filename: "business-logo.png",
+      content: Buffer.from("logo-bytes"),
+      contentType: "image/png",
+      contentId: "laundryangel-business-logo",
+    };
+    await sendEmail({ ...input, attachments: [attachment] });
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: [attachment] }),
+      expect.objectContaining({ idempotencyKey: input.idempotencyKey }),
+    );
+  });
+
   it("uses the business name on the verified platform sender and business email only as Reply-To", async () => {
     await sendEmail({ ...input, fromName: "10 Star Laundry", replyTo: "contact@10star.example" });
     expect(sendMock).toHaveBeenCalledWith(
@@ -78,19 +92,31 @@ describe("central email delivery", () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it("classifies rate limits as retryable without exposing provider diagnostics", async () => {
-    sendMock.mockResolvedValue({ data: null, error: { statusCode: 429, message: "private provider response" } });
+  it("classifies rate limits as retryable while redacting sensitive provider message details", async () => {
+    sendMock.mockResolvedValue({
+      data: null,
+      error: {
+        statusCode: 429,
+        message: "Recipient person@example.com rejected at https://example.com/reset/secret-token with key re_SecretApiKey12345678901234567890",
+      },
+    });
     await expect(sendEmail(input)).rejects.toMatchObject({
       name: "EmailDeliveryError", retryable: true,
       message: "Email provider is temporarily unavailable.",
     });
     expect(warnMock).toHaveBeenNthCalledWith(
       1,
-      { feature: "receipt", attempt: 1, retryable: true, providerStatusCode: 429 },
+      {
+        feature: "receipt", attempt: 1, retryable: true, providerStatusCode: 429,
+        providerErrorCode: null,
+        providerErrorMessage: "Recipient [email] rejected at [url] with key [redacted]",
+      },
       "Email submission failed.",
     );
     expect(warnMock).toHaveBeenCalledTimes(emailConfig.maxAttempts);
-    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("private provider response");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("person@example.com");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("secret-token");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("re_SecretApiKey");
     expect(JSON.stringify(warnMock.mock.calls)).not.toContain(input.to);
     expect(JSON.stringify(warnMock.mock.calls)).not.toContain(input.html);
   });
@@ -100,6 +126,28 @@ describe("central email delivery", () => {
     await expect(sendEmail(input)).rejects.toMatchObject({ retryable: false });
     sendMock.mockResolvedValueOnce({ data: {}, error: null });
     await expect(sendEmail(input)).rejects.toBeInstanceOf(EmailDeliveryError);
+  });
+
+  it("records a safe provider error code for permanent 403 rejections without retrying", async () => {
+    sendMock.mockResolvedValue({
+      data: null,
+      error: { statusCode: 403, name: "authorization_error", message: "private provider response" },
+    });
+    await expect(sendEmail(input)).rejects.toMatchObject({ retryable: false });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(warnMock).toHaveBeenCalledWith(
+      {
+        feature: "receipt",
+        attempt: 1,
+        retryable: false,
+        providerStatusCode: 403,
+        providerErrorCode: "authorization_error",
+        providerErrorMessage: "private provider response",
+      },
+      "Email submission failed.",
+    );
+    expect(JSON.stringify(warnMock.mock.calls)).toContain("private provider response");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain(input.to);
   });
 
   it("retries transient failures with the same idempotency key", async () => {

@@ -453,3 +453,119 @@ body.printing-company .invoice-print-customer {
 .receipt__note--internal {
   border-color: var(--receipt-accent, #111);
 }
+
+/* High-contrast print palette: do not depend on browser background graphics
+   or low-contrast business brand colours for readable paper receipts. */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .receipt,
+  .receipt * {
+    color: #111 !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+  }
+
+  .receipt {
+    background: #fff !important;
+    font-size: 12px !important;
+  }
+
+  .receipt__header {
+    border-bottom: 2px solid #111 !important;
+    background: #fff !important;
+  }
+
+  .receipt__company h1 {
+    color: #111 !important;
+    font-size: 20px !important;
+  }
+
+  .receipt__company-contact,
+  .receipt__title-row p,
+  .receipt__date,
+  .receipt__colors,
+  .receipt__footer {
+    color: #222 !important;
+    font-size: 10px !important;
+  }
+
+  .receipt__title-row h2,
+  .receipt__items th,
+  .receipt__payments h3 {
+    color: #111 !important;
+  }
+
+  .receipt__items {
+    color: #111 !important;
+    font-size: 12px !important;
+  }
+
+  .receipt__items th,
+  .receipt__items td,
+  .receipt__payments th,
+  .receipt__payments td {
+    color: #111 !important;
+    border-color: #444 !important;
+  }
+
+  .receipt__label {
+    color: #111 !important;
+    font-size: 10px !important;
+  }
+
+  .receipt__note,
+  .receipt__agreement,
+  .receipt__charges,
+  .receipt__payment-totals,
+  .receipt__summary {
+    color: #111 !important;
+    background: #fff !important;
+    border-color: #333 !important;
+  }
+
+  .receipt__total,
+  .receipt__total strong,
+  .receipt__summary strong {
+    color: #111 !important;
+    border-color: #111 !important;
+  }
+
+  .receipt__paid-in-full {
+    color: #111 !important;
+    background: #fff !important;
+    border: 2px solid #111 !important;
+  }
+
+  .receipt__brand-mark {
+    color: #111 !important;
+    background: #fff !important;
+    border: 2px solid #111 !important;
+  }
+
+  .receipt__logo {
+    filter: none !important;
+    opacity: 1 !important;
+    object-fit: contain !important;
+  }
+
+  .receipt__items tr,
+  .receipt__payments tr,
+  .receipt__customer,
+  .receipt__summary,
+  .receipt__footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    margin: 10mm;
+  }
+}

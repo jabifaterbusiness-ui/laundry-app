@@ -1,4 +1,4 @@
-import type { OrderStatus, Prisma, Role } from "@prisma/client";
+import { Prisma, type OrderStatus, type Role } from "@prisma/client";
 import { hasPermission } from "../permissions/permissions.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -341,29 +341,36 @@ async function createOrderWithTx(
     });
 }
 
-async function createUniqueOrderNumber(
+export async function createUniqueOrderNumber(
   tx: Prisma.TransactionClient,
   businessId: string,
 ): Promise<string> {
-  const sequence = await tx.orderNumberSequence.upsert({
-    where: {
-      businessId,
-    },
-    create: {
-      businessId,
-      nextNumber: 2,
-    },
-    update: {
-      nextNumber: {
-        increment: 1,
-      },
-    },
-    select: {
-      nextNumber: true,
-    },
-  });
+  // Serialize allocation per business across every API process. The
+  // transaction-scoped advisory lock also covers first-time sequence creation.
+  await tx.$queryRaw(
+    Prisma.sql`SELECT 1 AS "locked" FROM (SELECT pg_advisory_xact_lock(hashtextextended(${businessId}, 0))) AS "business_lock"`,
+  );
 
-  const assignedNumber = sequence.nextNumber - 1;
+  // Existing orders are authoritative if a sequence row is missing or stale.
+  // Only the established five-digit numeric format participates in allocation.
+  const highestOrder = await tx.$queryRaw<Array<{ maxOrderNumber: number }>>(
+    Prisma.sql`
+      SELECT COALESCE(MAX("orderNumber"::integer), 0)::integer AS "maxOrderNumber"
+      FROM "orders"
+      WHERE "businessId" = ${businessId}
+        AND "orderNumber" ~ '^[0-9]{1,5}$'
+    `,
+  );
+  const highestExistingNumber = highestOrder[0]?.maxOrderNumber ?? 0;
+
+  const currentSequence = await tx.orderNumberSequence.findUnique({
+    where: { businessId },
+    select: { nextNumber: true },
+  });
+  const assignedNumber = Math.max(
+    currentSequence?.nextNumber ?? 1,
+    highestExistingNumber + 1,
+  );
 
   if (assignedNumber > 99999) {
     throw new AppError(
@@ -371,6 +378,15 @@ async function createUniqueOrderNumber(
       422,
     );
   }
+
+  // The advisory lock makes this read/reconcile/write sequence atomic for
+  // this business. Keep nextNumber as the next number to be allocated.
+  await tx.orderNumberSequence.upsert({
+    where: { businessId },
+    create: { businessId, nextNumber: assignedNumber + 1 },
+    update: { nextNumber: assignedNumber + 1 },
+    select: { nextNumber: true },
+  });
 
   return assignedNumber.toString().padStart(5, "0");
 }

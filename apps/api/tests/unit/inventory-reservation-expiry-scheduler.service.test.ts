@@ -63,17 +63,31 @@ describe("inventory reservation expiry scheduler", () => {
     expect(txMock.inventoryStock.update).not.toHaveBeenCalled();
   });
 
-  it("refuses to hide an inconsistent reserved balance", async () => {
-    prismaMock.inventoryReservation.findMany.mockResolvedValue([{
-      id: "reservation-1", businessId: "business-1", branchId: "branch-1", inventoryItemId: "item-1", quantity: 5,
-    }]);
-    txMock.inventoryReservation.findFirst.mockResolvedValue({
-      id: "reservation-1", branchId: "branch-1", inventoryItemId: "item-1", quantity: 5,
-    });
+  it("skips an inconsistent reservation but continues releasing other expired reservations", async () => {
+    prismaMock.inventoryReservation.findMany.mockResolvedValue([
+      { id: "reservation-bad", businessId: "business-1", branchId: "branch-1", inventoryItemId: "item-1", quantity: 5 },
+      { id: "reservation-good", businessId: "business-1", branchId: "branch-1", inventoryItemId: "item-1", quantity: 1 },
+    ]);
+    txMock.inventoryReservation.findFirst
+      .mockResolvedValueOnce({ id: "reservation-bad", branchId: "branch-1", inventoryItemId: "item-1", quantity: 5 })
+      .mockResolvedValueOnce({ id: "reservation-good", branchId: "branch-1", inventoryItemId: "item-1", quantity: 1 });
     txMock.inventoryStock.findUnique.mockResolvedValue({ id: "stock-1" });
-    txMock.inventoryStock.findUniqueOrThrow.mockResolvedValue({ id: "stock-1", reservedQuantity: 3 });
+    txMock.inventoryStock.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: "stock-1", reservedQuantity: 3 })
+      .mockResolvedValueOnce({ id: "stock-1", reservedQuantity: 2 });
 
-    await expect(processExpiredInventoryReservations()).rejects.toThrow("Reserved inventory balance is inconsistent");
-    expect(txMock.inventoryStock.update).not.toHaveBeenCalled();
+    await expect(processExpiredInventoryReservations()).resolves.toEqual({ scanned: 2, released: 1 });
+    expect(txMock.inventoryStock.update).toHaveBeenCalledTimes(1);
+    expect(txMock.inventoryStock.update).toHaveBeenCalledWith({
+      where: { id: "stock-1" }, data: { reservedQuantity: { decrement: 1 } },
+    });
+    expect(txMock.inventoryReservation.update).toHaveBeenCalledWith({
+      where: { id: "reservation-good" },
+      data: { status: "EXPIRED", releasedAt: expect.any(Date) },
+    });
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      { reservationId: "reservation-bad", errorType: "Error" },
+      "Expired inventory reservation was skipped because its stock balance needs review.",
+    );
   });
 });

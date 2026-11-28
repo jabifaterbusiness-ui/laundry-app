@@ -1,6 +1,9 @@
+import sharp from "sharp";
 import { AppError } from "../../middleware/error-handler.js";
 import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 import { getCustomerReceipt } from "./receipts.service.js";
+import { readBusinessLogo } from "../businesses/business-branding.storage.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
 import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
 import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
@@ -79,13 +82,44 @@ export async function resendDigitalReceipt(
   }
 
   if (input.channel === "EMAIL") {
-    const html = renderCustomerReceiptEmail(receipt);
+    // Business logo storage is private and session-authenticated URLs cannot
+    // be loaded by external email clients. Embed a small PNG using a CID.
+    const storedLogo = receipt.logoUrl
+      ? await readBusinessLogo(receipt.businessId)
+      : null;
+    let emailLogo: Buffer | null = null;
+    if (storedLogo) {
+      try {
+        emailLogo = await sharp(storedLogo)
+          .resize(600, 600, { fit: "inside", withoutEnlargement: true })
+          .png({ compressionLevel: 9 })
+          .toBuffer();
+      } catch {
+        logger.warn(
+          { businessId: receipt.businessId },
+          "Business logo could not be optimized for receipt email; sending receipt without it.",
+        );
+      }
+    }
+    const logoContentId = "laundryangel-business-logo";
+    const html = renderCustomerReceiptEmail(
+      receipt,
+      emailLogo ? { logoContentId } : {},
+    );
 
     try {
       const delivery = await sendEmail({
         to: destination,
         subject: `${receipt.companyName} — Receipt ${receipt.invoiceNumber}`,
         html,
+        ...(emailLogo ? {
+          attachments: [{
+            filename: "business-logo.png",
+            content: emailLogo,
+            contentType: "image/png",
+            contentId: "laundryangel-business-logo",
+          }],
+        } : {}),
         fromName: receipt.companyName,
         replyTo: receipt.companyEmail,
         feature: "receipt",

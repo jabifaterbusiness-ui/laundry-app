@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { sendWithResend } from "./providers/resend.provider.js";
+import { sendWithResend, type ProviderEmailAttachment } from "./providers/resend.provider.js";
 
 export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  /** Optional inline or downloadable attachments. */
+  attachments?: ProviderEmailAttachment[];
   /** Business-facing name; the authenticated platform domain remains the sender address. */
   fromName?: string;
   /** Optional business email reply target. Never used as an unverified sender. */
@@ -54,7 +56,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         retryable ? "Email provider is temporarily unavailable." : "Email provider rejected the message.",
         retryable,
       );
-      logger.warn({ feature: input.feature, attempt, retryable, providerStatusCode: result.statusCode }, "Email submission failed.");
+      logger.warn({ feature: input.feature, attempt, retryable, providerStatusCode: result.statusCode, providerErrorCode: result.providerErrorCode, providerErrorMessage: result.providerErrorMessage }, "Email submission failed.");
     } catch (error) {
       if (error instanceof EmailDeliveryError) throw error;
       const configured = Boolean((error as Error)?.message?.includes("not configured"));

@@ -1,17 +1,25 @@
 import { Resend } from "resend";
 import { config } from "../../../config/index.js";
 
+export interface ProviderEmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+  contentId?: string;
+}
+
 export interface ProviderEmailInput {
   to: string;
   subject: string;
   html: string;
   fromName?: string;
   replyTo?: string | null;
+  attachments?: ProviderEmailAttachment[];
 }
 
 export type ProviderEmailResult =
   | { ok: true; id: string }
-  | { ok: false; statusCode: number | null; timedOut: boolean };
+  | { ok: false; statusCode: number | null; timedOut: boolean; providerErrorCode: string | null; providerErrorMessage: string | null };
 
 function validSender(value: string): boolean {
   if (/[\r\n]/.test(value)) return false;
@@ -20,7 +28,7 @@ function validSender(value: string): boolean {
     (!value.includes("<") || /^[^<>]+<[^<>]+>$/.test(value));
 }
 
-/** Resend-only transport boundary. Provider diagnostics are deliberately not returned. */
+/** Resend-only transport boundary. Only status and allowlisted error codes leave this boundary. */
 export async function sendWithResend(
   input: ProviderEmailInput,
   options: { idempotencyKey?: string } = {},
@@ -44,13 +52,32 @@ export async function sendWithResend(
   const safeName = input.fromName?.replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
   const replyTo = input.replyTo && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(input.replyTo) ? input.replyTo : undefined;
   const { data, error } = await resend.emails.send(
-    { from: safeName ? `${safeName} <${verifiedAddress}>` : from, to: input.to, subject: input.subject, html: input.html, ...(replyTo ? { replyTo } : {}) },
+    { from: safeName ? `${safeName} <${verifiedAddress}>` : from, to: input.to, subject: input.subject, html: input.html, ...(replyTo ? { replyTo } : {}), ...(input.attachments?.length ? { attachments: input.attachments } : {}) },
     requestOptions,
   );
 
   if (error) {
     const statusCode = typeof error.statusCode === "number" ? error.statusCode : null;
-    return { ok: false, statusCode, timedOut: signal.aborted };
+    const rawErrorCode = typeof error.name === "string" ? error.name : "";
+    const providerErrorCode = /^[a-z0-9_]{1,64}$/i.test(rawErrorCode)
+      ? rawErrorCode
+      : null;
+    const rawErrorMessage = typeof error.message === "string" ? error.message : "";
+    const providerErrorMessage = rawErrorMessage
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+      .replace(/https?:\/\/\S+/gi, "[url]")
+      .replace(/\b(?:re|sk|whsec)_[A-Za-z0-9_-]+\b/gi, "[redacted]")
+      .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 180) || null;
+    return {
+      ok: false,
+      statusCode,
+      timedOut: signal.aborted,
+      providerErrorCode,
+      providerErrorMessage,
+    };
   }
 
   if (!data?.id) {
