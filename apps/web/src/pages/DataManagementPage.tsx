@@ -679,7 +679,19 @@ export function DataManagementPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const result = await restoreBackup(restoreFile, restoreFormat === "LAUNDRYBK" ? restorePassword : "", organizationRestorePassword, trimmedReason, { accessToken });
+      const authorization = await requestSensitiveAuthorization();
+      if (!authorization) {
+        setMessage("Sensitive authorization was cancelled. The backup was not restored.");
+        return;
+      }
+
+      const result = await restoreBackup(
+        restoreFile,
+        restoreFormat === "LAUNDRYBK" ? restorePassword : "",
+        organizationRestorePassword,
+        trimmedReason,
+        { accessToken, sensitiveAuthorization: authorization },
+      );
       setOrganizationRestorePassword("");
       setMessage(
         `Restore completed: ${result.created} records created, ${result.updated} updated, ${result.mapped} safely mapped, and ${result.skippedUsers} existing staff accounts preserved without credential/security changes.`,

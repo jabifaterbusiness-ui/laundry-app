@@ -99,12 +99,13 @@ export async function restoreBackup(
   password: string,
   organizationPassword: string,
   reason: string,
-  auth: { accessToken: string | null },
+  auth: { accessToken: string | null; sensitiveAuthorization?: string | null },
 ) {
   const res = await fetch(`${API_BASE_URL}/migrations/backup/restore`, {
     method: "POST",
     headers: {
       ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+      ...(auth.sensitiveAuthorization ? { "X-Sensitive-Authorization": auth.sensitiveAuthorization } : {}),
       "Content-Type": file.type || "application/octet-stream",
       ...(password ? { "X-Backup-Password": password } : {}),
       "X-Organization-Restore-Password": organizationPassword,

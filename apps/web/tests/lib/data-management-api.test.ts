@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  restoreBackup,
   saveCloudBackupSettings,
   listCloudBackupSchedules,
   createCloudBackupSchedule,
@@ -268,5 +269,49 @@ describe("cloud backup run idempotency", () => {
 
     clearCloudBackupIdempotencyKey("business-1", "connection-1");
     expect(getCloudBackupIdempotencyKey("business-1", "connection-1")).not.toBe(first);
+  });
+});
+
+describe("restoreBackup sensitive authorization", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the recent sensitive authorization token with the restore request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ created: 1, updated: 0, mapped: 0, skippedUsers: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const file = new File(["encrypted-backup"], "business.laundry-backup", {
+      type: "application/octet-stream",
+    });
+
+    await restoreBackup(
+      file,
+      "backup-password",
+      "business-restore-password",
+      "Approved business backup recovery",
+      {
+        accessToken: "access-token",
+        sensitiveAuthorization: "fresh-sensitive-token",
+      },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/v1/migrations/backup/restore",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token",
+          "X-Sensitive-Authorization": "fresh-sensitive-token",
+          "X-Backup-Password": "backup-password",
+          "X-Organization-Restore-Password": "business-restore-password",
+          "X-Restore-Reason": "Approved business backup recovery",
+        }),
+        body: file,
+      }),
+    );
   });
 });

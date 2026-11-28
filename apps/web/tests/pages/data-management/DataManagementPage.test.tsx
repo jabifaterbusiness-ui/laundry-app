@@ -586,9 +586,17 @@ describe("DataManagementPage authorization", () => {
 
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
-        file, "", "business-restore-pass", "Quarterly recovery test", { accessToken: "test-access-token" },
+        file,
+        "",
+        "business-restore-pass",
+        "Quarterly recovery test",
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
   });
 
@@ -629,11 +637,50 @@ describe("DataManagementPage authorization", () => {
 
     await waitFor(() => {
       expect(restoreBackup).toHaveBeenCalledWith(
-        file, "legacy-pass-123", "business-restore-pass", "Legacy recovery validation",
-        { accessToken: "test-access-token" },
+        file,
+        "legacy-pass-123",
+        "business-restore-pass",
+        "Legacy recovery validation",
+        {
+          accessToken: "test-access-token",
+          sensitiveAuthorization: "test-authorization",
+        },
       );
     });
+    expect(mockCloudOAuth.requestSensitiveAuthorization).toHaveBeenCalledOnce();
     expect(await screen.findByText(/Restore completed: 1 records created/i)).toBeTruthy();
+  });
+
+  it("does not restore a backup when sensitive reauthorization is cancelled", async () => {
+    mockUser.current = businessUser();
+    mockCloudOAuth.accessToken = "test-access-token";
+    mockCloudOAuth.requestSensitiveAuthorization.mockResolvedValue(null);
+
+    render(<MemoryRouter><DataManagementPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /restore encrypted backup/i }));
+
+    const file = new File(["LABK1encrypted-payload"], "cancelled.laundry-backup", {
+      type: "application/octet-stream",
+    });
+    Object.defineProperty(file, "slice", {
+      value: () => ({
+        arrayBuffer: async () => new TextEncoder().encode("LABK1").buffer,
+      }),
+    });
+    fireEvent.change(screen.getByLabelText("Choose encrypted backup"), {
+      target: { files: [file] },
+    });
+    expect(await screen.findByText(/no password is required/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Business restoration password (required)"), {
+      target: { value: "test-business-restore-password" },
+    });
+    fireEvent.change(screen.getByLabelText(/reason for restoring/i), {
+      target: { value: "Cancelled restore authorization test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore backup" }));
+
+    expect(await screen.findByText(/Sensitive authorization was cancelled/i)).toBeTruthy();
+    expect(restoreBackup).not.toHaveBeenCalled();
   });
 
 });

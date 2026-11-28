@@ -33,7 +33,12 @@ migrationsRouter.post("/jobs/analyze", requireRole(...ADMIN_ROLES), requirePermi
 migrationsRouter.get("/jobs/:id", requireRole(...ADMIN_ROLES), requirePermission("migrations.view"), asyncHandler(getJob));
 migrationsRouter.post("/jobs/:id/import", requireRole(...ADMIN_ROLES), requirePermission("migrations.manage"), asyncHandler(importJob));
 migrationsRouter.post("/backup/export", requirePermission("migrations.view"), asyncHandler(exportBackup));
-migrationsRouter.post("/backup/restore", requirePermission("backups.restore"), asyncHandler(restoreBackup));
+migrationsRouter.post(
+  "/backup/restore",
+  requirePermission("backups.restore"),
+  asyncHandler(requireSensitiveAuthorization),
+  asyncHandler(restoreBackup),
+);
 migrationsRouter.get("/backup/restore-password", requirePermission("backups.restore_password.view"), asyncHandler(getRestorePassword));
 migrationsRouter.put("/backup/restore-password", requirePermission("backups.restore_password.manage"), asyncHandler(setRestorePassword));
 
