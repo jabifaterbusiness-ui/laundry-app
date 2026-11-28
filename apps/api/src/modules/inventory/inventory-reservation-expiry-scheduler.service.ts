@@ -12,33 +12,43 @@ export async function processExpiredInventoryReservations(now = new Date()) {
 
   let released = 0;
   for (const candidate of expired) {
-    const didRelease = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_reservations" WHERE "id" = ${candidate.id} AND "status" = 'ACTIVE' FOR UPDATE`);
-      const reservation = await tx.inventoryReservation.findFirst({
-        where: { id: candidate.id, status: "ACTIVE", expiresAt: { lte: now } },
-      });
-      if (!reservation) return false;
+    try {
+      const didRelease = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_reservations" WHERE "id" = ${candidate.id} AND "status" = 'ACTIVE' FOR UPDATE`);
+        const reservation = await tx.inventoryReservation.findFirst({
+          where: { id: candidate.id, status: "ACTIVE", expiresAt: { lte: now } },
+        });
+        if (!reservation) return false;
 
-      const stock = await tx.inventoryStock.findUnique({
-        where: { inventoryItemId_branchId: { inventoryItemId: reservation.inventoryItemId, branchId: reservation.branchId } },
+        const stock = await tx.inventoryStock.findUnique({
+          where: { inventoryItemId_branchId: { inventoryItemId: reservation.inventoryItemId, branchId: reservation.branchId } },
+        });
+        if (!stock) throw new Error("Reserved inventory balance not found for expired reservation " + reservation.id);
+        await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
+        const lockedStock = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
+        if (lockedStock.reservedQuantity < reservation.quantity) {
+          throw new Error("Reserved inventory balance is inconsistent for reservation " + reservation.id);
+        }
+        await tx.inventoryStock.update({
+          where: { id: stock.id },
+          data: { reservedQuantity: { decrement: reservation.quantity } },
+        });
+        await tx.inventoryReservation.update({
+          where: { id: reservation.id },
+          data: { status: "EXPIRED", releasedAt: now },
+        });
+        return true;
       });
-      if (!stock) throw new Error("Reserved inventory balance not found for expired reservation " + reservation.id);
-      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "inventory_stocks" WHERE "id" = ${stock.id} FOR UPDATE`);
-      const lockedStock = await tx.inventoryStock.findUniqueOrThrow({ where: { id: stock.id } });
-      if (lockedStock.reservedQuantity < reservation.quantity) {
-        throw new Error("Reserved inventory balance is inconsistent for reservation " + reservation.id);
-      }
-      await tx.inventoryStock.update({
-        where: { id: stock.id },
-        data: { reservedQuantity: { decrement: reservation.quantity } },
-      });
-      await tx.inventoryReservation.update({
-        where: { id: reservation.id },
-        data: { status: "EXPIRED", releasedAt: now },
-      });
-      return true;
-    });
-    if (didRelease) released += 1;
+      if (didRelease) released += 1;
+    } catch (error) {
+      // A damaged reservation must not prevent unrelated expired reservations
+      // from being released. Keep the inconsistent row ACTIVE for investigation;
+      // never invent or silently repair stock balances in the scheduler.
+      logger.error(
+        { reservationId: candidate.id, errorType: error instanceof Error ? error.name : typeof error },
+        "Expired inventory reservation was skipped because its stock balance needs review.",
+      );
+    }
   }
   return { scanned: expired.length, released };
 }
