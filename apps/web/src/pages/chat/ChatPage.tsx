@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../state/auth-store.js";
 import { hasPermission } from "../../lib/permissions.js";
@@ -21,17 +21,26 @@ export function ChatPage(){
  const [notificationPermission,setNotificationPermission]=useState<NotificationPermission|"unsupported">(typeof window!=="undefined"&&"Notification" in window?Notification.permission:"unsupported");
  const messagesContainerRef=useRef<HTMLDivElement|null>(null);
  const pendingSendRef=useRef<{key:string;clientMessageId:string}|null>(null);
- const [atLatest,setAtLatest]=useState(false);
+ const olderRequestIdRef=useRef(0);
+ const pendingScrollAdjustmentRef=useRef<{scrollHeight:number;scrollTop:number}|null>(null);
+ const initialScrollPendingRef=useRef(true);
+ const [olderMessages,setOlderMessages]=useState<ChatMessage[]>([]);
+ const [hasMoreMessages,setHasMoreMessages]=useState(true);
+ const [loadingOlder,setLoadingOlder]=useState(false);
+ const [atLatest,setAtLatest]=useState(true);
  
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""), [emojiPickerOpen,setEmojiPickerOpen]=useState(false),[search,setSearch]=useState(""),[messageSearch,setMessageSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[confirmLargeGroup,setConfirmLargeGroup]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
- useEffect(()=>{setAtLatest(false);setMessageSearch("");},[activeId]);
+ useEffect(()=>{setAtLatest(true);setMessageSearch("");},[activeId]);
+ useEffect(()=>{setOlderMessages([]);setHasMoreMessages(!messageSearch.trim());setLoadingOlder(false);pendingScrollAdjustmentRef.current=null;initialScrollPendingRef.current=true;olderRequestIdRef.current+=1;},[activeId,messageSearch]);
  const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:3000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
  useEffect(()=>{if(!activeId&&chats[0])setActiveId(chats[0].id);else if(activeId&&!chats.some(c=>c.id===activeId))setActiveId(chats[0]?.id??"");},[chats,activeId]);
  const messagesQ=useQuery({queryKey:["chat-messages",branchId,activeId,messageSearch.trim()],queryFn:()=>getChatMessages(activeId,messageSearch),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:messageSearch.trim()?false:2500});
- const messages=messagesQ.data?.data??[];
- useEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;if(atLatest)node.scrollTop=node.scrollHeight;else if(node.scrollHeight-node.scrollTop-node.clientHeight<72)setAtLatest(true);},[activeId,messages.length,atLatest]);
+ const latestMessages=messagesQ.data?.data??[];
+ const messages=[...olderMessages,...latestMessages];
+ useEffect(()=>{if(!olderMessages.length&&!messageSearch.trim()&&messagesQ.data){setHasMoreMessages(latestMessages.length===50);}},[activeId,messageSearch,latestMessages.length,olderMessages.length,messagesQ.data]);
+ useLayoutEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;const pending=pendingScrollAdjustmentRef.current;if(pending){node.scrollTop=pending.scrollTop+(node.scrollHeight-pending.scrollHeight);pendingScrollAdjustmentRef.current=null;return;}if(initialScrollPendingRef.current){node.scrollTop=node.scrollHeight;initialScrollPendingRef.current=false;setAtLatest(true);return;}if(atLatest)node.scrollTop=node.scrollHeight;},[activeId,messages.length,latestMessages.length,atLatest]);
  useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&!messageSearch.trim()&&messages.length&&pageVisible&&threadVisible&&atLatest)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen,atLatest,messageSearch]);
  const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
  const directory=directoryQ.data?.data??[];
@@ -55,6 +64,7 @@ export function ChatPage(){
  const canCreateGroup=hasPermission(user,"chat.create_group");
  if(!hasPermission(user,"chat.view"))return <main className="chat-page"><section className="chat-welcome"><span>🔒</span><h2>Chat access is not enabled</h2><p>Ask your business administrator to grant you the Chat permission.</p></section></main>;
  function sendDraft(){if((draft.trim()||pendingFiles.length)&&activeId&&!send.isPending&&!uploading){const body=draft.trim();const attachmentIds=pendingFiles.map(file=>file.id);const replyToMessageId=replyTo?.id;const key=JSON.stringify([activeId,body,attachmentIds,replyToMessageId??null]);pendingSendRef.current=resolveChatClientMessageId(pendingSendRef.current,key,()=>crypto.randomUUID());send.mutate({body,attachmentIds,...(replyToMessageId?{replyToMessageId}:{}),clientMessageId:pendingSendRef.current.clientMessageId});}}
+ async function loadOlderMessages(node:HTMLDivElement){if(!activeId||messageSearch.trim()||!hasMoreMessages||loadingOlder||!messages.length)return;const cursor=messages[0]?.id;if(!cursor)return;const requestId=++olderRequestIdRef.current;const scrollSnapshot={scrollHeight:node.scrollHeight,scrollTop:node.scrollTop};setLoadingOlder(true);try{const page=await getChatMessages(activeId,"",cursor);if(requestId!==olderRequestIdRef.current)return;if(page.data.length){pendingScrollAdjustmentRef.current=scrollSnapshot;setOlderMessages(current=>[...page.data,...current]);}if(page.data.length<50)setHasMoreMessages(false);}catch{/* Keep the cursor available so the user can retry by scrolling to the top. */}finally{if(requestId===olderRequestIdRef.current)setLoadingOlder(false);}}
  function submit(e:FormEvent){e.preventDefault();sendDraft();}
  function handleComposerKeyDown(e:React.KeyboardEvent<HTMLTextAreaElement>){if(shouldSendChatMessageOnKey(e.key,e.shiftKey,e.nativeEvent.isComposing)){e.preventDefault();sendDraft();}}
  async function handleFile(file:File){if(!activeId)return;setUploading(true);setUploadError("");try{const result=await uploadChatAttachment(activeId,file);setPendingFiles(current=>[...current,result.data]);}catch(error){setUploadError(error instanceof Error?error.message:"File upload failed");}finally{setUploading(false);}}
@@ -71,7 +81,7 @@ export function ChatPage(){
    <section className="chat-thread">
     {active?<><header className="chat-thread-head"><button type="button" className="chat-mobile-back" aria-label="Back to conversations" onClick={()=>setMobileThreadOpen(false)}>‹</button><span className="chat-avatar big">{initials(titleOf(active,user?.id??""))}</span><div><b>{titleOf(active,user?.id??"")}</b><small>{active.kind==="GROUP"?active.participants.length+" participants":"Direct conversation"}</small></div><span className="chat-private">● Private to participants</span></header>
      <label className="chat-search chat-message-search"><span>⌕</span><input value={messageSearch} onChange={e=>setMessageSearch(e.target.value)} placeholder="Search messages in this conversation" aria-label="Search messages in this conversation"/></label>
-      <div className="chat-messages" ref={messagesContainerRef} onScroll={event=>{const node=event.currentTarget;setAtLatest(node.scrollHeight-node.scrollTop-node.clientHeight<72);}}>{messagesQ.isLoading?<p className="chat-hint">Loading messages…</p>:null}{messagesQ.isError?<button className="chat-error" onClick={()=>void messagesQ.refetch()}>Messages unavailable. Retry</button>:null}
+      <div className="chat-messages" ref={messagesContainerRef} onScroll={event=>{const node=event.currentTarget;setAtLatest(node.scrollHeight-node.scrollTop-node.clientHeight<72);if(node.scrollTop<80&&hasMoreMessages&&!loadingOlder&&!messageSearch.trim())void loadOlderMessages(node);}}>{loadingOlder?<p className="chat-hint">Loading older messages…</p>:null}{messagesQ.isLoading?<p className="chat-hint">Loading messages…</p>:null}{messagesQ.isError?<button className="chat-error" onClick={()=>void messagesQ.refetch()}>Messages unavailable. Retry</button>:null}
       {messages.map(m=>{
        const others=active?.participants.filter(p=>p.user.id!==user?.id)??[];
        const delivered=others.filter(p=>markerIncludesMessage(p.lastDeliveredAt,p.lastDeliveredMessageId,m)).length;
