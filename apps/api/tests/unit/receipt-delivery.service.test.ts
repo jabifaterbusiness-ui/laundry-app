@@ -238,6 +238,25 @@ describe("receipt-delivery.service", () => {
     }));
   });
 
+  it("omits the CID reference when a saved logo file is no longer present", async () => {
+    customerFindFirstMock.mockResolvedValue({
+      id: "customer-A", name: "John Doe", email: "john@example.com", phone: null,
+    });
+    const receiptWithMissingLogo = {
+      ...RECEIPT,
+      businessId: INPUT.businessId,
+      logoUrl: "https://www.laundryangelweb.com/api/v1/businesses/logo",
+    };
+    getCustomerReceiptMock.mockResolvedValue(receiptWithMissingLogo);
+    readBusinessLogoMock.mockResolvedValue(null);
+    sendEmailMock.mockResolvedValue({ status: "SUBMITTED", id: "resend-no-logo-1" });
+
+    await resendDigitalReceipt({ ...INPUT, channel: "EMAIL" });
+
+    expect(renderCustomerReceiptEmailMock).toHaveBeenCalledWith(receiptWithMissingLogo, {});
+    expect(sendEmailMock.mock.calls[0]?.[0]).not.toHaveProperty("attachments");
+  });
+
   it("returns 503 when Resend email delivery fails", async () => {
     customerFindFirstMock.mockResolvedValue({
       id: "customer-A",
