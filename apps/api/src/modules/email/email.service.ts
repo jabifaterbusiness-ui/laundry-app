@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { sendWithResend } from "./providers/resend.provider.js";
+import { sendWithResend, type ProviderEmailAttachment } from "./providers/resend.provider.js";
 
 export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  /** Optional inline or downloadable attachments. */
+  attachments?: ProviderEmailAttachment[];
   /** Business-facing name; the authenticated platform domain remains the sender address. */
   fromName?: string;
   /** Optional business email reply target. Never used as an unverified sender. */
