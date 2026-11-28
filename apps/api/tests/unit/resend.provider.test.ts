@@ -45,6 +45,20 @@ describe("central email delivery", () => {
     );
   });
 
+  it("passes inline CID attachment data through the Resend single-send API", async () => {
+    const attachment = {
+      filename: "business-logo.png",
+      content: Buffer.from("logo-bytes"),
+      contentType: "image/png",
+      contentId: "laundryangel-business-logo",
+    };
+    await sendEmail({ ...input, attachments: [attachment] });
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: [attachment] }),
+      expect.objectContaining({ idempotencyKey: input.idempotencyKey }),
+    );
+  });
+
   it("uses the business name on the verified platform sender and business email only as Reply-To", async () => {
     await sendEmail({ ...input, fromName: "10 Star Laundry", replyTo: "contact@10star.example" });
     expect(sendMock).toHaveBeenCalledWith(
