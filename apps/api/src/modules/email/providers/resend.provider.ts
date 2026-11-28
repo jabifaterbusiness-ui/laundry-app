@@ -1,12 +1,20 @@
 import { Resend } from "resend";
 import { config } from "../../../config/index.js";
 
+export interface ProviderEmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+  contentId?: string;
+}
+
 export interface ProviderEmailInput {
   to: string;
   subject: string;
   html: string;
   fromName?: string;
   replyTo?: string | null;
+  attachments?: ProviderEmailAttachment[];
 }
 
 export type ProviderEmailResult =
@@ -44,7 +52,7 @@ export async function sendWithResend(
   const safeName = input.fromName?.replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
   const replyTo = input.replyTo && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(input.replyTo) ? input.replyTo : undefined;
   const { data, error } = await resend.emails.send(
-    { from: safeName ? `${safeName} <${verifiedAddress}>` : from, to: input.to, subject: input.subject, html: input.html, ...(replyTo ? { replyTo } : {}) },
+    { from: safeName ? `${safeName} <${verifiedAddress}>` : from, to: input.to, subject: input.subject, html: input.html, ...(replyTo ? { replyTo } : {}), ...(input.attachments?.length ? { attachments: input.attachments } : {}) },
     requestOptions,
   );
 
