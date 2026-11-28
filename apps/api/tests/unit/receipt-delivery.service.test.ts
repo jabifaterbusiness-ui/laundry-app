@@ -123,6 +123,12 @@ const RECEIPT = {
 beforeEach(() => {
   vi.clearAllMocks();
   renderCustomerReceiptEmailMock.mockReturnValue("<html>receipt</html>");
+  readBusinessLogoMock.mockResolvedValue(Buffer.from("stored-logo"));
+  sharpMock.mockImplementation(() => ({
+    resize: vi.fn().mockReturnThis(),
+    png: vi.fn().mockReturnThis(),
+    toBuffer: vi.fn().mockResolvedValue(Buffer.from("optimized-logo")),
+  }));
   renderCustomerReceiptImageMock.mockResolvedValue(
     Buffer.from("receipt-png"),
   );
