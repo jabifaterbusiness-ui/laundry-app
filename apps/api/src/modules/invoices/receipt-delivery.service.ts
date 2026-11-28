@@ -92,8 +92,11 @@ export async function resendDigitalReceipt(
           .png({ compressionLevel: 9 })
           .toBuffer()
       : null;
-    const logoContentId = emailLogo ? "laundryangel-business-logo" : undefined;
-    const html = renderCustomerReceiptEmail(receipt, { logoContentId });
+    const logoContentId = "laundryangel-business-logo";
+    const html = renderCustomerReceiptEmail(
+      receipt,
+      emailLogo ? { logoContentId } : {},
+    );
 
     try {
       const delivery = await sendEmail({
@@ -105,7 +108,7 @@ export async function resendDigitalReceipt(
             filename: "business-logo.png",
             content: emailLogo,
             contentType: "image/png",
-            contentId: logoContentId,
+            contentId: "laundryangel-business-logo",
           }],
         } : {}),
         fromName: receipt.companyName,
