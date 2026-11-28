@@ -11,6 +11,7 @@ const CHAT_EMOJIS=["😀","😂","😍","❤️","👍","🙏","🎉","😢","�
 export function appendChatEmoji(draft:string,emoji:string){return draft+emoji;}
 export function shouldSendChatMessageOnKey(key:string,shiftKey:boolean,isComposing:boolean){return key==="Enter"&&!shiftKey&&!isComposing;}
 export function resolveChatClientMessageId(current:{key:string;clientMessageId:string}|null,key:string,createId:()=>string){return current?.key===key?current:{key,clientMessageId:createId()};}
+export function preserveChatScrollPosition(scrollTop:number,previousScrollHeight:number,nextScrollHeight:number){return scrollTop+(nextScrollHeight-previousScrollHeight);}
 export function markerIncludesMessage(markerAt:string|null|undefined,markerId:string|null|undefined,message:Pick<ChatMessage,"id"|"createdAt">){if(!markerAt)return false;const markerTime=new Date(markerAt).getTime();const messageTime=new Date(message.createdAt).getTime();if(markerTime>messageTime)return true;if(markerTime<messageTime)return false;return markerId?markerId>=message.id:true;}
 function titleOf(chat:ChatConversation,userId:string){return chat.kind==="GROUP"?(chat.title||"Untitled group"):(chat.participants.find((p)=>p.user.id!==userId)?.user.fullName||"Direct message");}
 
@@ -41,7 +42,7 @@ export function ChatPage(){
  const latestMessages=messagesQ.data?.data??[];
  const messages=[...olderMessages,...latestMessages];
  useEffect(()=>{if(!olderMessages.length&&!messageSearch.trim()&&messagesQ.data){setHasMoreMessages(latestMessages.length===50);}},[activeId,messageSearch,latestMessages.length,olderMessages.length,messagesQ.data]);
- useLayoutEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;const pending=pendingScrollAdjustmentRef.current;if(pending){node.scrollTop=pending.scrollTop+(node.scrollHeight-pending.scrollHeight);pendingScrollAdjustmentRef.current=null;return;}if(initialScrollPendingRef.current){node.scrollTop=node.scrollHeight;initialScrollPendingRef.current=false;setAtLatest(true);return;}if(atLatest)node.scrollTop=node.scrollHeight;},[activeId,messages.length,latestMessages.length,atLatest]);
+ useLayoutEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;const pending=pendingScrollAdjustmentRef.current;if(pending){node.scrollTop=preserveChatScrollPosition(pending.scrollTop,pending.scrollHeight,node.scrollHeight);pendingScrollAdjustmentRef.current=null;return;}if(initialScrollPendingRef.current){node.scrollTop=node.scrollHeight;initialScrollPendingRef.current=false;setAtLatest(true);return;}if(atLatest)node.scrollTop=node.scrollHeight;},[activeId,messages.length,latestMessages.length,atLatest]);
  useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&!messageSearch.trim()&&messages.length&&pageVisible&&threadVisible&&atLatest)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen,atLatest,messageSearch]);
  const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
  const directory=directoryQ.data?.data??[];
