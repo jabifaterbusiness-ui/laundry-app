@@ -11,3 +11,7 @@
   cursor: pointer;
 }
 .chat-notify-button:hover { background: #fce7f3; }
+
+/* Keep the thread and its message list shrinkable inside the fixed chat panel. */
+.chat-thread{min-height:0;}
+.chat-messages{min-height:0;min-width:0;overscroll-behavior:contain;}
