@@ -132,7 +132,9 @@ export async function deleteCloudBackupScheduleController(req: Request, res: Res
 }
 
 export async function listCloudConnectionsController(req: Request, res: Response) {
-  res.status(200).json({ connections: await listBackupConnections(businessId(req)) });
+  const connections = await listBackupConnections(businessId(req));
+  // Business backup screens must not expose legacy OneDrive connections.
+  res.status(200).json({ connections: connections.filter((connection) => connection.provider !== "ONEDRIVE") });
 }
 
 export async function createCloudConnectionController(req: Request, res: Response) {
