@@ -1,6 +1,8 @@
+import sharp from "sharp";
 import { AppError } from "../../middleware/error-handler.js";
 import { prisma } from "../../lib/prisma.js";
 import { getCustomerReceipt } from "./receipts.service.js";
+import { readBusinessLogo } from "../businesses/business-branding.storage.js";
 import { renderCustomerReceiptEmail } from "./templates/customer-receipt-email.js";
 import { renderCustomerReceiptImage } from "./templates/customer-receipt-image.js";
 import { EmailDeliveryError, sendEmail } from "../email/email.service.js";
@@ -79,13 +81,33 @@ export async function resendDigitalReceipt(
   }
 
   if (input.channel === "EMAIL") {
-    const html = renderCustomerReceiptEmail(receipt);
+    // Business logo storage is private and session-authenticated URLs cannot
+    // be loaded by external email clients. Embed a small PNG using a CID.
+    const storedLogo = receipt.logoUrl
+      ? await readBusinessLogo(receipt.businessId)
+      : null;
+    const emailLogo = storedLogo
+      ? await sharp(storedLogo)
+          .resize(600, 600, { fit: "inside", withoutEnlargement: true })
+          .png({ compressionLevel: 9 })
+          .toBuffer()
+      : null;
+    const logoContentId = emailLogo ? "laundryangel-business-logo" : undefined;
+    const html = renderCustomerReceiptEmail(receipt, { logoContentId });
 
     try {
       const delivery = await sendEmail({
         to: destination,
         subject: `${receipt.companyName} — Receipt ${receipt.invoiceNumber}`,
         html,
+        ...(emailLogo ? {
+          attachments: [{
+            filename: "business-logo.png",
+            content: emailLogo,
+            contentType: "image/png",
+            contentId: logoContentId,
+          }],
+        } : {}),
         fromName: receipt.companyName,
         replyTo: receipt.companyEmail,
         feature: "receipt",
