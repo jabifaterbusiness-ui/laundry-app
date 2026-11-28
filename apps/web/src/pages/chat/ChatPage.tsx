@@ -26,6 +26,7 @@ export function ChatPage(){
  const loadingOlderRef=useRef(false);
  const pendingScrollAdjustmentRef=useRef<{scrollHeight:number;scrollTop:number}|null>(null);
  const initialScrollPendingRef=useRef(true);
+ const initialPageLoadedRef=useRef(false);
  const [olderMessages,setOlderMessages]=useState<ChatMessage[]>([]);
  const [hasMoreMessages,setHasMoreMessages]=useState(true);
  const [loadingOlder,setLoadingOlder]=useState(false);
@@ -33,7 +34,7 @@ export function ChatPage(){
  
  const [activeId,setActiveId]=useState(""),[mobileThreadOpen,setMobileThreadOpen]=useState(false),[draft,setDraft]=useState(""), [emojiPickerOpen,setEmojiPickerOpen]=useState(false),[search,setSearch]=useState(""),[messageSearch,setMessageSearch]=useState(""),[showNew,setShowNew]=useState(false),[groupMode,setGroupMode]=useState(false),[groupName,setGroupName]=useState(""),[selected,setSelected]=useState<string[]>([]),[allUsers,setAllUsers]=useState(false),[confirmLargeGroup,setConfirmLargeGroup]=useState(false),[pendingFiles,setPendingFiles]=useState<ChatAttachment[]>([]),[uploading,setUploading]=useState(false),[uploadError,setUploadError]=useState(""),[replyTo,setReplyTo]=useState<ChatMessage|null>(null),[addToGroup,setAddToGroup]=useState(false),[groupTitleDraft,setGroupTitleDraft]=useState(""),[groupDescription,setGroupDescription]=useState(""),[groupDescriptionDraft,setGroupDescriptionDraft]=useState("");
  useEffect(()=>{setAtLatest(true);setMessageSearch("");},[activeId]);
- useEffect(()=>{setOlderMessages([]);setHasMoreMessages(!messageSearch.trim());setLoadingOlder(false);loadingOlderRef.current=false;pendingScrollAdjustmentRef.current=null;initialScrollPendingRef.current=true;olderRequestIdRef.current+=1;},[activeId,messageSearch]);
+ useEffect(()=>{setOlderMessages([]);setHasMoreMessages(!messageSearch.trim());setLoadingOlder(false);loadingOlderRef.current=false;pendingScrollAdjustmentRef.current=null;initialScrollPendingRef.current=true;initialPageLoadedRef.current=false;olderRequestIdRef.current+=1;},[activeId,messageSearch]);
  const chatsQ=useQuery({queryKey:["chat-conversations",branchId],queryFn:getChatConversations,enabled:!!token&&!!branchId,refetchInterval:3000});
  const chats=chatsQ.data?.data??[];
  const active=chats.find(c=>c.id===activeId)??null;
@@ -41,7 +42,7 @@ export function ChatPage(){
  const messagesQ=useQuery({queryKey:["chat-messages",branchId,activeId,messageSearch.trim()],queryFn:()=>getChatMessages(activeId,messageSearch),enabled:!!token&&!!branchId&&!!activeId,refetchInterval:messageSearch.trim()?false:2500});
  const latestMessages=messagesQ.data?.data??[];
  const messages=[...olderMessages,...latestMessages];
- useEffect(()=>{if(!olderMessages.length&&!messageSearch.trim()&&messagesQ.data){setHasMoreMessages(latestMessages.length===50);}},[activeId,messageSearch,latestMessages.length,olderMessages.length,messagesQ.data]);
+ useEffect(()=>{if(!initialPageLoadedRef.current&&messagesQ.data){setHasMoreMessages(!messageSearch.trim()&&latestMessages.length===50);initialPageLoadedRef.current=true;}},[activeId,messageSearch,latestMessages.length,messagesQ.data]);
  useLayoutEffect(()=>{const node=messagesContainerRef.current;if(!node||!messages.length)return;const pending=pendingScrollAdjustmentRef.current;if(pending){node.scrollTop=preserveChatScrollPosition(pending.scrollTop,pending.scrollHeight,node.scrollHeight);pendingScrollAdjustmentRef.current=null;return;}if(initialScrollPendingRef.current){node.scrollTop=node.scrollHeight;initialScrollPendingRef.current=false;setAtLatest(true);return;}if(atLatest)node.scrollTop=node.scrollHeight;},[activeId,messages.length,latestMessages.at(-1)?.id,atLatest]);
  useEffect(()=>{const threadVisible=typeof window!=="undefined"&&(window.innerWidth>=900||mobileThreadOpen);if(activeId&&!messageSearch.trim()&&messages.length&&pageVisible&&threadVisible&&atLatest)void markChatRead(activeId).then(()=>qc.invalidateQueries({queryKey:["chat-conversations",branchId]})).catch(()=>undefined);},[activeId,messages.at(-1)?.id,qc,branchId,pageVisible,mobileThreadOpen,atLatest,messageSearch]);
  const directoryQ=useQuery({queryKey:["chat-directory",branchId,search],queryFn:()=>getChatDirectory(search),enabled:!!token&&!!branchId&&showNew});
