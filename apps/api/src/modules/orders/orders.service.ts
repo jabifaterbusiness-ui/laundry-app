@@ -348,7 +348,7 @@ export async function createUniqueOrderNumber(
   // Serialize allocation per business across every API process. The
   // transaction-scoped advisory lock also covers first-time sequence creation.
   await tx.$queryRaw(
-    Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${businessId}, 0))`,
+    Prisma.sql`SELECT 1 AS "locked" FROM (SELECT pg_advisory_xact_lock(hashtextextended(${businessId}, 0))) AS "business_lock"`,
   );
 
   // Existing orders are authoritative if a sequence row is missing or stale.
